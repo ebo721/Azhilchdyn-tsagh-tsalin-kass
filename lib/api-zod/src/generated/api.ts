@@ -8,6 +8,28 @@
 import * as zod from 'zod';
 
 
+export const GetAuthSessionResponse = zod.object({
+  "authenticated": zod.boolean(),
+  "role": zod.union([zod.literal('hr'),zod.literal(null)]).nullable(),
+  "username": zod.string().nullable()
+})
+
+
+export const LoginHrManagerBody = zod.object({
+  "username": zod.string(),
+  "password": zod.string()
+})
+
+export const LoginHrManagerResponse = zod.object({
+  "authenticated": zod.boolean(),
+  "role": zod.union([zod.literal('hr'),zod.literal(null)]).nullable(),
+  "username": zod.string().nullable()
+})
+
+
+export const LogoutHrManagerResponse = zod.void()
+
+
 /**
  * Returns server health status
  * @summary Health check

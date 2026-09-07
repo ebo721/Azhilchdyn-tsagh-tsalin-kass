@@ -5,6 +5,29 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+/**
+ * @nullable
+ */
+export type AuthSessionRole = typeof AuthSessionRole[keyof typeof AuthSessionRole] | null;
+
+
+export const AuthSessionRole = {
+  hr: 'hr',
+} as const;
+
+export interface AuthSession {
+  authenticated: boolean;
+  /** @nullable */
+  role: AuthSessionRole;
+  /** @nullable */
+  username: string | null;
+}
+
+export interface LoginInput {
+  username: string;
+  password: string;
+}
+
 export interface HealthStatus {
   status: string;
 }

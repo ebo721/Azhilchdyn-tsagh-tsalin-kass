@@ -30,8 +30,22 @@ import {
   payrollAdjustmentsTable,
   payrollAdvanceApprovalsTable,
 } from "@workspace/db";
+import { getHrRole } from "../lib/hr-session";
 
 const router: IRouter = Router();
+
+router.use((req, res, next) => {
+  if (getHrRole(req) !== "hr") {
+    res.status(401).json({ error: "Нэвтрэх шаардлагатай" });
+    return;
+  }
+  const allowedPrefixes = ["/employees", "/attendance", "/hour-balance"];
+  if (allowedPrefixes.some((prefix) => req.path.startsWith(prefix))) {
+    next();
+    return;
+  }
+  res.status(403).json({ error: "Хүний нөөцийн менежер энэ хэсэгт хандах эрхгүй" });
+});
 
 const today = () => new Date().toISOString().slice(0, 10);
 const currentMonth = () => today().slice(0, 7);

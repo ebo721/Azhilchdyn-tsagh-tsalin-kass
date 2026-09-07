@@ -8,6 +8,8 @@ servers:
   - url: /api
     description: Base API path
 tags:
+  - name: auth
+    description: HR manager authentication
   - name: health
     description: Health operations
   - name: dashboard
@@ -23,6 +25,38 @@ tags:
   - name: cash
     description: Cash register transactions
 paths:
+  /auth/me:
+    get:
+      operationId: getAuthSession
+      tags: [auth]
+      responses:
+        "200":
+          description: Current session
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthSession" }
+  /auth/login:
+    post:
+      operationId: loginHrManager
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginInput" }
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthSession" }
+  /auth/logout:
+    post:
+      operationId: logoutHrManager
+      tags: [auth]
+      responses:
+        "204":
+          description: Logged out
   /healthz:
     get:
       operationId: healthCheck
@@ -311,6 +345,19 @@ components:
       schema:
         type: integer
   schemas:
+    AuthSession:
+      type: object
+      required: [authenticated, role, username]
+      properties:
+        authenticated: { type: boolean }
+        role: { type: [string, "null"], enum: [hr, null] }
+        username: { type: [string, "null"] }
+    LoginInput:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string }
     HealthStatus:
       type: object
       properties:
