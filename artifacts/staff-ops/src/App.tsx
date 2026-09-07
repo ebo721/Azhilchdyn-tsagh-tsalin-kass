@@ -67,12 +67,11 @@ const dateLabel = (value: string) =>
   new Intl.DateTimeFormat('mn-MN', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value));
 const today = () => new Date().toISOString().slice(0, 10);
 const currentMonth = () => new Date().toISOString().slice(0, 7);
-const shiftDate = (value: string, days: number) => {
-  const date = new Date(`${value}T00:00:00`);
-  date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+const calendarDays = (month: string) => {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const dayCount = new Date(year, monthNumber, 0).getDate();
+  return Array.from({ length: dayCount }, (_, index) => `${month}-${String(index + 1).padStart(2, '0')}`);
 };
-const calendarDays = () => Array.from({ length: 30 }, (_, index) => shiftDate(today(), index - 29));
 const calendarDateLabel = (value: string) =>
   new Intl.DateTimeFormat('mn-MN', { weekday: 'short', day: 'numeric' }).format(new Date(`${value}T00:00:00`));
 
@@ -261,16 +260,16 @@ function Employees() {
 }
 
 function AttendancePage() {
-  const days = useMemo(calendarDays, []);
+  const [month, setMonth] = useState(currentMonth());
+  const days = useMemo(() => calendarDays(month), [month]);
   const query = useListAttendance({});
   const employees = useListEmployees();
   const upsert = useUpsertAttendance();
   const qc = useQueryClient();
   const attendanceMap = useMemo(() => new Map((query.data ?? []).map((row) => [`${row.employeeId}-${row.date}`, row])), [query.data]);
   const activeEmployees = (employees.data ?? []).filter((employee) => employee.status === EmployeeStatus.active);
-  const selectedDay = days[days.length - 1];
-  const selectedRows = activeEmployees.map((employee) => attendanceMap.get(`${employee.id}-${selectedDay}`)).filter(Boolean);
-  const counts = selectedRows.reduce((acc, row) => {
+  const monthRows = activeEmployees.flatMap((employee) => days.map((day) => attendanceMap.get(`${employee.id}-${day}`))).filter(Boolean);
+  const counts = monthRows.reduce((acc, row) => {
     if (!row) return acc;
     if (row.status === 'leave') acc.leave += 1;
     else if (Number(row.hours) === 12) acc.twelve += 1;
@@ -291,15 +290,15 @@ function AttendancePage() {
     });
   };
   return <div className="page-enter">
-    <PageHeading eyebrow="30 хоногийн бүртгэл / attendance" title="Ирцийн календарь" detail="Огноо болон ажилтны огтлолцол дээр дарж ажилласан эсэхийг шууд тэмдэглэнэ." />
+    <PageHeading eyebrow="Сарын бүртгэл / attendance" title="Ирцийн календарь" detail="Сарын 1-нээс сүүлийн өдөр хүртэл ажилтан бүрийн цагийг сонгож бүртгэнэ." action={<div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3"><CalendarDays className="size-4 text-primary" /><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="h-10 bg-transparent text-sm outline-none" data-testid="input-attendance-month" /></div>} />
     <div className="mb-6 flex flex-wrap items-center gap-2">
-      <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs"><span className="font-mono font-bold">{days[0]}</span><span className="mx-2 text-muted-foreground">—</span><span className="font-mono font-bold">{selectedDay}</span></div>
+      <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs"><span className="font-mono font-bold">{days[0]}</span><span className="mx-2 text-muted-foreground">—</span><span className="font-mono font-bold">{days[days.length - 1]}</span></div>
       {[['eight', '8 цаг'], ['twelve', '12 цаг'], ['leave', 'Чөлөө']].map(([key, label]) => <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs" key={key}><span className={cn('size-2.5 rounded-full', key === 'eight' ? 'bg-primary' : key === 'twelve' ? 'bg-accent' : 'bg-sky-300')} /><span className="font-mono font-bold">{counts[key as keyof typeof counts]}</span><span className="text-muted-foreground">{label}</span></div>)}
       <div className="ml-auto text-xs text-muted-foreground">Нүд бүрээс 8, 12 эсвэл Ч сонгоно</div>
     </div>
     <section className="overflow-hidden rounded-2xl border border-border bg-card" data-testid="attendance-calendar">
-      <div className="flex items-center justify-between border-b border-border px-5 py-4"><div><p className="font-mono text-[10px] font-bold uppercase tracking-[.18em] text-primary">30 day view</p><h2 className="mt-1 text-base font-bold">Ажилтны ирцийн хүснэгт</h2></div><CalendarDays className="size-4 text-muted-foreground" /></div>
-      {query.isLoading || employees.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError || employees.isError ? <ErrorBlock onRetry={() => { query.refetch(); employees.refetch(); }} /> : !activeEmployees.length ? <EmptyState title="Идэвхтэй ажилтан алга" detail="Эхлээд ажилтны бүртгэлээс ажилтан нэмнэ үү." icon={UsersRound} /> : <div className="overflow-x-auto"><table className="w-full min-w-[1500px] table-fixed text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="sticky left-0 z-10 w-52 border-r border-border bg-secondary/95 px-5 py-3">Ажилтан</th>{days.map((day) => <th className={cn('w-11 px-1 py-3 text-center', day === selectedDay && 'bg-accent/35 text-foreground')} key={day}><div className="text-[9px] uppercase">{calendarDateLabel(day).split(' ')[0]}</div><div className="mt-1 font-mono text-[11px]">{day.slice(8)}</div></th>)}</tr></thead><tbody className="divide-y divide-border">{activeEmployees.map((employee) => <tr key={employee.id} data-testid={`row-attendance-calendar-${employee.id}`}><td className="sticky left-0 z-10 border-r border-border bg-card px-5 py-3"><p className="truncate text-sm font-semibold">{employee.name}</p><p className="truncate text-[11px] text-muted-foreground">{employee.role}</p></td>{days.map((day) => { const row = attendanceMap.get(`${employee.id}-${day}`); const value = row?.status === 'leave' ? 'leave' : Number(row?.hours) === 12 ? '12' : Number(row?.hours) === 8 ? '8' : ''; return <td className={cn('border-l border-border/60 p-1 text-center', day === selectedDay && 'bg-accent/10')} key={day}><select value={value} disabled={upsert.isPending} onChange={(event) => setAttendance(employee.id, day, event.target.value)} className={cn('mx-auto h-8 w-10 appearance-none rounded-lg border-0 text-center font-mono text-[10px] font-bold outline-none transition-colors focus:ring-2 focus:ring-primary/30', value === '8' ? 'bg-primary text-primary-foreground' : value === '12' ? 'bg-accent text-foreground' : value === 'leave' ? 'bg-sky-100 text-sky-800' : 'bg-secondary/60 text-muted-foreground/50')} aria-label={`${employee.name} ${day} цагийн сонголт`} data-testid={`select-attendance-${employee.id}-${day}`}><option value="" disabled>—</option><option value="8">8</option><option value="12">12</option><option value="leave">Ч</option></select></td>; })}</tr>)}</tbody></table></div>}
+      <div className="flex items-center justify-between border-b border-border px-5 py-4"><div><p className="font-mono text-[10px] font-bold uppercase tracking-[.18em] text-primary">Full month view</p><h2 className="mt-1 text-base font-bold">{month.replace('-', ' оны ')} сарын ирц</h2></div><span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{days.length} хоног</span></div>
+      {query.isLoading || employees.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError || employees.isError ? <ErrorBlock onRetry={() => { query.refetch(); employees.refetch(); }} /> : !activeEmployees.length ? <EmptyState title="Идэвхтэй ажилтан алга" detail="Эхлээд ажилтны бүртгэлээс ажилтан нэмнэ үү." icon={UsersRound} /> : <div className="overflow-x-auto"><table className="w-full table-fixed text-left" style={{ minWidth: `${208 + days.length * 44}px` }}><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="sticky left-0 z-10 w-52 border-r border-border bg-secondary/95 px-5 py-3">Ажилтан</th>{days.map((day) => <th className={cn('w-11 px-1 py-3 text-center', day === today() && 'bg-accent/35 text-foreground')} key={day}><div className="text-[9px] uppercase">{calendarDateLabel(day).split(' ')[0]}</div><div className="mt-1 font-mono text-[11px]">{day.slice(8)}</div></th>)}</tr></thead><tbody className="divide-y divide-border">{activeEmployees.map((employee) => <tr key={employee.id} data-testid={`row-attendance-calendar-${employee.id}`}><td className="sticky left-0 z-10 border-r border-border bg-card px-5 py-3"><p className="truncate text-sm font-semibold">{employee.name}</p><p className="truncate text-[11px] text-muted-foreground">{employee.role}</p></td>{days.map((day) => { const row = attendanceMap.get(`${employee.id}-${day}`); const value = row?.status === 'leave' ? 'leave' : Number(row?.hours) === 12 ? '12' : Number(row?.hours) === 8 ? '8' : ''; return <td className={cn('border-l border-border/60 p-1 text-center', day === today() && 'bg-accent/10')} key={day}><select value={value} disabled={upsert.isPending} onChange={(event) => setAttendance(employee.id, day, event.target.value)} className={cn('mx-auto h-8 w-10 appearance-none rounded-lg border-0 text-center font-mono text-[10px] font-bold outline-none transition-colors focus:ring-2 focus:ring-primary/30', value === '8' ? 'bg-primary text-primary-foreground' : value === '12' ? 'bg-accent text-foreground' : value === 'leave' ? 'bg-sky-100 text-sky-800' : 'bg-secondary/60 text-muted-foreground/50')} aria-label={`${employee.name} ${day} цагийн сонголт`} data-testid={`select-attendance-${employee.id}-${day}`}><option value="" disabled>—</option><option value="8">8</option><option value="12">12</option><option value="leave">Ч</option></select></td>; })}</tr>)}</tbody></table></div>}
     </section>
     <p className="mt-3 text-xs text-muted-foreground">8: найман цаг · 12: арван хоёр цаг · Ч: чөлөөтэй өдөр</p>
   </div>;
