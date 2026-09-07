@@ -265,21 +265,22 @@ function Dashboard() {
   );
 }
 
-type EmployeeForm = { name: string; role: string; phone: string; employeeType: 'shift' | 'office'; baseSalary: string; socialInsuranceSalary: string; monthlyExpectedWorkDays: string; status?: 'active' | 'inactive' };
+type EmployeeForm = { name: string; role: string; phone: string; employeeType: 'shift' | 'office'; baseSalary: string; socialInsuranceSalary: string; payrollTaxExempt: boolean; monthlyExpectedWorkDays: string; status?: 'active' | 'inactive' };
 
 function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: () => void }) {
   const isEdit = !!employee;
   const create = useCreateEmployee();
   const update = useUpdateEmployee();
   const qc = useQueryClient();
-  const form = useForm<EmployeeForm>({ defaultValues: { name: employee?.name ?? '', role: employee?.role ?? '', phone: employee?.phone ?? '', employeeType: employee?.employeeType ?? 'office', baseSalary: String(employee?.baseSalary ?? ''), socialInsuranceSalary: String(employee?.socialInsuranceSalary ?? ''), monthlyExpectedWorkDays: String(employee?.monthlyExpectedWorkDays ?? 0), status: employee?.status ?? 'active' } });
+  const form = useForm<EmployeeForm>({ defaultValues: { name: employee?.name ?? '', role: employee?.role ?? '', phone: employee?.phone ?? '', employeeType: employee?.employeeType ?? 'office', baseSalary: String(employee?.baseSalary ?? ''), socialInsuranceSalary: String(employee?.socialInsuranceSalary ?? ''), payrollTaxExempt: employee?.payrollTaxExempt ?? false, monthlyExpectedWorkDays: String(employee?.monthlyExpectedWorkDays ?? 0), status: employee?.status ?? 'active' } });
   const submit = (values: EmployeeForm) => {
-    const data = { name: values.name, role: values.role, phone: values.phone, employeeType: values.employeeType, baseSalary: Number(values.baseSalary), socialInsuranceSalary: Number(values.socialInsuranceSalary), monthlyExpectedWorkDays: values.employeeType === 'shift' ? Number(values.monthlyExpectedWorkDays) : 0, ...(isEdit ? { status: values.status } : {}) };
+    const data = { name: values.name, role: values.role, phone: values.phone, employeeType: values.employeeType, baseSalary: Number(values.baseSalary), socialInsuranceSalary: values.payrollTaxExempt ? 0 : Number(values.socialInsuranceSalary), payrollTaxExempt: values.payrollTaxExempt, monthlyExpectedWorkDays: values.employeeType === 'shift' ? Number(values.monthlyExpectedWorkDays) : 0, ...(isEdit ? { status: values.status } : {}) };
     const done = () => { qc.invalidateQueries({ queryKey: getListEmployeesQueryKey() }); qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() }); qc.invalidateQueries({ queryKey: getGetPayrollQueryKey() }); onClose(); };
     if (isEdit && employee) update.mutate({ id: employee.id, data }, { onSuccess: done }); else create.mutate({ data }, { onSuccess: done });
   };
   const pending = create.isPending || update.isPending;
   const employeeType = form.watch('employeeType');
+  const payrollTaxExempt = form.watch('payrollTaxExempt');
   return <Modal title={isEdit ? 'Ажилтны мэдээлэл засах' : 'Шинэ ажилтан бүртгэх'} detail="Ажилтны төрлөөс хамаарч өдрийн эсвэл сарын цалинг оруулна." onClose={onClose}>
     <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-5" data-testid="form-employee">
       <div className="grid gap-5 sm:grid-cols-2">
@@ -288,7 +289,8 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
         <label className="space-y-2 text-xs font-semibold">Утас<input className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('phone')} data-testid="input-employee-phone" /></label>
         <label className="space-y-2 text-xs font-semibold">Ажилтны төрөл<select className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('employeeType')} data-testid="select-employee-type"><option value="office">Оффис ажилтан</option><option value="shift">Ээлжийн ажилтан</option></select></label>
         <label className="space-y-2 text-xs font-semibold">{employeeType === 'shift' ? 'Өдрийн цалин' : 'Сарын цалин'}<input type="number" min="0" className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('baseSalary', { required: true, min: 0 })} data-testid="input-employee-salary" /></label>
-        <label className="space-y-2 text-xs font-semibold">НДШ тооцох цалин<input type="number" min="0" className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('socialInsuranceSalary', { required: true, min: 0 })} data-testid="input-employee-social-insurance-salary" /></label>
+        <label className="space-y-2 text-xs font-semibold">НДШ тооцох цалин<input type="number" min="0" disabled={payrollTaxExempt} className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none disabled:cursor-not-allowed disabled:opacity-50 focus:border-primary" {...form.register('socialInsuranceSalary', { required: !payrollTaxExempt, min: 0 })} data-testid="input-employee-social-insurance-salary" /></label>
+        <label className="flex items-center gap-3 rounded-xl border border-border bg-secondary/35 px-4 py-3 text-sm font-semibold sm:col-span-2"><input type="checkbox" className="size-4 accent-primary" {...form.register('payrollTaxExempt')} data-testid="checkbox-employee-payroll-tax-exempt" /><span><span className="block">НДШ, ХХОАТ төлөхгүй</span><span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">Цалин бодоход НДШ, ХХОАТ болон татварын хөнгөлөлт 0 байна.</span></span></label>
         {employeeType === 'shift' ? <label className="space-y-2 text-xs font-semibold">Сард ажиллах ёстой өдөр<input type="number" min="0" max="31" className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('monthlyExpectedWorkDays', { required: true, min: 0, max: 31 })} data-testid="input-employee-expected-work-days" /><span className="text-[11px] font-normal text-muted-foreground">Цагийн балансад ашиглах ээлжийн сарын төлөвлөгөө.</span></label> : <div className="rounded-xl border border-border bg-secondary/35 p-3 text-xs text-muted-foreground">Ажиллах ёстой өдрийг тухайн сарын Даваа–Баасан гарагаар автоматаар тооцно.</div>}
         {isEdit && <label className="space-y-2 text-xs font-semibold">Төлөв<select className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('status')} data-testid="select-employee-status"><option value="active">Идэвхтэй</option><option value="inactive">Идэвхгүй</option></select></label>}
       </div>

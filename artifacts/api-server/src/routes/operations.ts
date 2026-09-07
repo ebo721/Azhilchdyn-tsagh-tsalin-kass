@@ -151,13 +151,14 @@ async function getPayrollSummary(month: string) {
       employee.employeeType === "shift"
         ? money(daysWorked * Number(employee.baseSalary))
         : money(Number(employee.baseSalary));
-    const socialInsuranceSalary = money(Number(employee.socialInsuranceSalary));
-    const socialInsurance = money(socialInsuranceSalary * 0.115);
-    const taxableIncome = money(Math.max(0, socialInsuranceSalary - socialInsurance));
+    const payrollTaxExempt = employee.payrollTaxExempt;
+    const socialInsuranceSalary = payrollTaxExempt ? 0 : money(Number(employee.socialInsuranceSalary));
+    const socialInsurance = payrollTaxExempt ? 0 : money(socialInsuranceSalary * 0.115);
+    const taxableIncome = payrollTaxExempt ? 0 : money(Math.max(0, socialInsuranceSalary - socialInsurance));
     const adjustment = adjustmentMap.get(employee.id);
-    const calculatedIncomeTax = money(taxableIncome * 0.1);
-    const taxRelief = monthlyIncomeTaxRelief(socialInsuranceSalary);
-    const incomeTax = money(Math.max(0, calculatedIncomeTax - taxRelief));
+    const calculatedIncomeTax = payrollTaxExempt ? 0 : money(taxableIncome * 0.1);
+    const taxRelief = payrollTaxExempt ? 0 : monthlyIncomeTaxRelief(socialInsuranceSalary);
+    const incomeTax = payrollTaxExempt ? 0 : money(Math.max(0, calculatedIncomeTax - taxRelief));
     const advanceAmount = money(paidAdvanceMap.get(employee.id) ?? 0);
     const manualDeduction = money(Number(adjustment?.manualDeduction ?? 0));
     const paidAmount = money(Number(adjustment?.paidAmount ?? 0));

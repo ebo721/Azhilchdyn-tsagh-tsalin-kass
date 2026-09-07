@@ -18,6 +18,7 @@ export interface EmployeeInput {
   baseSalary: number;
   /** @minimum 0 */
   socialInsuranceSalary: number;
+  payrollTaxExempt: boolean;
   /**
      * @minimum 0
      * @maximum 31

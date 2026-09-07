@@ -68,6 +68,7 @@ export const ListEmployeesResponseItem = zod.object({
   "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "socialInsuranceSalary": zod.number(),
+  "payrollTaxExempt": zod.boolean(),
   "monthlyExpectedWorkDays": zod.number().int(),
   "status": zod.enum(['active', 'inactive']),
   "joinedAt": zod.string()
@@ -96,6 +97,7 @@ export const CreateEmployeeBody = zod.object({
   "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number().min(createEmployeeBodyBaseSalaryMin),
   "socialInsuranceSalary": zod.number().min(createEmployeeBodySocialInsuranceSalaryMin),
+  "payrollTaxExempt": zod.boolean(),
   "monthlyExpectedWorkDays": zod.number().int().min(createEmployeeBodyMonthlyExpectedWorkDaysMin).max(createEmployeeBodyMonthlyExpectedWorkDaysMax)
 })
 
@@ -107,6 +109,7 @@ export const CreateEmployeeResponse = zod.object({
   "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "socialInsuranceSalary": zod.number(),
+  "payrollTaxExempt": zod.boolean(),
   "monthlyExpectedWorkDays": zod.number().int(),
   "status": zod.enum(['active', 'inactive']),
   "joinedAt": zod.string()
@@ -138,6 +141,7 @@ export const UpdateEmployeeBody = zod.object({
   "employeeType": zod.enum(['shift', 'office']).optional(),
   "baseSalary": zod.number().min(updateEmployeeBodyBaseSalaryMin).optional(),
   "socialInsuranceSalary": zod.number().min(updateEmployeeBodySocialInsuranceSalaryMin).optional(),
+  "payrollTaxExempt": zod.boolean().optional(),
   "monthlyExpectedWorkDays": zod.number().int().min(updateEmployeeBodyMonthlyExpectedWorkDaysMin).max(updateEmployeeBodyMonthlyExpectedWorkDaysMax).optional(),
   "status": zod.enum(['active', 'inactive']).optional()
 })
@@ -150,6 +154,7 @@ export const UpdateEmployeeResponse = zod.object({
   "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "socialInsuranceSalary": zod.number(),
+  "payrollTaxExempt": zod.boolean(),
   "monthlyExpectedWorkDays": zod.number().int(),
   "status": zod.enum(['active', 'inactive']),
   "joinedAt": zod.string()
