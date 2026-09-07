@@ -8,7 +8,7 @@
 
 export interface PayrollAdjustmentInput {
   employeeId: number;
-  /** @pattern ^\d{4}-\d{2}$ */
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])$ */
   month: string;
   /** @minimum 0 */
   manualDeduction: number;

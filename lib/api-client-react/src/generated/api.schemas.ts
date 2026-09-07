@@ -234,7 +234,7 @@ export interface ShiftPlanInput {
 }
 
 export interface ShiftPlanCopyInput {
-  /** @pattern ^\d{4}-\d{2}$ */
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])$ */
   month: string;
   overwrite: boolean;
 }
@@ -302,7 +302,7 @@ export interface PayrollAdjustment {
 
 export interface PayrollAdjustmentInput {
   employeeId: number;
-  /** @pattern ^\d{4}-\d{2}$ */
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])$ */
   month: string;
   /** @minimum 0 */
   manualDeduction: number;
@@ -348,7 +348,7 @@ export interface PayrollAdvanceSummary {
 }
 
 export interface PayrollAdvanceApprovalInput {
-  /** @pattern ^\d{4}-\d{2}$ */
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])$ */
   month: string;
 }
 
@@ -399,25 +399,37 @@ export interface CashSummary {
 
 export type ListAttendanceParams = {
 date?: string;
+/**
+ * @pattern ^\d{4}-(0[1-9]|1[0-2])$
+ */
 month?: string;
 };
 
 export type ListShiftPlansParams = {
 /**
- * @pattern ^\d{4}-\d{2}$
+ * @pattern ^\d{4}-(0[1-9]|1[0-2])$
  */
 month: string;
 };
 
 export type GetPayrollParams = {
+/**
+ * @pattern ^\d{4}-(0[1-9]|1[0-2])$
+ */
 month?: string;
 };
 
 export type GetPayrollAdvanceParams = {
+/**
+ * @pattern ^\d{4}-(0[1-9]|1[0-2])$
+ */
 month?: string;
 };
 
 export type GetHourBalanceParams = {
+/**
+ * @pattern ^\d{4}-(0[1-9]|1[0-2])$
+ */
 month?: string;
 };
 

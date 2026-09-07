@@ -48,3 +48,57 @@ describe("PUT /api/attendance/shift-plans", () => {
     }).success, true);
   });
 });
+
+describe("calendar month request validation", () => {
+  let server: Server;
+  let baseUrl: string;
+  let adminCookie: string;
+
+  before(() => {
+    process.env.SESSION_SECRET = "calendar-month-regression-test";
+    adminCookie = `${hrCookie.name}=${createStaffSession("admin")}`;
+    server = app.listen(0);
+    const address = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${address.port}`;
+  });
+
+  after(() => {
+    server.close();
+  });
+
+  for (const month of ["2026-00", "2026-13"]) {
+    it(`rejects ${month} when copying the previous month's shift plans`, async () => {
+      const response = await fetch(`${baseUrl}/api/attendance/shift-plans/copy-previous`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: adminCookie,
+        },
+        body: JSON.stringify({ month, overwrite: false }),
+      });
+
+      assert.equal(response.status, 400);
+    });
+
+    it(`rejects ${month} for the monthly payroll report`, async () => {
+      const response = await fetch(`${baseUrl}/api/payroll?month=${month}`, {
+        headers: { cookie: adminCookie },
+      });
+
+      assert.equal(response.status, 400);
+    });
+  }
+
+  it("keeps malformed JSON classified as a 400 client error", async () => {
+    const response = await fetch(`${baseUrl}/api/attendance/shift-plans/copy-previous`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: adminCookie,
+      },
+      body: "{",
+    });
+
+    assert.equal(response.status, 400);
+  });
+});

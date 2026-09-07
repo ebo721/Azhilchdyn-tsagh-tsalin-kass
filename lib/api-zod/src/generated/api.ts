@@ -169,9 +169,12 @@ export const DeleteEmployeeResponse = zod.void()
 /**
  * @summary List attendance records
  */
+export const listAttendanceQueryMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+
+
 export const ListAttendanceQueryParams = zod.object({
   "date": zod.coerce.string().optional(),
-  "month": zod.coerce.string().optional()
+  "month": zod.coerce.string().regex(listAttendanceQueryMonthRegExp).optional()
 })
 
 export const ListAttendanceResponseItem = zod.object({
@@ -311,7 +314,7 @@ export const DeleteShiftResponse = zod.void()
 /**
  * @summary List employee shift plans for a month
  */
-export const listShiftPlansQueryMonthRegExp = new RegExp('^\\d{4}-\\d{2}$');
+export const listShiftPlansQueryMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
 
 
 export const ListShiftPlansQueryParams = zod.object({
@@ -358,7 +361,7 @@ export const UpsertShiftPlanResponse = zod.union([zod.object({
 /**
  * @summary Copy valid active employee shift plans from the previous month
  */
-export const copyPreviousShiftPlansBodyMonthRegExp = new RegExp('^\\d{4}-\\d{2}$');
+export const copyPreviousShiftPlansBodyMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
 
 
 export const CopyPreviousShiftPlansBody = zod.object({
@@ -379,8 +382,11 @@ export const CopyPreviousShiftPlansResponse = zod.object({
 /**
  * @summary Calculate payroll for a month
  */
+export const getPayrollQueryMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+
+
 export const GetPayrollQueryParams = zod.object({
-  "month": zod.coerce.string().optional()
+  "month": zod.coerce.string().regex(getPayrollQueryMonthRegExp).optional()
 })
 
 export const GetPayrollResponse = zod.object({
@@ -418,7 +424,7 @@ export const GetPayrollResponse = zod.object({
 /**
  * @summary Save monthly payroll adjustments for an employee
  */
-export const upsertPayrollAdjustmentBodyMonthRegExp = new RegExp('^\\d{4}-\\d{2}$');
+export const upsertPayrollAdjustmentBodyMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
 export const upsertPayrollAdjustmentBodyManualDeductionMin = 0;
 
 export const upsertPayrollAdjustmentBodyPaidAmountMin = 0;
@@ -444,8 +450,11 @@ export const UpsertPayrollAdjustmentResponse = zod.object({
 /**
  * @summary Get the monthly payroll advance list and approval status
  */
+export const getPayrollAdvanceQueryMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+
+
 export const GetPayrollAdvanceQueryParams = zod.object({
-  "month": zod.coerce.string().optional()
+  "month": zod.coerce.string().regex(getPayrollAdvanceQueryMonthRegExp).optional()
 })
 
 export const GetPayrollAdvanceResponse = zod.object({
@@ -469,7 +478,7 @@ export const GetPayrollAdvanceResponse = zod.object({
 /**
  * @summary Approve and freeze the monthly payroll advance
  */
-export const approvePayrollAdvanceBodyMonthRegExp = new RegExp('^\\d{4}-\\d{2}$');
+export const approvePayrollAdvanceBodyMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
 
 
 export const ApprovePayrollAdvanceBody = zod.object({
@@ -497,8 +506,11 @@ export const ApprovePayrollAdvanceResponse = zod.object({
 /**
  * @summary Get monthly hour balance
  */
+export const getHourBalanceQueryMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+
+
 export const GetHourBalanceQueryParams = zod.object({
-  "month": zod.coerce.string().optional()
+  "month": zod.coerce.string().regex(getHourBalanceQueryMonthRegExp).optional()
 })
 
 export const GetHourBalanceResponseItem = zod.object({
