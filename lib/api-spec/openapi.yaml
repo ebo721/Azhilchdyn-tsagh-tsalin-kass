@@ -394,6 +394,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PayrollAdvanceSummary"
+  /payroll-advance/approval:
+    delete:
+      operationId: revertPayrollAdvanceApproval
+      tags: [payroll]
+      summary: Revert a monthly payroll advance approval
+      parameters:
+        - in: query
+          name: month
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+      responses:
+        "200":
+          description: Recalculated unapproved monthly payroll advance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayrollAdvanceSummary"
   /payroll-advance/payment:
     put:
       operationId: updatePayrollAdvancePayment

@@ -444,6 +444,13 @@ export type GetPayrollAdvanceParams = {
 month?: string;
 };
 
+export type RevertPayrollAdvanceApprovalParams = {
+/**
+ * @pattern ^\d{4}-(0[1-9]|1[0-2])$
+ */
+month: string;
+};
+
 export type GetHourBalanceParams = {
 /**
  * @pattern ^\d{4}-(0[1-9]|1[0-2])$

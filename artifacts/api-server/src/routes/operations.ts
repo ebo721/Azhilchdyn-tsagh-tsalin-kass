@@ -20,6 +20,7 @@ import {
   ListShiftPlansQueryParams,
   ListShiftPlansResponse,
   ListShiftsResponse,
+  RevertPayrollAdvanceApprovalQueryParams,
   ListCashTransactionsResponse,
   ListEmployeesResponse,
   UpsertPayrollAdjustmentBody,
@@ -791,6 +792,37 @@ router.post("/payroll-advance/approve", async (req, res, next) => {
         totalAmount: existing.totalAmount,
       }).onConflictDoNothing();
     }
+    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/payroll-advance/approval", async (req, res, next) => {
+  try {
+    if (getStaffRole(req) !== "admin") {
+      res.status(403).json({ error: "Урьдчилгаа цалингийн батлалтыг зөвхөн ерөнхий админ буцаана" });
+      return;
+    }
+    const { month } = RevertPayrollAdvanceApprovalQueryParams.parse(req.query);
+    const [approval] = await db
+      .select()
+      .from(payrollAdvanceApprovalsTable)
+      .where(eq(payrollAdvanceApprovalsTable.month, month));
+    if (!approval) {
+      res.status(404).json({ error: "Батлагдсан урьдчилгаа цалин олдсонгүй" });
+      return;
+    }
+    const lines = Array.isArray(approval.lines)
+      ? approval.lines as Array<{ paid?: boolean }>
+      : [];
+    if (lines.some((line) => line.paid === true)) {
+      res.status(409).json({ error: "Эхлээд олгосон урьдчилгаа цалингийн мөрүүдийг Олгоогүй болгоно уу" });
+      return;
+    }
+    await db
+      .delete(payrollAdvanceApprovalsTable)
+      .where(eq(payrollAdvanceApprovalsTable.id, approval.id));
     res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month)));
   } catch (error) {
     next(error);

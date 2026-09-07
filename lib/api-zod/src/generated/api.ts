@@ -511,6 +511,36 @@ export const ApprovePayrollAdvanceResponse = zod.object({
 
 
 /**
+ * @summary Revert a monthly payroll advance approval
+ */
+export const revertPayrollAdvanceApprovalQueryMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+
+
+export const RevertPayrollAdvanceApprovalQueryParams = zod.object({
+  "month": zod.coerce.string().regex(revertPayrollAdvanceApprovalQueryMonthRegExp)
+})
+
+export const RevertPayrollAdvanceApprovalResponse = zod.object({
+  "month": zod.string(),
+  "approved": zod.boolean(),
+  "approvedAt": zod.string().optional(),
+  "totalAmount": zod.number(),
+  "lines": zod.array(zod.object({
+  "employeeId": zod.number().int(),
+  "employeeName": zod.string(),
+  "employeeType": zod.enum(['shift', 'office']),
+  "baseSalary": zod.number(),
+  "daysWorked": zod.number(),
+  "dailySalary": zod.number(),
+  "totalSalary": zod.number(),
+  "advanceAmount": zod.number(),
+  "paid": zod.boolean(),
+  "paymentDate": zod.string().nullish()
+}))
+})
+
+
+/**
  * @summary Mark an approved employee payroll advance as paid or unpaid
  */
 export const updatePayrollAdvancePaymentBodyMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');

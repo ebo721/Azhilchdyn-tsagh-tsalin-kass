@@ -45,6 +45,7 @@ import type {
   PayrollAdvancePaymentInput,
   PayrollAdvanceSummary,
   PayrollSummary,
+  RevertPayrollAdvanceApprovalParams,
   Shift,
   ShiftInput,
   ShiftPlan,
@@ -1778,6 +1779,84 @@ export const useApprovePayrollAdvance = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getApprovePayrollAdvanceMutationOptions(options));
+    }
+
+export const getRevertPayrollAdvanceApprovalUrl = (params: RevertPayrollAdvanceApprovalParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/payroll-advance/approval?${stringifiedParams}` : `/api/payroll-advance/approval`
+}
+
+/**
+ * @summary Revert a monthly payroll advance approval
+ */
+export const revertPayrollAdvanceApproval = async (params: RevertPayrollAdvanceApprovalParams, options?: Parameters<typeof customFetch>[1]): Promise<PayrollAdvanceSummary> => {
+
+  return customFetch<PayrollAdvanceSummary>(getRevertPayrollAdvanceApprovalUrl(params),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getRevertPayrollAdvanceApprovalMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revertPayrollAdvanceApproval>>, TError,{params: RevertPayrollAdvanceApprovalParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revertPayrollAdvanceApproval>>, TError,{params: RevertPayrollAdvanceApprovalParams}, TContext> => {
+
+const mutationKey = ['revertPayrollAdvanceApproval'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revertPayrollAdvanceApproval>>, {params: RevertPayrollAdvanceApprovalParams}> = (props) => {
+          const {params} = props ?? {};
+
+          return  revertPayrollAdvanceApproval(params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevertPayrollAdvanceApprovalMutationResult = NonNullable<Awaited<ReturnType<typeof revertPayrollAdvanceApproval>>>
+
+    export type RevertPayrollAdvanceApprovalMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Revert a monthly payroll advance approval
+ */
+export const useRevertPayrollAdvanceApproval = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revertPayrollAdvanceApproval>>, TError,{params: RevertPayrollAdvanceApprovalParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revertPayrollAdvanceApproval>>,
+        TError,
+        {params: RevertPayrollAdvanceApprovalParams},
+        TContext
+      > => {
+      return useMutation(getRevertPayrollAdvanceApprovalMutationOptions(options));
     }
 
 export const getUpdatePayrollAdvancePaymentUrl = () => {

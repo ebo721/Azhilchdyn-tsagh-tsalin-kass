@@ -47,6 +47,7 @@ export * from './payrollAdvanceSummary';
 export * from './payrollLine';
 export * from './payrollLineEmployeeType';
 export * from './payrollSummary';
+export * from './revertPayrollAdvanceApprovalParams';
 export * from './shift';
 export * from './shiftInput';
 export * from './shiftPlan';

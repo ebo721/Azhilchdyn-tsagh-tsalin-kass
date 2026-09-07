@@ -69,6 +69,7 @@ import {
   useListShifts,
   useLoginHrManager,
   useLogoutHrManager,
+  useRevertPayrollAdvanceApproval,
   useUpsertAttendance,
   useUpsertShiftPlan,
   useUpsertPayrollAdjustment,
@@ -495,13 +496,24 @@ function Payroll() {
   const [advanceDates, setAdvanceDates] = useState<Record<number, string>>({});
   const query = useGetPayroll({ month });
   const advanceQuery = useGetPayrollAdvance({ month });
+  const session = useGetAuthSession();
   const qc = useQueryClient();
   const approveAdvance = useApprovePayrollAdvance();
+  const revertAdvanceApproval = useRevertPayrollAdvanceApproval();
   const updateAdvancePayment = useUpdatePayrollAdvancePayment();
   const approve = () => {
     if (!window.confirm(`${month} сарын урьдчилгаа цалинг батлах уу? Баталсны дараа энэ жагсаалтын дүн өөрчлөгдөхгүй.`)) return;
     approveAdvance.mutate({ data: { month } }, {
       onSuccess: () => qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey({ month }) }),
+    });
+  };
+  const revertApproval = () => {
+    if (!window.confirm(`${month} сарын урьдчилгаа цалингийн батлалтыг буцаах уу?`)) return;
+    revertAdvanceApproval.mutate({ params: { month } }, {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey({ month }) });
+        qc.invalidateQueries({ queryKey: getGetPayrollQueryKey({ month }) });
+      },
     });
   };
   const setAdvancePaid = (employeeId: number, paid: boolean, existingDate?: string | null) => {
@@ -518,7 +530,7 @@ function Payroll() {
     {showAdvance && <section className="mb-6 overflow-hidden rounded-2xl border border-accent/60 bg-card shadow-sm" data-testid="section-payroll-advance">
       <div className="flex flex-col justify-between gap-4 border-b border-border bg-accent/10 px-5 py-4 sm:flex-row sm:items-center">
         <div><p className="font-mono text-[10px] font-bold uppercase tracking-[.18em] text-primary">Advance payroll</p><h2 className="mt-1 text-lg font-bold">{month.replace('-', ' оны ')} сарын урьдчилгаа цалин</h2><p className="mt-1 text-xs text-muted-foreground">Ээлжийн ажилтан сарын 1–15-нд ажилласан хоногийн бүтэн цалингаа, оффис ажилтан үндсэн цалингийн 50%-ийг авна.</p></div>
-        {advanceQuery.data?.approved ? <div className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground" data-testid="status-advance-approved"><Check className="mr-2 inline size-4" />Батлагдсан · {advanceQuery.data.approvedAt ? dateLabel(advanceQuery.data.approvedAt) : ''}</div> : <Button onClick={approve} disabled={approveAdvance.isPending || advanceQuery.isLoading} data-testid="button-approve-payroll-advance"><Check className="size-4" />{approveAdvance.isPending ? 'Баталж байна...' : 'Урьдчилгаа батлах'}</Button>}
+        {advanceQuery.data?.approved ? <div className="flex flex-wrap items-center gap-2"><div className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground" data-testid="status-advance-approved"><Check className="mr-2 inline size-4" />Батлагдсан · {advanceQuery.data.approvedAt ? dateLabel(advanceQuery.data.approvedAt) : ''}</div>{session.data?.role === 'admin' && <Button variant="outline" onClick={revertApproval} disabled={revertAdvanceApproval.isPending} data-testid="button-revert-payroll-advance">{revertAdvanceApproval.isPending ? 'Буцааж байна...' : 'Батлалт буцаах'}</Button>}</div> : <Button onClick={approve} disabled={approveAdvance.isPending || advanceQuery.isLoading} data-testid="button-approve-payroll-advance"><Check className="size-4" />{approveAdvance.isPending ? 'Баталж байна...' : 'Урьдчилгаа батлах'}</Button>}
       </div>
       {advanceQuery.isLoading ? <div className="p-5"><LoadingBlock className="h-36" /></div> : advanceQuery.isError ? <div className="p-5"><ErrorBlock onRetry={() => advanceQuery.refetch()} /></div> : <div className="overflow-x-auto">
         <table className="w-full min-w-[1280px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Ажилтан</th><th className="px-5 py-3 text-right">Үндсэн цалин</th><th className="px-5 py-3 text-right">Ажилласан хоног</th><th className="px-5 py-3 text-right">Өдрийн цалин</th><th className="px-5 py-3 text-right">Нийт олгох цалин</th><th className="px-5 py-3 text-right">Олгох урьдчилгаа</th><th className="px-5 py-3 text-center">Гүйлгээний огноо</th><th className="px-5 py-3 text-center">Төлөв</th></tr></thead>
@@ -526,6 +538,7 @@ function Payroll() {
           <tfoot className="border-t-2 border-border bg-secondary/35"><tr><td colSpan={5} className="px-5 py-4 text-right text-sm font-bold">Нийт олгох урьдчилгаа</td><td className="px-5 py-4 text-right font-mono text-base font-bold text-primary" data-testid="value-total-payroll-advance">{money(advanceQuery.data?.totalAmount)}</td><td colSpan={2} /></tr></tfoot>
         </table>
       </div>}
+      {revertAdvanceApproval.isError && <p className="border-t border-border bg-destructive/5 px-5 py-3 text-xs font-medium text-destructive">Олгосон урьдчилгаа байвал эхлээд тухайн мөрийг “Олгоогүй” болгоно уу.</p>}
     </section>}
     {query.isLoading ? <div className="space-y-3 rounded-2xl border border-border bg-card p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : <>
       <section className="overflow-hidden rounded-2xl border border-border bg-card">
