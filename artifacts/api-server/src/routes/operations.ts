@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import {
   CreateAttendanceBody,
+  CreateShiftBody,
   CreateCashTransactionBody,
   CreateEmployeeBody,
   ApprovePayrollAdvanceBody,
@@ -14,10 +15,16 @@ import {
   GetCashSummaryResponse,
   ListAttendanceQueryParams,
   ListAttendanceResponse,
+  ListShiftPlansQueryParams,
+  ListShiftPlansResponse,
+  ListShiftsResponse,
   ListCashTransactionsResponse,
   ListEmployeesResponse,
   UpsertPayrollAdjustmentBody,
   UpsertAttendanceBody,
+  UpsertShiftPlanBody,
+  UpdateShiftBody,
+  UpdateShiftParams,
   UpdateEmployeeBody,
   UpdateEmployeeParams,
 } from "@workspace/api-zod";
@@ -27,8 +34,10 @@ import {
   cashTransactionsTable,
   db,
   employeesTable,
+  employeeShiftPlansTable,
   payrollAdjustmentsTable,
   payrollAdvanceApprovalsTable,
+  shiftTemplatesTable,
 } from "@workspace/db";
 import { getStaffRole } from "../lib/hr-session";
 
@@ -328,6 +337,132 @@ router.delete("/employees/:id", async (req, res, next) => {
     }
     await db.delete(employeesTable).where(eq(employeesTable.id, id));
     res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/attendance/shifts", async (_req, res, next) => {
+  try {
+    const rows = await db.select().from(shiftTemplatesTable).orderBy(shiftTemplatesTable.startTime);
+    res.json(ListShiftsResponse.parse(rows));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/attendance/shifts", async (req, res, next) => {
+  try {
+    const input = CreateShiftBody.parse(req.body);
+    if (input.startTime === input.endTime) {
+      res.status(400).json({ error: "Ээлжийн эхлэх, тарах цаг ижил байж болохгүй" });
+      return;
+    }
+    const [shift] = await db.insert(shiftTemplatesTable).values(input).returning();
+    res.status(201).json(shift);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch("/attendance/shifts/:id", async (req, res, next) => {
+  try {
+    const { id } = UpdateShiftParams.parse(req.params);
+    const input = UpdateShiftBody.parse(req.body);
+    if (input.startTime === input.endTime) {
+      res.status(400).json({ error: "Ээлжийн эхлэх, тарах цаг ижил байж болохгүй" });
+      return;
+    }
+    const [shift] = await db.update(shiftTemplatesTable).set(input).where(eq(shiftTemplatesTable.id, id)).returning();
+    if (!shift) {
+      res.status(404).json({ error: "Ээлж олдсонгүй" });
+      return;
+    }
+    res.json(shift);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/attendance/shifts/:id", async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      res.status(400).json({ error: "Ээлжийн дугаар буруу байна" });
+      return;
+    }
+    const plans = await db.select().from(employeeShiftPlansTable).where(eq(employeeShiftPlansTable.shiftId, id));
+    if (plans.length) {
+      res.status(409).json({ error: "Энэ ээлж сарын төлөвлөгөөнд ашиглагдсан тул устгах боломжгүй" });
+      return;
+    }
+    await db.delete(shiftTemplatesTable).where(eq(shiftTemplatesTable.id, id));
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/attendance/shift-plans", async (req, res, next) => {
+  try {
+    const { month } = ListShiftPlansQueryParams.parse(req.query);
+    const [plans, employees, shifts] = await Promise.all([
+      db.select().from(employeeShiftPlansTable),
+      db.select().from(employeesTable),
+      db.select().from(shiftTemplatesTable),
+    ]);
+    const employeeMap = new Map(employees.map((employee) => [employee.id, employee.name]));
+    const shiftMap = new Map(shifts.map((shift) => [shift.id, shift]));
+    const rows = plans.filter((plan) => plan.date.startsWith(month)).map((plan) => {
+      const shift = shiftMap.get(plan.shiftId);
+      return {
+        id: plan.id,
+        employeeId: plan.employeeId,
+        employeeName: employeeMap.get(plan.employeeId) ?? "Тодорхойгүй",
+        date: plan.date,
+        shiftId: plan.shiftId,
+        shiftName: shift?.name ?? "Тодорхойгүй",
+        startTime: shift?.startTime ?? "",
+        endTime: shift?.endTime ?? "",
+      };
+    });
+    res.json(ListShiftPlansResponse.parse(rows));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/attendance/shift-plans", async (req, res, next) => {
+  try {
+    const input = UpsertShiftPlanBody.parse(req.body);
+    const existing = await db.select().from(employeeShiftPlansTable).where(and(
+      eq(employeeShiftPlansTable.employeeId, input.employeeId),
+      eq(employeeShiftPlansTable.date, input.date),
+    ));
+    if (input.shiftId === null) {
+      if (existing[0]) await db.delete(employeeShiftPlansTable).where(eq(employeeShiftPlansTable.id, existing[0].id));
+      res.json(null);
+      return;
+    }
+    const [shift] = await db.select().from(shiftTemplatesTable).where(eq(shiftTemplatesTable.id, input.shiftId));
+    const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, input.employeeId));
+    if (!shift || !employee) {
+      res.status(404).json({ error: "Ажилтан эсвэл ээлж олдсонгүй" });
+      return;
+    }
+    const [plan] = existing[0]
+      ? await db.update(employeeShiftPlansTable).set({ shiftId: input.shiftId }).where(eq(employeeShiftPlansTable.id, existing[0].id)).returning()
+      : await db.insert(employeeShiftPlansTable).values(input as { employeeId: number; date: string; shiftId: number }).returning();
+    res.json({
+      id: plan.id,
+      employeeId: plan.employeeId,
+      employeeName: employee.name,
+      date: plan.date,
+      shiftId: shift.id,
+      shiftName: shift.name,
+      startTime: shift.startTime,
+      endTime: shift.endTime,
+    });
   } catch (error) {
     next(error);
   }

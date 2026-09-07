@@ -25,6 +25,26 @@ export const employeesTable = pgTable("employees", {
   joinedAt: date("joined_at").notNull().defaultNow(),
 });
 
+export const shiftTemplatesTable = pgTable("shift_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("shift_templates_name_idx").on(table.name),
+]);
+
+export const employeeShiftPlansTable = pgTable("employee_shift_plans", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => employeesTable.id, { onDelete: "cascade" }),
+  date: date("date", { mode: "string" }).notNull(),
+  shiftId: integer("shift_id").notNull().references(() => shiftTemplatesTable.id, { onDelete: "restrict" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  uniqueIndex("employee_shift_plans_employee_date_idx").on(table.employeeId, table.date),
+]);
+
 export const attendanceTable = pgTable("attendance", {
   id: serial("id").primaryKey(),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id, { onDelete: "cascade" }),
@@ -82,6 +102,8 @@ export const insertCashTransactionSchema = createInsertSchema(cashTransactionsTa
 });
 
 export type Employee = typeof employeesTable.$inferSelect;
+export type ShiftTemplate = typeof shiftTemplatesTable.$inferSelect;
+export type EmployeeShiftPlan = typeof employeeShiftPlansTable.$inferSelect;
 export type Attendance = typeof attendanceTable.$inferSelect;
 export type PayrollAdjustment = typeof payrollAdjustmentsTable.$inferSelect;
 export type PayrollAdvanceApproval = typeof payrollAdvanceApprovalsTable.$inferSelect;

@@ -239,6 +239,123 @@ export const UpsertAttendanceResponse = zod.object({
 
 
 /**
+ * @summary List reusable shift schedules
+ */
+export const ListShiftsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "startTime": zod.string(),
+  "endTime": zod.string()
+})
+export const ListShiftsResponse = zod.array(ListShiftsResponseItem)
+
+
+/**
+ * @summary Create a shift schedule
+ */
+
+export const createShiftBodyStartTimeRegExp = new RegExp('^([01]\\d|2[0-3]):[0-5]\\d$');
+export const createShiftBodyEndTimeRegExp = new RegExp('^([01]\\d|2[0-3]):[0-5]\\d$');
+
+
+export const CreateShiftBody = zod.object({
+  "name": zod.string().min(1),
+  "startTime": zod.string().regex(createShiftBodyStartTimeRegExp),
+  "endTime": zod.string().regex(createShiftBodyEndTimeRegExp)
+})
+
+export const CreateShiftResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "startTime": zod.string(),
+  "endTime": zod.string()
+})
+
+
+/**
+ * @summary Update a shift schedule
+ */
+export const UpdateShiftParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+export const updateShiftBodyStartTimeRegExp = new RegExp('^([01]\\d|2[0-3]):[0-5]\\d$');
+export const updateShiftBodyEndTimeRegExp = new RegExp('^([01]\\d|2[0-3]):[0-5]\\d$');
+
+
+export const UpdateShiftBody = zod.object({
+  "name": zod.string().min(1),
+  "startTime": zod.string().regex(updateShiftBodyStartTimeRegExp),
+  "endTime": zod.string().regex(updateShiftBodyEndTimeRegExp)
+})
+
+export const UpdateShiftResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "startTime": zod.string(),
+  "endTime": zod.string()
+})
+
+
+/**
+ * @summary Delete an unused shift schedule
+ */
+export const DeleteShiftParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteShiftResponse = zod.void()
+
+
+/**
+ * @summary List employee shift plans for a month
+ */
+export const listShiftPlansQueryMonthRegExp = new RegExp('^\\d{4}-\\d{2}$');
+
+
+export const ListShiftPlansQueryParams = zod.object({
+  "month": zod.coerce.string().regex(listShiftPlansQueryMonthRegExp)
+})
+
+export const ListShiftPlansResponseItem = zod.object({
+  "id": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "employeeName": zod.string(),
+  "date": zod.string(),
+  "shiftId": zod.number().int(),
+  "shiftName": zod.string(),
+  "startTime": zod.string(),
+  "endTime": zod.string()
+})
+export const ListShiftPlansResponse = zod.array(ListShiftPlansResponseItem)
+
+
+/**
+ * @summary Assign or clear an employee shift for a day
+ */
+export const upsertShiftPlanBodyDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const UpsertShiftPlanBody = zod.object({
+  "employeeId": zod.number().int(),
+  "date": zod.string().regex(upsertShiftPlanBodyDateRegExp),
+  "shiftId": zod.number().int().nullable()
+})
+
+export const UpsertShiftPlanResponse = zod.union([zod.object({
+  "id": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "employeeName": zod.string(),
+  "date": zod.string(),
+  "shiftId": zod.number().int(),
+  "shiftName": zod.string(),
+  "startTime": zod.string(),
+  "endTime": zod.string()
+}),zod.null()])
+
+
+/**
  * @summary Calculate payroll for a month
  */
 export const GetPayrollQueryParams = zod.object({

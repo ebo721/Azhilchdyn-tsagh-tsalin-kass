@@ -37,12 +37,17 @@ import type {
   HealthStatus,
   HourBalanceLine,
   ListAttendanceParams,
+  ListShiftPlansParams,
   LoginInput,
   PayrollAdjustment,
   PayrollAdjustmentInput,
   PayrollAdvanceApprovalInput,
   PayrollAdvanceSummary,
-  PayrollSummary
+  PayrollSummary,
+  Shift,
+  ShiftInput,
+  ShiftPlan,
+  ShiftPlanInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -943,6 +948,452 @@ export const useUpsertAttendance = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpsertAttendanceMutationOptions(options));
+    }
+
+export const getListShiftsUrl = () => {
+
+
+
+
+  return `/api/attendance/shifts`
+}
+
+/**
+ * @summary List reusable shift schedules
+ */
+export const listShifts = async ( options?: Parameters<typeof customFetch>[1]): Promise<Shift[]> => {
+
+  return customFetch<Shift[]>(getListShiftsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShiftsQueryKey = () => {
+    return [
+    `/api/attendance/shifts`
+    ] as const;
+    }
+
+
+export const getListShiftsQueryOptions = <TData = Awaited<ReturnType<typeof listShifts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShifts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShiftsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShifts>>> = ({ signal }) => listShifts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShifts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShiftsQueryResult = NonNullable<Awaited<ReturnType<typeof listShifts>>>
+export type ListShiftsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List reusable shift schedules
+ */
+
+export function useListShifts<TData = Awaited<ReturnType<typeof listShifts>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShifts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShiftsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateShiftUrl = () => {
+
+
+
+
+  return `/api/attendance/shifts`
+}
+
+/**
+ * @summary Create a shift schedule
+ */
+export const createShift = async (shiftInput: ShiftInput, options?: Parameters<typeof customFetch>[1]): Promise<Shift> => {
+
+  return customFetch<Shift>(getCreateShiftUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shiftInput)
+  }
+);}
+
+
+
+
+
+export const getCreateShiftMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createShift>>, TError,{data: BodyType<ShiftInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createShift>>, TError,{data: BodyType<ShiftInput>}, TContext> => {
+
+const mutationKey = ['createShift'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createShift>>, {data: BodyType<ShiftInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createShift(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateShiftMutationResult = NonNullable<Awaited<ReturnType<typeof createShift>>>
+    export type CreateShiftMutationBody = BodyType<ShiftInput>
+    export type CreateShiftMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a shift schedule
+ */
+export const useCreateShift = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createShift>>, TError,{data: BodyType<ShiftInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createShift>>,
+        TError,
+        {data: BodyType<ShiftInput>},
+        TContext
+      > => {
+      return useMutation(getCreateShiftMutationOptions(options));
+    }
+
+export const getUpdateShiftUrl = (id: number,) => {
+
+
+
+
+  return `/api/attendance/shifts/${id}`
+}
+
+/**
+ * @summary Update a shift schedule
+ */
+export const updateShift = async (id: number,
+    shiftInput: ShiftInput, options?: Parameters<typeof customFetch>[1]): Promise<Shift> => {
+
+  return customFetch<Shift>(getUpdateShiftUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shiftInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateShiftMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateShift>>, TError,{id: number;data: BodyType<ShiftInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateShift>>, TError,{id: number;data: BodyType<ShiftInput>}, TContext> => {
+
+const mutationKey = ['updateShift'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateShift>>, {id: number;data: BodyType<ShiftInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateShift(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateShiftMutationResult = NonNullable<Awaited<ReturnType<typeof updateShift>>>
+    export type UpdateShiftMutationBody = BodyType<ShiftInput>
+    export type UpdateShiftMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update a shift schedule
+ */
+export const useUpdateShift = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateShift>>, TError,{id: number;data: BodyType<ShiftInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateShift>>,
+        TError,
+        {id: number;data: BodyType<ShiftInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateShiftMutationOptions(options));
+    }
+
+export const getDeleteShiftUrl = (id: number,) => {
+
+
+
+
+  return `/api/attendance/shifts/${id}`
+}
+
+/**
+ * @summary Delete an unused shift schedule
+ */
+export const deleteShift = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteShiftUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteShiftMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteShift>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteShift>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteShift'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteShift>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteShift(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteShiftMutationResult = NonNullable<Awaited<ReturnType<typeof deleteShift>>>
+
+    export type DeleteShiftMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete an unused shift schedule
+ */
+export const useDeleteShift = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteShift>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteShift>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteShiftMutationOptions(options));
+    }
+
+export const getListShiftPlansUrl = (params: ListShiftPlansParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/attendance/shift-plans?${stringifiedParams}` : `/api/attendance/shift-plans`
+}
+
+/**
+ * @summary List employee shift plans for a month
+ */
+export const listShiftPlans = async (params: ListShiftPlansParams, options?: Parameters<typeof customFetch>[1]): Promise<ShiftPlan[]> => {
+
+  return customFetch<ShiftPlan[]>(getListShiftPlansUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListShiftPlansQueryKey = (params?: ListShiftPlansParams,) => {
+    return [
+    `/api/attendance/shift-plans`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListShiftPlansQueryOptions = <TData = Awaited<ReturnType<typeof listShiftPlans>>, TError = ErrorType<unknown>>(params: ListShiftPlansParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftPlans>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListShiftPlansQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listShiftPlans>>> = ({ signal }) => listShiftPlans(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listShiftPlans>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListShiftPlansQueryResult = NonNullable<Awaited<ReturnType<typeof listShiftPlans>>>
+export type ListShiftPlansQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List employee shift plans for a month
+ */
+
+export function useListShiftPlans<TData = Awaited<ReturnType<typeof listShiftPlans>>, TError = ErrorType<unknown>>(
+ params: ListShiftPlansParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listShiftPlans>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListShiftPlansQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpsertShiftPlanUrl = () => {
+
+
+
+
+  return `/api/attendance/shift-plans`
+}
+
+/**
+ * @summary Assign or clear an employee shift for a day
+ */
+export const upsertShiftPlan = async (shiftPlanInput: ShiftPlanInput, options?: Parameters<typeof customFetch>[1]): Promise<ShiftPlan | null> => {
+
+  return customFetch<ShiftPlan | null>(getUpsertShiftPlanUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shiftPlanInput)
+  }
+);}
+
+
+
+
+
+export const getUpsertShiftPlanMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertShiftPlan>>, TError,{data: BodyType<ShiftPlanInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof upsertShiftPlan>>, TError,{data: BodyType<ShiftPlanInput>}, TContext> => {
+
+const mutationKey = ['upsertShiftPlan'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertShiftPlan>>, {data: BodyType<ShiftPlanInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  upsertShiftPlan(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpsertShiftPlanMutationResult = NonNullable<Awaited<ReturnType<typeof upsertShiftPlan>>>
+    export type UpsertShiftPlanMutationBody = BodyType<ShiftPlanInput>
+    export type UpsertShiftPlanMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Assign or clear an employee shift for a day
+ */
+export const useUpsertShiftPlan = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertShiftPlan>>, TError,{data: BodyType<ShiftPlanInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof upsertShiftPlan>>,
+        TError,
+        {data: BodyType<ShiftPlanInput>},
+        TContext
+      > => {
+      return useMutation(getUpsertShiftPlanMutationOptions(options));
     }
 
 export const getGetPayrollUrl = (params?: GetPayrollParams,) => {

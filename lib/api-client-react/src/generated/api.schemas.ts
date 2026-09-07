@@ -198,6 +198,41 @@ export interface AttendanceToggleInput {
   hours?: number;
 }
 
+export interface Shift {
+  id: number;
+  name: string;
+  startTime: string;
+  endTime: string;
+}
+
+export interface ShiftInput {
+  /** @minLength 1 */
+  name: string;
+  /** @pattern ^([01]\d|2[0-3]):[0-5]\d$ */
+  startTime: string;
+  /** @pattern ^([01]\d|2[0-3]):[0-5]\d$ */
+  endTime: string;
+}
+
+export interface ShiftPlan {
+  id: number;
+  employeeId: number;
+  employeeName: string;
+  date: string;
+  shiftId: number;
+  shiftName: string;
+  startTime: string;
+  endTime: string;
+}
+
+export interface ShiftPlanInput {
+  employeeId: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  date: string;
+  /** @nullable */
+  shiftId: number | null;
+}
+
 export interface HourBalanceLine {
   employeeId: number;
   employeeName: string;
@@ -350,6 +385,13 @@ export interface CashSummary {
 export type ListAttendanceParams = {
 date?: string;
 month?: string;
+};
+
+export type ListShiftPlansParams = {
+/**
+ * @pattern ^\d{4}-\d{2}$
+ */
+month: string;
 };
 
 export type GetPayrollParams = {

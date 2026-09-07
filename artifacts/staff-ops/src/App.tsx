@@ -45,11 +45,15 @@ import {
   getGetPayrollAdvanceQueryKey,
   getGetPayrollQueryKey,
   getListAttendanceQueryKey,
+  getListShiftPlansQueryKey,
+  getListShiftsQueryKey,
   getListCashTransactionsQueryKey,
   getListEmployeesQueryKey,
   useCreateCashTransaction,
+  useCreateShift,
   useCreateEmployee,
   useDeleteEmployee,
+  useDeleteShift,
   useGetCashSummary,
   useGetAuthSession,
   useGetDashboard,
@@ -59,14 +63,19 @@ import {
   useListAttendance,
   useListCashTransactions,
   useListEmployees,
+  useListShiftPlans,
+  useListShifts,
   useLoginHrManager,
   useLogoutHrManager,
   useUpsertAttendance,
+  useUpsertShiftPlan,
   useUpsertPayrollAdjustment,
   useApprovePayrollAdvance,
   useUpdateEmployee,
+  useUpdateShift,
   type Employee,
   type PayrollLine,
+  type Shift,
 } from '@workspace/api-client-react';
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import NotFound from '@/pages/not-found';
@@ -295,14 +304,60 @@ function Employees() {
   return <div className="page-enter"><PageHeading eyebrow="Хүний нөөц / directory" title="Ажилчид" detail="Ээлжийн болон оффис ажилтны цалин, НДШ-ийн суурийг нэг дор удирдана." action={<Button onClick={() => setModal({ open: true })} data-testid="button-add-employee"><Plus className="size-4" />Ажилтан нэмэх</Button>} /><section className="overflow-hidden rounded-2xl border border-border bg-card"><div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-bold">Бүх ажилтан <span className="ml-1 font-mono text-xs text-muted-foreground">{query.data?.length ?? 0}</span></p><p className="mt-1 text-xs text-muted-foreground">Идэвхтэй ажилтны мэдээлэл шинэчлэгдэнэ.</p></div><div className="relative w-full sm:w-64"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" placeholder="Нэрээр хайх" data-testid="input-search-employees" /></div></div>{query.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : employees.length === 0 ? <EmptyState title="Ажилтан олдсонгүй" detail={search ? 'Хайлтын үгээ өөрчлөөд үзнэ үү.' : 'Эхний ажилтнаа бүртгэж эхлээрэй.'} icon={UsersRound} /> : <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3 font-bold">Ажилтан</th><th className="px-5 py-3 font-bold">Утас</th><th className="px-5 py-3 font-bold">Ажилтны төрөл</th><th className="px-5 py-3 font-bold">Цалин</th><th className="px-5 py-3 font-bold">НДШ-ийн цалин</th><th className="px-5 py-3 font-bold">Төлөв</th><th className="px-5 py-3 text-right font-bold">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{employees.map((employee) => <tr className="group transition-colors hover:bg-secondary/35" key={employee.id} data-testid={`row-employee-${employee.id}`}><td className="px-5 py-4"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent/30 text-xs font-bold text-foreground">{employee.name.slice(0, 1)}</span><div><p className="text-sm font-semibold">{employee.name}</p><p className="text-xs text-muted-foreground">{employee.role}</p></div></div></td><td className="px-5 py-4 text-sm text-muted-foreground">{employee.phone || '—'}</td><td className="px-5 py-4 text-sm">{employee.employeeType === EmployeeEmployeeType.office ? 'Оффис' : 'Ээлжийн'}</td><td className="px-5 py-4"><p className="font-mono text-sm">{money(employee.baseSalary)}</p><p className="text-[10px] text-muted-foreground">{employee.employeeType === EmployeeEmployeeType.office ? 'сарын' : 'өдрийн'}</p></td><td className="px-5 py-4 font-mono text-sm">{money(employee.socialInsuranceSalary)}</td><td className="px-5 py-4"><StatusPill value={employee.status} /></td><td className="px-5 py-4"><div className="flex justify-end gap-1"><button className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={() => setModal({ open: true, employee })} aria-label={`${employee.name} засах`} data-testid={`button-edit-employee-${employee.id}`}><Pencil className="size-4" /></button><button className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => del(employee)} aria-label={`${employee.name} устгах`} data-testid={`button-delete-employee-${employee.id}`}><Trash2 className="size-4" /></button></div></td></tr>)}</tbody></table></div>}</section>{modal.open && <EmployeeModal employee={modal.employee} onClose={() => setModal({ open: false })} />}</div>;
 }
 
+type ShiftForm = { name: string; startTime: string; endTime: string };
+
+function ShiftSettingsModal({ onClose }: { onClose: () => void }) {
+  const shifts = useListShifts();
+  const create = useCreateShift();
+  const update = useUpdateShift();
+  const remove = useDeleteShift();
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState<Shift | null>(null);
+  const form = useForm<ShiftForm>({ defaultValues: { name: '', startTime: '09:00', endTime: '18:00' } });
+  const reset = () => { setEditing(null); form.reset({ name: '', startTime: '09:00', endTime: '18:00' }); };
+  const submit = (data: ShiftForm) => {
+    const done = () => { qc.invalidateQueries({ queryKey: getListShiftsQueryKey() }); reset(); };
+    if (editing) update.mutate({ id: editing.id, data }, { onSuccess: done });
+    else create.mutate({ data }, { onSuccess: done });
+  };
+  const edit = (shift: Shift) => {
+    setEditing(shift);
+    form.reset({ name: shift.name, startTime: shift.startTime, endTime: shift.endTime });
+  };
+  const del = (shift: Shift) => {
+    if (!window.confirm(`${shift.name} ээлжийг устгах уу?`)) return;
+    remove.mutate({ id: shift.id }, { onSuccess: () => qc.invalidateQueries({ queryKey: getListShiftsQueryKey() }) });
+  };
+  return <Modal title="Ээлжийн тохиргоо" detail="Ээлжийн нэр болон өдөр бүрийн эхлэх, тарах цагийг удирдана." onClose={onClose}>
+    <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-[1fr_120px_120px]">
+        <label className="space-y-1.5 text-xs font-semibold">Ээлжийн нэр<Input {...form.register('name', { required: true })} placeholder="Өдрийн ээлж" data-testid="input-shift-name" /></label>
+        <label className="space-y-1.5 text-xs font-semibold">Эхлэх цаг<Input type="time" {...form.register('startTime', { required: true })} data-testid="input-shift-start" /></label>
+        <label className="space-y-1.5 text-xs font-semibold">Тарах цаг<Input type="time" {...form.register('endTime', { required: true })} data-testid="input-shift-end" /></label>
+      </div>
+      <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={editing ? reset : onClose}>{editing ? 'Болих' : 'Хаах'}</Button><Button type="submit" disabled={create.isPending || update.isPending}>{editing ? 'Өөрчлөх' : 'Ээлж нэмэх'}</Button></div>
+    </form></Form>
+    <div className="mt-6 border-t border-border pt-5">
+      <p className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Бүртгэлтэй ээлжүүд</p>
+      {shifts.isLoading ? <LoadingBlock className="h-20" /> : !shifts.data?.length ? <div className="rounded-xl bg-secondary/50 p-4 text-center text-xs text-muted-foreground">Ээлж бүртгээгүй байна.</div> : <div className="space-y-2">{shifts.data.map((shift) => <div key={shift.id} className="flex items-center gap-3 rounded-xl border border-border p-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{shift.name}</p><p className="font-mono text-xs text-muted-foreground">{shift.startTime} — {shift.endTime}</p></div><button type="button" onClick={() => edit(shift)} className="grid size-8 place-items-center rounded-lg hover:bg-secondary" aria-label={`${shift.name} засах`}><Pencil className="size-4" /></button><button type="button" onClick={() => del(shift)} className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label={`${shift.name} устгах`}><Trash2 className="size-4" /></button></div>)}</div>}
+      {remove.isError && <p className="mt-2 text-xs text-destructive">Төлөвлөгөөнд ашигласан ээлжийг устгах боломжгүй.</p>}
+    </div>
+  </Modal>;
+}
+
 function AttendancePage() {
   const [month, setMonth] = useState(currentMonth());
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const days = useMemo(() => calendarDays(month), [month]);
-  const query = useListAttendance({});
+  const query = useListAttendance({ month });
   const employees = useListEmployees();
+  const shifts = useListShifts();
+  const plans = useListShiftPlans({ month });
   const upsert = useUpsertAttendance();
+  const upsertPlan = useUpsertShiftPlan();
   const qc = useQueryClient();
   const attendanceMap = useMemo(() => new Map((query.data ?? []).map((row) => [`${row.employeeId}-${row.date}`, row])), [query.data]);
+  const planMap = useMemo(() => new Map((plans.data ?? []).map((row) => [`${row.employeeId}-${row.date}`, row])), [plans.data]);
   const activeEmployees = (employees.data ?? []).filter((employee) => employee.status === EmployeeStatus.active);
   const monthRows = activeEmployees.flatMap((employee) => days.map((day) => attendanceMap.get(`${employee.id}-${day}`))).filter(Boolean);
   const counts = monthRows.reduce((acc, row) => {
@@ -325,18 +380,24 @@ function AttendancePage() {
       },
     });
   };
+  const setPlan = (employeeId: number, date: string, value: string) => {
+    upsertPlan.mutate({ data: { employeeId, date, shiftId: value ? Number(value) : null } }, {
+      onSuccess: () => qc.invalidateQueries({ queryKey: getListShiftPlansQueryKey({ month }) }),
+    });
+  };
   return <div className="page-enter">
-    <PageHeading eyebrow="Сарын бүртгэл / attendance" title="Ирцийн календарь" detail="Сарын 1-нээс сүүлийн өдөр хүртэл ажилтан бүрийн цагийг сонгож бүртгэнэ." action={<div className="flex items-center overflow-hidden rounded-xl border border-border bg-card"><button type="button" onClick={() => setMonth((value) => shiftMonth(value, -1))} className="grid size-10 place-items-center border-r border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Өмнөх сар" data-testid="button-attendance-previous-month"><ChevronRight className="size-4 rotate-180" /></button><div className="flex items-center gap-2 px-3"><CalendarDays className="size-4 text-primary" /><input type="month" value={month} max={currentMonth()} onChange={(event) => setMonth(event.target.value)} className="h-10 bg-transparent text-sm outline-none" data-testid="input-attendance-month" /></div><button type="button" onClick={() => setMonth((value) => shiftMonth(value, 1))} disabled={month >= currentMonth()} className="grid size-10 place-items-center border-l border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30" aria-label="Дараагийн сар" data-testid="button-attendance-next-month"><ChevronRight className="size-4" /></button></div>} />
+    <PageHeading eyebrow="Сарын бүртгэл / attendance" title="Ирц ба ээлжийн төлөвлөгөө" detail="Ажилтан бүрийн сарын ээлжийг төлөвлөж, бодит ирцийг тусад нь бүртгэнэ." action={<div className="flex flex-wrap items-center gap-2"><Button variant="outline" onClick={() => setSettingsOpen(true)} data-testid="button-shift-settings"><Clock3 className="size-4" />Ээлжийн тохиргоо</Button><div className="flex items-center overflow-hidden rounded-xl border border-border bg-card"><button type="button" onClick={() => setMonth((value) => shiftMonth(value, -1))} className="grid size-10 place-items-center border-r border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Өмнөх сар" data-testid="button-attendance-previous-month"><ChevronRight className="size-4 rotate-180" /></button><div className="flex items-center gap-2 px-3"><CalendarDays className="size-4 text-primary" /><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="h-10 bg-transparent text-sm outline-none" data-testid="input-attendance-month" /></div><button type="button" onClick={() => setMonth((value) => shiftMonth(value, 1))} className="grid size-10 place-items-center border-l border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Дараагийн сар" data-testid="button-attendance-next-month"><ChevronRight className="size-4" /></button></div></div>} />
     <div className="mb-6 flex flex-wrap items-center gap-2">
       <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs"><span className="font-mono font-bold">{days[0]}</span><span className="mx-2 text-muted-foreground">—</span><span className="font-mono font-bold">{days[days.length - 1]}</span></div>
       {[['eight', '8 цаг'], ['twelve', '12 цаг'], ['leave', 'Чөлөө']].map(([key, label]) => <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs" key={key}><span className={cn('size-2.5 rounded-full', key === 'eight' ? 'bg-primary' : key === 'twelve' ? 'bg-accent' : 'bg-sky-300')} /><span className="font-mono font-bold">{counts[key as keyof typeof counts]}</span><span className="text-muted-foreground">{label}</span></div>)}
-      <div className="ml-auto text-xs text-muted-foreground">Нүд бүрээс 8, 12 эсвэл Ч сонгоно</div>
+      <div className="ml-auto text-xs text-muted-foreground">Дээд сонголт: ээлжийн төлөвлөгөө · Доод сонголт: бодит ирц</div>
     </div>
     <section className="overflow-hidden rounded-2xl border border-border bg-card" data-testid="attendance-calendar">
       <div className="flex items-center justify-between border-b border-border px-5 py-4"><div><p className="font-mono text-[10px] font-bold uppercase tracking-[.18em] text-primary">Full month view</p><h2 className="mt-1 text-base font-bold">{month.replace('-', ' оны ')} сарын ирц</h2></div><span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{days.length} хоног</span></div>
-      {query.isLoading || employees.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError || employees.isError ? <ErrorBlock onRetry={() => { query.refetch(); employees.refetch(); }} /> : !activeEmployees.length ? <EmptyState title="Идэвхтэй ажилтан алга" detail="Эхлээд ажилтны бүртгэлээс ажилтан нэмнэ үү." icon={UsersRound} /> : <div className="overflow-x-auto"><table className="w-full table-fixed text-left" style={{ minWidth: `${208 + days.length * 44}px` }}><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="sticky left-0 z-10 w-52 border-r border-border bg-secondary/95 px-5 py-3">Ажилтан</th>{days.map((day) => <th className={cn('w-11 px-1 py-3 text-center', day === today() && 'bg-accent/35 text-foreground')} key={day}><div className="text-[9px] uppercase">{calendarDateLabel(day).split(' ')[0]}</div><div className="mt-1 font-mono text-[11px]">{day.slice(8)}</div></th>)}</tr></thead><tbody className="divide-y divide-border">{activeEmployees.map((employee) => <tr key={employee.id} data-testid={`row-attendance-calendar-${employee.id}`}><td className="sticky left-0 z-10 border-r border-border bg-card px-5 py-3"><p className="truncate text-sm font-semibold">{employee.name}</p><p className="truncate text-[11px] text-muted-foreground">{employee.role}</p></td>{days.map((day) => { const row = attendanceMap.get(`${employee.id}-${day}`); const value = row?.status === 'leave' ? 'leave' : Number(row?.hours) === 12 ? '12' : Number(row?.hours) === 8 ? '8' : ''; return <td className={cn('border-l border-border/60 p-1 text-center', day === today() && 'bg-accent/10')} key={day}><select value={value} disabled={upsert.isPending} onChange={(event) => setAttendance(employee.id, day, event.target.value)} className={cn('mx-auto h-8 w-10 appearance-none rounded-lg border-0 text-center font-mono text-[10px] font-bold outline-none transition-colors focus:ring-2 focus:ring-primary/30', value === '8' ? 'bg-primary text-primary-foreground' : value === '12' ? 'bg-accent text-foreground' : value === 'leave' ? 'bg-sky-100 text-sky-800' : 'bg-secondary/60 text-muted-foreground/50')} aria-label={`${employee.name} ${day} цагийн сонголт`} data-testid={`select-attendance-${employee.id}-${day}`}><option value="" disabled>—</option><option value="8">8</option><option value="12">12</option><option value="leave">Ч</option></select></td>; })}</tr>)}</tbody></table></div>}
+      {query.isLoading || employees.isLoading || shifts.isLoading || plans.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError || employees.isError || shifts.isError || plans.isError ? <ErrorBlock onRetry={() => { query.refetch(); employees.refetch(); shifts.refetch(); plans.refetch(); }} /> : !activeEmployees.length ? <EmptyState title="Идэвхтэй ажилтан алга" detail="Эхлээд ажилтны бүртгэлээс ажилтан нэмнэ үү." icon={UsersRound} /> : <div className="overflow-x-auto"><table className="w-full table-fixed text-left" style={{ minWidth: `${208 + days.length * 84}px` }}><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="sticky left-0 z-10 w-52 border-r border-border bg-secondary/95 px-5 py-3">Ажилтан</th>{days.map((day) => <th className={cn('w-[84px] px-1 py-3 text-center', day === today() && 'bg-accent/35 text-foreground')} key={day}><div className="text-[9px] uppercase">{calendarDateLabel(day).split(' ')[0]}</div><div className="mt-1 font-mono text-[11px]">{day.slice(8)}</div></th>)}</tr></thead><tbody className="divide-y divide-border">{activeEmployees.map((employee) => <tr key={employee.id} data-testid={`row-attendance-calendar-${employee.id}`}><td className="sticky left-0 z-10 border-r border-border bg-card px-5 py-3"><p className="truncate text-sm font-semibold">{employee.name}</p><p className="truncate text-[11px] text-muted-foreground">{employee.role}</p><p className="mt-1 text-[10px] font-medium text-primary">{employee.employeeType === EmployeeEmployeeType.shift ? 'Ээлжийн' : 'Оффис'}</p></td>{days.map((day) => { const row = attendanceMap.get(`${employee.id}-${day}`); const plan = planMap.get(`${employee.id}-${day}`); const value = row?.status === 'leave' ? 'leave' : Number(row?.hours) === 12 ? '12' : Number(row?.hours) === 8 ? '8' : ''; return <td className={cn('border-l border-border/60 p-1 text-center', day === today() && 'bg-accent/10')} key={day}><select value={plan?.shiftId ?? ''} disabled={upsertPlan.isPending} onChange={(event) => setPlan(employee.id, day, event.target.value)} className="h-8 w-full rounded-md border border-border bg-background px-1 text-[10px] font-semibold outline-none focus:ring-2 focus:ring-primary/30" aria-label={`${employee.name} ${day} ээлж`} data-testid={`select-shift-plan-${employee.id}-${day}`}><option value="">Ээлжгүй</option>{shifts.data?.map((shift) => <option value={shift.id} key={shift.id}>{shift.name}</option>)}</select><select value={value} disabled={upsert.isPending} onChange={(event) => setAttendance(employee.id, day, event.target.value)} className={cn('mt-1 h-7 w-full rounded-md border-0 text-center font-mono text-[10px] font-bold outline-none transition-colors focus:ring-2 focus:ring-primary/30', value === '8' ? 'bg-primary text-primary-foreground' : value === '12' ? 'bg-accent text-foreground' : value === 'leave' ? 'bg-sky-100 text-sky-800' : 'bg-secondary/60 text-muted-foreground/60')} aria-label={`${employee.name} ${day} ирц`} data-testid={`select-attendance-${employee.id}-${day}`}><option value="" disabled>Ирц</option><option value="8">8 цаг</option><option value="12">12 цаг</option><option value="leave">Чөлөө</option></select></td>; })}</tr>)}</tbody></table></div>}
     </section>
-    <p className="mt-3 text-xs text-muted-foreground">8: найман цаг · 12: арван хоёр цаг · Ч: чөлөөтэй өдөр</p>
+    <p className="mt-3 text-xs text-muted-foreground">Ээлжийн төлөвлөгөө нь бодит ирцээс тусдаа хадгалагдана. Цалин зөвхөн доод мөрийн бодит ирцээр бодогдоно.</p>
+    {settingsOpen && <ShiftSettingsModal onClose={() => setSettingsOpen(false)} />}
   </div>;
 }
 

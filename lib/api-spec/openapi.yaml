@@ -201,6 +201,106 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Attendance"
+  /attendance/shifts:
+    get:
+      operationId: listShifts
+      tags: [attendance]
+      summary: List reusable shift schedules
+      responses:
+        "200":
+          description: Shift schedules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Shift"
+    post:
+      operationId: createShift
+      tags: [attendance]
+      summary: Create a shift schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftInput"
+      responses:
+        "201":
+          description: Created shift
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+  /attendance/shifts/{id}:
+    patch:
+      operationId: updateShift
+      tags: [attendance]
+      summary: Update a shift schedule
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftInput"
+      responses:
+        "200":
+          description: Updated shift
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+    delete:
+      operationId: deleteShift
+      tags: [attendance]
+      summary: Delete an unused shift schedule
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Shift deleted
+  /attendance/shift-plans:
+    get:
+      operationId: listShiftPlans
+      tags: [attendance]
+      summary: List employee shift plans for a month
+      parameters:
+        - in: query
+          name: month
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}$'
+      responses:
+        "200":
+          description: Monthly shift plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ShiftPlan"
+    put:
+      operationId: upsertShiftPlan
+      tags: [attendance]
+      summary: Assign or clear an employee shift for a day
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftPlanInput"
+      responses:
+        "200":
+          description: Updated shift plan, or null when cleared
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ShiftPlan"
+                  - type: "null"
   /payroll:
     get:
       operationId: getPayroll
@@ -453,6 +553,40 @@ components:
         clockIn: { type: string }
         clockOut: { type: string }
         hours: { type: number, minimum: 0 }
+    Shift:
+      type: object
+      required: [id, name, startTime, endTime]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        startTime: { type: string }
+        endTime: { type: string }
+    ShiftInput:
+      type: object
+      required: [name, startTime, endTime]
+      properties:
+        name: { type: string, minLength: 1 }
+        startTime: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+        endTime: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+    ShiftPlan:
+      type: object
+      required: [id, employeeId, employeeName, date, shiftId, shiftName, startTime, endTime]
+      properties:
+        id: { type: integer }
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        date: { type: string }
+        shiftId: { type: integer }
+        shiftName: { type: string }
+        startTime: { type: string }
+        endTime: { type: string }
+    ShiftPlanInput:
+      type: object
+      required: [employeeId, date, shiftId]
+      properties:
+        employeeId: { type: integer }
+        date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        shiftId: { type: ["integer", "null"] }
     HourBalanceLine:
       type: object
       required: [employeeId, employeeName, role, month, totalHours, expectedWorkDays, workDays, eightHourDays, twelveHourDays, leaveDays]
