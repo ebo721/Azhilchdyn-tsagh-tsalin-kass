@@ -171,12 +171,17 @@ export const CreateAttendanceResponse = zod.object({
 /**
  * @summary Mark an employee as present or absent for a day
  */
+export const upsertAttendanceBodyHoursMin = 0;
+
+
+
 export const UpsertAttendanceBody = zod.object({
   "employeeId": zod.number().int(),
   "date": zod.string(),
-  "status": zod.enum(['present', 'absent']),
+  "status": zod.enum(['present', 'absent', 'leave']),
   "clockIn": zod.string().optional(),
-  "clockOut": zod.string().optional()
+  "clockOut": zod.string().optional(),
+  "hours": zod.number().min(upsertAttendanceBodyHoursMin).optional()
 })
 
 export const UpsertAttendanceResponse = zod.object({
@@ -214,6 +219,27 @@ export const GetPayrollResponse = zod.object({
   "net": zod.number()
 }))
 })
+
+
+/**
+ * @summary Get monthly hour balance
+ */
+export const GetHourBalanceQueryParams = zod.object({
+  "month": zod.coerce.string().optional()
+})
+
+export const GetHourBalanceResponseItem = zod.object({
+  "employeeId": zod.number().int(),
+  "employeeName": zod.string(),
+  "role": zod.string(),
+  "month": zod.string(),
+  "totalHours": zod.number(),
+  "workDays": zod.number().int(),
+  "eightHourDays": zod.number().int(),
+  "twelveHourDays": zod.number().int(),
+  "leaveDays": zod.number().int()
+})
+export const GetHourBalanceResponse = zod.array(GetHourBalanceResponseItem)
 
 
 /**

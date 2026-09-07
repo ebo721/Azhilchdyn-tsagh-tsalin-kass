@@ -13,4 +13,6 @@ export interface AttendanceToggleInput {
   status: AttendanceToggleInputStatus;
   clockIn?: string;
   clockOut?: string;
+  /** @minimum 0 */
+  hours?: number;
 }

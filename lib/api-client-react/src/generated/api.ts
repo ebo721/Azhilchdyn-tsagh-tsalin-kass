@@ -30,8 +30,10 @@ import type {
   Employee,
   EmployeeInput,
   EmployeeUpdate,
+  GetHourBalanceParams,
   GetPayrollParams,
   HealthStatus,
+  HourBalanceLine,
   ListAttendanceParams,
   PayrollSummary
 } from './api.schemas';
@@ -807,6 +809,90 @@ export function useGetPayroll<TData = Awaited<ReturnType<typeof getPayroll>>, TE
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetPayrollQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetHourBalanceUrl = (params?: GetHourBalanceParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/hour-balance?${stringifiedParams}` : `/api/hour-balance`
+}
+
+/**
+ * @summary Get monthly hour balance
+ */
+export const getHourBalance = async (params?: GetHourBalanceParams, options?: Parameters<typeof customFetch>[1]): Promise<HourBalanceLine[]> => {
+
+  return customFetch<HourBalanceLine[]>(getGetHourBalanceUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetHourBalanceQueryKey = (params?: GetHourBalanceParams,) => {
+    return [
+    `/api/hour-balance`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetHourBalanceQueryOptions = <TData = Awaited<ReturnType<typeof getHourBalance>>, TError = ErrorType<unknown>>(params?: GetHourBalanceParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getHourBalance>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetHourBalanceQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getHourBalance>>> = ({ signal }) => getHourBalance(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getHourBalance>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetHourBalanceQueryResult = NonNullable<Awaited<ReturnType<typeof getHourBalance>>>
+export type GetHourBalanceQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get monthly hour balance
+ */
+
+export function useGetHourBalance<TData = Awaited<ReturnType<typeof getHourBalance>>, TError = ErrorType<unknown>>(
+ params?: GetHourBalanceParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getHourBalance>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetHourBalanceQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

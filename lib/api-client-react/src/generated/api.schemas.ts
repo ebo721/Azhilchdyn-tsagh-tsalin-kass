@@ -144,6 +144,7 @@ export type AttendanceToggleInputStatus = typeof AttendanceToggleInputStatus[key
 export const AttendanceToggleInputStatus = {
   present: 'present',
   absent: 'absent',
+  leave: 'leave',
 } as const;
 
 export interface AttendanceToggleInput {
@@ -152,6 +153,20 @@ export interface AttendanceToggleInput {
   status: AttendanceToggleInputStatus;
   clockIn?: string;
   clockOut?: string;
+  /** @minimum 0 */
+  hours?: number;
+}
+
+export interface HourBalanceLine {
+  employeeId: number;
+  employeeName: string;
+  role: string;
+  month: string;
+  totalHours: number;
+  workDays: number;
+  eightHourDays: number;
+  twelveHourDays: number;
+  leaveDays: number;
 }
 
 export interface PayrollLine {
@@ -224,6 +239,10 @@ month?: string;
 };
 
 export type GetPayrollParams = {
+month?: string;
+};
+
+export type GetHourBalanceParams = {
 month?: string;
 };
 

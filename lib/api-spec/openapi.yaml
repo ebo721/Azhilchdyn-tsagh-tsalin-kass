@@ -18,6 +18,8 @@ tags:
     description: Attendance tracking
   - name: payroll
     description: Payroll calculations
+  - name: hour-balance
+    description: Monthly hour balances
   - name: cash
     description: Cash register transactions
 paths:
@@ -183,6 +185,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PayrollSummary"
+  /hour-balance:
+    get:
+      operationId: getHourBalance
+      tags: [hour-balance]
+      summary: Get monthly hour balance
+      parameters:
+        - in: query
+          name: month
+          schema:
+            type: string
+          required: false
+      responses:
+        "200":
+          description: Monthly hour balance by employee
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HourBalanceLine"
   /cash/summary:
     get:
       operationId: getCashSummary
@@ -320,9 +342,23 @@ components:
       properties:
         employeeId: { type: integer }
         date: { type: string }
-        status: { type: string, enum: [present, absent] }
+        status: { type: string, enum: [present, absent, leave] }
         clockIn: { type: string }
         clockOut: { type: string }
+        hours: { type: number, minimum: 0 }
+    HourBalanceLine:
+      type: object
+      required: [employeeId, employeeName, role, month, totalHours, workDays, eightHourDays, twelveHourDays, leaveDays]
+      properties:
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        role: { type: string }
+        month: { type: string }
+        totalHours: { type: number }
+        workDays: { type: integer }
+        eightHourDays: { type: integer }
+        twelveHourDays: { type: integer }
+        leaveDays: { type: integer }
     PayrollLine:
       type: object
       required: [employeeId, employeeName, role, daysWorked, hours, gross, deductions, net]

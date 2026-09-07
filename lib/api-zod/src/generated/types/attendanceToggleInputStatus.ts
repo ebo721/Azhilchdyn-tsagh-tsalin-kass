@@ -12,4 +12,5 @@ export type AttendanceToggleInputStatus = typeof AttendanceToggleInputStatus[key
 export const AttendanceToggleInputStatus = {
   present: 'present',
   absent: 'absent',
+  leave: 'leave',
 } as const;
