@@ -337,6 +337,7 @@ export interface PayrollAdvanceLine {
   dailySalary: number;
   totalSalary: number;
   advanceAmount: number;
+  paid: boolean;
 }
 
 export interface PayrollAdvanceSummary {
@@ -350,6 +351,13 @@ export interface PayrollAdvanceSummary {
 export interface PayrollAdvanceApprovalInput {
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])$ */
   month: string;
+}
+
+export interface PayrollAdvancePaymentInput {
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])$ */
+  month: string;
+  employeeId: number;
+  paid: boolean;
 }
 
 export type CashTransactionType = typeof CashTransactionType[keyof typeof CashTransactionType];

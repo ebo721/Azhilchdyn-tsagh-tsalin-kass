@@ -394,6 +394,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PayrollAdvanceSummary"
+  /payroll-advance/payment:
+    put:
+      operationId: updatePayrollAdvancePayment
+      tags: [payroll]
+      summary: Mark an approved employee payroll advance as paid or unpaid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PayrollAdvancePaymentInput"
+      responses:
+        "200":
+          description: Updated monthly payroll advance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayrollAdvanceSummary"
   /hour-balance:
     get:
       operationId: getHourBalance
@@ -698,7 +716,7 @@ components:
             $ref: "#/components/schemas/PayrollLine"
     PayrollAdvanceLine:
       type: object
-      required: [employeeId, employeeName, employeeType, baseSalary, daysWorked, dailySalary, totalSalary, advanceAmount]
+      required: [employeeId, employeeName, employeeType, baseSalary, daysWorked, dailySalary, totalSalary, advanceAmount, paid]
       properties:
         employeeId: { type: integer }
         employeeName: { type: string }
@@ -708,6 +726,7 @@ components:
         dailySalary: { type: number }
         totalSalary: { type: number }
         advanceAmount: { type: number }
+        paid: { type: boolean }
     PayrollAdvanceSummary:
       type: object
       required: [month, approved, totalAmount, lines]
@@ -725,6 +744,13 @@ components:
       required: [month]
       properties:
         month: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+    PayrollAdvancePaymentInput:
+      type: object
+      required: [month, employeeId, paid]
+      properties:
+        month: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+        employeeId: { type: integer }
+        paid: { type: boolean }
     CashTransaction:
       type: object
       required: [id, type, category, description, amount, date, createdAt]

@@ -42,6 +42,7 @@ export * from './payrollAdjustmentInput';
 export * from './payrollAdvanceApprovalInput';
 export * from './payrollAdvanceLine';
 export * from './payrollAdvanceLineEmployeeType';
+export * from './payrollAdvancePaymentInput';
 export * from './payrollAdvanceSummary';
 export * from './payrollLine';
 export * from './payrollLineEmployeeType';

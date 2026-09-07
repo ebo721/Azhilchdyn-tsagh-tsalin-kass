@@ -23,6 +23,7 @@ import {
   ListCashTransactionsResponse,
   ListEmployeesResponse,
   UpsertPayrollAdjustmentBody,
+  UpdatePayrollAdvancePaymentBody,
   UpsertAttendanceBody,
   UpsertShiftPlanBody,
   UpdateShiftBody,
@@ -131,9 +132,13 @@ async function getPayrollSummary(month: string) {
   const monthRecords = records.filter((record) => String(record.date).startsWith(month));
   const adjustmentMap = new Map(adjustments.map((adjustment) => [adjustment.employeeId, adjustment]));
   const approvedAdvanceLines = Array.isArray(advanceApprovals[0]?.lines)
-    ? advanceApprovals[0].lines as Array<{ employeeId: number; advanceAmount: number }>
+    ? advanceApprovals[0].lines as Array<{ employeeId: number; advanceAmount: number; paid?: boolean }>
     : [];
-  const approvedAdvanceMap = new Map(approvedAdvanceLines.map((line) => [line.employeeId, Number(line.advanceAmount)]));
+  const paidAdvanceMap = new Map(
+    approvedAdvanceLines
+      .filter((line) => line.paid === true)
+      .map((line) => [line.employeeId, Number(line.advanceAmount)]),
+  );
 
   const lines = employees.map((employee) => {
     const employeeRecords = monthRecords.filter((record) => record.employeeId === employee.id);
@@ -152,13 +157,7 @@ async function getPayrollSummary(month: string) {
     const calculatedIncomeTax = money(taxableIncome * 0.1);
     const taxRelief = monthlyIncomeTaxRelief(socialInsuranceSalary);
     const incomeTax = money(Math.max(0, calculatedIncomeTax - taxRelief));
-    const firstHalfDaysWorked = employeeRecords.filter((record) =>
-      ["present", "late"].includes(record.status) && Number(String(record.date).slice(8, 10)) <= 15
-    ).length;
-    const calculatedAdvance = employee.employeeType === "shift"
-      ? money(firstHalfDaysWorked * Number(employee.baseSalary))
-      : money(Number(employee.baseSalary) * 0.5);
-    const advanceAmount = money(approvedAdvanceMap.get(employee.id) ?? calculatedAdvance);
+    const advanceAmount = money(paidAdvanceMap.get(employee.id) ?? 0);
     const manualDeduction = money(Number(adjustment?.manualDeduction ?? 0));
     const paidAmount = money(Number(adjustment?.paidAmount ?? 0));
     const deductions = money(socialInsurance + incomeTax + advanceAmount + manualDeduction);
@@ -205,12 +204,15 @@ async function getPayrollAdvanceSummary(month: string) {
     .from(payrollAdvanceApprovalsTable)
     .where(eq(payrollAdvanceApprovalsTable.month, month));
   if (approval) {
+    const lines = Array.isArray(approval.lines)
+      ? (approval.lines as Array<Record<string, unknown>>).map((line) => ({ ...line, paid: line.paid === true }))
+      : [];
     return {
       month,
       approved: true,
       approvedAt: approval.approvedAt.toISOString(),
       totalAmount: Number(approval.totalAmount),
-      lines: approval.lines,
+      lines,
     };
   }
   const [employees, records] = await Promise.all([
@@ -238,6 +240,7 @@ async function getPayrollAdvanceSummary(month: string) {
       dailySalary,
       totalSalary,
       advanceAmount: employee.employeeType === "shift" ? totalSalary : money(totalSalary * 0.5),
+      paid: false,
     };
   });
   return {
@@ -742,6 +745,39 @@ router.post("/payroll-advance/approve", async (req, res, next) => {
       }).onConflictDoNothing();
     }
     res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/payroll-advance/payment", async (req, res, next) => {
+  try {
+    const input = UpdatePayrollAdvancePaymentBody.parse(req.body);
+    const [approval] = await db
+      .select()
+      .from(payrollAdvanceApprovalsTable)
+      .where(eq(payrollAdvanceApprovalsTable.month, input.month));
+    if (!approval) {
+      res.status(409).json({ error: "Эхлээд тухайн сарын урьдчилгаа цалинг батална уу" });
+      return;
+    }
+    const sourceLines = Array.isArray(approval.lines)
+      ? approval.lines as Array<Record<string, unknown>>
+      : [];
+    if (!sourceLines.some((line) => Number(line.employeeId) === input.employeeId)) {
+      res.status(404).json({ error: "Урьдчилгаа цалингийн мөр олдсонгүй" });
+      return;
+    }
+    const lines: Array<Record<string, unknown>> = sourceLines.map((line) => (
+          Number(line.employeeId) === input.employeeId
+            ? { ...line, paid: input.paid }
+            : { ...line, paid: line.paid === true }
+        ));
+    await db
+      .update(payrollAdvanceApprovalsTable)
+      .set({ lines })
+      .where(eq(payrollAdvanceApprovalsTable.id, approval.id));
+    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(input.month)));
   } catch (error) {
     next(error);
   }

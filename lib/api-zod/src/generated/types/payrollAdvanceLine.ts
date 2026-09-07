@@ -16,4 +16,5 @@ export interface PayrollAdvanceLine {
   dailySalary: number;
   totalSalary: number;
   advanceAmount: number;
+  paid: boolean;
 }

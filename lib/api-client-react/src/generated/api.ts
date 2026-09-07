@@ -42,6 +42,7 @@ import type {
   PayrollAdjustment,
   PayrollAdjustmentInput,
   PayrollAdvanceApprovalInput,
+  PayrollAdvancePaymentInput,
   PayrollAdvanceSummary,
   PayrollSummary,
   Shift,
@@ -1777,6 +1778,77 @@ export const useApprovePayrollAdvance = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getApprovePayrollAdvanceMutationOptions(options));
+    }
+
+export const getUpdatePayrollAdvancePaymentUrl = () => {
+
+
+
+
+  return `/api/payroll-advance/payment`
+}
+
+/**
+ * @summary Mark an approved employee payroll advance as paid or unpaid
+ */
+export const updatePayrollAdvancePayment = async (payrollAdvancePaymentInput: PayrollAdvancePaymentInput, options?: Parameters<typeof customFetch>[1]): Promise<PayrollAdvanceSummary> => {
+
+  return customFetch<PayrollAdvanceSummary>(getUpdatePayrollAdvancePaymentUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(payrollAdvancePaymentInput)
+  }
+);}
+
+
+
+
+
+export const getUpdatePayrollAdvancePaymentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePayrollAdvancePayment>>, TError,{data: BodyType<PayrollAdvancePaymentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePayrollAdvancePayment>>, TError,{data: BodyType<PayrollAdvancePaymentInput>}, TContext> => {
+
+const mutationKey = ['updatePayrollAdvancePayment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePayrollAdvancePayment>>, {data: BodyType<PayrollAdvancePaymentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updatePayrollAdvancePayment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePayrollAdvancePaymentMutationResult = NonNullable<Awaited<ReturnType<typeof updatePayrollAdvancePayment>>>
+    export type UpdatePayrollAdvancePaymentMutationBody = BodyType<PayrollAdvancePaymentInput>
+    export type UpdatePayrollAdvancePaymentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Mark an approved employee payroll advance as paid or unpaid
+ */
+export const useUpdatePayrollAdvancePayment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePayrollAdvancePayment>>, TError,{data: BodyType<PayrollAdvancePaymentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updatePayrollAdvancePayment>>,
+        TError,
+        {data: BodyType<PayrollAdvancePaymentInput>},
+        TContext
+      > => {
+      return useMutation(getUpdatePayrollAdvancePaymentMutationOptions(options));
     }
 
 export const getGetHourBalanceUrl = (params?: GetHourBalanceParams,) => {
