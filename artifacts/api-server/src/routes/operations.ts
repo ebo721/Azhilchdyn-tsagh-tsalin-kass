@@ -1,0 +1,298 @@
+import { Router, type IRouter } from "express";
+import {
+  CreateAttendanceBody,
+  CreateCashTransactionBody,
+  CreateEmployeeBody,
+  GetDashboardResponse,
+  GetPayrollQueryParams,
+  GetPayrollResponse,
+  GetCashSummaryResponse,
+  ListAttendanceQueryParams,
+  ListAttendanceResponse,
+  ListCashTransactionsResponse,
+  ListEmployeesResponse,
+  UpdateEmployeeBody,
+  UpdateEmployeeParams,
+} from "@workspace/api-zod";
+import { desc, eq } from "drizzle-orm";
+import {
+  attendanceTable,
+  cashTransactionsTable,
+  db,
+  employeesTable,
+} from "@workspace/db";
+
+const router: IRouter = Router();
+
+const today = () => new Date().toISOString().slice(0, 10);
+const currentMonth = () => today().slice(0, 7);
+const money = (value: number) => Math.round(value * 100) / 100;
+
+function hoursBetween(clockIn: string, clockOut: string) {
+  const [inHour, inMinute] = clockIn.split(":").map(Number);
+  const [outHour, outMinute] = clockOut.split(":").map(Number);
+  const start = inHour * 60 + inMinute;
+  const end = outHour * 60 + outMinute;
+  return Math.max(0, money((end - start) / 60));
+}
+
+async function getPayrollSummary(month: string) {
+  const employees = await db
+    .select()
+    .from(employeesTable)
+    .where(eq(employeesTable.status, "active"));
+  const records = await db
+    .select()
+    .from(attendanceTable);
+  const monthRecords = records.filter((record) => String(record.date).startsWith(month));
+
+  const lines = employees.map((employee) => {
+    const employeeRecords = monthRecords.filter((record) => record.employeeId === employee.id);
+    const daysWorked = employeeRecords.filter((record) =>
+      ["present", "late"].includes(record.status),
+    ).length;
+    const hours = money(employeeRecords.reduce((total, record) => total + Number(record.hours), 0));
+    const gross =
+      employee.salaryType === "hourly"
+        ? money(hours * Number(employee.baseSalary))
+        : money(Number(employee.baseSalary));
+    const deductions = money(gross * 0.1);
+    return {
+      employeeId: employee.id,
+      employeeName: employee.name,
+      role: employee.role,
+      daysWorked,
+      hours,
+      gross,
+      deductions,
+      net: money(gross - deductions),
+    };
+  });
+
+  return {
+    month,
+    totalGross: money(lines.reduce((total, line) => total + line.gross, 0)),
+    totalDeductions: money(lines.reduce((total, line) => total + line.deductions, 0)),
+    totalNet: money(lines.reduce((total, line) => total + line.net, 0)),
+    lines,
+  };
+}
+
+router.get("/dashboard", async (_req, res, next) => {
+  try {
+    const [employees, records, transactions] = await Promise.all([
+      db.select().from(employeesTable),
+      db.select().from(attendanceTable),
+      db.select().from(cashTransactionsTable).orderBy(desc(cashTransactionsTable.createdAt)),
+    ]);
+    const todayRecords = records.filter((record) => String(record.date) === today());
+    const payroll = await getPayrollSummary(currentMonth());
+    const balance = transactions.reduce(
+      (total, transaction) =>
+        total + (transaction.type === "income" ? Number(transaction.amount) : -Number(transaction.amount)),
+      0,
+    );
+    const recentAttendance = [...records]
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+      .slice(0, 3)
+      .map((record) => ({
+        id: `attendance-${record.id}`,
+        type: "attendance",
+        title: "Ирц бүртгэгдлээ",
+        detail: `${record.date} · ${record.clockIn}–${record.clockOut}`,
+        createdAt: String(record.createdAt),
+      }));
+    const recentCash = transactions.slice(0, 3).map((transaction) => ({
+      id: `cash-${transaction.id}`,
+      type: "cash",
+      title: transaction.type === "income" ? "Орлого бүртгэгдлээ" : "Зарлага бүртгэгдлээ",
+      detail: `${transaction.description} · ${money(Number(transaction.amount)).toLocaleString()}₮`,
+      createdAt: String(transaction.createdAt),
+    }));
+    const data = GetDashboardResponse.parse({
+      employeeCount: employees.filter((employee) => employee.status === "active").length,
+      presentToday: todayRecords.filter((record) => ["present", "late"].includes(record.status)).length,
+      monthlyPayroll: payroll.totalNet,
+      cashBalance: money(balance),
+      recentActivity: [...recentAttendance, ...recentCash]
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, 5),
+    });
+    res.json(data);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/employees", async (_req, res, next) => {
+  try {
+    const rows = await db.select().from(employeesTable).orderBy(desc(employeesTable.id));
+    res.json(ListEmployeesResponse.parse(rows.map((employee) => ({
+      ...employee,
+      baseSalary: Number(employee.baseSalary),
+      joinedAt: String(employee.joinedAt),
+    }))));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/employees", async (req, res, next) => {
+  try {
+    const input = CreateEmployeeBody.parse(req.body);
+    const [employee] = await db.insert(employeesTable).values(input).returning();
+    res.status(201).json({
+      ...employee,
+      baseSalary: Number(employee.baseSalary),
+      joinedAt: String(employee.joinedAt),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch("/employees/:id", async (req, res, next) => {
+  try {
+    const { id } = UpdateEmployeeParams.parse(req.params);
+    const input = UpdateEmployeeBody.parse(req.body);
+    const [employee] = await db
+      .update(employeesTable)
+      .set(input)
+      .where(eq(employeesTable.id, id))
+      .returning();
+    if (!employee) {
+      res.status(404).json({ error: "Employee not found" });
+      return;
+    }
+    res.json({
+      ...employee,
+      baseSalary: Number(employee.baseSalary),
+      joinedAt: String(employee.joinedAt),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/employees/:id", async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      res.status(400).json({ error: "Invalid employee id" });
+      return;
+    }
+    await db.delete(employeesTable).where(eq(employeesTable.id, id));
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/attendance", async (req, res, next) => {
+  try {
+    const query = ListAttendanceQueryParams.parse(req.query);
+    const [records, employees] = await Promise.all([
+      db.select().from(attendanceTable).orderBy(desc(attendanceTable.date), desc(attendanceTable.id)),
+      db.select().from(employeesTable),
+    ]);
+    const employeeMap = new Map(employees.map((employee) => [employee.id, employee.name]));
+    const filtered = records
+      .filter((record) => !query.date || String(record.date) === query.date)
+      .filter((record) => !query.month || String(record.date).startsWith(query.month))
+      .map((record) => ({
+        ...record,
+        employeeName: employeeMap.get(record.employeeId) ?? "Тодорхойгүй",
+        date: String(record.date),
+        hours: Number(record.hours),
+      }));
+    res.json(ListAttendanceResponse.parse(filtered));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/attendance", async (req, res, next) => {
+  try {
+    const input = CreateAttendanceBody.parse(req.body);
+    const [record] = await db
+      .insert(attendanceTable)
+      .values({ ...input, hours: hoursBetween(input.clockIn, input.clockOut) })
+      .returning();
+    const [employee] = await db
+      .select()
+      .from(employeesTable)
+      .where(eq(employeesTable.id, record.employeeId));
+    res.status(201).json({
+      ...record,
+      employeeName: employee?.name ?? "Тодорхойгүй",
+      date: String(record.date),
+      hours: Number(record.hours),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/payroll", async (req, res, next) => {
+  try {
+    const { month } = GetPayrollQueryParams.parse(req.query);
+    res.json(GetPayrollResponse.parse(await getPayrollSummary(month ?? currentMonth())));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/cash/summary", async (_req, res, next) => {
+  try {
+    const transactions = await db.select().from(cashTransactionsTable);
+    const summary = transactions.reduce(
+      (result, transaction) => {
+        const amount = Number(transaction.amount);
+        const isIncome = transaction.type === "income";
+        result.balance += isIncome ? amount : -amount;
+        result[isIncome ? "income" : "expense"] += amount;
+        if (String(transaction.date) === today()) {
+          result[isIncome ? "todayIncome" : "todayExpense"] += amount;
+        }
+        return result;
+      },
+      { balance: 0, income: 0, expense: 0, todayIncome: 0, todayExpense: 0 },
+    );
+    res.json(GetCashSummaryResponse.parse(Object.fromEntries(
+      Object.entries(summary).map(([key, value]) => [key, money(value)]),
+    )));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/cash/transactions", async (_req, res, next) => {
+  try {
+    const rows = await db.select().from(cashTransactionsTable).orderBy(desc(cashTransactionsTable.date), desc(cashTransactionsTable.id));
+    res.json(ListCashTransactionsResponse.parse(rows.map((transaction) => ({
+      ...transaction,
+      amount: Number(transaction.amount),
+      date: String(transaction.date),
+      createdAt: String(transaction.createdAt),
+    }))));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/cash/transactions", async (req, res, next) => {
+  try {
+    const input = CreateCashTransactionBody.parse(req.body);
+    const [transaction] = await db.insert(cashTransactionsTable).values(input).returning();
+    res.status(201).json({
+      ...transaction,
+      amount: Number(transaction.amount),
+      date: String(transaction.date),
+      createdAt: String(transaction.createdAt),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+export default router;

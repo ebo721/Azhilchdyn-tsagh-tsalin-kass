@@ -1,20 +1,60 @@
-// Export your models here. Add one export per file
-// export * from "./posts";
-//
-// Each model/table should ideally be split into different files.
-// Each model/table should define a Drizzle table, insert schema, and types:
-//
-//   import { pgTable, text, serial } from "drizzle-orm/pg-core";
-//   import { createInsertSchema } from "drizzle-zod";
-//   import { z } from "zod/v4";
-//
-//   export const postsTable = pgTable("posts", {
-//     id: serial("id").primaryKey(),
-//     title: text("title").notNull(),
-//   });
-//
-//   export const insertPostSchema = createInsertSchema(postsTable).omit({ id: true });
-//   export type InsertPost = z.infer<typeof insertPostSchema>;
-//   export type Post = typeof postsTable.$inferSelect;
+import {
+  date,
+  integer,
+  numeric,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
 
-export {}
+export const employeesTable = pgTable("employees", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  role: text("role").notNull(),
+  phone: text("phone").notNull().default(""),
+  salaryType: text("salary_type").notNull().default("monthly"),
+  baseSalary: numeric("base_salary", { precision: 12, scale: 2, mode: "number" }).notNull(),
+  status: text("status").notNull().default("active"),
+  joinedAt: date("joined_at").notNull().defaultNow(),
+});
+
+export const attendanceTable = pgTable("attendance", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => employeesTable.id, { onDelete: "cascade" }),
+  date: date("date").notNull(),
+  clockIn: text("clock_in").notNull(),
+  clockOut: text("clock_out").notNull(),
+  hours: numeric("hours", { precision: 6, scale: 2, mode: "number" }).notNull().default(0),
+  status: text("status").notNull().default("present"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const cashTransactionsTable = pgTable("cash_transactions", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(),
+  category: text("category").notNull(),
+  description: text("description").notNull(),
+  amount: numeric("amount", { precision: 12, scale: 2, mode: "number" }).notNull(),
+  date: date("date").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertEmployeeSchema = createInsertSchema(employeesTable).omit({
+  id: true,
+  joinedAt: true,
+});
+export const insertAttendanceSchema = createInsertSchema(attendanceTable).omit({
+  id: true,
+  createdAt: true,
+  hours: true,
+});
+export const insertCashTransactionSchema = createInsertSchema(cashTransactionsTable).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type Employee = typeof employeesTable.$inferSelect;
+export type Attendance = typeof attendanceTable.$inferSelect;
+export type CashTransaction = typeof cashTransactionsTable.$inferSelect;

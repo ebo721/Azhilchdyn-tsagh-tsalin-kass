@@ -1,6 +1,6 @@
-# [Project name]
+# Ажилчдын цаг, цалин, касс
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Жижиг бизнесийн ажилчдын ирц, цалин, кассын орлого зарлагыг нэг дор удирдах дотоод ажиллагааны веб апп.
 
 ## Run & Operate
 
@@ -22,23 +22,33 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `lib/api-spec/openapi.yaml` — API-ийн цорын ганц эх сурвалж; өөрчилсний дараа codegen ажиллуулна
+- `lib/db/src/schema/index.ts` — ажилтан, ирц, кассын PostgreSQL хүснэгтүүд
+- `artifacts/api-server/src/routes/operations.ts` — dashboard, ажилтан, ирц, payroll, кассын endpoint-ууд
+- `artifacts/staff-ops/src/App.tsx` — Монгол хэл дээрх үндсэн веб интерфэйс
+- `artifacts/staff-ops/src/index.css` — deep-teal / warm-gold үйл ажиллагааны өнгөний систем
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Цалингийн сарын дүнг тусдаа хадгалах хүснэгтгүйгээр ирц ба ажилтны үндсэн цалингаас тухайн сарын байдлаар тооцно.
+- Эхний хувилбар нь сарын болон цагийн цалингийн хоёр төрлийг дэмжиж, нийт дүнгийн 10%-ийг үндсэн суутгал гэж тооцно.
+- API contract нь OpenAPI-оор эхэлж, frontend нь Orval-оор үүсгэсэн React Query hook-уудыг ашиглана.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Өдрийн dashboard: ажилтны тоо, өнөөдрийн ирц, сарын цалин, кассын үлдэгдэл, сүүлийн хөдөлгөөн.
+- Ажилтан нэмэх, засах, идэвхгүй болгох/устгах.
+- Ирцийн огноо, цаг, статус бүртгэх; сарын ирцээр payroll тооцох.
+- Кассын орлого, зарлага нэмэх; нийт болон өнөөдрийн дүнг харах.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+Монгол хэл дээрх, жижиг бизнесийн өдөр тутмын хэрэглээнд ойлгомжтой интерфэйс.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- `lib/api-spec/openapi.yaml` өөрчлөгдвөл `pnpm --filter @workspace/api-spec run codegen`-г заавал дахин ажиллуулна.
+- Үйлчилгээний замуудыг гараар localhost гэж хатуу кодлохгүй; artifact workflow-ийн proxy замыг ашиглана.
 
 ## Pointers
 
