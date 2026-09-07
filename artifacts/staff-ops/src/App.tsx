@@ -72,6 +72,11 @@ const calendarDays = (month: string) => {
   const dayCount = new Date(year, monthNumber, 0).getDate();
   return Array.from({ length: dayCount }, (_, index) => `${month}-${String(index + 1).padStart(2, '0')}`);
 };
+const shiftMonth = (month: string, amount: number) => {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const date = new Date(year, monthNumber - 1 + amount, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+};
 const calendarDateLabel = (value: string) =>
   new Intl.DateTimeFormat('mn-MN', { weekday: 'short', day: 'numeric' }).format(new Date(`${value}T00:00:00`));
 
@@ -290,7 +295,7 @@ function AttendancePage() {
     });
   };
   return <div className="page-enter">
-    <PageHeading eyebrow="Сарын бүртгэл / attendance" title="Ирцийн календарь" detail="Сарын 1-нээс сүүлийн өдөр хүртэл ажилтан бүрийн цагийг сонгож бүртгэнэ." action={<div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3"><CalendarDays className="size-4 text-primary" /><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="h-10 bg-transparent text-sm outline-none" data-testid="input-attendance-month" /></div>} />
+    <PageHeading eyebrow="Сарын бүртгэл / attendance" title="Ирцийн календарь" detail="Сарын 1-нээс сүүлийн өдөр хүртэл ажилтан бүрийн цагийг сонгож бүртгэнэ." action={<div className="flex items-center overflow-hidden rounded-xl border border-border bg-card"><button type="button" onClick={() => setMonth((value) => shiftMonth(value, -1))} className="grid size-10 place-items-center border-r border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Өмнөх сар" data-testid="button-attendance-previous-month"><ChevronRight className="size-4 rotate-180" /></button><div className="flex items-center gap-2 px-3"><CalendarDays className="size-4 text-primary" /><input type="month" value={month} max={currentMonth()} onChange={(event) => setMonth(event.target.value)} className="h-10 bg-transparent text-sm outline-none" data-testid="input-attendance-month" /></div><button type="button" onClick={() => setMonth((value) => shiftMonth(value, 1))} disabled={month >= currentMonth()} className="grid size-10 place-items-center border-l border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30" aria-label="Дараагийн сар" data-testid="button-attendance-next-month"><ChevronRight className="size-4" /></button></div>} />
     <div className="mb-6 flex flex-wrap items-center gap-2">
       <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs"><span className="font-mono font-bold">{days[0]}</span><span className="mx-2 text-muted-foreground">—</span><span className="font-mono font-bold">{days[days.length - 1]}</span></div>
       {[['eight', '8 цаг'], ['twelve', '12 цаг'], ['leave', 'Чөлөө']].map(([key, label]) => <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs" key={key}><span className={cn('size-2.5 rounded-full', key === 'eight' ? 'bg-primary' : key === 'twelve' ? 'bg-accent' : 'bg-sky-300')} /><span className="font-mono font-bold">{counts[key as keyof typeof counts]}</span><span className="text-muted-foreground">{label}</span></div>)}
