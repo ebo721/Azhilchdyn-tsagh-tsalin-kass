@@ -35,6 +35,8 @@ import type {
   HealthStatus,
   HourBalanceLine,
   ListAttendanceParams,
+  PayrollAdjustment,
+  PayrollAdjustmentInput,
   PayrollSummary
 } from './api.schemas';
 
@@ -820,6 +822,77 @@ export function useGetPayroll<TData = Awaited<ReturnType<typeof getPayroll>>, TE
 
 
 
+
+export const getUpsertPayrollAdjustmentUrl = () => {
+
+
+
+
+  return `/api/payroll-adjustments`
+}
+
+/**
+ * @summary Save monthly payroll adjustments for an employee
+ */
+export const upsertPayrollAdjustment = async (payrollAdjustmentInput: PayrollAdjustmentInput, options?: Parameters<typeof customFetch>[1]): Promise<PayrollAdjustment> => {
+
+  return customFetch<PayrollAdjustment>(getUpsertPayrollAdjustmentUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(payrollAdjustmentInput)
+  }
+);}
+
+
+
+
+
+export const getUpsertPayrollAdjustmentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertPayrollAdjustment>>, TError,{data: BodyType<PayrollAdjustmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof upsertPayrollAdjustment>>, TError,{data: BodyType<PayrollAdjustmentInput>}, TContext> => {
+
+const mutationKey = ['upsertPayrollAdjustment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertPayrollAdjustment>>, {data: BodyType<PayrollAdjustmentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  upsertPayrollAdjustment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpsertPayrollAdjustmentMutationResult = NonNullable<Awaited<ReturnType<typeof upsertPayrollAdjustment>>>
+    export type UpsertPayrollAdjustmentMutationBody = BodyType<PayrollAdjustmentInput>
+    export type UpsertPayrollAdjustmentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Save monthly payroll adjustments for an employee
+ */
+export const useUpsertPayrollAdjustment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertPayrollAdjustment>>, TError,{data: BodyType<PayrollAdjustmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof upsertPayrollAdjustment>>,
+        TError,
+        {data: BodyType<PayrollAdjustmentInput>},
+        TContext
+      > => {
+      return useMutation(getUpsertPayrollAdjustmentMutationOptions(options));
+    }
 
 export const getGetHourBalanceUrl = (params?: GetHourBalanceParams,) => {
   const normalizedParams = new URLSearchParams();

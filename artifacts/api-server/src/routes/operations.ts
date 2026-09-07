@@ -13,6 +13,7 @@ import {
   ListAttendanceResponse,
   ListCashTransactionsResponse,
   ListEmployeesResponse,
+  UpsertPayrollAdjustmentBody,
   UpsertAttendanceBody,
   UpdateEmployeeBody,
   UpdateEmployeeParams,
@@ -23,6 +24,7 @@ import {
   cashTransactionsTable,
   db,
   employeesTable,
+  payrollAdjustmentsTable,
 } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -40,14 +42,13 @@ function hoursBetween(clockIn: string, clockOut: string) {
 }
 
 async function getPayrollSummary(month: string) {
-  const employees = await db
-    .select()
-    .from(employeesTable)
-    .where(eq(employeesTable.status, "active"));
-  const records = await db
-    .select()
-    .from(attendanceTable);
+  const [employees, records, adjustments] = await Promise.all([
+    db.select().from(employeesTable).where(eq(employeesTable.status, "active")),
+    db.select().from(attendanceTable),
+    db.select().from(payrollAdjustmentsTable).where(eq(payrollAdjustmentsTable.month, month)),
+  ]);
   const monthRecords = records.filter((record) => String(record.date).startsWith(month));
+  const adjustmentMap = new Map(adjustments.map((adjustment) => [adjustment.employeeId, adjustment]));
 
   const lines = employees.map((employee) => {
     const employeeRecords = monthRecords.filter((record) => record.employeeId === employee.id);
@@ -62,8 +63,16 @@ async function getPayrollSummary(month: string) {
     const socialInsuranceSalary = money(Number(employee.socialInsuranceSalary));
     const socialInsurance = money(socialInsuranceSalary * 0.115);
     const taxableIncome = money(Math.max(0, gross - socialInsurance));
-    const incomeTax = money(taxableIncome * 0.1);
-    const deductions = money(socialInsurance + incomeTax);
+    const adjustment = adjustmentMap.get(employee.id);
+    const calculatedIncomeTax = money(taxableIncome * 0.1);
+    const taxRelief = money(Number(adjustment?.taxRelief ?? 0));
+    const incomeTax = money(Math.max(0, calculatedIncomeTax - taxRelief));
+    const advanceAmount = money(Number(adjustment?.advanceAmount ?? 0));
+    const manualDeduction = money(Number(adjustment?.manualDeduction ?? 0));
+    const paidAmount = money(Number(adjustment?.paidAmount ?? 0));
+    const deductions = money(socialInsurance + incomeTax + advanceAmount + manualDeduction);
+    const payable = money(Math.max(0, gross - deductions));
+    const remainingAmount = money(Math.max(0, payable - paidAmount));
     return {
       employeeId: employee.id,
       employeeName: employee.name,
@@ -74,9 +83,16 @@ async function getPayrollSummary(month: string) {
       socialInsuranceSalary,
       socialInsurance,
       taxableIncome,
+      calculatedIncomeTax,
+      taxRelief,
       incomeTax,
+      advanceAmount,
+      manualDeduction,
       deductions,
-      net: money(gross - deductions),
+      payable,
+      paidAmount,
+      remainingAmount,
+      net: payable,
     };
   });
 
@@ -334,6 +350,36 @@ router.get("/payroll", async (req, res, next) => {
   try {
     const { month } = GetPayrollQueryParams.parse(req.query);
     res.json(GetPayrollResponse.parse(await getPayrollSummary(month ?? currentMonth())));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/payroll-adjustments", async (req, res, next) => {
+  try {
+    const input = UpsertPayrollAdjustmentBody.parse(req.body);
+    const [adjustment] = await db
+      .insert(payrollAdjustmentsTable)
+      .values(input)
+      .onConflictDoUpdate({
+        target: [payrollAdjustmentsTable.employeeId, payrollAdjustmentsTable.month],
+        set: {
+          advanceAmount: input.advanceAmount,
+          taxRelief: input.taxRelief,
+          manualDeduction: input.manualDeduction,
+          paidAmount: input.paidAmount,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    res.json({
+      employeeId: adjustment.employeeId,
+      month: adjustment.month,
+      advanceAmount: Number(adjustment.advanceAmount),
+      taxRelief: Number(adjustment.taxRelief),
+      manualDeduction: Number(adjustment.manualDeduction),
+      paidAmount: Number(adjustment.paidAmount),
+    });
   } catch (error) {
     next(error);
   }

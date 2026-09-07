@@ -184,9 +184,39 @@ export interface PayrollLine {
   socialInsuranceSalary: number;
   socialInsurance: number;
   taxableIncome: number;
+  calculatedIncomeTax: number;
+  taxRelief: number;
   incomeTax: number;
+  advanceAmount: number;
+  manualDeduction: number;
   deductions: number;
+  payable: number;
+  paidAmount: number;
+  remainingAmount: number;
   net: number;
+}
+
+export interface PayrollAdjustment {
+  employeeId: number;
+  month: string;
+  advanceAmount: number;
+  taxRelief: number;
+  manualDeduction: number;
+  paidAmount: number;
+}
+
+export interface PayrollAdjustmentInput {
+  employeeId: number;
+  /** @pattern ^\d{4}-\d{2}$ */
+  month: string;
+  /** @minimum 0 */
+  advanceAmount: number;
+  /** @minimum 0 */
+  taxRelief: number;
+  /** @minimum 0 */
+  manualDeduction: number;
+  /** @minimum 0 */
+  paidAmount: number;
 }
 
 export interface PayrollSummary {

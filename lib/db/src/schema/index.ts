@@ -6,6 +6,7 @@ import {
   serial,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 
@@ -31,6 +32,19 @@ export const attendanceTable = pgTable("attendance", {
   status: text("status").notNull().default("present"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const payrollAdjustmentsTable = pgTable("payroll_adjustments", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => employeesTable.id, { onDelete: "cascade" }),
+  month: text("month").notNull(),
+  advanceAmount: numeric("advance_amount", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
+  taxRelief: numeric("tax_relief", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
+  manualDeduction: numeric("manual_deduction", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
+  paidAmount: numeric("paid_amount", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  uniqueIndex("payroll_adjustments_employee_month_idx").on(table.employeeId, table.month),
+]);
 
 export const cashTransactionsTable = pgTable("cash_transactions", {
   id: serial("id").primaryKey(),
@@ -58,4 +72,5 @@ export const insertCashTransactionSchema = createInsertSchema(cashTransactionsTa
 
 export type Employee = typeof employeesTable.$inferSelect;
 export type Attendance = typeof attendanceTable.$inferSelect;
+export type PayrollAdjustment = typeof payrollAdjustmentsTable.$inferSelect;
 export type CashTransaction = typeof cashTransactionsTable.$inferSelect;

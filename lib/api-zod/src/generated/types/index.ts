@@ -32,5 +32,7 @@ export * from './getPayrollParams';
 export * from './healthStatus';
 export * from './hourBalanceLine';
 export * from './listAttendanceParams';
+export * from './payrollAdjustment';
+export * from './payrollAdjustmentInput';
 export * from './payrollLine';
 export * from './payrollSummary';

@@ -229,10 +229,50 @@ export const GetPayrollResponse = zod.object({
   "socialInsuranceSalary": zod.number(),
   "socialInsurance": zod.number(),
   "taxableIncome": zod.number(),
+  "calculatedIncomeTax": zod.number(),
+  "taxRelief": zod.number(),
   "incomeTax": zod.number(),
+  "advanceAmount": zod.number(),
+  "manualDeduction": zod.number(),
   "deductions": zod.number(),
+  "payable": zod.number(),
+  "paidAmount": zod.number(),
+  "remainingAmount": zod.number(),
   "net": zod.number()
 }))
+})
+
+
+/**
+ * @summary Save monthly payroll adjustments for an employee
+ */
+export const upsertPayrollAdjustmentBodyMonthRegExp = new RegExp('^\\d{4}-\\d{2}$');
+export const upsertPayrollAdjustmentBodyAdvanceAmountMin = 0;
+
+export const upsertPayrollAdjustmentBodyTaxReliefMin = 0;
+
+export const upsertPayrollAdjustmentBodyManualDeductionMin = 0;
+
+export const upsertPayrollAdjustmentBodyPaidAmountMin = 0;
+
+
+
+export const UpsertPayrollAdjustmentBody = zod.object({
+  "employeeId": zod.number().int(),
+  "month": zod.string().regex(upsertPayrollAdjustmentBodyMonthRegExp),
+  "advanceAmount": zod.number().min(upsertPayrollAdjustmentBodyAdvanceAmountMin),
+  "taxRelief": zod.number().min(upsertPayrollAdjustmentBodyTaxReliefMin),
+  "manualDeduction": zod.number().min(upsertPayrollAdjustmentBodyManualDeductionMin),
+  "paidAmount": zod.number().min(upsertPayrollAdjustmentBodyPaidAmountMin)
+})
+
+export const UpsertPayrollAdjustmentResponse = zod.object({
+  "employeeId": zod.number().int(),
+  "month": zod.string(),
+  "advanceAmount": zod.number(),
+  "taxRelief": zod.number(),
+  "manualDeduction": zod.number(),
+  "paidAmount": zod.number()
 })
 
 

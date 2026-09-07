@@ -16,7 +16,14 @@ export interface PayrollLine {
   socialInsuranceSalary: number;
   socialInsurance: number;
   taxableIncome: number;
+  calculatedIncomeTax: number;
+  taxRelief: number;
   incomeTax: number;
+  advanceAmount: number;
+  manualDeduction: number;
   deductions: number;
+  payable: number;
+  paidAmount: number;
+  remainingAmount: number;
   net: number;
 }

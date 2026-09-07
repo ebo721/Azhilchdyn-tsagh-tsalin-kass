@@ -54,8 +54,10 @@ import {
   useListCashTransactions,
   useListEmployees,
   useUpsertAttendance,
+  useUpsertPayrollAdjustment,
   useUpdateEmployee,
   type Employee,
+  type PayrollLine,
 } from '@workspace/api-client-react';
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import NotFound from '@/pages/not-found';
@@ -340,8 +342,60 @@ function HourBalance() {
   </div>;
 }
 
+type PayrollAdjustmentForm = {
+  advanceAmount: string;
+  taxRelief: string;
+  manualDeduction: string;
+  paidAmount: string;
+};
+
+function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; month: string; onClose: () => void }) {
+  const save = useUpsertPayrollAdjustment();
+  const qc = useQueryClient();
+  const form = useForm<PayrollAdjustmentForm>({
+    defaultValues: {
+      advanceAmount: String(line.advanceAmount),
+      taxRelief: String(line.taxRelief),
+      manualDeduction: String(line.manualDeduction),
+      paidAmount: String(line.paidAmount),
+    },
+  });
+  const submit = (values: PayrollAdjustmentForm) => {
+    save.mutate({
+      data: {
+        employeeId: line.employeeId,
+        month,
+        advanceAmount: Number(values.advanceAmount),
+        taxRelief: Number(values.taxRelief),
+        manualDeduction: Number(values.manualDeduction),
+        paidAmount: Number(values.paidAmount),
+      },
+    }, {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetPayrollQueryKey({ month }) });
+        qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+        onClose();
+      },
+    });
+  };
+  return <Modal title={`${line.employeeName} · Цалингийн тохируулга`} detail={`${month.replace('-', ' оны ')} сарын урьдчилгаа, хөнгөлөлт, суутгал болон шилжүүлсэн дүнг оруулна.`} onClose={onClose}>
+    <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-5" data-testid="form-payroll-adjustment">
+      <div className="rounded-xl border border-border bg-secondary/40 p-4 text-xs text-muted-foreground"><div className="flex justify-between"><span>Тооцсон олгох цалин</span><strong className="font-mono text-foreground">{money(line.payable)}</strong></div><div className="mt-2 flex justify-between"><span>Одоогийн дутуу дүн</span><strong className="font-mono text-primary">{money(line.remainingAmount)}</strong></div></div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className="space-y-2 text-xs font-semibold">Урьдчилгаа цалин<input type="number" min="0" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('advanceAmount', { required: true, min: 0 })} data-testid="input-payroll-advance" /></label>
+        <label className="space-y-2 text-xs font-semibold">ХХОАТ хөнгөлөлт<input type="number" min="0" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('taxRelief', { required: true, min: 0 })} data-testid="input-payroll-tax-relief" /></label>
+        <label className="space-y-2 text-xs font-semibold">Гараар оруулах суутгал<input type="number" min="0" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('manualDeduction', { required: true, min: 0 })} data-testid="input-payroll-manual-deduction" /></label>
+        <label className="space-y-2 text-xs font-semibold">Гүйлгээ хийсэн дүн<input type="number" min="0" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('paidAmount', { required: true, min: 0 })} data-testid="input-payroll-paid-amount" /></label>
+      </div>
+      <p className="text-[11px] leading-relaxed text-muted-foreground">ХХОАТ хөнгөлөлт нь тооцсон ХХОАТ-аас хасагдана. Урьдчилгаа болон гараар оруулсан суутгал нь олгох цалингаас хасагдана.</p>
+      <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={onClose}>Болих</Button><Button type="submit" disabled={save.isPending} data-testid="button-save-payroll-adjustment">{save.isPending ? 'Хадгалж байна...' : 'Тохируулга хадгалах'}</Button></div>
+    </form></Form>
+  </Modal>;
+}
+
 function Payroll() {
   const [month, setMonth] = useState(currentMonth());
+  const [selectedLine, setSelectedLine] = useState<PayrollLine | null>(null);
   const query = useGetPayroll({ month });
   return <div className="page-enter">
     <PageHeading eyebrow="Сарын тооцоо / payroll" title="Цалингийн тойм" detail="НДШ 11.5%, НДШ хассан татвар ногдох орлогоос ХХОАТ 10%-ийг суутгана." action={<div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3"><CalendarDays className="size-4 text-primary" /><input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="h-10 bg-transparent text-sm outline-none" data-testid="input-payroll-month" /></div>} />
@@ -354,9 +408,10 @@ function Payroll() {
       </div>
       <section className="mt-6 overflow-hidden rounded-2xl border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border px-5 py-4"><div><p className="font-mono text-[10px] font-bold uppercase tracking-[.18em] text-primary">Payroll register</p><h2 className="mt-1 text-base font-bold">{month.replace('-', ' оны ')} сарын задаргаа</h2></div><span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{query.data?.lines?.length ?? 0} мөр</span></div>
-        {!query.data?.lines?.length ? <EmptyState title="Энэ сард цалин тооцоолоогүй" detail="Ирцийн бүртгэл нэмэгдсэний дараа энд ажилтны мөрүүд гарна." icon={Banknote} /> : <div className="overflow-x-auto"><table className="w-full min-w-[1180px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Ажилтан</th><th className="px-5 py-3">Ажилласан</th><th className="px-5 py-3 text-right">Брутто</th><th className="px-5 py-3 text-right">НДШ-ийн суурь</th><th className="px-5 py-3 text-right">НДШ 11.5%</th><th className="px-5 py-3 text-right">ХХОАТ 10%</th><th className="px-5 py-3 text-right">Нийт суутгал</th><th className="px-5 py-3 text-right">Олгох</th></tr></thead><tbody className="divide-y divide-border">{query.data.lines.map((line) => <tr key={line.employeeId} className="hover:bg-secondary/35" data-testid={`row-payroll-${line.employeeId}`}><td className="px-5 py-4"><p className="text-sm font-semibold">{line.employeeName}</p><p className="text-xs text-muted-foreground">{line.role}</p></td><td className="px-5 py-4 font-mono text-xs text-muted-foreground">{line.daysWorked} өдөр · {line.hours}ц</td><td className="px-5 py-4 text-right font-mono text-sm">{money(line.gross)}</td><td className="px-5 py-4 text-right font-mono text-sm">{money(line.socialInsuranceSalary)}</td><td className="px-5 py-4 text-right font-mono text-sm text-muted-foreground">{money(line.socialInsurance)}</td><td className="px-5 py-4 text-right font-mono text-sm text-muted-foreground">{money(line.incomeTax)}</td><td className="px-5 py-4 text-right font-mono text-sm font-semibold text-orange-800">{money(line.deductions)}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold text-primary">{money(line.net)}</td></tr>)}</tbody></table></div>}
+        {!query.data?.lines?.length ? <EmptyState title="Энэ сард цалин тооцоолоогүй" detail="Ирцийн бүртгэл нэмэгдсэний дараа энд ажилтны мөрүүд гарна." icon={Banknote} /> : <div className="overflow-x-auto"><table className="w-full min-w-[1740px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Ажилтан</th><th className="px-5 py-3">Ажилласан</th><th className="px-5 py-3 text-right">Брутто</th><th className="px-5 py-3 text-right">НДШ</th><th className="px-5 py-3 text-right">ХХОАТ</th><th className="px-5 py-3 text-right">Хөнгөлөлт</th><th className="px-5 py-3 text-right">Урьдчилгаа</th><th className="px-5 py-3 text-right">Бусад суутгал</th><th className="px-5 py-3 text-right">Олгох</th><th className="px-5 py-3 text-right">Гүйлгээ</th><th className="px-5 py-3 text-right">Дутуу</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{query.data.lines.map((line) => <tr key={line.employeeId} className="hover:bg-secondary/35" data-testid={`row-payroll-${line.employeeId}`}><td className="px-5 py-4"><p className="text-sm font-semibold">{line.employeeName}</p><p className="text-xs text-muted-foreground">{line.role}</p></td><td className="px-5 py-4 font-mono text-xs text-muted-foreground">{line.daysWorked} өдөр · {line.hours}ц</td><td className="px-5 py-4 text-right font-mono text-sm">{money(line.gross)}</td><td className="px-5 py-4 text-right font-mono text-sm text-muted-foreground">{money(line.socialInsurance)}</td><td className="px-5 py-4 text-right font-mono text-sm text-muted-foreground">{money(line.incomeTax)}</td><td className="px-5 py-4 text-right font-mono text-sm text-sky-700">{money(line.taxRelief)}</td><td className="px-5 py-4 text-right font-mono text-sm">{money(line.advanceAmount)}</td><td className="px-5 py-4 text-right font-mono text-sm">{money(line.manualDeduction)}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold text-primary">{money(line.payable)}</td><td className="px-5 py-4 text-right font-mono text-sm">{money(line.paidAmount)}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold text-orange-800" data-testid={`value-payroll-remaining-${line.employeeId}`}>{money(line.remainingAmount)}</td><td className="px-5 py-4 text-right"><Button size="sm" variant="outline" onClick={() => setSelectedLine(line)} data-testid={`button-payroll-adjustment-${line.employeeId}`}><Pencil className="size-3.5" />Оруулах</Button></td></tr>)}</tbody></table></div>}
       </section>
     </>}
+    {selectedLine && <PayrollAdjustmentModal line={selectedLine} month={month} onClose={() => setSelectedLine(null)} />}
   </div>;
 }
 
