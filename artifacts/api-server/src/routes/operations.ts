@@ -715,44 +715,49 @@ router.put("/payroll-adjustments", async (req, res, next) => {
       res.status(404).json({ error: "Ажилтан олдсонгүй" });
       return;
     }
-    const [adjustment] = await db
-      .insert(payrollAdjustmentsTable)
-      .values(input)
-      .onConflictDoUpdate({
-        target: [payrollAdjustmentsTable.employeeId, payrollAdjustmentsTable.month],
-        set: {
-          manualDeduction: input.manualDeduction,
-          paidAmount: input.paidAmount,
-          paymentDate: input.paidAmount > 0 ? input.paymentDate : null,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
     const sourceType = "payroll";
     const sourceKey = `${input.month}:${input.employeeId}`;
-    if (input.paidAmount > 0 && input.paymentDate) {
-      await db.insert(cashTransactionsTable).values({
-        type: "expense",
-        category: "Цалин",
-        description: `${employee.name} · ${input.month} сарын цалин`,
-        amount: input.paidAmount,
-        date: input.paymentDate,
-        sourceType,
-        sourceKey,
-      }).onConflictDoUpdate({
-        target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
-        set: {
+    const adjustment = await db.transaction(async (tx) => {
+      const [savedAdjustment] = await tx
+        .insert(payrollAdjustmentsTable)
+        .values(input)
+        .onConflictDoUpdate({
+          target: [payrollAdjustmentsTable.employeeId, payrollAdjustmentsTable.month],
+          set: {
+            manualDeduction: input.manualDeduction,
+            paidAmount: input.paidAmount,
+            paymentDate: input.paidAmount > 0 ? input.paymentDate : null,
+            updatedAt: new Date(),
+          },
+        })
+        .returning();
+
+      if (input.paidAmount > 0 && input.paymentDate) {
+        await tx.insert(cashTransactionsTable).values({
+          type: "expense",
+          category: "Цалин",
+          description: `${employee.name} · ${input.month} сарын цалин`,
           amount: input.paidAmount,
           date: input.paymentDate,
-          description: `${employee.name} · ${input.month} сарын цалин`,
-        },
-      });
-    } else {
-      await db.delete(cashTransactionsTable).where(and(
-        eq(cashTransactionsTable.sourceType, sourceType),
-        eq(cashTransactionsTable.sourceKey, sourceKey),
-      ));
-    }
+          sourceType,
+          sourceKey,
+        }).onConflictDoUpdate({
+          target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
+          set: {
+            amount: input.paidAmount,
+            date: input.paymentDate,
+            description: `${employee.name} · ${input.month} сарын цалин`,
+          },
+        });
+      } else {
+        await tx.delete(cashTransactionsTable).where(and(
+          eq(cashTransactionsTable.sourceType, sourceType),
+          eq(cashTransactionsTable.sourceKey, sourceKey),
+        ));
+      }
+
+      return savedAdjustment;
+    });
     res.json({
       employeeId: adjustment.employeeId,
       month: adjustment.month,
@@ -823,37 +828,44 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
                 paymentDate: typeof line.paymentDate === "string" ? line.paymentDate : null,
               }
         ));
-    await db
-      .update(payrollAdvanceApprovalsTable)
-      .set({ lines })
-      .where(eq(payrollAdvanceApprovalsTable.id, approval.id));
     const selectedLine = lines.find((line) => Number(line.employeeId) === input.employeeId);
     const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, input.employeeId));
+    if (!selectedLine || !employee) {
+      res.status(404).json({ error: "Ажилтан эсвэл урьдчилгаа цалингийн мөр олдсонгүй" });
+      return;
+    }
     const sourceType = "payroll_advance";
     const sourceKey = `${input.month}:${input.employeeId}`;
-    if (input.paid && input.paymentDate && selectedLine && employee) {
-      await db.insert(cashTransactionsTable).values({
-        type: "expense",
-        category: "Урьдчилгаа цалин",
-        description: `${employee.name} · ${input.month} сарын урьдчилгаа`,
-        amount: Number(selectedLine.advanceAmount),
-        date: input.paymentDate,
-        sourceType,
-        sourceKey,
-      }).onConflictDoUpdate({
-        target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
-        set: {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(payrollAdvanceApprovalsTable)
+        .set({ lines })
+        .where(eq(payrollAdvanceApprovalsTable.id, approval.id));
+
+      if (input.paid && input.paymentDate) {
+        await tx.insert(cashTransactionsTable).values({
+          type: "expense",
+          category: "Урьдчилгаа цалин",
+          description: `${employee.name} · ${input.month} сарын урьдчилгаа`,
           amount: Number(selectedLine.advanceAmount),
           date: input.paymentDate,
-          description: `${employee.name} · ${input.month} сарын урьдчилгаа`,
-        },
-      });
-    } else {
-      await db.delete(cashTransactionsTable).where(and(
-        eq(cashTransactionsTable.sourceType, sourceType),
-        eq(cashTransactionsTable.sourceKey, sourceKey),
-      ));
-    }
+          sourceType,
+          sourceKey,
+        }).onConflictDoUpdate({
+          target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
+          set: {
+            amount: Number(selectedLine.advanceAmount),
+            date: input.paymentDate,
+            description: `${employee.name} · ${input.month} сарын урьдчилгаа`,
+          },
+        });
+      } else {
+        await tx.delete(cashTransactionsTable).where(and(
+          eq(cashTransactionsTable.sourceType, sourceType),
+          eq(cashTransactionsTable.sourceKey, sourceKey),
+        ));
+      }
+    });
     res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(input.month)));
   } catch (error) {
     next(error);
