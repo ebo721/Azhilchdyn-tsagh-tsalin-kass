@@ -248,8 +248,6 @@ export const GetPayrollResponse = zod.object({
  * @summary Save monthly payroll adjustments for an employee
  */
 export const upsertPayrollAdjustmentBodyMonthRegExp = new RegExp('^\\d{4}-\\d{2}$');
-export const upsertPayrollAdjustmentBodyTaxReliefMin = 0;
-
 export const upsertPayrollAdjustmentBodyManualDeductionMin = 0;
 
 export const upsertPayrollAdjustmentBodyPaidAmountMin = 0;
@@ -259,7 +257,6 @@ export const upsertPayrollAdjustmentBodyPaidAmountMin = 0;
 export const UpsertPayrollAdjustmentBody = zod.object({
   "employeeId": zod.number().int(),
   "month": zod.string().regex(upsertPayrollAdjustmentBodyMonthRegExp),
-  "taxRelief": zod.number().min(upsertPayrollAdjustmentBodyTaxReliefMin),
   "manualDeduction": zod.number().min(upsertPayrollAdjustmentBodyManualDeductionMin),
   "paidAmount": zod.number().min(upsertPayrollAdjustmentBodyPaidAmountMin)
 })

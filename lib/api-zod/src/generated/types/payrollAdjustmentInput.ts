@@ -11,8 +11,6 @@ export interface PayrollAdjustmentInput {
   /** @pattern ^\d{4}-\d{2}$ */
   month: string;
   /** @minimum 0 */
-  taxRelief: number;
-  /** @minimum 0 */
   manualDeduction: number;
   /** @minimum 0 */
   paidAmount: number;

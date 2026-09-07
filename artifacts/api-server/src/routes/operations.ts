@@ -36,6 +36,15 @@ const router: IRouter = Router();
 const today = () => new Date().toISOString().slice(0, 10);
 const currentMonth = () => today().slice(0, 7);
 const money = (value: number) => Math.round(value * 100) / 100;
+const monthlyIncomeTaxRelief = (gross: number) => {
+  if (gross <= 500_000) return 20_000;
+  if (gross <= 1_000_000) return 18_000;
+  if (gross <= 1_500_000) return 16_000;
+  if (gross <= 2_000_000) return 14_000;
+  if (gross <= 2_500_000) return 12_000;
+  if (gross <= 3_000_000) return 10_000;
+  return 0;
+};
 
 function hoursBetween(clockIn: string, clockOut: string) {
   const [inHour, inMinute] = clockIn.split(":").map(Number);
@@ -74,7 +83,7 @@ async function getPayrollSummary(month: string) {
     const taxableIncome = money(Math.max(0, gross - socialInsurance));
     const adjustment = adjustmentMap.get(employee.id);
     const calculatedIncomeTax = money(taxableIncome * 0.1);
-    const taxRelief = money(Number(adjustment?.taxRelief ?? 0));
+    const taxRelief = monthlyIncomeTaxRelief(gross);
     const incomeTax = money(Math.max(0, calculatedIncomeTax - taxRelief));
     const firstHalfDaysWorked = employeeRecords.filter((record) =>
       ["present", "late"].includes(record.status) && Number(String(record.date).slice(8, 10)) <= 15
@@ -436,7 +445,6 @@ router.put("/payroll-adjustments", async (req, res, next) => {
       .onConflictDoUpdate({
         target: [payrollAdjustmentsTable.employeeId, payrollAdjustmentsTable.month],
         set: {
-          taxRelief: input.taxRelief,
           manualDeduction: input.manualDeduction,
           paidAmount: input.paidAmount,
           updatedAt: new Date(),
