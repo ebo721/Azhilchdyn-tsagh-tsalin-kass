@@ -47,6 +47,8 @@ import type {
   Shift,
   ShiftInput,
   ShiftPlan,
+  ShiftPlanCopyInput,
+  ShiftPlanCopyResult,
   ShiftPlanInput
 } from './api.schemas';
 
@@ -1394,6 +1396,77 @@ export const useUpsertShiftPlan = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpsertShiftPlanMutationOptions(options));
+    }
+
+export const getCopyPreviousShiftPlansUrl = () => {
+
+
+
+
+  return `/api/attendance/shift-plans/copy-previous`
+}
+
+/**
+ * @summary Copy valid active employee shift plans from the previous month
+ */
+export const copyPreviousShiftPlans = async (shiftPlanCopyInput: ShiftPlanCopyInput, options?: Parameters<typeof customFetch>[1]): Promise<ShiftPlanCopyResult> => {
+
+  return customFetch<ShiftPlanCopyResult>(getCopyPreviousShiftPlansUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shiftPlanCopyInput)
+  }
+);}
+
+
+
+
+
+export const getCopyPreviousShiftPlansMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof copyPreviousShiftPlans>>, TError,{data: BodyType<ShiftPlanCopyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof copyPreviousShiftPlans>>, TError,{data: BodyType<ShiftPlanCopyInput>}, TContext> => {
+
+const mutationKey = ['copyPreviousShiftPlans'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof copyPreviousShiftPlans>>, {data: BodyType<ShiftPlanCopyInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  copyPreviousShiftPlans(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CopyPreviousShiftPlansMutationResult = NonNullable<Awaited<ReturnType<typeof copyPreviousShiftPlans>>>
+    export type CopyPreviousShiftPlansMutationBody = BodyType<ShiftPlanCopyInput>
+    export type CopyPreviousShiftPlansMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Copy valid active employee shift plans from the previous month
+ */
+export const useCopyPreviousShiftPlans = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof copyPreviousShiftPlans>>, TError,{data: BodyType<ShiftPlanCopyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof copyPreviousShiftPlans>>,
+        TError,
+        {data: BodyType<ShiftPlanCopyInput>},
+        TContext
+      > => {
+      return useMutation(getCopyPreviousShiftPlansMutationOptions(options));
     }
 
 export const getGetPayrollUrl = (params?: GetPayrollParams,) => {

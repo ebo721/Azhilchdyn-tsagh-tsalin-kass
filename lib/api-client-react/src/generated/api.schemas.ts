@@ -233,6 +233,21 @@ export interface ShiftPlanInput {
   shiftId: number | null;
 }
 
+export interface ShiftPlanCopyInput {
+  /** @pattern ^\d{4}-\d{2}$ */
+  month: string;
+  overwrite: boolean;
+}
+
+export interface ShiftPlanCopyResult {
+  sourceMonth: string;
+  targetMonth: string;
+  copied: number;
+  overwritten: number;
+  skipped: number;
+  unavailableDates: number;
+}
+
 export interface HourBalanceLine {
   employeeId: number;
   employeeName: string;

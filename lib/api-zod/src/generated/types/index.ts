@@ -49,4 +49,6 @@ export * from './payrollSummary';
 export * from './shift';
 export * from './shiftInput';
 export * from './shiftPlan';
+export * from './shiftPlanCopyInput';
+export * from './shiftPlanCopyResult';
 export * from './shiftPlanInput';

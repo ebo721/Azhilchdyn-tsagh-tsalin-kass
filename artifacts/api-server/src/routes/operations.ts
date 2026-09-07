@@ -4,6 +4,8 @@ import {
   CreateShiftBody,
   CreateCashTransactionBody,
   CreateEmployeeBody,
+  CopyPreviousShiftPlansBody,
+  CopyPreviousShiftPlansResponse,
   ApprovePayrollAdvanceBody,
   GetDashboardResponse,
   GetHourBalanceQueryParams,
@@ -82,6 +84,17 @@ function hoursBetween(clockIn: string, clockOut: string) {
   const start = inHour * 60 + inMinute;
   const end = outHour * 60 + outMinute;
   return Math.max(0, money((end - start) / 60));
+}
+
+function previousMonth(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const date = new Date(Date.UTC(year, monthNumber - 2, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function daysInMonth(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  return new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
 }
 
 function weekdayCount(month: string) {
@@ -463,6 +476,76 @@ router.put("/attendance/shift-plans", async (req, res, next) => {
       startTime: shift.startTime,
       endTime: shift.endTime,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/attendance/shift-plans/copy-previous", async (req, res, next) => {
+  try {
+    const { month, overwrite } = CopyPreviousShiftPlansBody.parse(req.body);
+    const sourceMonth = previousMonth(month);
+    const targetDayCount = daysInMonth(month);
+    const [activeEmployees, shifts, sourcePlans, targetPlans] = await Promise.all([
+      db.select({ id: employeesTable.id }).from(employeesTable).where(eq(employeesTable.status, "active")),
+      db.select({ id: shiftTemplatesTable.id }).from(shiftTemplatesTable),
+      db.select().from(employeeShiftPlansTable),
+      db.select().from(employeeShiftPlansTable),
+    ]);
+    const activeEmployeeIds = new Set(activeEmployees.map(({ id }) => id));
+    const validShiftIds = new Set(shifts.map(({ id }) => id));
+    const eligiblePlans = sourcePlans.filter((plan) =>
+      plan.date.startsWith(sourceMonth)
+      && activeEmployeeIds.has(plan.employeeId)
+      && validShiftIds.has(plan.shiftId)
+    );
+    const targetByKey = new Map(
+      targetPlans
+        .filter((plan) => plan.date.startsWith(month))
+        .map((plan) => [`${plan.employeeId}-${plan.date}`, plan]),
+    );
+    let copied = 0;
+    let overwritten = 0;
+    let skipped = 0;
+    let unavailableDates = 0;
+
+    await db.transaction(async (tx) => {
+      for (const source of eligiblePlans) {
+        const day = Number(source.date.slice(8, 10));
+        if (day > targetDayCount) {
+          unavailableDates += 1;
+          continue;
+        }
+        const date = `${month}-${String(day).padStart(2, "0")}`;
+        const existing = targetByKey.get(`${source.employeeId}-${date}`);
+        if (existing && !overwrite) {
+          skipped += 1;
+          continue;
+        }
+        if (existing) {
+          await tx.update(employeeShiftPlansTable)
+            .set({ shiftId: source.shiftId })
+            .where(eq(employeeShiftPlansTable.id, existing.id));
+          overwritten += 1;
+        } else {
+          await tx.insert(employeeShiftPlansTable).values({
+            employeeId: source.employeeId,
+            date,
+            shiftId: source.shiftId,
+          });
+          copied += 1;
+        }
+      }
+    });
+
+    res.json(CopyPreviousShiftPlansResponse.parse({
+      sourceMonth,
+      targetMonth: month,
+      copied,
+      overwritten,
+      skipped,
+      unavailableDates,
+    }));
   } catch (error) {
     next(error);
   }
