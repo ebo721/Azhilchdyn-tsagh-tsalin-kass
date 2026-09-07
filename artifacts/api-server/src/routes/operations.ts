@@ -98,6 +98,14 @@ function daysInMonth(month: string) {
   return new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
 }
 
+function isValidCalendarDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day;
+}
+
 function weekdayCount(month: string) {
   const [year, monthNumber] = month.split("-").map(Number);
   const daysInMonth = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
@@ -448,7 +456,16 @@ router.get("/attendance/shift-plans", async (req, res, next) => {
 
 router.put("/attendance/shift-plans", async (req, res, next) => {
   try {
-    const input = UpsertShiftPlanBody.parse(req.body);
+    const parsed = UpsertShiftPlanBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const input = parsed.data;
+    if (!isValidCalendarDate(input.date)) {
+      res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
+      return;
+    }
     const existing = await db.select().from(employeeShiftPlansTable).where(and(
       eq(employeeShiftPlansTable.employeeId, input.employeeId),
       eq(employeeShiftPlansTable.date, input.date),

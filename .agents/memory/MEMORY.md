@@ -1,0 +1,1 @@
+- [OpenAPI calendar-date validation](openapi-calendar-date-validation.md) — Orval cannot combine string date format and pattern; keep shape in schema and calendar checks at the route boundary.

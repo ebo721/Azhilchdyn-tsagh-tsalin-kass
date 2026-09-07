@@ -227,7 +227,7 @@ export interface ShiftPlan {
 
 export interface ShiftPlanInput {
   employeeId: number;
-  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
   date: string;
   /** @nullable */
   shiftId: number | null;
