@@ -332,12 +332,6 @@ function AttendancePage() {
 function HourBalance() {
   const [month, setMonth] = useState(currentMonth());
   const query = useGetHourBalance({ month });
-  const totals = (query.data ?? []).reduce((acc, row) => ({
-    hours: acc.hours + row.totalHours,
-    workDays: acc.workDays + row.workDays,
-    eightHourDays: acc.eightHourDays + row.eightHourDays,
-    twelveHourDays: acc.twelveHourDays + row.twelveHourDays,
-  }), { hours: 0, workDays: 0, eightHourDays: 0, twelveHourDays: 0 });
   return <div className="page-enter">
     <PageHeading
       eyebrow="Сарын нийлбэр / hour balance"
@@ -346,12 +340,6 @@ function HourBalance() {
       action={<div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3"><CalendarDays className="size-4 text-primary" /><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="h-10 bg-transparent text-sm outline-none" data-testid="input-hour-balance-month" /></div>}
     />
     {query.isLoading ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><LoadingBlock className="h-32" /><LoadingBlock className="h-32" /><LoadingBlock className="h-32" /><LoadingBlock className="h-32" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : <>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Нийт цаг" value={`${totals.hours} цаг`} meta={`${query.data?.length ?? 0} ажилтны нийлбэр`} icon={Timer} />
-        <StatCard label="Ажилласан өдөр" value={`${totals.workDays} өдөр`} meta="Бүх ажилтны нийлбэр" icon={CalendarDays} tone="gold" />
-        <StatCard label="8 цагийн ээлж" value={`${totals.eightHourDays}`} meta="Сонгосон сарын тоо" icon={Clock3} tone="blue" />
-        <StatCard label="12 цагийн ээлж" value={`${totals.twelveHourDays}`} meta="Сонгосон сарын тоо" icon={Clock3} tone="orange" />
-      </div>
       <section className="mt-6 overflow-hidden rounded-2xl border border-border bg-card" data-testid="hour-balance-list">
         <div className="flex items-center justify-between border-b border-border px-5 py-4"><div><p className="font-mono text-[10px] font-bold uppercase tracking-[.18em] text-primary">Monthly register</p><h2 className="mt-1 text-base font-bold">{month.replace('-', ' оны ')} сарын цагийн жагсаалт</h2></div><span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{query.data?.length ?? 0} ажилтан</span></div>
         {!query.data?.length ? <EmptyState title="Цагийн баланс хоосон" detail="Ажилтан болон ирцийн бүртгэл нэмэгдсэний дараа энд сарын нийлбэр гарна." icon={Timer} /> : <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Ажилтан</th><th className="px-5 py-3 text-center">Ажиллах ёстой өдөр</th><th className="px-5 py-3 text-center">8 цаг</th><th className="px-5 py-3 text-center">12 цаг</th><th className="px-5 py-3 text-center">Чөлөө</th><th className="px-5 py-3 text-center">Ажилласан өдөр</th><th className="px-5 py-3 text-right">Нийт цаг</th></tr></thead><tbody className="divide-y divide-border">{query.data.map((row) => <tr key={row.employeeId} className="transition-colors hover:bg-secondary/35" data-testid={`row-hour-balance-${row.employeeId}`}><td className="px-5 py-4"><p className="text-sm font-semibold">{row.employeeName}</p><p className="text-xs text-muted-foreground">{row.role}</p></td><td className="px-5 py-4 text-center font-mono text-sm font-semibold text-primary">{row.expectedWorkDays}</td><td className="px-5 py-4 text-center font-mono text-sm">{row.eightHourDays}</td><td className="px-5 py-4 text-center font-mono text-sm">{row.twelveHourDays}</td><td className="px-5 py-4 text-center font-mono text-sm">{row.leaveDays}</td><td className="px-5 py-4 text-center font-mono text-sm">{row.workDays}</td><td className="px-5 py-4 text-right"><span className="inline-flex min-w-24 justify-center rounded-xl bg-primary px-3 py-2 font-mono text-sm font-bold text-primary-foreground" data-testid={`value-hour-balance-${row.employeeId}`}>{row.totalHours} цаг</span></td></tr>)}</tbody></table></div>}
