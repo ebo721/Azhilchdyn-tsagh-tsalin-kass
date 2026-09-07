@@ -10,6 +10,8 @@ import type { PayrollLine } from './payrollLine';
 export interface PayrollSummary {
   month: string;
   totalGross: number;
+  totalSocialInsurance: number;
+  totalIncomeTax: number;
   totalDeductions: number;
   totalNet: number;
   lines: PayrollLine[];

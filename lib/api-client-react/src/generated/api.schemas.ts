@@ -48,6 +48,7 @@ export interface Employee {
   phone: string;
   salaryType: EmployeeSalaryType;
   baseSalary: number;
+  socialInsuranceSalary: number;
   status: EmployeeStatus;
   joinedAt: string;
 }
@@ -69,6 +70,8 @@ export interface EmployeeInput {
   salaryType: EmployeeInputSalaryType;
   /** @minimum 0 */
   baseSalary: number;
+  /** @minimum 0 */
+  socialInsuranceSalary: number;
 }
 
 export type EmployeeUpdateSalaryType = typeof EmployeeUpdateSalaryType[keyof typeof EmployeeUpdateSalaryType];
@@ -96,6 +99,8 @@ export interface EmployeeUpdate {
   salaryType?: EmployeeUpdateSalaryType;
   /** @minimum 0 */
   baseSalary?: number;
+  /** @minimum 0 */
+  socialInsuranceSalary?: number;
   status?: EmployeeUpdateStatus;
 }
 
@@ -176,6 +181,10 @@ export interface PayrollLine {
   daysWorked: number;
   hours: number;
   gross: number;
+  socialInsuranceSalary: number;
+  socialInsurance: number;
+  taxableIncome: number;
+  incomeTax: number;
   deductions: number;
   net: number;
 }
@@ -183,6 +192,8 @@ export interface PayrollLine {
 export interface PayrollSummary {
   month: string;
   totalGross: number;
+  totalSocialInsurance: number;
+  totalIncomeTax: number;
   totalDeductions: number;
   totalNet: number;
   lines: PayrollLine[];

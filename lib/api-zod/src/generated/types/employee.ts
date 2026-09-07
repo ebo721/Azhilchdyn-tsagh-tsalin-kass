@@ -15,6 +15,7 @@ export interface Employee {
   phone: string;
   salaryType: EmployeeSalaryType;
   baseSalary: number;
+  socialInsuranceSalary: number;
   status: EmployeeStatus;
   joinedAt: string;
 }

@@ -13,6 +13,10 @@ export interface PayrollLine {
   daysWorked: number;
   hours: number;
   gross: number;
+  socialInsuranceSalary: number;
+  socialInsurance: number;
+  taxableIncome: number;
+  incomeTax: number;
   deductions: number;
   net: number;
 }

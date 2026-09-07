@@ -16,4 +16,6 @@ export interface EmployeeInput {
   salaryType: EmployeeInputSalaryType;
   /** @minimum 0 */
   baseSalary: number;
+  /** @minimum 0 */
+  socialInsuranceSalary: number;
 }

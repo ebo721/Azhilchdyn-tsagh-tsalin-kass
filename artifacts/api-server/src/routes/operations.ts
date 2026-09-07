@@ -59,7 +59,11 @@ async function getPayrollSummary(month: string) {
       employee.salaryType === "hourly"
         ? money(hours * Number(employee.baseSalary))
         : money(Number(employee.baseSalary));
-    const deductions = money(gross * 0.1);
+    const socialInsuranceSalary = money(Number(employee.socialInsuranceSalary));
+    const socialInsurance = money(socialInsuranceSalary * 0.115);
+    const taxableIncome = money(Math.max(0, gross - socialInsurance));
+    const incomeTax = money(taxableIncome * 0.1);
+    const deductions = money(socialInsurance + incomeTax);
     return {
       employeeId: employee.id,
       employeeName: employee.name,
@@ -67,6 +71,10 @@ async function getPayrollSummary(month: string) {
       daysWorked,
       hours,
       gross,
+      socialInsuranceSalary,
+      socialInsurance,
+      taxableIncome,
+      incomeTax,
       deductions,
       net: money(gross - deductions),
     };
@@ -75,6 +83,8 @@ async function getPayrollSummary(month: string) {
   return {
     month,
     totalGross: money(lines.reduce((total, line) => total + line.gross, 0)),
+    totalSocialInsurance: money(lines.reduce((total, line) => total + line.socialInsurance, 0)),
+    totalIncomeTax: money(lines.reduce((total, line) => total + line.incomeTax, 0)),
     totalDeductions: money(lines.reduce((total, line) => total + line.deductions, 0)),
     totalNet: money(lines.reduce((total, line) => total + line.net, 0)),
     lines,
@@ -133,6 +143,7 @@ router.get("/employees", async (_req, res, next) => {
     res.json(ListEmployeesResponse.parse(rows.map((employee) => ({
       ...employee,
       baseSalary: Number(employee.baseSalary),
+      socialInsuranceSalary: Number(employee.socialInsuranceSalary),
       joinedAt: String(employee.joinedAt),
     }))));
   } catch (error) {
@@ -147,6 +158,7 @@ router.post("/employees", async (req, res, next) => {
     res.status(201).json({
       ...employee,
       baseSalary: Number(employee.baseSalary),
+      socialInsuranceSalary: Number(employee.socialInsuranceSalary),
       joinedAt: String(employee.joinedAt),
     });
   } catch (error) {
@@ -170,6 +182,7 @@ router.patch("/employees/:id", async (req, res, next) => {
     res.json({
       ...employee,
       baseSalary: Number(employee.baseSalary),
+      socialInsuranceSalary: Number(employee.socialInsuranceSalary),
       joinedAt: String(employee.joinedAt),
     });
   } catch (error) {

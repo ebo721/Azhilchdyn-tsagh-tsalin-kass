@@ -287,7 +287,7 @@ components:
         createdAt: { type: string }
     Employee:
       type: object
-      required: [id, name, role, phone, salaryType, baseSalary, status, joinedAt]
+      required: [id, name, role, phone, salaryType, baseSalary, socialInsuranceSalary, status, joinedAt]
       properties:
         id: { type: integer }
         name: { type: string }
@@ -295,17 +295,19 @@ components:
         phone: { type: string }
         salaryType: { type: string, enum: [monthly, hourly] }
         baseSalary: { type: number }
+        socialInsuranceSalary: { type: number }
         status: { type: string, enum: [active, inactive] }
         joinedAt: { type: string }
     EmployeeInput:
       type: object
-      required: [name, role, phone, salaryType, baseSalary]
+      required: [name, role, phone, salaryType, baseSalary, socialInsuranceSalary]
       properties:
         name: { type: string, minLength: 1 }
         role: { type: string, minLength: 1 }
         phone: { type: string }
         salaryType: { type: string, enum: [monthly, hourly] }
         baseSalary: { type: number, minimum: 0 }
+        socialInsuranceSalary: { type: number, minimum: 0 }
     EmployeeUpdate:
       type: object
       properties:
@@ -314,6 +316,7 @@ components:
         phone: { type: string }
         salaryType: { type: string, enum: [monthly, hourly] }
         baseSalary: { type: number, minimum: 0 }
+        socialInsuranceSalary: { type: number, minimum: 0 }
         status: { type: string, enum: [active, inactive] }
     Attendance:
       type: object
@@ -361,7 +364,7 @@ components:
         leaveDays: { type: integer }
     PayrollLine:
       type: object
-      required: [employeeId, employeeName, role, daysWorked, hours, gross, deductions, net]
+      required: [employeeId, employeeName, role, daysWorked, hours, gross, socialInsuranceSalary, socialInsurance, taxableIncome, incomeTax, deductions, net]
       properties:
         employeeId: { type: integer }
         employeeName: { type: string }
@@ -369,14 +372,20 @@ components:
         daysWorked: { type: number }
         hours: { type: number }
         gross: { type: number }
+        socialInsuranceSalary: { type: number }
+        socialInsurance: { type: number }
+        taxableIncome: { type: number }
+        incomeTax: { type: number }
         deductions: { type: number }
         net: { type: number }
     PayrollSummary:
       type: object
-      required: [month, totalGross, totalDeductions, totalNet, lines]
+      required: [month, totalGross, totalSocialInsurance, totalIncomeTax, totalDeductions, totalNet, lines]
       properties:
         month: { type: string }
         totalGross: { type: number }
+        totalSocialInsurance: { type: number }
+        totalIncomeTax: { type: number }
         totalDeductions: { type: number }
         totalNet: { type: number }
         lines:

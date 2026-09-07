@@ -45,6 +45,7 @@ export const ListEmployeesResponseItem = zod.object({
   "phone": zod.string(),
   "salaryType": zod.enum(['monthly', 'hourly']),
   "baseSalary": zod.number(),
+  "socialInsuranceSalary": zod.number(),
   "status": zod.enum(['active', 'inactive']),
   "joinedAt": zod.string()
 })
@@ -58,6 +59,8 @@ export const ListEmployeesResponse = zod.array(ListEmployeesResponseItem)
 
 export const createEmployeeBodyBaseSalaryMin = 0;
 
+export const createEmployeeBodySocialInsuranceSalaryMin = 0;
+
 
 
 export const CreateEmployeeBody = zod.object({
@@ -65,7 +68,8 @@ export const CreateEmployeeBody = zod.object({
   "role": zod.string().min(1),
   "phone": zod.string(),
   "salaryType": zod.enum(['monthly', 'hourly']),
-  "baseSalary": zod.number().min(createEmployeeBodyBaseSalaryMin)
+  "baseSalary": zod.number().min(createEmployeeBodyBaseSalaryMin),
+  "socialInsuranceSalary": zod.number().min(createEmployeeBodySocialInsuranceSalaryMin)
 })
 
 export const CreateEmployeeResponse = zod.object({
@@ -75,6 +79,7 @@ export const CreateEmployeeResponse = zod.object({
   "phone": zod.string(),
   "salaryType": zod.enum(['monthly', 'hourly']),
   "baseSalary": zod.number(),
+  "socialInsuranceSalary": zod.number(),
   "status": zod.enum(['active', 'inactive']),
   "joinedAt": zod.string()
 })
@@ -91,6 +96,8 @@ export const UpdateEmployeeParams = zod.object({
 
 export const updateEmployeeBodyBaseSalaryMin = 0;
 
+export const updateEmployeeBodySocialInsuranceSalaryMin = 0;
+
 
 
 export const UpdateEmployeeBody = zod.object({
@@ -99,6 +106,7 @@ export const UpdateEmployeeBody = zod.object({
   "phone": zod.string().optional(),
   "salaryType": zod.enum(['monthly', 'hourly']).optional(),
   "baseSalary": zod.number().min(updateEmployeeBodyBaseSalaryMin).optional(),
+  "socialInsuranceSalary": zod.number().min(updateEmployeeBodySocialInsuranceSalaryMin).optional(),
   "status": zod.enum(['active', 'inactive']).optional()
 })
 
@@ -109,6 +117,7 @@ export const UpdateEmployeeResponse = zod.object({
   "phone": zod.string(),
   "salaryType": zod.enum(['monthly', 'hourly']),
   "baseSalary": zod.number(),
+  "socialInsuranceSalary": zod.number(),
   "status": zod.enum(['active', 'inactive']),
   "joinedAt": zod.string()
 })
@@ -206,6 +215,8 @@ export const GetPayrollQueryParams = zod.object({
 export const GetPayrollResponse = zod.object({
   "month": zod.string(),
   "totalGross": zod.number(),
+  "totalSocialInsurance": zod.number(),
+  "totalIncomeTax": zod.number(),
   "totalDeductions": zod.number(),
   "totalNet": zod.number(),
   "lines": zod.array(zod.object({
@@ -215,6 +226,10 @@ export const GetPayrollResponse = zod.object({
   "daysWorked": zod.number(),
   "hours": zod.number(),
   "gross": zod.number(),
+  "socialInsuranceSalary": zod.number(),
+  "socialInsurance": zod.number(),
+  "taxableIncome": zod.number(),
+  "incomeTax": zod.number(),
   "deductions": zod.number(),
   "net": zod.number()
 }))

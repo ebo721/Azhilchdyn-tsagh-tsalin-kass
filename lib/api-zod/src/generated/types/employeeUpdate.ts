@@ -17,5 +17,7 @@ export interface EmployeeUpdate {
   salaryType?: EmployeeUpdateSalaryType;
   /** @minimum 0 */
   baseSalary?: number;
+  /** @minimum 0 */
+  socialInsuranceSalary?: number;
   status?: EmployeeUpdateStatus;
 }
