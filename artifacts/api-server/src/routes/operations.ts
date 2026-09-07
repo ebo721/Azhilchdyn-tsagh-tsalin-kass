@@ -4,6 +4,8 @@ import {
   CreateCashTransactionBody,
   CreateEmployeeBody,
   GetDashboardResponse,
+  GetHourBalanceQueryParams,
+  GetHourBalanceResponse,
   GetPayrollQueryParams,
   GetPayrollResponse,
   GetCashSummaryResponse,
@@ -237,8 +239,13 @@ router.post("/attendance", async (req, res, next) => {
 router.put("/attendance", async (req, res, next) => {
   try {
     const input = UpsertAttendanceBody.parse(req.body);
+    const selectedHours = input.status === "present" ? (input.hours ?? 8) : 0;
     const clockIn = input.clockIn ?? (input.status === "present" ? "09:00" : "00:00");
-    const clockOut = input.clockOut ?? (input.status === "present" ? "18:00" : "00:00");
+    const clockOut = input.clockOut ?? (
+      input.status === "present"
+        ? selectedHours === 12 ? "21:00" : "17:00"
+        : "00:00"
+    );
     const existing = await db
       .select()
       .from(attendanceTable)
@@ -249,7 +256,7 @@ router.put("/attendance", async (req, res, next) => {
     const [record] = existing.length
       ? await db
           .update(attendanceTable)
-          .set({ status: input.status, clockIn, clockOut, hours: hoursBetween(clockIn, clockOut) })
+          .set({ status: input.status, clockIn, clockOut, hours: selectedHours })
           .where(eq(attendanceTable.id, existing[0].id))
           .returning()
       : await db
@@ -260,7 +267,7 @@ router.put("/attendance", async (req, res, next) => {
             status: input.status,
             clockIn,
             clockOut,
-            hours: hoursBetween(clockIn, clockOut),
+            hours: selectedHours,
           })
           .returning();
     const [employee] = await db
@@ -273,6 +280,38 @@ router.put("/attendance", async (req, res, next) => {
       date: String(record.date),
       hours: Number(record.hours),
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/hour-balance", async (req, res, next) => {
+  try {
+    const { month } = GetHourBalanceQueryParams.parse(req.query);
+    const selectedMonth = month ?? currentMonth();
+    const [employees, records] = await Promise.all([
+      db.select().from(employeesTable).where(eq(employeesTable.status, "active")),
+      db.select().from(attendanceTable),
+    ]);
+    const monthRecords = records.filter((record) => String(record.date).startsWith(selectedMonth));
+    const lines = employees.map((employee) => {
+      const employeeRecords = monthRecords.filter((record) => record.employeeId === employee.id);
+      const workedRecords = employeeRecords.filter((record) =>
+        ["present", "late"].includes(record.status),
+      );
+      return {
+        employeeId: employee.id,
+        employeeName: employee.name,
+        role: employee.role,
+        month: selectedMonth,
+        totalHours: money(workedRecords.reduce((total, record) => total + Number(record.hours), 0)),
+        workDays: workedRecords.length,
+        eightHourDays: workedRecords.filter((record) => Number(record.hours) === 8).length,
+        twelveHourDays: workedRecords.filter((record) => Number(record.hours) === 12).length,
+        leaveDays: employeeRecords.filter((record) => record.status === "leave").length,
+      };
+    });
+    res.json(GetHourBalanceResponse.parse(lines));
   } catch (error) {
     next(error);
   }

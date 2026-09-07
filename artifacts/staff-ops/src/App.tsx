@@ -25,6 +25,7 @@ import {
   Plus,
   Receipt,
   Search,
+  Timer,
   Trash2,
   UserRound,
   UsersRound,
@@ -37,6 +38,7 @@ import {
   EmployeeStatus,
   getGetCashSummaryQueryKey,
   getGetDashboardQueryKey,
+  getGetHourBalanceQueryKey,
   getGetPayrollQueryKey,
   getListAttendanceQueryKey,
   getListCashTransactionsQueryKey,
@@ -46,6 +48,7 @@ import {
   useDeleteEmployee,
   useGetCashSummary,
   useGetDashboard,
+  useGetHourBalance,
   useGetPayroll,
   useListAttendance,
   useListCashTransactions,
@@ -77,6 +80,7 @@ const nav = [
   { href: '/', label: 'Тойм', icon: LayoutDashboard },
   { href: '/employees', label: 'Ажилчид', icon: UsersRound },
   { href: '/attendance', label: 'Ирц', icon: Clock3 },
+  { href: '/hour-balance', label: 'Цагийн баланс', icon: Timer },
   { href: '/payroll', label: 'Цалин', icon: Banknote },
   { href: '/cash', label: 'Касс', icon: WalletCards },
 ];
@@ -266,15 +270,23 @@ function AttendancePage() {
   const activeEmployees = (employees.data ?? []).filter((employee) => employee.status === EmployeeStatus.active);
   const selectedDay = days[days.length - 1];
   const selectedRows = activeEmployees.map((employee) => attendanceMap.get(`${employee.id}-${selectedDay}`)).filter(Boolean);
-  const counts = selectedRows.reduce((acc, row) => { if (row) acc[row.status] = (acc[row.status] ?? 0) + 1; return acc; }, {} as Record<string, number>);
-  const toggleAttendance = (employeeId: number, date: string) => {
-    const current = attendanceMap.get(`${employeeId}-${date}`);
-    const worked = current?.status === 'present' || current?.status === 'late';
-    upsert.mutate({ data: { employeeId, date, status: worked ? 'absent' : 'present', clockIn: worked ? '00:00' : '09:00', clockOut: worked ? '00:00' : '18:00' } }, {
+  const counts = selectedRows.reduce((acc, row) => {
+    if (!row) return acc;
+    if (row.status === 'leave') acc.leave += 1;
+    else if (Number(row.hours) === 12) acc.twelve += 1;
+    else if (Number(row.hours) === 8) acc.eight += 1;
+    return acc;
+  }, { eight: 0, twelve: 0, leave: 0 });
+  const setAttendance = (employeeId: number, date: string, value: string) => {
+    if (!value) return;
+    const isLeave = value === 'leave';
+    const hours = isLeave ? 0 : Number(value);
+    upsert.mutate({ data: { employeeId, date, status: isLeave ? 'leave' : 'present', hours } }, {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getListAttendanceQueryKey() });
         qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
         qc.invalidateQueries({ queryKey: getGetPayrollQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetHourBalanceQueryKey({ month: date.slice(0, 7) }) });
       },
     });
   };
@@ -282,14 +294,45 @@ function AttendancePage() {
     <PageHeading eyebrow="30 хоногийн бүртгэл / attendance" title="Ирцийн календарь" detail="Огноо болон ажилтны огтлолцол дээр дарж ажилласан эсэхийг шууд тэмдэглэнэ." />
     <div className="mb-6 flex flex-wrap items-center gap-2">
       <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs"><span className="font-mono font-bold">{days[0]}</span><span className="mx-2 text-muted-foreground">—</span><span className="font-mono font-bold">{selectedDay}</span></div>
-      {['present', 'absent'].map((key) => <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs" key={key}><span className={cn('size-2.5 rounded-full', key === 'present' ? 'bg-primary' : 'bg-muted-foreground/35')} /><span className="font-mono font-bold">{counts[key] ?? 0}</span><span className="text-muted-foreground">{key === 'present' ? 'Өнөөдөр ажилласан' : 'Өнөөдөр ажиллаагүй'}</span></div>)}
-      <div className="ml-auto text-xs text-muted-foreground">Нүд дээр дарж төлвийг солино</div>
+      {[['eight', '8 цаг'], ['twelve', '12 цаг'], ['leave', 'Чөлөө']].map(([key, label]) => <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs" key={key}><span className={cn('size-2.5 rounded-full', key === 'eight' ? 'bg-primary' : key === 'twelve' ? 'bg-accent' : 'bg-sky-300')} /><span className="font-mono font-bold">{counts[key as keyof typeof counts]}</span><span className="text-muted-foreground">{label}</span></div>)}
+      <div className="ml-auto text-xs text-muted-foreground">Нүд бүрээс 8, 12 эсвэл Ч сонгоно</div>
     </div>
     <section className="overflow-hidden rounded-2xl border border-border bg-card" data-testid="attendance-calendar">
       <div className="flex items-center justify-between border-b border-border px-5 py-4"><div><p className="font-mono text-[10px] font-bold uppercase tracking-[.18em] text-primary">30 day view</p><h2 className="mt-1 text-base font-bold">Ажилтны ирцийн хүснэгт</h2></div><CalendarDays className="size-4 text-muted-foreground" /></div>
-      {query.isLoading || employees.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError || employees.isError ? <ErrorBlock onRetry={() => { query.refetch(); employees.refetch(); }} /> : !activeEmployees.length ? <EmptyState title="Идэвхтэй ажилтан алга" detail="Эхлээд ажилтны бүртгэлээс ажилтан нэмнэ үү." icon={UsersRound} /> : <div className="overflow-x-auto"><table className="w-full min-w-[1260px] table-fixed text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="sticky left-0 z-10 w-52 border-r border-border bg-secondary/95 px-5 py-3">Ажилтан</th>{days.map((day) => <th className={cn('w-9 px-1 py-3 text-center', day === selectedDay && 'bg-accent/35 text-foreground')} key={day}><div className="text-[9px] uppercase">{calendarDateLabel(day).split(' ')[0]}</div><div className="mt-1 font-mono text-[11px]">{day.slice(8)}</div></th>)}</tr></thead><tbody className="divide-y divide-border">{activeEmployees.map((employee) => <tr key={employee.id} data-testid={`row-attendance-calendar-${employee.id}`}><td className="sticky left-0 z-10 border-r border-border bg-card px-5 py-3"><p className="truncate text-sm font-semibold">{employee.name}</p><p className="truncate text-[11px] text-muted-foreground">{employee.role}</p></td>{days.map((day) => { const row = attendanceMap.get(`${employee.id}-${day}`); const worked = row?.status === 'present' || row?.status === 'late'; const recorded = !!row; return <td className={cn('border-l border-border/60 p-1 text-center', day === selectedDay && 'bg-accent/10')} key={day}><button type="button" disabled={upsert.isPending} onClick={() => toggleAttendance(employee.id, day)} className={cn('mx-auto grid size-7 place-items-center rounded-lg text-[11px] font-bold transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-primary/30', worked ? 'bg-primary text-primary-foreground' : recorded ? 'bg-muted text-muted-foreground' : 'bg-secondary/60 text-muted-foreground/35 hover:bg-secondary')} aria-label={`${employee.name} ${day} ${worked ? 'ажилласан' : 'ажиллаагүй'}`} data-testid={`button-attendance-${employee.id}-${day}`}>{worked ? <Check className="size-3.5" /> : recorded ? '–' : ''}</button></td>; })}</tr>)}</tbody></table></div>}
+      {query.isLoading || employees.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError || employees.isError ? <ErrorBlock onRetry={() => { query.refetch(); employees.refetch(); }} /> : !activeEmployees.length ? <EmptyState title="Идэвхтэй ажилтан алга" detail="Эхлээд ажилтны бүртгэлээс ажилтан нэмнэ үү." icon={UsersRound} /> : <div className="overflow-x-auto"><table className="w-full min-w-[1500px] table-fixed text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="sticky left-0 z-10 w-52 border-r border-border bg-secondary/95 px-5 py-3">Ажилтан</th>{days.map((day) => <th className={cn('w-11 px-1 py-3 text-center', day === selectedDay && 'bg-accent/35 text-foreground')} key={day}><div className="text-[9px] uppercase">{calendarDateLabel(day).split(' ')[0]}</div><div className="mt-1 font-mono text-[11px]">{day.slice(8)}</div></th>)}</tr></thead><tbody className="divide-y divide-border">{activeEmployees.map((employee) => <tr key={employee.id} data-testid={`row-attendance-calendar-${employee.id}`}><td className="sticky left-0 z-10 border-r border-border bg-card px-5 py-3"><p className="truncate text-sm font-semibold">{employee.name}</p><p className="truncate text-[11px] text-muted-foreground">{employee.role}</p></td>{days.map((day) => { const row = attendanceMap.get(`${employee.id}-${day}`); const value = row?.status === 'leave' ? 'leave' : Number(row?.hours) === 12 ? '12' : Number(row?.hours) === 8 ? '8' : ''; return <td className={cn('border-l border-border/60 p-1 text-center', day === selectedDay && 'bg-accent/10')} key={day}><select value={value} disabled={upsert.isPending} onChange={(event) => setAttendance(employee.id, day, event.target.value)} className={cn('mx-auto h-8 w-10 appearance-none rounded-lg border-0 text-center font-mono text-[10px] font-bold outline-none transition-colors focus:ring-2 focus:ring-primary/30', value === '8' ? 'bg-primary text-primary-foreground' : value === '12' ? 'bg-accent text-foreground' : value === 'leave' ? 'bg-sky-100 text-sky-800' : 'bg-secondary/60 text-muted-foreground/50')} aria-label={`${employee.name} ${day} цагийн сонголт`} data-testid={`select-attendance-${employee.id}-${day}`}><option value="" disabled>—</option><option value="8">8</option><option value="12">12</option><option value="leave">Ч</option></select></td>; })}</tr>)}</tbody></table></div>}
     </section>
-    <p className="mt-3 text-xs text-muted-foreground">Бүдэг нүд: бүртгэлгүй · тэмдэгтэй нүд: ажиллаагүй · ногоон тэмдэг: ажилласан</p>
+    <p className="mt-3 text-xs text-muted-foreground">8: найман цаг · 12: арван хоёр цаг · Ч: чөлөөтэй өдөр</p>
+  </div>;
+}
+
+function HourBalance() {
+  const [month, setMonth] = useState(currentMonth());
+  const query = useGetHourBalance({ month });
+  const totals = (query.data ?? []).reduce((acc, row) => ({
+    hours: acc.hours + row.totalHours,
+    workDays: acc.workDays + row.workDays,
+    eightHourDays: acc.eightHourDays + row.eightHourDays,
+    twelveHourDays: acc.twelveHourDays + row.twelveHourDays,
+  }), { hours: 0, workDays: 0, eightHourDays: 0, twelveHourDays: 0 });
+  return <div className="page-enter">
+    <PageHeading
+      eyebrow="Сарын нийлбэр / hour balance"
+      title="Цагийн баланс"
+      detail="Ажилтан бүрийн сонгосон сарын нийт ажилласан цаг болон ээлжийн задаргааг харна."
+      action={<div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3"><CalendarDays className="size-4 text-primary" /><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="h-10 bg-transparent text-sm outline-none" data-testid="input-hour-balance-month" /></div>}
+    />
+    {query.isLoading ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><LoadingBlock className="h-32" /><LoadingBlock className="h-32" /><LoadingBlock className="h-32" /><LoadingBlock className="h-32" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : <>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Нийт цаг" value={`${totals.hours} цаг`} meta={`${query.data?.length ?? 0} ажилтны нийлбэр`} icon={Timer} />
+        <StatCard label="Ажилласан өдөр" value={`${totals.workDays} өдөр`} meta="Бүх ажилтны нийлбэр" icon={CalendarDays} tone="gold" />
+        <StatCard label="8 цагийн ээлж" value={`${totals.eightHourDays}`} meta="Сонгосон сарын тоо" icon={Clock3} tone="blue" />
+        <StatCard label="12 цагийн ээлж" value={`${totals.twelveHourDays}`} meta="Сонгосон сарын тоо" icon={Clock3} tone="orange" />
+      </div>
+      <section className="mt-6 overflow-hidden rounded-2xl border border-border bg-card" data-testid="hour-balance-list">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4"><div><p className="font-mono text-[10px] font-bold uppercase tracking-[.18em] text-primary">Monthly register</p><h2 className="mt-1 text-base font-bold">{month.replace('-', ' оны ')} сарын цагийн жагсаалт</h2></div><span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{query.data?.length ?? 0} ажилтан</span></div>
+        {!query.data?.length ? <EmptyState title="Цагийн баланс хоосон" detail="Ажилтан болон ирцийн бүртгэл нэмэгдсэний дараа энд сарын нийлбэр гарна." icon={Timer} /> : <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Ажилтан</th><th className="px-5 py-3 text-center">8 цаг</th><th className="px-5 py-3 text-center">12 цаг</th><th className="px-5 py-3 text-center">Чөлөө</th><th className="px-5 py-3 text-center">Ажилласан өдөр</th><th className="px-5 py-3 text-right">Нийт цаг</th></tr></thead><tbody className="divide-y divide-border">{query.data.map((row) => <tr key={row.employeeId} className="transition-colors hover:bg-secondary/35" data-testid={`row-hour-balance-${row.employeeId}`}><td className="px-5 py-4"><p className="text-sm font-semibold">{row.employeeName}</p><p className="text-xs text-muted-foreground">{row.role}</p></td><td className="px-5 py-4 text-center font-mono text-sm">{row.eightHourDays}</td><td className="px-5 py-4 text-center font-mono text-sm">{row.twelveHourDays}</td><td className="px-5 py-4 text-center font-mono text-sm">{row.leaveDays}</td><td className="px-5 py-4 text-center font-mono text-sm">{row.workDays}</td><td className="px-5 py-4 text-right"><span className="inline-flex min-w-24 justify-center rounded-xl bg-primary px-3 py-2 font-mono text-sm font-bold text-primary-foreground" data-testid={`value-hour-balance-${row.employeeId}`}>{row.totalHours} цаг</span></td></tr>)}</tbody></table></div>}
+      </section>
+    </>}
   </div>;
 }
 
@@ -313,7 +356,7 @@ function Cash() {
 
 function Router() {
   const [location] = useLocation();
-  return <ErrorBoundary resetKey={location}><AppShell><Switch><Route path="/" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route component={NotFound} /></Switch></AppShell></ErrorBoundary>;
+  return <ErrorBoundary resetKey={location}><AppShell><Switch><Route path="/" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route component={NotFound} /></Switch></AppShell></ErrorBoundary>;
 }
 
 function App() {
