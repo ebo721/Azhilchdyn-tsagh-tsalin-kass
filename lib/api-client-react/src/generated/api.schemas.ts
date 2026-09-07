@@ -49,6 +49,7 @@ export interface Employee {
   employeeType: EmployeeEmployeeType;
   baseSalary: number;
   socialInsuranceSalary: number;
+  monthlyExpectedWorkDays: number;
   status: EmployeeStatus;
   joinedAt: string;
 }
@@ -72,6 +73,11 @@ export interface EmployeeInput {
   baseSalary: number;
   /** @minimum 0 */
   socialInsuranceSalary: number;
+  /**
+     * @minimum 0
+     * @maximum 31
+     */
+  monthlyExpectedWorkDays: number;
 }
 
 export type EmployeeUpdateEmployeeType = typeof EmployeeUpdateEmployeeType[keyof typeof EmployeeUpdateEmployeeType];
@@ -101,6 +107,11 @@ export interface EmployeeUpdate {
   baseSalary?: number;
   /** @minimum 0 */
   socialInsuranceSalary?: number;
+  /**
+     * @minimum 0
+     * @maximum 31
+     */
+  monthlyExpectedWorkDays?: number;
   status?: EmployeeUpdateStatus;
 }
 
@@ -168,6 +179,7 @@ export interface HourBalanceLine {
   role: string;
   month: string;
   totalHours: number;
+  expectedWorkDays: number;
   workDays: number;
   eightHourDays: number;
   twelveHourDays: number;

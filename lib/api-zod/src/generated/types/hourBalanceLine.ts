@@ -12,6 +12,7 @@ export interface HourBalanceLine {
   role: string;
   month: string;
   totalHours: number;
+  expectedWorkDays: number;
   workDays: number;
   eightHourDays: number;
   twelveHourDays: number;

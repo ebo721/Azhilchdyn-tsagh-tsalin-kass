@@ -341,7 +341,7 @@ components:
         createdAt: { type: string }
     Employee:
       type: object
-      required: [id, name, role, phone, employeeType, baseSalary, socialInsuranceSalary, status, joinedAt]
+      required: [id, name, role, phone, employeeType, baseSalary, socialInsuranceSalary, monthlyExpectedWorkDays, status, joinedAt]
       properties:
         id: { type: integer }
         name: { type: string }
@@ -350,11 +350,12 @@ components:
         employeeType: { type: string, enum: [shift, office] }
         baseSalary: { type: number }
         socialInsuranceSalary: { type: number }
+        monthlyExpectedWorkDays: { type: integer }
         status: { type: string, enum: [active, inactive] }
         joinedAt: { type: string }
     EmployeeInput:
       type: object
-      required: [name, role, phone, employeeType, baseSalary, socialInsuranceSalary]
+      required: [name, role, phone, employeeType, baseSalary, socialInsuranceSalary, monthlyExpectedWorkDays]
       properties:
         name: { type: string, minLength: 1 }
         role: { type: string, minLength: 1 }
@@ -362,6 +363,7 @@ components:
         employeeType: { type: string, enum: [shift, office] }
         baseSalary: { type: number, minimum: 0 }
         socialInsuranceSalary: { type: number, minimum: 0 }
+        monthlyExpectedWorkDays: { type: integer, minimum: 0, maximum: 31 }
     EmployeeUpdate:
       type: object
       properties:
@@ -371,6 +373,7 @@ components:
         employeeType: { type: string, enum: [shift, office] }
         baseSalary: { type: number, minimum: 0 }
         socialInsuranceSalary: { type: number, minimum: 0 }
+        monthlyExpectedWorkDays: { type: integer, minimum: 0, maximum: 31 }
         status: { type: string, enum: [active, inactive] }
     Attendance:
       type: object
@@ -405,13 +408,14 @@ components:
         hours: { type: number, minimum: 0 }
     HourBalanceLine:
       type: object
-      required: [employeeId, employeeName, role, month, totalHours, workDays, eightHourDays, twelveHourDays, leaveDays]
+      required: [employeeId, employeeName, role, month, totalHours, expectedWorkDays, workDays, eightHourDays, twelveHourDays, leaveDays]
       properties:
         employeeId: { type: integer }
         employeeName: { type: string }
         role: { type: string }
         month: { type: string }
         totalHours: { type: number }
+        expectedWorkDays: { type: integer }
         workDays: { type: integer }
         eightHourDays: { type: integer }
         twelveHourDays: { type: integer }

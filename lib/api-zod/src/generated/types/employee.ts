@@ -16,6 +16,7 @@ export interface Employee {
   employeeType: EmployeeEmployeeType;
   baseSalary: number;
   socialInsuranceSalary: number;
+  monthlyExpectedWorkDays: number;
   status: EmployeeStatus;
   joinedAt: string;
 }

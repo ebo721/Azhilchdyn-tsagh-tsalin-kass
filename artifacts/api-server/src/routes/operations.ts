@@ -54,6 +54,17 @@ function hoursBetween(clockIn: string, clockOut: string) {
   return Math.max(0, money((end - start) / 60));
 }
 
+function weekdayCount(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const daysInMonth = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  let count = 0;
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const weekDay = new Date(Date.UTC(year, monthNumber - 1, day)).getUTCDay();
+    if (weekDay >= 1 && weekDay <= 5) count += 1;
+  }
+  return count;
+}
+
 async function getPayrollSummary(month: string) {
   const [employees, records, adjustments, advanceApprovals] = await Promise.all([
     db.select().from(employeesTable).where(eq(employeesTable.status, "active")),
@@ -415,6 +426,9 @@ router.get("/hour-balance", async (req, res, next) => {
         role: employee.role,
         month: selectedMonth,
         totalHours: money(workedRecords.reduce((total, record) => total + Number(record.hours), 0)),
+        expectedWorkDays: employee.employeeType === "office"
+          ? weekdayCount(selectedMonth)
+          : employee.monthlyExpectedWorkDays,
         workDays: workedRecords.length,
         eightHourDays: workedRecords.filter((record) => Number(record.hours) === 8).length,
         twelveHourDays: workedRecords.filter((record) => Number(record.hours) === 12).length,

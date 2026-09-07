@@ -20,6 +20,7 @@ export const employeesTable = pgTable("employees", {
   employeeType: text("employee_type").notNull().default("office"),
   baseSalary: numeric("base_salary", { precision: 12, scale: 2, mode: "number" }).notNull(),
   socialInsuranceSalary: numeric("social_insurance_salary", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
+  monthlyExpectedWorkDays: integer("monthly_expected_work_days").notNull().default(0),
   status: text("status").notNull().default("active"),
   joinedAt: date("joined_at").notNull().defaultNow(),
 });

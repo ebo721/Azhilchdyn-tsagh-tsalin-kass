@@ -46,6 +46,7 @@ export const ListEmployeesResponseItem = zod.object({
   "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "socialInsuranceSalary": zod.number(),
+  "monthlyExpectedWorkDays": zod.number().int(),
   "status": zod.enum(['active', 'inactive']),
   "joinedAt": zod.string()
 })
@@ -61,6 +62,9 @@ export const createEmployeeBodyBaseSalaryMin = 0;
 
 export const createEmployeeBodySocialInsuranceSalaryMin = 0;
 
+export const createEmployeeBodyMonthlyExpectedWorkDaysMin = 0;
+export const createEmployeeBodyMonthlyExpectedWorkDaysMax = 31;
+
 
 
 export const CreateEmployeeBody = zod.object({
@@ -69,7 +73,8 @@ export const CreateEmployeeBody = zod.object({
   "phone": zod.string(),
   "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number().min(createEmployeeBodyBaseSalaryMin),
-  "socialInsuranceSalary": zod.number().min(createEmployeeBodySocialInsuranceSalaryMin)
+  "socialInsuranceSalary": zod.number().min(createEmployeeBodySocialInsuranceSalaryMin),
+  "monthlyExpectedWorkDays": zod.number().int().min(createEmployeeBodyMonthlyExpectedWorkDaysMin).max(createEmployeeBodyMonthlyExpectedWorkDaysMax)
 })
 
 export const CreateEmployeeResponse = zod.object({
@@ -80,6 +85,7 @@ export const CreateEmployeeResponse = zod.object({
   "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "socialInsuranceSalary": zod.number(),
+  "monthlyExpectedWorkDays": zod.number().int(),
   "status": zod.enum(['active', 'inactive']),
   "joinedAt": zod.string()
 })
@@ -98,6 +104,9 @@ export const updateEmployeeBodyBaseSalaryMin = 0;
 
 export const updateEmployeeBodySocialInsuranceSalaryMin = 0;
 
+export const updateEmployeeBodyMonthlyExpectedWorkDaysMin = 0;
+export const updateEmployeeBodyMonthlyExpectedWorkDaysMax = 31;
+
 
 
 export const UpdateEmployeeBody = zod.object({
@@ -107,6 +116,7 @@ export const UpdateEmployeeBody = zod.object({
   "employeeType": zod.enum(['shift', 'office']).optional(),
   "baseSalary": zod.number().min(updateEmployeeBodyBaseSalaryMin).optional(),
   "socialInsuranceSalary": zod.number().min(updateEmployeeBodySocialInsuranceSalaryMin).optional(),
+  "monthlyExpectedWorkDays": zod.number().int().min(updateEmployeeBodyMonthlyExpectedWorkDaysMin).max(updateEmployeeBodyMonthlyExpectedWorkDaysMax).optional(),
   "status": zod.enum(['active', 'inactive']).optional()
 })
 
@@ -118,6 +128,7 @@ export const UpdateEmployeeResponse = zod.object({
   "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "socialInsuranceSalary": zod.number(),
+  "monthlyExpectedWorkDays": zod.number().int(),
   "status": zod.enum(['active', 'inactive']),
   "joinedAt": zod.string()
 })
@@ -336,6 +347,7 @@ export const GetHourBalanceResponseItem = zod.object({
   "role": zod.string(),
   "month": zod.string(),
   "totalHours": zod.number(),
+  "expectedWorkDays": zod.number().int(),
   "workDays": zod.number().int(),
   "eightHourDays": zod.number().int(),
   "twelveHourDays": zod.number().int(),
