@@ -14,4 +14,6 @@ export interface PayrollAdjustmentInput {
   manualDeduction: number;
   /** @minimum 0 */
   paidAmount: number;
+  /** @nullable */
+  paymentDate?: string | null;
 }

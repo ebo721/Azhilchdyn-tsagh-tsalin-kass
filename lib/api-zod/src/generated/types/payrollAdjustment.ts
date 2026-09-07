@@ -12,4 +12,6 @@ export interface PayrollAdjustment {
   taxRelief: number;
   manualDeduction: number;
   paidAmount: number;
+  /** @nullable */
+  paymentDate?: string | null;
 }

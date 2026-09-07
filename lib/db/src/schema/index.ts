@@ -64,6 +64,7 @@ export const payrollAdjustmentsTable = pgTable("payroll_adjustments", {
   taxRelief: numeric("tax_relief", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
   manualDeduction: numeric("manual_deduction", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
   paidAmount: numeric("paid_amount", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
+  paymentDate: date("payment_date", { mode: "string" }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
   uniqueIndex("payroll_adjustments_employee_month_idx").on(table.employeeId, table.month),
@@ -84,8 +85,12 @@ export const cashTransactionsTable = pgTable("cash_transactions", {
   description: text("description").notNull(),
   amount: numeric("amount", { precision: 12, scale: 2, mode: "number" }).notNull(),
   date: date("date").notNull(),
+  sourceType: text("source_type"),
+  sourceKey: text("source_key"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("cash_transactions_source_idx").on(table.sourceType, table.sourceKey),
+]);
 
 export const insertEmployeeSchema = createInsertSchema(employeesTable).omit({
   id: true,

@@ -11,4 +11,6 @@ export interface PayrollAdvancePaymentInput {
   month: string;
   employeeId: number;
   paid: boolean;
+  /** @nullable */
+  paymentDate?: string | null;
 }

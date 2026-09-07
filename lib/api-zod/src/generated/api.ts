@@ -415,6 +415,7 @@ export const GetPayrollResponse = zod.object({
   "deductions": zod.number(),
   "payable": zod.number(),
   "paidAmount": zod.number(),
+  "paymentDate": zod.string().nullable(),
   "remainingAmount": zod.number(),
   "net": zod.number()
 }))
@@ -435,7 +436,8 @@ export const UpsertPayrollAdjustmentBody = zod.object({
   "employeeId": zod.number().int(),
   "month": zod.string().regex(upsertPayrollAdjustmentBodyMonthRegExp),
   "manualDeduction": zod.number().min(upsertPayrollAdjustmentBodyManualDeductionMin),
-  "paidAmount": zod.number().min(upsertPayrollAdjustmentBodyPaidAmountMin)
+  "paidAmount": zod.number().min(upsertPayrollAdjustmentBodyPaidAmountMin),
+  "paymentDate": zod.string().nullish()
 })
 
 export const UpsertPayrollAdjustmentResponse = zod.object({
@@ -443,7 +445,8 @@ export const UpsertPayrollAdjustmentResponse = zod.object({
   "month": zod.string(),
   "taxRelief": zod.number(),
   "manualDeduction": zod.number(),
-  "paidAmount": zod.number()
+  "paidAmount": zod.number(),
+  "paymentDate": zod.string().nullish()
 })
 
 
@@ -471,7 +474,8 @@ export const GetPayrollAdvanceResponse = zod.object({
   "dailySalary": zod.number(),
   "totalSalary": zod.number(),
   "advanceAmount": zod.number(),
-  "paid": zod.boolean()
+  "paid": zod.boolean(),
+  "paymentDate": zod.string().nullish()
 }))
 })
 
@@ -500,7 +504,8 @@ export const ApprovePayrollAdvanceResponse = zod.object({
   "dailySalary": zod.number(),
   "totalSalary": zod.number(),
   "advanceAmount": zod.number(),
-  "paid": zod.boolean()
+  "paid": zod.boolean(),
+  "paymentDate": zod.string().nullish()
 }))
 })
 
@@ -514,7 +519,8 @@ export const updatePayrollAdvancePaymentBodyMonthRegExp = new RegExp('^\\d{4}-(0
 export const UpdatePayrollAdvancePaymentBody = zod.object({
   "month": zod.string().regex(updatePayrollAdvancePaymentBodyMonthRegExp),
   "employeeId": zod.number().int(),
-  "paid": zod.boolean()
+  "paid": zod.boolean(),
+  "paymentDate": zod.string().nullish()
 })
 
 export const UpdatePayrollAdvancePaymentResponse = zod.object({
@@ -531,7 +537,8 @@ export const UpdatePayrollAdvancePaymentResponse = zod.object({
   "dailySalary": zod.number(),
   "totalSalary": zod.number(),
   "advanceAmount": zod.number(),
-  "paid": zod.boolean()
+  "paid": zod.boolean(),
+  "paymentDate": zod.string().nullish()
 }))
 })
 

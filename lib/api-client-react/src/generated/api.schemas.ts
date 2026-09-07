@@ -288,6 +288,8 @@ export interface PayrollLine {
   deductions: number;
   payable: number;
   paidAmount: number;
+  /** @nullable */
+  paymentDate: string | null;
   remainingAmount: number;
   net: number;
 }
@@ -298,6 +300,8 @@ export interface PayrollAdjustment {
   taxRelief: number;
   manualDeduction: number;
   paidAmount: number;
+  /** @nullable */
+  paymentDate?: string | null;
 }
 
 export interface PayrollAdjustmentInput {
@@ -308,6 +312,8 @@ export interface PayrollAdjustmentInput {
   manualDeduction: number;
   /** @minimum 0 */
   paidAmount: number;
+  /** @nullable */
+  paymentDate?: string | null;
 }
 
 export interface PayrollSummary {
@@ -338,6 +344,8 @@ export interface PayrollAdvanceLine {
   totalSalary: number;
   advanceAmount: number;
   paid: boolean;
+  /** @nullable */
+  paymentDate?: string | null;
 }
 
 export interface PayrollAdvanceSummary {
@@ -358,6 +366,8 @@ export interface PayrollAdvancePaymentInput {
   month: string;
   employeeId: number;
   paid: boolean;
+  /** @nullable */
+  paymentDate?: string | null;
 }
 
 export type CashTransactionType = typeof CashTransactionType[keyof typeof CashTransactionType];

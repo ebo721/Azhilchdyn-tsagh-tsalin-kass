@@ -182,6 +182,7 @@ async function getPayrollSummary(month: string) {
       deductions,
       payable,
       paidAmount,
+      paymentDate: adjustment?.paymentDate ?? null,
       remainingAmount,
       net: payable,
     };
@@ -205,7 +206,11 @@ async function getPayrollAdvanceSummary(month: string) {
     .where(eq(payrollAdvanceApprovalsTable.month, month));
   if (approval) {
     const lines = Array.isArray(approval.lines)
-      ? (approval.lines as Array<Record<string, unknown>>).map((line) => ({ ...line, paid: line.paid === true }))
+      ? (approval.lines as Array<Record<string, unknown>>).map((line) => ({
+          ...line,
+          paid: line.paid === true,
+          paymentDate: typeof line.paymentDate === "string" ? line.paymentDate : null,
+        }))
       : [];
     return {
       month,
@@ -241,6 +246,7 @@ async function getPayrollAdvanceSummary(month: string) {
       totalSalary,
       advanceAmount: employee.employeeType === "shift" ? totalSalary : money(totalSalary * 0.5),
       paid: false,
+      paymentDate: null,
     };
   });
   return {
@@ -700,6 +706,15 @@ router.get("/payroll", async (req, res, next) => {
 router.put("/payroll-adjustments", async (req, res, next) => {
   try {
     const input = UpsertPayrollAdjustmentBody.parse(req.body);
+    if (input.paidAmount > 0 && (!input.paymentDate || !isValidCalendarDate(input.paymentDate))) {
+      res.status(400).json({ error: "Цалин олгосон огноог зөв оруулна уу" });
+      return;
+    }
+    const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, input.employeeId));
+    if (!employee) {
+      res.status(404).json({ error: "Ажилтан олдсонгүй" });
+      return;
+    }
     const [adjustment] = await db
       .insert(payrollAdjustmentsTable)
       .values(input)
@@ -708,16 +723,43 @@ router.put("/payroll-adjustments", async (req, res, next) => {
         set: {
           manualDeduction: input.manualDeduction,
           paidAmount: input.paidAmount,
+          paymentDate: input.paidAmount > 0 ? input.paymentDate : null,
           updatedAt: new Date(),
         },
       })
       .returning();
+    const sourceType = "payroll";
+    const sourceKey = `${input.month}:${input.employeeId}`;
+    if (input.paidAmount > 0 && input.paymentDate) {
+      await db.insert(cashTransactionsTable).values({
+        type: "expense",
+        category: "Цалин",
+        description: `${employee.name} · ${input.month} сарын цалин`,
+        amount: input.paidAmount,
+        date: input.paymentDate,
+        sourceType,
+        sourceKey,
+      }).onConflictDoUpdate({
+        target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
+        set: {
+          amount: input.paidAmount,
+          date: input.paymentDate,
+          description: `${employee.name} · ${input.month} сарын цалин`,
+        },
+      });
+    } else {
+      await db.delete(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, sourceType),
+        eq(cashTransactionsTable.sourceKey, sourceKey),
+      ));
+    }
     res.json({
       employeeId: adjustment.employeeId,
       month: adjustment.month,
       taxRelief: Number(adjustment.taxRelief),
       manualDeduction: Number(adjustment.manualDeduction),
       paidAmount: Number(adjustment.paidAmount),
+      paymentDate: adjustment.paymentDate,
     });
   } catch (error) {
     next(error);
@@ -753,6 +795,10 @@ router.post("/payroll-advance/approve", async (req, res, next) => {
 router.put("/payroll-advance/payment", async (req, res, next) => {
   try {
     const input = UpdatePayrollAdvancePaymentBody.parse(req.body);
+    if (input.paid && (!input.paymentDate || !isValidCalendarDate(input.paymentDate))) {
+      res.status(400).json({ error: "Урьдчилгаа олгосон огноог зөв оруулна уу" });
+      return;
+    }
     const [approval] = await db
       .select()
       .from(payrollAdvanceApprovalsTable)
@@ -770,13 +816,44 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
     }
     const lines: Array<Record<string, unknown>> = sourceLines.map((line) => (
           Number(line.employeeId) === input.employeeId
-            ? { ...line, paid: input.paid }
-            : { ...line, paid: line.paid === true }
+            ? { ...line, paid: input.paid, paymentDate: input.paid ? input.paymentDate : null }
+            : {
+                ...line,
+                paid: line.paid === true,
+                paymentDate: typeof line.paymentDate === "string" ? line.paymentDate : null,
+              }
         ));
     await db
       .update(payrollAdvanceApprovalsTable)
       .set({ lines })
       .where(eq(payrollAdvanceApprovalsTable.id, approval.id));
+    const selectedLine = lines.find((line) => Number(line.employeeId) === input.employeeId);
+    const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, input.employeeId));
+    const sourceType = "payroll_advance";
+    const sourceKey = `${input.month}:${input.employeeId}`;
+    if (input.paid && input.paymentDate && selectedLine && employee) {
+      await db.insert(cashTransactionsTable).values({
+        type: "expense",
+        category: "Урьдчилгаа цалин",
+        description: `${employee.name} · ${input.month} сарын урьдчилгаа`,
+        amount: Number(selectedLine.advanceAmount),
+        date: input.paymentDate,
+        sourceType,
+        sourceKey,
+      }).onConflictDoUpdate({
+        target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
+        set: {
+          amount: Number(selectedLine.advanceAmount),
+          date: input.paymentDate,
+          description: `${employee.name} · ${input.month} сарын урьдчилгаа`,
+        },
+      });
+    } else {
+      await db.delete(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, sourceType),
+        eq(cashTransactionsTable.sourceKey, sourceKey),
+      ));
+    }
     res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(input.month)));
   } catch (error) {
     next(error);

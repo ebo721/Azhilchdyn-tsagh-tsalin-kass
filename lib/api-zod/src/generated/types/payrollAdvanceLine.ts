@@ -17,4 +17,6 @@ export interface PayrollAdvanceLine {
   totalSalary: number;
   advanceAmount: number;
   paid: boolean;
+  /** @nullable */
+  paymentDate?: string | null;
 }

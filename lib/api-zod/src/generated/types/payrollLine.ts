@@ -26,6 +26,8 @@ export interface PayrollLine {
   deductions: number;
   payable: number;
   paidAmount: number;
+  /** @nullable */
+  paymentDate: string | null;
   remainingAmount: number;
   net: number;
 }
