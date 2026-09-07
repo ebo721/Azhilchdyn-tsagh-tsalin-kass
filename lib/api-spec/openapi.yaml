@@ -148,6 +148,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Attendance"
+    put:
+      operationId: upsertAttendance
+      tags: [attendance]
+      summary: Mark an employee as present or absent for a day
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttendanceToggleInput"
+      responses:
+        "200":
+          description: Updated attendance record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attendance"
   /payroll:
     get:
       operationId: getPayroll
@@ -297,6 +314,15 @@ components:
         clockIn: { type: string }
         clockOut: { type: string }
         status: { type: string, enum: [present, late, leave, absent] }
+    AttendanceToggleInput:
+      type: object
+      required: [employeeId, date, status]
+      properties:
+        employeeId: { type: integer }
+        date: { type: string }
+        status: { type: string, enum: [present, absent] }
+        clockIn: { type: string }
+        clockOut: { type: string }
     PayrollLine:
       type: object
       required: [employeeId, employeeName, role, daysWorked, hours, gross, deductions, net]
