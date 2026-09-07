@@ -46,13 +46,18 @@ function hoursBetween(clockIn: string, clockOut: string) {
 }
 
 async function getPayrollSummary(month: string) {
-  const [employees, records, adjustments] = await Promise.all([
+  const [employees, records, adjustments, advanceApprovals] = await Promise.all([
     db.select().from(employeesTable).where(eq(employeesTable.status, "active")),
     db.select().from(attendanceTable),
     db.select().from(payrollAdjustmentsTable).where(eq(payrollAdjustmentsTable.month, month)),
+    db.select().from(payrollAdvanceApprovalsTable).where(eq(payrollAdvanceApprovalsTable.month, month)),
   ]);
   const monthRecords = records.filter((record) => String(record.date).startsWith(month));
   const adjustmentMap = new Map(adjustments.map((adjustment) => [adjustment.employeeId, adjustment]));
+  const approvedAdvanceLines = Array.isArray(advanceApprovals[0]?.lines)
+    ? advanceApprovals[0].lines as Array<{ employeeId: number; advanceAmount: number }>
+    : [];
+  const approvedAdvanceMap = new Map(approvedAdvanceLines.map((line) => [line.employeeId, Number(line.advanceAmount)]));
 
   const lines = employees.map((employee) => {
     const employeeRecords = monthRecords.filter((record) => record.employeeId === employee.id);
@@ -71,7 +76,13 @@ async function getPayrollSummary(month: string) {
     const calculatedIncomeTax = money(taxableIncome * 0.1);
     const taxRelief = money(Number(adjustment?.taxRelief ?? 0));
     const incomeTax = money(Math.max(0, calculatedIncomeTax - taxRelief));
-    const advanceAmount = money(gross * 0.5);
+    const firstHalfDaysWorked = employeeRecords.filter((record) =>
+      ["present", "late"].includes(record.status) && Number(String(record.date).slice(8, 10)) <= 15
+    ).length;
+    const calculatedAdvance = employee.employeeType === "shift"
+      ? money(firstHalfDaysWorked * Number(employee.baseSalary) * 0.5)
+      : money(Number(employee.baseSalary) * 0.5);
+    const advanceAmount = money(approvedAdvanceMap.get(employee.id) ?? calculatedAdvance);
     const manualDeduction = money(Number(adjustment?.manualDeduction ?? 0));
     const paidAmount = money(Number(adjustment?.paidAmount ?? 0));
     const deductions = money(socialInsurance + incomeTax + advanceAmount + manualDeduction);
@@ -126,19 +137,33 @@ async function getPayrollAdvanceSummary(month: string) {
       lines: approval.lines,
     };
   }
-  const payroll = await getPayrollSummary(month);
-  const lines = payroll.lines.map((line) => ({
-    employeeId: line.employeeId,
-    employeeName: line.employeeName,
-    employeeType: line.employeeType,
-    baseSalary: line.employeeType === "office" ? line.gross : 0,
-    daysWorked: line.daysWorked,
-    dailySalary: line.employeeType === "shift" && line.daysWorked > 0
-      ? money(line.gross / line.daysWorked)
-      : 0,
-    totalSalary: line.gross,
-    advanceAmount: line.advanceAmount,
-  }));
+  const [employees, records] = await Promise.all([
+    db.select().from(employeesTable).where(eq(employeesTable.status, "active")),
+    db.select().from(attendanceTable),
+  ]);
+  const firstHalfRecords = records.filter((record) =>
+    String(record.date).startsWith(month) && Number(String(record.date).slice(8, 10)) <= 15
+  );
+  const lines = employees.map((employee) => {
+    const daysWorked = firstHalfRecords.filter((record) =>
+      record.employeeId === employee.id && ["present", "late"].includes(record.status)
+    ).length;
+    const dailySalary = employee.employeeType === "shift" ? money(Number(employee.baseSalary)) : 0;
+    const baseSalary = employee.employeeType === "office" ? money(Number(employee.baseSalary)) : 0;
+    const totalSalary = employee.employeeType === "shift"
+      ? money(daysWorked * dailySalary)
+      : baseSalary;
+    return {
+      employeeId: employee.id,
+      employeeName: employee.name,
+      employeeType: employee.employeeType,
+      baseSalary,
+      daysWorked,
+      dailySalary,
+      totalSalary,
+      advanceAmount: money(totalSalary * 0.5),
+    };
+  });
   return {
     month,
     approved: false,
