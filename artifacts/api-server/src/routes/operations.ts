@@ -42,6 +42,7 @@ import {
   shiftTemplatesTable,
 } from "@workspace/db";
 import { getStaffRole } from "../lib/hr-session";
+import { planShiftPlanCopy } from "../lib/shift-plan-copy";
 
 const router: IRouter = Router();
 
@@ -494,46 +495,29 @@ router.post("/attendance/shift-plans/copy-previous", async (req, res, next) => {
     ]);
     const activeEmployeeIds = new Set(activeEmployees.map(({ id }) => id));
     const validShiftIds = new Set(shifts.map(({ id }) => id));
-    const eligiblePlans = sourcePlans.filter((plan) =>
-      plan.date.startsWith(sourceMonth)
-      && activeEmployeeIds.has(plan.employeeId)
-      && validShiftIds.has(plan.shiftId)
-    );
-    const targetByKey = new Map(
-      targetPlans
-        .filter((plan) => plan.date.startsWith(month))
-        .map((plan) => [`${plan.employeeId}-${plan.date}`, plan]),
-    );
-    let copied = 0;
-    let overwritten = 0;
-    let skipped = 0;
-    let unavailableDates = 0;
+    const copyPlan = planShiftPlanCopy({
+      sourceMonth,
+      targetMonth: month,
+      targetDayCount,
+      overwrite,
+      activeEmployeeIds,
+      validShiftIds,
+      sourcePlans,
+      targetPlans,
+    });
 
     await db.transaction(async (tx) => {
-      for (const source of eligiblePlans) {
-        const day = Number(source.date.slice(8, 10));
-        if (day > targetDayCount) {
-          unavailableDates += 1;
-          continue;
-        }
-        const date = `${month}-${String(day).padStart(2, "0")}`;
-        const existing = targetByKey.get(`${source.employeeId}-${date}`);
-        if (existing && !overwrite) {
-          skipped += 1;
-          continue;
-        }
-        if (existing) {
+      for (const action of copyPlan.actions) {
+        if (action.type === "update") {
           await tx.update(employeeShiftPlansTable)
-            .set({ shiftId: source.shiftId })
-            .where(eq(employeeShiftPlansTable.id, existing.id));
-          overwritten += 1;
+            .set({ shiftId: action.shiftId })
+            .where(eq(employeeShiftPlansTable.id, action.targetId));
         } else {
           await tx.insert(employeeShiftPlansTable).values({
-            employeeId: source.employeeId,
-            date,
-            shiftId: source.shiftId,
+            employeeId: action.employeeId,
+            date: action.date,
+            shiftId: action.shiftId,
           });
-          copied += 1;
         }
       }
     });
@@ -541,10 +525,10 @@ router.post("/attendance/shift-plans/copy-previous", async (req, res, next) => {
     res.json(CopyPreviousShiftPlansResponse.parse({
       sourceMonth,
       targetMonth: month,
-      copied,
-      overwritten,
-      skipped,
-      unavailableDates,
+      copied: copyPlan.copied,
+      overwritten: copyPlan.overwritten,
+      skipped: copyPlan.skipped,
+      unavailableDates: copyPlan.unavailableDates,
     }));
   } catch (error) {
     next(error);
