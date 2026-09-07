@@ -10,7 +10,7 @@ import * as zod from 'zod';
 
 export const GetAuthSessionResponse = zod.object({
   "authenticated": zod.boolean(),
-  "role": zod.union([zod.literal('admin'),zod.literal('hr'),zod.literal(null)]).nullable(),
+  "role": zod.union([zod.literal('admin'),zod.literal('hr'),zod.literal('accountant'),zod.literal(null)]).nullable(),
   "username": zod.string().nullable()
 })
 
@@ -22,7 +22,7 @@ export const LoginHrManagerBody = zod.object({
 
 export const LoginHrManagerResponse = zod.object({
   "authenticated": zod.boolean(),
-  "role": zod.union([zod.literal('admin'),zod.literal('hr'),zod.literal(null)]).nullable(),
+  "role": zod.union([zod.literal('admin'),zod.literal('hr'),zod.literal('accountant'),zod.literal(null)]).nullable(),
   "username": zod.string().nullable()
 })
 

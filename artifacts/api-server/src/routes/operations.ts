@@ -44,7 +44,9 @@ router.use((req, res, next) => {
     next();
     return;
   }
-  const allowedPrefixes = ["/employees", "/attendance", "/hour-balance"];
+  const allowedPrefixes = role === "hr"
+    ? ["/employees", "/attendance", "/hour-balance"]
+    : ["/hour-balance", "/payroll"];
   if (allowedPrefixes.some((prefix) => req.path.startsWith(prefix))) {
     next();
     return;
