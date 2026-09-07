@@ -56,6 +56,10 @@ router.use((req, res, next) => {
     next();
     return;
   }
+  if (req.method === "DELETE" && req.path.startsWith("/employees/")) {
+    res.status(403).json({ error: "Ажилтан устгах зөвшөөрлийг зөвхөн ерөнхий админ өгнө" });
+    return;
+  }
   const allowedPrefixes = role === "hr"
     ? ["/employees", "/attendance", "/hour-balance"]
     : ["/hour-balance", "/payroll"];
