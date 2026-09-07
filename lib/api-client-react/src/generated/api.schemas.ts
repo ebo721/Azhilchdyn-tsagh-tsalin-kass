@@ -235,6 +235,38 @@ export interface PayrollSummary {
   lines: PayrollLine[];
 }
 
+export type PayrollAdvanceLineEmployeeType = typeof PayrollAdvanceLineEmployeeType[keyof typeof PayrollAdvanceLineEmployeeType];
+
+
+export const PayrollAdvanceLineEmployeeType = {
+  shift: 'shift',
+  office: 'office',
+} as const;
+
+export interface PayrollAdvanceLine {
+  employeeId: number;
+  employeeName: string;
+  employeeType: PayrollAdvanceLineEmployeeType;
+  baseSalary: number;
+  daysWorked: number;
+  dailySalary: number;
+  totalSalary: number;
+  advanceAmount: number;
+}
+
+export interface PayrollAdvanceSummary {
+  month: string;
+  approved: boolean;
+  approvedAt?: string;
+  totalAmount: number;
+  lines: PayrollAdvanceLine[];
+}
+
+export interface PayrollAdvanceApprovalInput {
+  /** @pattern ^\d{4}-\d{2}$ */
+  month: string;
+}
+
 export type CashTransactionType = typeof CashTransactionType[keyof typeof CashTransactionType];
 
 
@@ -286,6 +318,10 @@ month?: string;
 };
 
 export type GetPayrollParams = {
+month?: string;
+};
+
+export type GetPayrollAdvanceParams = {
 month?: string;
 };
 

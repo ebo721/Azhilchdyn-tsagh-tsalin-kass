@@ -3,11 +3,14 @@ import {
   CreateAttendanceBody,
   CreateCashTransactionBody,
   CreateEmployeeBody,
+  ApprovePayrollAdvanceBody,
   GetDashboardResponse,
   GetHourBalanceQueryParams,
   GetHourBalanceResponse,
   GetPayrollQueryParams,
   GetPayrollResponse,
+  GetPayrollAdvanceQueryParams,
+  GetPayrollAdvanceResponse,
   GetCashSummaryResponse,
   ListAttendanceQueryParams,
   ListAttendanceResponse,
@@ -25,6 +28,7 @@ import {
   db,
   employeesTable,
   payrollAdjustmentsTable,
+  payrollAdvanceApprovalsTable,
 } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -104,6 +108,41 @@ async function getPayrollSummary(month: string) {
     totalIncomeTax: money(lines.reduce((total, line) => total + line.incomeTax, 0)),
     totalDeductions: money(lines.reduce((total, line) => total + line.deductions, 0)),
     totalNet: money(lines.reduce((total, line) => total + line.net, 0)),
+    lines,
+  };
+}
+
+async function getPayrollAdvanceSummary(month: string) {
+  const [approval] = await db
+    .select()
+    .from(payrollAdvanceApprovalsTable)
+    .where(eq(payrollAdvanceApprovalsTable.month, month));
+  if (approval) {
+    return {
+      month,
+      approved: true,
+      approvedAt: approval.approvedAt.toISOString(),
+      totalAmount: Number(approval.totalAmount),
+      lines: approval.lines,
+    };
+  }
+  const payroll = await getPayrollSummary(month);
+  const lines = payroll.lines.map((line) => ({
+    employeeId: line.employeeId,
+    employeeName: line.employeeName,
+    employeeType: line.employeeType,
+    baseSalary: line.employeeType === "office" ? line.gross : 0,
+    daysWorked: line.daysWorked,
+    dailySalary: line.employeeType === "shift" && line.daysWorked > 0
+      ? money(line.gross / line.daysWorked)
+      : 0,
+    totalSalary: line.gross,
+    advanceAmount: line.advanceAmount,
+  }));
+  return {
+    month,
+    approved: false,
+    totalAmount: money(lines.reduce((total, line) => total + line.advanceAmount, 0)),
     lines,
   };
 }
@@ -386,6 +425,32 @@ router.put("/payroll-adjustments", async (req, res, next) => {
       manualDeduction: Number(adjustment.manualDeduction),
       paidAmount: Number(adjustment.paidAmount),
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/payroll-advance", async (req, res, next) => {
+  try {
+    const { month } = GetPayrollAdvanceQueryParams.parse(req.query);
+    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month ?? currentMonth())));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/payroll-advance/approve", async (req, res, next) => {
+  try {
+    const { month } = ApprovePayrollAdvanceBody.parse(req.body);
+    const existing = await getPayrollAdvanceSummary(month);
+    if (!existing.approved) {
+      await db.insert(payrollAdvanceApprovalsTable).values({
+        month,
+        lines: existing.lines,
+        totalAmount: existing.totalAmount,
+      }).onConflictDoNothing();
+    }
+    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month)));
   } catch (error) {
     next(error);
   }

@@ -203,6 +203,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PayrollAdjustment"
+  /payroll-advance:
+    get:
+      operationId: getPayrollAdvance
+      tags: [payroll]
+      summary: Get the monthly payroll advance list and approval status
+      parameters:
+        - in: query
+          name: month
+          schema:
+            type: string
+          required: false
+      responses:
+        "200":
+          description: Monthly payroll advance summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayrollAdvanceSummary"
+  /payroll-advance/approve:
+    post:
+      operationId: approvePayrollAdvance
+      tags: [payroll]
+      summary: Approve and freeze the monthly payroll advance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PayrollAdvanceApprovalInput"
+      responses:
+        "200":
+          description: Approved monthly payroll advance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayrollAdvanceSummary"
   /hour-balance:
     get:
       operationId: getHourBalance
@@ -436,6 +472,35 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PayrollLine"
+    PayrollAdvanceLine:
+      type: object
+      required: [employeeId, employeeName, employeeType, baseSalary, daysWorked, dailySalary, totalSalary, advanceAmount]
+      properties:
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        employeeType: { type: string, enum: [shift, office] }
+        baseSalary: { type: number }
+        daysWorked: { type: number }
+        dailySalary: { type: number }
+        totalSalary: { type: number }
+        advanceAmount: { type: number }
+    PayrollAdvanceSummary:
+      type: object
+      required: [month, approved, totalAmount, lines]
+      properties:
+        month: { type: string }
+        approved: { type: boolean }
+        approvedAt: { type: string }
+        totalAmount: { type: number }
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/PayrollAdvanceLine"
+    PayrollAdvanceApprovalInput:
+      type: object
+      required: [month]
+      properties:
+        month: { type: string, pattern: '^\d{4}-\d{2}$' }
     CashTransaction:
       type: object
       required: [id, type, category, description, amount, date, createdAt]

@@ -39,6 +39,7 @@ import {
   getGetCashSummaryQueryKey,
   getGetDashboardQueryKey,
   getGetHourBalanceQueryKey,
+  getGetPayrollAdvanceQueryKey,
   getGetPayrollQueryKey,
   getListAttendanceQueryKey,
   getListCashTransactionsQueryKey,
@@ -50,11 +51,13 @@ import {
   useGetDashboard,
   useGetHourBalance,
   useGetPayroll,
+  useGetPayrollAdvance,
   useListAttendance,
   useListCashTransactions,
   useListEmployees,
   useUpsertAttendance,
   useUpsertPayrollAdjustment,
+  useApprovePayrollAdvance,
   useUpdateEmployee,
   type Employee,
   type PayrollLine,
@@ -393,10 +396,32 @@ function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; m
 function Payroll() {
   const [month, setMonth] = useState(currentMonth());
   const [selectedLine, setSelectedLine] = useState<PayrollLine | null>(null);
+  const [showAdvance, setShowAdvance] = useState(false);
   const query = useGetPayroll({ month });
+  const advanceQuery = useGetPayrollAdvance({ month });
+  const qc = useQueryClient();
+  const approveAdvance = useApprovePayrollAdvance();
   const totalAdvance = query.data?.lines.reduce((sum, line) => sum + line.advanceAmount, 0) ?? 0;
+  const approve = () => {
+    if (!window.confirm(`${month} сарын урьдчилгаа цалинг батлах уу? Баталсны дараа энэ жагсаалтын дүн өөрчлөгдөхгүй.`)) return;
+    approveAdvance.mutate({ data: { month } }, {
+      onSuccess: () => qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey({ month }) }),
+    });
+  };
   return <div className="page-enter">
-    <PageHeading eyebrow="Сарын тооцоо / payroll" title="Цалингийн тойм" detail="Цалинг урьдчилгаа болон сүүл цалин гэж хоёр хуваана. Ээлжийн ажилтны цалинг ажилласан хоногоор тооцно." action={<div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3"><CalendarDays className="size-4 text-primary" /><input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="h-10 bg-transparent text-sm outline-none" data-testid="input-payroll-month" /></div>} />
+    <PageHeading eyebrow="Сарын тооцоо / payroll" title="Цалингийн тойм" detail="Цалинг урьдчилгаа болон сүүл цалин гэж хоёр хуваана. Ээлжийн ажилтны цалинг ажилласан хоногоор тооцно." action={<div className="flex flex-wrap items-center justify-end gap-2"><Button onClick={() => setShowAdvance((value) => !value)} variant={showAdvance ? 'default' : 'outline'} data-testid="button-payroll-advance"><Coins className="size-4" />Урьдчилгаа цалин</Button><div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3"><CalendarDays className="size-4 text-primary" /><input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="h-10 bg-transparent text-sm outline-none" data-testid="input-payroll-month" /></div></div>} />
+    {showAdvance && <section className="mb-6 overflow-hidden rounded-2xl border border-accent/60 bg-card shadow-sm" data-testid="section-payroll-advance">
+      <div className="flex flex-col justify-between gap-4 border-b border-border bg-accent/10 px-5 py-4 sm:flex-row sm:items-center">
+        <div><p className="font-mono text-[10px] font-bold uppercase tracking-[.18em] text-primary">Advance payroll</p><h2 className="mt-1 text-lg font-bold">{month.replace('-', ' оны ')} сарын урьдчилгаа цалин</h2><p className="mt-1 text-xs text-muted-foreground">Ээлжийн ажилтны дүнг ажилласан хоног × өдрийн цалингаас 50%-иар тооцно.</p></div>
+        {advanceQuery.data?.approved ? <div className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground" data-testid="status-advance-approved"><Check className="mr-2 inline size-4" />Батлагдсан · {advanceQuery.data.approvedAt ? dateLabel(advanceQuery.data.approvedAt) : ''}</div> : <Button onClick={approve} disabled={approveAdvance.isPending || advanceQuery.isLoading} data-testid="button-approve-payroll-advance"><Check className="size-4" />{approveAdvance.isPending ? 'Баталж байна...' : 'Урьдчилгаа батлах'}</Button>}
+      </div>
+      {advanceQuery.isLoading ? <div className="p-5"><LoadingBlock className="h-36" /></div> : advanceQuery.isError ? <div className="p-5"><ErrorBlock onRetry={() => advanceQuery.refetch()} /></div> : <div className="overflow-x-auto">
+        <table className="w-full min-w-[980px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Ажилтан</th><th className="px-5 py-3 text-right">Үндсэн цалин</th><th className="px-5 py-3 text-right">Ажилласан хоног</th><th className="px-5 py-3 text-right">Өдрийн цалин</th><th className="px-5 py-3 text-right">Нийт олгох цалин</th><th className="px-5 py-3 text-right">Олгох урьдчилгаа</th></tr></thead>
+          <tbody className="divide-y divide-border">{advanceQuery.data?.lines.map((line) => <tr key={line.employeeId}><td className="px-5 py-4"><p className="text-sm font-semibold">{line.employeeName}</p><p className="text-xs text-muted-foreground">{line.employeeType === 'shift' ? 'Ээлжийн ажилтан' : 'Оффис ажилтан'}</p></td><td className="px-5 py-4 text-right font-mono text-sm">{line.employeeType === 'office' ? money(line.baseSalary) : '—'}</td><td className="px-5 py-4 text-right font-mono text-sm">{line.daysWorked}</td><td className="px-5 py-4 text-right font-mono text-sm">{line.employeeType === 'shift' ? money(line.dailySalary) : '—'}</td><td className="px-5 py-4 text-right font-mono text-sm">{money(line.totalSalary)}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold text-primary">{money(line.advanceAmount)}</td></tr>)}</tbody>
+          <tfoot className="border-t-2 border-border bg-secondary/35"><tr><td colSpan={5} className="px-5 py-4 text-right text-sm font-bold">Нийт олгох урьдчилгаа</td><td className="px-5 py-4 text-right font-mono text-base font-bold text-primary" data-testid="value-total-payroll-advance">{money(advanceQuery.data?.totalAmount)}</td></tr></tfoot>
+        </table>
+      </div>}
+    </section>}
     {query.isLoading ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><LoadingBlock className="h-28" /><LoadingBlock className="h-28" /><LoadingBlock className="h-28" /><LoadingBlock className="h-28" /><LoadingBlock className="h-28" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : <>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Нийт брутто" value={money(query.data?.totalGross)} meta="Суутгалын өмнө" icon={Banknote} />

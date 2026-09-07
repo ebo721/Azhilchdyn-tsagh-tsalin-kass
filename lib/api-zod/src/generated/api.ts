@@ -274,6 +274,59 @@ export const UpsertPayrollAdjustmentResponse = zod.object({
 
 
 /**
+ * @summary Get the monthly payroll advance list and approval status
+ */
+export const GetPayrollAdvanceQueryParams = zod.object({
+  "month": zod.coerce.string().optional()
+})
+
+export const GetPayrollAdvanceResponse = zod.object({
+  "month": zod.string(),
+  "approved": zod.boolean(),
+  "approvedAt": zod.string().optional(),
+  "totalAmount": zod.number(),
+  "lines": zod.array(zod.object({
+  "employeeId": zod.number().int(),
+  "employeeName": zod.string(),
+  "employeeType": zod.enum(['shift', 'office']),
+  "baseSalary": zod.number(),
+  "daysWorked": zod.number(),
+  "dailySalary": zod.number(),
+  "totalSalary": zod.number(),
+  "advanceAmount": zod.number()
+}))
+})
+
+
+/**
+ * @summary Approve and freeze the monthly payroll advance
+ */
+export const approvePayrollAdvanceBodyMonthRegExp = new RegExp('^\\d{4}-\\d{2}$');
+
+
+export const ApprovePayrollAdvanceBody = zod.object({
+  "month": zod.string().regex(approvePayrollAdvanceBodyMonthRegExp)
+})
+
+export const ApprovePayrollAdvanceResponse = zod.object({
+  "month": zod.string(),
+  "approved": zod.boolean(),
+  "approvedAt": zod.string().optional(),
+  "totalAmount": zod.number(),
+  "lines": zod.array(zod.object({
+  "employeeId": zod.number().int(),
+  "employeeName": zod.string(),
+  "employeeType": zod.enum(['shift', 'office']),
+  "baseSalary": zod.number(),
+  "daysWorked": zod.number(),
+  "dailySalary": zod.number(),
+  "totalSalary": zod.number(),
+  "advanceAmount": zod.number()
+}))
+})
+
+
+/**
  * @summary Get monthly hour balance
  */
 export const GetHourBalanceQueryParams = zod.object({

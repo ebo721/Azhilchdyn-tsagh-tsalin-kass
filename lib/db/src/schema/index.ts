@@ -1,6 +1,7 @@
 import {
   date,
   integer,
+  jsonb,
   numeric,
   pgTable,
   serial,
@@ -47,6 +48,14 @@ export const payrollAdjustmentsTable = pgTable("payroll_adjustments", {
   uniqueIndex("payroll_adjustments_employee_month_idx").on(table.employeeId, table.month),
 ]);
 
+export const payrollAdvanceApprovalsTable = pgTable("payroll_advance_approvals", {
+  id: serial("id").primaryKey(),
+  month: text("month").notNull().unique(),
+  lines: jsonb("lines").notNull(),
+  totalAmount: numeric("total_amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  approvedAt: timestamp("approved_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const cashTransactionsTable = pgTable("cash_transactions", {
   id: serial("id").primaryKey(),
   type: text("type").notNull(),
@@ -74,4 +83,5 @@ export const insertCashTransactionSchema = createInsertSchema(cashTransactionsTa
 export type Employee = typeof employeesTable.$inferSelect;
 export type Attendance = typeof attendanceTable.$inferSelect;
 export type PayrollAdjustment = typeof payrollAdjustmentsTable.$inferSelect;
+export type PayrollAdvanceApproval = typeof payrollAdvanceApprovalsTable.$inferSelect;
 export type CashTransaction = typeof cashTransactionsTable.$inferSelect;
