@@ -36,13 +36,13 @@ const router: IRouter = Router();
 const today = () => new Date().toISOString().slice(0, 10);
 const currentMonth = () => today().slice(0, 7);
 const money = (value: number) => Math.round(value * 100) / 100;
-const monthlyIncomeTaxRelief = (gross: number) => {
-  if (gross <= 500_000) return 20_000;
-  if (gross <= 1_000_000) return 18_000;
-  if (gross <= 1_500_000) return 16_000;
-  if (gross <= 2_000_000) return 14_000;
-  if (gross <= 2_500_000) return 12_000;
-  if (gross <= 3_000_000) return 10_000;
+const monthlyIncomeTaxRelief = (socialInsuranceSalary: number) => {
+  if (socialInsuranceSalary <= 500_000) return 20_000;
+  if (socialInsuranceSalary <= 1_000_000) return 18_000;
+  if (socialInsuranceSalary <= 1_500_000) return 16_000;
+  if (socialInsuranceSalary <= 2_000_000) return 14_000;
+  if (socialInsuranceSalary <= 2_500_000) return 12_000;
+  if (socialInsuranceSalary <= 3_000_000) return 10_000;
   return 0;
 };
 
@@ -80,10 +80,10 @@ async function getPayrollSummary(month: string) {
         : money(Number(employee.baseSalary));
     const socialInsuranceSalary = money(Number(employee.socialInsuranceSalary));
     const socialInsurance = money(socialInsuranceSalary * 0.115);
-    const taxableIncome = money(Math.max(0, gross - socialInsurance));
+    const taxableIncome = money(Math.max(0, socialInsuranceSalary - socialInsurance));
     const adjustment = adjustmentMap.get(employee.id);
     const calculatedIncomeTax = money(taxableIncome * 0.1);
-    const taxRelief = monthlyIncomeTaxRelief(gross);
+    const taxRelief = monthlyIncomeTaxRelief(socialInsuranceSalary);
     const incomeTax = money(Math.max(0, calculatedIncomeTax - taxRelief));
     const firstHalfDaysWorked = employeeRecords.filter((record) =>
       ["present", "late"].includes(record.status) && Number(String(record.date).slice(8, 10)) <= 15
