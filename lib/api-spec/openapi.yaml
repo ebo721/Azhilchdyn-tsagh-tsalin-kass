@@ -10,6 +10,16 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: dashboard
+    description: Dashboard summaries
+  - name: employees
+    description: Employee management
+  - name: attendance
+    description: Attendance tracking
+  - name: payroll
+    description: Payroll calculations
+  - name: cash
+    description: Cash register transactions
 paths:
   /healthz:
     get:
@@ -24,7 +34,189 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Get dashboard summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+  /employees:
+    get:
+      operationId: listEmployees
+      tags: [employees]
+      summary: List employees
+      responses:
+        "200":
+          description: Employees
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Employee"
+    post:
+      operationId: createEmployee
+      tags: [employees]
+      summary: Create an employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmployeeInput"
+      responses:
+        "201":
+          description: Created employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+  /employees/{id}:
+    patch:
+      operationId: updateEmployee
+      tags: [employees]
+      summary: Update an employee
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmployeeUpdate"
+      responses:
+        "200":
+          description: Updated employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+    delete:
+      operationId: deleteEmployee
+      tags: [employees]
+      summary: Delete an employee
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Employee deleted
+  /attendance:
+    get:
+      operationId: listAttendance
+      tags: [attendance]
+      summary: List attendance records
+      parameters:
+        - in: query
+          name: date
+          schema:
+            type: string
+          required: false
+        - in: query
+          name: month
+          schema:
+            type: string
+          required: false
+      responses:
+        "200":
+          description: Attendance records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Attendance"
+    post:
+      operationId: createAttendance
+      tags: [attendance]
+      summary: Create or replace attendance record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttendanceInput"
+      responses:
+        "201":
+          description: Created attendance record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attendance"
+  /payroll:
+    get:
+      operationId: getPayroll
+      tags: [payroll]
+      summary: Calculate payroll for a month
+      parameters:
+        - in: query
+          name: month
+          schema:
+            type: string
+          required: false
+      responses:
+        "200":
+          description: Payroll summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayrollSummary"
+  /cash/summary:
+    get:
+      operationId: getCashSummary
+      tags: [cash]
+      summary: Get cash summary
+      responses:
+        "200":
+          description: Cash summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashSummary"
+  /cash/transactions:
+    get:
+      operationId: listCashTransactions
+      tags: [cash]
+      summary: List cash transactions
+      responses:
+        "200":
+          description: Cash transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CashTransaction"
+    post:
+      operationId: createCashTransaction
+      tags: [cash]
+      summary: Create a cash transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashTransactionInput"
+      responses:
+        "201":
+          description: Created cash transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashTransaction"
 components:
+  parameters:
+    Id:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: integer
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +225,129 @@ components:
           type: string
       required:
         - status
+    Dashboard:
+      type: object
+      required: [employeeCount, presentToday, monthlyPayroll, cashBalance, recentActivity]
+      properties:
+        employeeCount: { type: integer }
+        presentToday: { type: integer }
+        monthlyPayroll: { type: number }
+        cashBalance: { type: number }
+        recentActivity:
+          type: array
+          items:
+            $ref: "#/components/schemas/Activity"
+    Activity:
+      type: object
+      required: [id, type, title, detail, createdAt]
+      properties:
+        id: { type: string }
+        type: { type: string }
+        title: { type: string }
+        detail: { type: string }
+        createdAt: { type: string }
+    Employee:
+      type: object
+      required: [id, name, role, phone, salaryType, baseSalary, status, joinedAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        role: { type: string }
+        phone: { type: string }
+        salaryType: { type: string, enum: [monthly, hourly] }
+        baseSalary: { type: number }
+        status: { type: string, enum: [active, inactive] }
+        joinedAt: { type: string }
+    EmployeeInput:
+      type: object
+      required: [name, role, phone, salaryType, baseSalary]
+      properties:
+        name: { type: string, minLength: 1 }
+        role: { type: string, minLength: 1 }
+        phone: { type: string }
+        salaryType: { type: string, enum: [monthly, hourly] }
+        baseSalary: { type: number, minimum: 0 }
+    EmployeeUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        role: { type: string, minLength: 1 }
+        phone: { type: string }
+        salaryType: { type: string, enum: [monthly, hourly] }
+        baseSalary: { type: number, minimum: 0 }
+        status: { type: string, enum: [active, inactive] }
+    Attendance:
+      type: object
+      required: [id, employeeId, employeeName, date, clockIn, clockOut, hours, status]
+      properties:
+        id: { type: integer }
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        date: { type: string }
+        clockIn: { type: string }
+        clockOut: { type: string }
+        hours: { type: number }
+        status: { type: string, enum: [present, late, leave, absent] }
+    AttendanceInput:
+      type: object
+      required: [employeeId, date, clockIn, clockOut, status]
+      properties:
+        employeeId: { type: integer }
+        date: { type: string }
+        clockIn: { type: string }
+        clockOut: { type: string }
+        status: { type: string, enum: [present, late, leave, absent] }
+    PayrollLine:
+      type: object
+      required: [employeeId, employeeName, role, daysWorked, hours, gross, deductions, net]
+      properties:
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        role: { type: string }
+        daysWorked: { type: number }
+        hours: { type: number }
+        gross: { type: number }
+        deductions: { type: number }
+        net: { type: number }
+    PayrollSummary:
+      type: object
+      required: [month, totalGross, totalDeductions, totalNet, lines]
+      properties:
+        month: { type: string }
+        totalGross: { type: number }
+        totalDeductions: { type: number }
+        totalNet: { type: number }
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/PayrollLine"
+    CashTransaction:
+      type: object
+      required: [id, type, category, description, amount, date, createdAt]
+      properties:
+        id: { type: integer }
+        type: { type: string, enum: [income, expense] }
+        category: { type: string }
+        description: { type: string }
+        amount: { type: number }
+        date: { type: string }
+        createdAt: { type: string }
+    CashTransactionInput:
+      type: object
+      required: [type, category, description, amount, date]
+      properties:
+        type: { type: string, enum: [income, expense] }
+        category: { type: string, minLength: 1 }
+        description: { type: string, minLength: 1 }
+        amount: { type: number, minimum: 0 }
+        date: { type: string }
+    CashSummary:
+      type: object
+      required: [balance, income, expense, todayIncome, todayExpense]
+      properties:
+        balance: { type: number }
+        income: { type: number }
+        expense: { type: number }
+        todayIncome: { type: number }
+        todayExpense: { type: number }
 
