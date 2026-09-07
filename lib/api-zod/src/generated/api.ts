@@ -169,6 +169,29 @@ export const CreateAttendanceResponse = zod.object({
 
 
 /**
+ * @summary Mark an employee as present or absent for a day
+ */
+export const UpsertAttendanceBody = zod.object({
+  "employeeId": zod.number().int(),
+  "date": zod.string(),
+  "status": zod.enum(['present', 'absent']),
+  "clockIn": zod.string().optional(),
+  "clockOut": zod.string().optional()
+})
+
+export const UpsertAttendanceResponse = zod.object({
+  "id": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "employeeName": zod.string(),
+  "date": zod.string(),
+  "clockIn": zod.string(),
+  "clockOut": zod.string(),
+  "hours": zod.number(),
+  "status": zod.enum(['present', 'late', 'leave', 'absent'])
+})
+
+
+/**
  * @summary Calculate payroll for a month
  */
 export const GetPayrollQueryParams = zod.object({

@@ -22,6 +22,7 @@ import type {
 import type {
   Attendance,
   AttendanceInput,
+  AttendanceToggleInput,
   CashSummary,
   CashTransaction,
   CashTransactionInput,
@@ -661,6 +662,77 @@ export const useCreateAttendance = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateAttendanceMutationOptions(options));
+    }
+
+export const getUpsertAttendanceUrl = () => {
+
+
+
+
+  return `/api/attendance`
+}
+
+/**
+ * @summary Mark an employee as present or absent for a day
+ */
+export const upsertAttendance = async (attendanceToggleInput: AttendanceToggleInput, options?: Parameters<typeof customFetch>[1]): Promise<Attendance> => {
+
+  return customFetch<Attendance>(getUpsertAttendanceUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(attendanceToggleInput)
+  }
+);}
+
+
+
+
+
+export const getUpsertAttendanceMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertAttendance>>, TError,{data: BodyType<AttendanceToggleInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof upsertAttendance>>, TError,{data: BodyType<AttendanceToggleInput>}, TContext> => {
+
+const mutationKey = ['upsertAttendance'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertAttendance>>, {data: BodyType<AttendanceToggleInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  upsertAttendance(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpsertAttendanceMutationResult = NonNullable<Awaited<ReturnType<typeof upsertAttendance>>>
+    export type UpsertAttendanceMutationBody = BodyType<AttendanceToggleInput>
+    export type UpsertAttendanceMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Mark an employee as present or absent for a day
+ */
+export const useUpsertAttendance = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertAttendance>>, TError,{data: BodyType<AttendanceToggleInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof upsertAttendance>>,
+        TError,
+        {data: BodyType<AttendanceToggleInput>},
+        TContext
+      > => {
+      return useMutation(getUpsertAttendanceMutationOptions(options));
     }
 
 export const getGetPayrollUrl = (params?: GetPayrollParams,) => {

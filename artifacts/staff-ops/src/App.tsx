@@ -37,10 +37,10 @@ import {
   EmployeeStatus,
   getGetCashSummaryQueryKey,
   getGetDashboardQueryKey,
+  getGetPayrollQueryKey,
   getListAttendanceQueryKey,
   getListCashTransactionsQueryKey,
   getListEmployeesQueryKey,
-  useCreateAttendance,
   useCreateCashTransaction,
   useCreateEmployee,
   useDeleteEmployee,
@@ -50,6 +50,7 @@ import {
   useListAttendance,
   useListCashTransactions,
   useListEmployees,
+  useUpsertAttendance,
   useUpdateEmployee,
   type Employee,
 } from '@workspace/api-client-react';
@@ -63,6 +64,14 @@ const dateLabel = (value: string) =>
   new Intl.DateTimeFormat('mn-MN', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value));
 const today = () => new Date().toISOString().slice(0, 10);
 const currentMonth = () => new Date().toISOString().slice(0, 7);
+const shiftDate = (value: string, days: number) => {
+  const date = new Date(`${value}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+const calendarDays = () => Array.from({ length: 30 }, (_, index) => shiftDate(today(), index - 29));
+const calendarDateLabel = (value: string) =>
+  new Intl.DateTimeFormat('mn-MN', { weekday: 'short', day: 'numeric' }).format(new Date(`${value}T00:00:00`));
 
 const nav = [
   { href: '/', label: 'Тойм', icon: LayoutDashboard },
@@ -248,16 +257,40 @@ function Employees() {
 }
 
 function AttendancePage() {
-  const [date, setDate] = useState(today());
-  const query = useListAttendance({ date });
+  const days = useMemo(calendarDays, []);
+  const query = useListAttendance({});
   const employees = useListEmployees();
-  const create = useCreateAttendance();
+  const upsert = useUpsertAttendance();
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const form = useForm<{ employeeId: string; clockIn: string; clockOut: string; status: 'present' | 'late' | 'leave' | 'absent' }>({ defaultValues: { employeeId: '', clockIn: '09:00', clockOut: '18:00', status: 'present' } });
-  const submit = (v: { employeeId: string; clockIn: string; clockOut: string; status: 'present' | 'late' | 'leave' | 'absent' }) => create.mutate({ data: { employeeId: Number(v.employeeId), date, clockIn: v.clockIn, clockOut: v.clockOut, status: v.status } }, { onSuccess: () => { qc.invalidateQueries({ queryKey: getListAttendanceQueryKey({ date }) }); qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() }); setOpen(false); } });
-  const counts = (query.data ?? []).reduce((acc, row) => { acc[row.status] = (acc[row.status] ?? 0) + 1; return acc; }, {} as Record<string, number>);
-  return <div className="page-enter"><PageHeading eyebrow="Өдөр тутмын бүртгэл / attendance" title="Ирц" detail="Өнөөдрийн ирцийн төлөвийг бүртгэж, багийн хэмнэлийг нэг дор харна." action={<Button onClick={() => setOpen(true)} data-testid="button-add-attendance"><Plus className="size-4" />Ирц бүртгэх</Button>} /><div className="mb-6 flex flex-wrap items-center gap-2"><div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3"><CalendarDays className="size-4 text-primary" /><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-10 bg-transparent text-sm outline-none" data-testid="input-attendance-date" /></div>{[['present', 'Ирсэн'], ['late', 'Хоцорсон'], ['leave', 'Чөлөөтэй'], ['absent', 'Ирээгүй']].map(([key, label]) => <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs" key={key}><span className="font-mono font-bold">{counts[key] ?? 0}</span><span className="ml-2 text-muted-foreground">{label}</span></div>)}</div><section className="overflow-hidden rounded-2xl border border-border bg-card"><div className="border-b border-border px-5 py-4"><p className="font-mono text-[10px] font-bold uppercase tracking-[.18em] text-primary">Daily pulse</p><h2 className="mt-1 text-base font-bold">{dateLabel(date)}</h2></div>{query.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : !query.data?.length ? <EmptyState title="Энэ өдөр бүртгэл алга" detail="Ирц бүртгэх товчоор ажилчдын ирцийг оруулна уу." icon={Clock3} /> : <div className="overflow-x-auto"><table className="w-full min-w-[650px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Ажилтан</th><th className="px-5 py-3">Орсон</th><th className="px-5 py-3">Гарсан</th><th className="px-5 py-3">Нийт цаг</th><th className="px-5 py-3">Төлөв</th></tr></thead><tbody className="divide-y divide-border">{query.data.map((row) => <tr key={row.id} className="hover:bg-secondary/35" data-testid={`row-attendance-${row.id}`}><td className="px-5 py-4 text-sm font-semibold">{row.employeeName}</td><td className="px-5 py-4 font-mono text-sm text-muted-foreground">{row.clockIn || '—'}</td><td className="px-5 py-4 font-mono text-sm text-muted-foreground">{row.clockOut || '—'}</td><td className="px-5 py-4 font-mono text-sm">{row.hours}ц</td><td className="px-5 py-4"><StatusPill value={row.status} /></td></tr>)}</tbody></table></div>}</section>{open && <Modal title="Ирц бүртгэх" detail={`${dateLabel(date)} өдөрт ажилтны ирцийг оруулна.`} onClose={() => setOpen(false)}><Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-5" data-testid="form-attendance"><label className="block space-y-2 text-xs font-semibold">Ажилтан<select className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('employeeId', { required: true })} data-testid="select-attendance-employee"><option value="">Ажилтан сонгох</option>{(employees.data ?? []).filter((e) => e.status === EmployeeStatus.active).map((e) => <option value={e.id} key={e.id}>{e.name} — {e.role}</option>)}</select></label><div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-xs font-semibold">Орсон цаг<input type="time" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('clockIn')} data-testid="input-attendance-clock-in" /></label><label className="space-y-2 text-xs font-semibold">Гарсан цаг<input type="time" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('clockOut')} data-testid="input-attendance-clock-out" /></label></div><label className="block space-y-2 text-xs font-semibold">Төлөв<select className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('status')} data-testid="select-attendance-status"><option value="present">Ирсэн</option><option value="late">Хоцорсон</option><option value="leave">Чөлөөтэй</option><option value="absent">Ирээгүй</option></select></label><div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setOpen(false)} data-testid="button-cancel-attendance">Болих</Button><Button type="submit" disabled={create.isPending} data-testid="button-save-attendance">{create.isPending ? 'Хадгалж байна...' : 'Ирц хадгалах'}</Button></div></form></Form></Modal>}</div>;
+  const attendanceMap = useMemo(() => new Map((query.data ?? []).map((row) => [`${row.employeeId}-${row.date}`, row])), [query.data]);
+  const activeEmployees = (employees.data ?? []).filter((employee) => employee.status === EmployeeStatus.active);
+  const selectedDay = days[days.length - 1];
+  const selectedRows = activeEmployees.map((employee) => attendanceMap.get(`${employee.id}-${selectedDay}`)).filter(Boolean);
+  const counts = selectedRows.reduce((acc, row) => { if (row) acc[row.status] = (acc[row.status] ?? 0) + 1; return acc; }, {} as Record<string, number>);
+  const toggleAttendance = (employeeId: number, date: string) => {
+    const current = attendanceMap.get(`${employeeId}-${date}`);
+    const worked = current?.status === 'present' || current?.status === 'late';
+    upsert.mutate({ data: { employeeId, date, status: worked ? 'absent' : 'present', clockIn: worked ? '00:00' : '09:00', clockOut: worked ? '00:00' : '18:00' } }, {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListAttendanceQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetPayrollQueryKey() });
+      },
+    });
+  };
+  return <div className="page-enter">
+    <PageHeading eyebrow="30 хоногийн бүртгэл / attendance" title="Ирцийн календарь" detail="Огноо болон ажилтны огтлолцол дээр дарж ажилласан эсэхийг шууд тэмдэглэнэ." />
+    <div className="mb-6 flex flex-wrap items-center gap-2">
+      <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs"><span className="font-mono font-bold">{days[0]}</span><span className="mx-2 text-muted-foreground">—</span><span className="font-mono font-bold">{selectedDay}</span></div>
+      {['present', 'absent'].map((key) => <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs" key={key}><span className={cn('size-2.5 rounded-full', key === 'present' ? 'bg-primary' : 'bg-muted-foreground/35')} /><span className="font-mono font-bold">{counts[key] ?? 0}</span><span className="text-muted-foreground">{key === 'present' ? 'Өнөөдөр ажилласан' : 'Өнөөдөр ажиллаагүй'}</span></div>)}
+      <div className="ml-auto text-xs text-muted-foreground">Нүд дээр дарж төлвийг солино</div>
+    </div>
+    <section className="overflow-hidden rounded-2xl border border-border bg-card" data-testid="attendance-calendar">
+      <div className="flex items-center justify-between border-b border-border px-5 py-4"><div><p className="font-mono text-[10px] font-bold uppercase tracking-[.18em] text-primary">30 day view</p><h2 className="mt-1 text-base font-bold">Ажилтны ирцийн хүснэгт</h2></div><CalendarDays className="size-4 text-muted-foreground" /></div>
+      {query.isLoading || employees.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError || employees.isError ? <ErrorBlock onRetry={() => { query.refetch(); employees.refetch(); }} /> : !activeEmployees.length ? <EmptyState title="Идэвхтэй ажилтан алга" detail="Эхлээд ажилтны бүртгэлээс ажилтан нэмнэ үү." icon={UsersRound} /> : <div className="overflow-x-auto"><table className="w-full min-w-[1260px] table-fixed text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="sticky left-0 z-10 w-52 border-r border-border bg-secondary/95 px-5 py-3">Ажилтан</th>{days.map((day) => <th className={cn('w-9 px-1 py-3 text-center', day === selectedDay && 'bg-accent/35 text-foreground')} key={day}><div className="text-[9px] uppercase">{calendarDateLabel(day).split(' ')[0]}</div><div className="mt-1 font-mono text-[11px]">{day.slice(8)}</div></th>)}</tr></thead><tbody className="divide-y divide-border">{activeEmployees.map((employee) => <tr key={employee.id} data-testid={`row-attendance-calendar-${employee.id}`}><td className="sticky left-0 z-10 border-r border-border bg-card px-5 py-3"><p className="truncate text-sm font-semibold">{employee.name}</p><p className="truncate text-[11px] text-muted-foreground">{employee.role}</p></td>{days.map((day) => { const row = attendanceMap.get(`${employee.id}-${day}`); const worked = row?.status === 'present' || row?.status === 'late'; const recorded = !!row; return <td className={cn('border-l border-border/60 p-1 text-center', day === selectedDay && 'bg-accent/10')} key={day}><button type="button" disabled={upsert.isPending} onClick={() => toggleAttendance(employee.id, day)} className={cn('mx-auto grid size-7 place-items-center rounded-lg text-[11px] font-bold transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-primary/30', worked ? 'bg-primary text-primary-foreground' : recorded ? 'bg-muted text-muted-foreground' : 'bg-secondary/60 text-muted-foreground/35 hover:bg-secondary')} aria-label={`${employee.name} ${day} ${worked ? 'ажилласан' : 'ажиллаагүй'}`} data-testid={`button-attendance-${employee.id}-${day}`}>{worked ? <Check className="size-3.5" /> : recorded ? '–' : ''}</button></td>; })}</tr>)}</tbody></table></div>}
+    </section>
+    <p className="mt-3 text-xs text-muted-foreground">Бүдэг нүд: бүртгэлгүй · тэмдэгтэй нүд: ажиллаагүй · ногоон тэмдэг: ажилласан</p>
+  </div>;
 }
 
 function Payroll() {

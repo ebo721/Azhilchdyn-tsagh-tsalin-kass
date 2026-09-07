@@ -11,10 +11,11 @@ import {
   ListAttendanceResponse,
   ListCashTransactionsResponse,
   ListEmployeesResponse,
+  UpsertAttendanceBody,
   UpdateEmployeeBody,
   UpdateEmployeeParams,
 } from "@workspace/api-zod";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import {
   attendanceTable,
   cashTransactionsTable,
@@ -223,6 +224,50 @@ router.post("/attendance", async (req, res, next) => {
       .from(employeesTable)
       .where(eq(employeesTable.id, record.employeeId));
     res.status(201).json({
+      ...record,
+      employeeName: employee?.name ?? "Тодорхойгүй",
+      date: String(record.date),
+      hours: Number(record.hours),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/attendance", async (req, res, next) => {
+  try {
+    const input = UpsertAttendanceBody.parse(req.body);
+    const clockIn = input.clockIn ?? (input.status === "present" ? "09:00" : "00:00");
+    const clockOut = input.clockOut ?? (input.status === "present" ? "18:00" : "00:00");
+    const existing = await db
+      .select()
+      .from(attendanceTable)
+      .where(and(
+        eq(attendanceTable.employeeId, input.employeeId),
+        eq(attendanceTable.date, input.date),
+      ));
+    const [record] = existing.length
+      ? await db
+          .update(attendanceTable)
+          .set({ status: input.status, clockIn, clockOut, hours: hoursBetween(clockIn, clockOut) })
+          .where(eq(attendanceTable.id, existing[0].id))
+          .returning()
+      : await db
+          .insert(attendanceTable)
+          .values({
+            employeeId: input.employeeId,
+            date: input.date,
+            status: input.status,
+            clockIn,
+            clockOut,
+            hours: hoursBetween(clockIn, clockOut),
+          })
+          .returning();
+    const [employee] = await db
+      .select()
+      .from(employeesTable)
+      .where(eq(employeesTable.id, record.employeeId));
+    res.json({
       ...record,
       employeeName: employee?.name ?? "Тодорхойгүй",
       date: String(record.date),

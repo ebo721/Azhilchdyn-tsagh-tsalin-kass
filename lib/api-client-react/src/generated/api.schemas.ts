@@ -138,6 +138,22 @@ export interface AttendanceInput {
   status: AttendanceInputStatus;
 }
 
+export type AttendanceToggleInputStatus = typeof AttendanceToggleInputStatus[keyof typeof AttendanceToggleInputStatus];
+
+
+export const AttendanceToggleInputStatus = {
+  present: 'present',
+  absent: 'absent',
+} as const;
+
+export interface AttendanceToggleInput {
+  employeeId: number;
+  date: string;
+  status: AttendanceToggleInputStatus;
+  clockIn?: string;
+  clockOut?: string;
+}
+
 export interface PayrollLine {
   employeeId: number;
   employeeName: string;

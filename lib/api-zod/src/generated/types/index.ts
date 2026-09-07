@@ -11,6 +11,8 @@ export * from './attendance';
 export * from './attendanceInput';
 export * from './attendanceInputStatus';
 export * from './attendanceStatus';
+export * from './attendanceToggleInput';
+export * from './attendanceToggleInputStatus';
 export * from './cashSummary';
 export * from './cashTransaction';
 export * from './cashTransactionInput';
