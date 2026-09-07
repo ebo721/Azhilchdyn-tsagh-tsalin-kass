@@ -365,14 +365,6 @@ function AttendancePage() {
   const attendanceMap = useMemo(() => new Map((query.data ?? []).map((row) => [`${row.employeeId}-${row.date}`, row])), [query.data]);
   const planMap = useMemo(() => new Map((plans.data ?? []).map((row) => [`${row.employeeId}-${row.date}`, row])), [plans.data]);
   const activeEmployees = (employees.data ?? []).filter((employee) => employee.status === EmployeeStatus.active);
-  const monthRows = activeEmployees.flatMap((employee) => days.map((day) => attendanceMap.get(`${employee.id}-${day}`))).filter(Boolean);
-  const counts = monthRows.reduce((acc, row) => {
-    if (!row) return acc;
-    if (row.status === 'leave') acc.leave += 1;
-    else if (Number(row.hours) === 12) acc.twelve += 1;
-    else if (Number(row.hours) === 8) acc.eight += 1;
-    return acc;
-  }, { eight: 0, twelve: 0, leave: 0 });
   const setAttendance = (employeeId: number, date: string, value: string) => {
     if (!value) return;
     const isLeave = value === 'leave';
@@ -409,7 +401,6 @@ function AttendancePage() {
     <div className="flex flex-wrap items-center justify-end gap-2"><Button variant="outline" onClick={copyPreviousMonth} disabled={copyPreviousPlans.isPending || plans.isLoading} data-testid="button-copy-previous-shift-plans"><Copy className="size-4" />{copyPreviousPlans.isPending ? 'Хуулж байна...' : 'Өмнөх сараас хуулах'}</Button><Button variant="outline" onClick={() => setSettingsOpen(true)} data-testid="button-shift-settings"><Clock3 className="size-4" />Ээлжийн тохиргоо</Button><div className="flex items-center overflow-hidden rounded-xl border border-border bg-card"><button type="button" onClick={() => setMonth((value) => shiftMonth(value, -1))} className="grid size-10 place-items-center border-r border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Өмнөх сар" data-testid="button-attendance-previous-month"><ChevronRight className="size-4 rotate-180" /></button><div className="flex items-center gap-2 px-3"><CalendarDays className="size-4 text-primary" /><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="h-10 bg-transparent text-sm outline-none" data-testid="input-attendance-month" /></div><button type="button" onClick={() => setMonth((value) => shiftMonth(value, 1))} className="grid size-10 place-items-center border-l border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Дараагийн сар" data-testid="button-attendance-next-month"><ChevronRight className="size-4" /></button></div></div>
     <div className="mb-6 flex flex-wrap items-center gap-2">
       <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs"><span className="font-mono font-bold">{days[0]}</span><span className="mx-2 text-muted-foreground">—</span><span className="font-mono font-bold">{days[days.length - 1]}</span></div>
-      {[['eight', '8 цаг'], ['twelve', '12 цаг'], ['leave', 'Чөлөө']].map(([key, label]) => <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs" key={key}><span className={cn('size-2.5 rounded-full', key === 'eight' ? 'bg-primary' : key === 'twelve' ? 'bg-accent' : 'bg-sky-300')} /><span className="font-mono font-bold">{counts[key as keyof typeof counts]}</span><span className="text-muted-foreground">{label}</span></div>)}
     </div>
     <section className="overflow-hidden rounded-2xl border border-border bg-card" data-testid="attendance-calendar">
       <div className="flex items-center justify-between border-b border-border px-5 py-4"><div><p className="font-mono text-[10px] font-bold uppercase tracking-[.18em] text-primary">Full month view</p><h2 className="mt-1 text-base font-bold">{month.replace('-', ' оны ')} сарын ирц</h2></div><span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{days.length} хоног</span></div>
