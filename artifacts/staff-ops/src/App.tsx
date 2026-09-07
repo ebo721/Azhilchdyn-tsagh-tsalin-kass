@@ -27,6 +27,7 @@ import {
   Pencil,
   Plus,
   Receipt,
+  RefreshCw,
   Search,
   Timer,
   Trash2,
@@ -488,6 +489,10 @@ function Payroll() {
   const approveAdvance = useApprovePayrollAdvance();
   const revertAdvanceApproval = useRevertPayrollAdvanceApproval();
   const updateAdvancePayment = useUpdatePayrollAdvancePayment();
+  const pullLatestAttendance = async () => {
+    await query.refetch();
+    if (showAdvance && !advanceQuery.data?.approved) await advanceQuery.refetch();
+  };
   const approve = () => {
     if (!window.confirm(`${month} сарын урьдчилгаа цалинг батлах уу? Баталсны дараа энэ жагсаалтын дүн өөрчлөгдөхгүй.`)) return;
     approveAdvance.mutate({ data: { month } }, {
@@ -513,7 +518,7 @@ function Payroll() {
     });
   };
   return <div className="page-enter">
-    <div className="mb-6 flex flex-wrap items-center justify-end gap-2"><Button onClick={() => setShowAdvance((value) => !value)} variant={showAdvance ? 'default' : 'outline'} data-testid="button-payroll-advance"><Coins className="size-4" />Урьдчилгаа цалин</Button><div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3"><CalendarDays className="size-4 text-primary" /><input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="h-10 bg-transparent text-sm outline-none" data-testid="input-payroll-month" /></div></div>
+    <div className="mb-6 flex flex-wrap items-center justify-end gap-2"><Button onClick={pullLatestAttendance} variant="outline" disabled={query.isFetching || advanceQuery.isFetching} data-testid="button-pull-payroll-attendance"><RefreshCw className={cn('size-4', (query.isFetching || advanceQuery.isFetching) && 'animate-spin')} />{query.isFetching || advanceQuery.isFetching ? 'Татаж байна...' : 'Цаг татах'}</Button><Button onClick={() => setShowAdvance((value) => !value)} variant={showAdvance ? 'default' : 'outline'} data-testid="button-payroll-advance"><Coins className="size-4" />Урьдчилгаа цалин</Button><div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3"><CalendarDays className="size-4 text-primary" /><input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="h-10 bg-transparent text-sm outline-none" data-testid="input-payroll-month" /></div></div>
     {showAdvance && <section className="mb-6 overflow-hidden rounded-2xl border border-accent/60 bg-card shadow-sm" data-testid="section-payroll-advance">
       <div className="flex flex-col justify-between gap-4 border-b border-border bg-accent/10 px-5 py-4 sm:flex-row sm:items-center">
         <div><p className="font-mono text-[10px] font-bold uppercase tracking-[.18em] text-primary">Advance payroll</p><h2 className="mt-1 text-lg font-bold">{month.replace('-', ' оны ')} сарын урьдчилгаа цалин</h2><p className="mt-1 text-xs text-muted-foreground">Ээлжийн ажилтан сарын 1–15-нд ажилласан хоногийн бүтэн цалингаа, оффис ажилтан үндсэн цалингийн 50%-ийг авна.</p></div>
