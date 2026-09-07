@@ -5,7 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { EmployeeUpdateSalaryType } from './employeeUpdateSalaryType';
+import type { EmployeeUpdateEmployeeType } from './employeeUpdateEmployeeType';
 import type { EmployeeUpdateStatus } from './employeeUpdateStatus';
 
 export interface EmployeeUpdate {
@@ -14,7 +14,7 @@ export interface EmployeeUpdate {
   /** @minLength 1 */
   role?: string;
   phone?: string;
-  salaryType?: EmployeeUpdateSalaryType;
+  employeeType?: EmployeeUpdateEmployeeType;
   /** @minimum 0 */
   baseSalary?: number;
   /** @minimum 0 */

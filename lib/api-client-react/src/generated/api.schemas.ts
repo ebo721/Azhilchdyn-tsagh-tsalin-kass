@@ -25,12 +25,12 @@ export interface Dashboard {
   recentActivity: Activity[];
 }
 
-export type EmployeeSalaryType = typeof EmployeeSalaryType[keyof typeof EmployeeSalaryType];
+export type EmployeeEmployeeType = typeof EmployeeEmployeeType[keyof typeof EmployeeEmployeeType];
 
 
-export const EmployeeSalaryType = {
-  monthly: 'monthly',
-  hourly: 'hourly',
+export const EmployeeEmployeeType = {
+  shift: 'shift',
+  office: 'office',
 } as const;
 
 export type EmployeeStatus = typeof EmployeeStatus[keyof typeof EmployeeStatus];
@@ -46,19 +46,19 @@ export interface Employee {
   name: string;
   role: string;
   phone: string;
-  salaryType: EmployeeSalaryType;
+  employeeType: EmployeeEmployeeType;
   baseSalary: number;
   socialInsuranceSalary: number;
   status: EmployeeStatus;
   joinedAt: string;
 }
 
-export type EmployeeInputSalaryType = typeof EmployeeInputSalaryType[keyof typeof EmployeeInputSalaryType];
+export type EmployeeInputEmployeeType = typeof EmployeeInputEmployeeType[keyof typeof EmployeeInputEmployeeType];
 
 
-export const EmployeeInputSalaryType = {
-  monthly: 'monthly',
-  hourly: 'hourly',
+export const EmployeeInputEmployeeType = {
+  shift: 'shift',
+  office: 'office',
 } as const;
 
 export interface EmployeeInput {
@@ -67,19 +67,19 @@ export interface EmployeeInput {
   /** @minLength 1 */
   role: string;
   phone: string;
-  salaryType: EmployeeInputSalaryType;
+  employeeType: EmployeeInputEmployeeType;
   /** @minimum 0 */
   baseSalary: number;
   /** @minimum 0 */
   socialInsuranceSalary: number;
 }
 
-export type EmployeeUpdateSalaryType = typeof EmployeeUpdateSalaryType[keyof typeof EmployeeUpdateSalaryType];
+export type EmployeeUpdateEmployeeType = typeof EmployeeUpdateEmployeeType[keyof typeof EmployeeUpdateEmployeeType];
 
 
-export const EmployeeUpdateSalaryType = {
-  monthly: 'monthly',
-  hourly: 'hourly',
+export const EmployeeUpdateEmployeeType = {
+  shift: 'shift',
+  office: 'office',
 } as const;
 
 export type EmployeeUpdateStatus = typeof EmployeeUpdateStatus[keyof typeof EmployeeUpdateStatus];
@@ -96,7 +96,7 @@ export interface EmployeeUpdate {
   /** @minLength 1 */
   role?: string;
   phone?: string;
-  salaryType?: EmployeeUpdateSalaryType;
+  employeeType?: EmployeeUpdateEmployeeType;
   /** @minimum 0 */
   baseSalary?: number;
   /** @minimum 0 */
@@ -174,10 +174,19 @@ export interface HourBalanceLine {
   leaveDays: number;
 }
 
+export type PayrollLineEmployeeType = typeof PayrollLineEmployeeType[keyof typeof PayrollLineEmployeeType];
+
+
+export const PayrollLineEmployeeType = {
+  shift: 'shift',
+  office: 'office',
+} as const;
+
 export interface PayrollLine {
   employeeId: number;
   employeeName: string;
   role: string;
+  employeeType: PayrollLineEmployeeType;
   daysWorked: number;
   hours: number;
   gross: number;
@@ -199,7 +208,6 @@ export interface PayrollLine {
 export interface PayrollAdjustment {
   employeeId: number;
   month: string;
-  advanceAmount: number;
   taxRelief: number;
   manualDeduction: number;
   paidAmount: number;
@@ -209,8 +217,6 @@ export interface PayrollAdjustmentInput {
   employeeId: number;
   /** @pattern ^\d{4}-\d{2}$ */
   month: string;
-  /** @minimum 0 */
-  advanceAmount: number;
   /** @minimum 0 */
   taxRelief: number;
   /** @minimum 0 */

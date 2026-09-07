@@ -9,7 +9,6 @@
 export interface PayrollAdjustment {
   employeeId: number;
   month: string;
-  advanceAmount: number;
   taxRelief: number;
   manualDeduction: number;
   paidAmount: number;

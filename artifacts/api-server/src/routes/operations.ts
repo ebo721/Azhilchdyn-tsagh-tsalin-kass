@@ -57,8 +57,8 @@ async function getPayrollSummary(month: string) {
     ).length;
     const hours = money(employeeRecords.reduce((total, record) => total + Number(record.hours), 0));
     const gross =
-      employee.salaryType === "hourly"
-        ? money(hours * Number(employee.baseSalary))
+      employee.employeeType === "shift"
+        ? money(daysWorked * Number(employee.baseSalary))
         : money(Number(employee.baseSalary));
     const socialInsuranceSalary = money(Number(employee.socialInsuranceSalary));
     const socialInsurance = money(socialInsuranceSalary * 0.115);
@@ -67,7 +67,7 @@ async function getPayrollSummary(month: string) {
     const calculatedIncomeTax = money(taxableIncome * 0.1);
     const taxRelief = money(Number(adjustment?.taxRelief ?? 0));
     const incomeTax = money(Math.max(0, calculatedIncomeTax - taxRelief));
-    const advanceAmount = money(Number(adjustment?.advanceAmount ?? 0));
+    const advanceAmount = money(gross * 0.5);
     const manualDeduction = money(Number(adjustment?.manualDeduction ?? 0));
     const paidAmount = money(Number(adjustment?.paidAmount ?? 0));
     const deductions = money(socialInsurance + incomeTax + advanceAmount + manualDeduction);
@@ -77,6 +77,7 @@ async function getPayrollSummary(month: string) {
       employeeId: employee.id,
       employeeName: employee.name,
       role: employee.role,
+      employeeType: employee.employeeType,
       daysWorked,
       hours,
       gross,
@@ -170,7 +171,10 @@ router.get("/employees", async (_req, res, next) => {
 router.post("/employees", async (req, res, next) => {
   try {
     const input = CreateEmployeeBody.parse(req.body);
-    const [employee] = await db.insert(employeesTable).values(input).returning();
+    const [employee] = await db.insert(employeesTable).values({
+      ...input,
+      salaryType: input.employeeType === "shift" ? "hourly" : "monthly",
+    }).returning();
     res.status(201).json({
       ...employee,
       baseSalary: Number(employee.baseSalary),
@@ -186,9 +190,13 @@ router.patch("/employees/:id", async (req, res, next) => {
   try {
     const { id } = UpdateEmployeeParams.parse(req.params);
     const input = UpdateEmployeeBody.parse(req.body);
+    const update = {
+      ...input,
+      ...(input.employeeType ? { salaryType: input.employeeType === "shift" ? "hourly" : "monthly" } : {}),
+    };
     const [employee] = await db
       .update(employeesTable)
-      .set(input)
+      .set(update)
       .where(eq(employeesTable.id, id))
       .returning();
     if (!employee) {
@@ -364,7 +372,6 @@ router.put("/payroll-adjustments", async (req, res, next) => {
       .onConflictDoUpdate({
         target: [payrollAdjustmentsTable.employeeId, payrollAdjustmentsTable.month],
         set: {
-          advanceAmount: input.advanceAmount,
           taxRelief: input.taxRelief,
           manualDeduction: input.manualDeduction,
           paidAmount: input.paidAmount,
@@ -375,7 +382,6 @@ router.put("/payroll-adjustments", async (req, res, next) => {
     res.json({
       employeeId: adjustment.employeeId,
       month: adjustment.month,
-      advanceAmount: Number(adjustment.advanceAmount),
       taxRelief: Number(adjustment.taxRelief),
       manualDeduction: Number(adjustment.manualDeduction),
       paidAmount: Number(adjustment.paidAmount),

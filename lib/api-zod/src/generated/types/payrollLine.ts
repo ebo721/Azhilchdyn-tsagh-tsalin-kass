@@ -5,11 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PayrollLineEmployeeType } from './payrollLineEmployeeType';
 
 export interface PayrollLine {
   employeeId: number;
   employeeName: string;
   role: string;
+  employeeType: PayrollLineEmployeeType;
   daysWorked: number;
   hours: number;
   gross: number;

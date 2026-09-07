@@ -43,7 +43,7 @@ export const ListEmployeesResponseItem = zod.object({
   "name": zod.string(),
   "role": zod.string(),
   "phone": zod.string(),
-  "salaryType": zod.enum(['monthly', 'hourly']),
+  "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "socialInsuranceSalary": zod.number(),
   "status": zod.enum(['active', 'inactive']),
@@ -67,7 +67,7 @@ export const CreateEmployeeBody = zod.object({
   "name": zod.string().min(1),
   "role": zod.string().min(1),
   "phone": zod.string(),
-  "salaryType": zod.enum(['monthly', 'hourly']),
+  "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number().min(createEmployeeBodyBaseSalaryMin),
   "socialInsuranceSalary": zod.number().min(createEmployeeBodySocialInsuranceSalaryMin)
 })
@@ -77,7 +77,7 @@ export const CreateEmployeeResponse = zod.object({
   "name": zod.string(),
   "role": zod.string(),
   "phone": zod.string(),
-  "salaryType": zod.enum(['monthly', 'hourly']),
+  "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "socialInsuranceSalary": zod.number(),
   "status": zod.enum(['active', 'inactive']),
@@ -104,7 +104,7 @@ export const UpdateEmployeeBody = zod.object({
   "name": zod.string().min(1).optional(),
   "role": zod.string().min(1).optional(),
   "phone": zod.string().optional(),
-  "salaryType": zod.enum(['monthly', 'hourly']).optional(),
+  "employeeType": zod.enum(['shift', 'office']).optional(),
   "baseSalary": zod.number().min(updateEmployeeBodyBaseSalaryMin).optional(),
   "socialInsuranceSalary": zod.number().min(updateEmployeeBodySocialInsuranceSalaryMin).optional(),
   "status": zod.enum(['active', 'inactive']).optional()
@@ -115,7 +115,7 @@ export const UpdateEmployeeResponse = zod.object({
   "name": zod.string(),
   "role": zod.string(),
   "phone": zod.string(),
-  "salaryType": zod.enum(['monthly', 'hourly']),
+  "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "socialInsuranceSalary": zod.number(),
   "status": zod.enum(['active', 'inactive']),
@@ -223,6 +223,7 @@ export const GetPayrollResponse = zod.object({
   "employeeId": zod.number().int(),
   "employeeName": zod.string(),
   "role": zod.string(),
+  "employeeType": zod.enum(['shift', 'office']),
   "daysWorked": zod.number(),
   "hours": zod.number(),
   "gross": zod.number(),
@@ -247,8 +248,6 @@ export const GetPayrollResponse = zod.object({
  * @summary Save monthly payroll adjustments for an employee
  */
 export const upsertPayrollAdjustmentBodyMonthRegExp = new RegExp('^\\d{4}-\\d{2}$');
-export const upsertPayrollAdjustmentBodyAdvanceAmountMin = 0;
-
 export const upsertPayrollAdjustmentBodyTaxReliefMin = 0;
 
 export const upsertPayrollAdjustmentBodyManualDeductionMin = 0;
@@ -260,7 +259,6 @@ export const upsertPayrollAdjustmentBodyPaidAmountMin = 0;
 export const UpsertPayrollAdjustmentBody = zod.object({
   "employeeId": zod.number().int(),
   "month": zod.string().regex(upsertPayrollAdjustmentBodyMonthRegExp),
-  "advanceAmount": zod.number().min(upsertPayrollAdjustmentBodyAdvanceAmountMin),
   "taxRelief": zod.number().min(upsertPayrollAdjustmentBodyTaxReliefMin),
   "manualDeduction": zod.number().min(upsertPayrollAdjustmentBodyManualDeductionMin),
   "paidAmount": zod.number().min(upsertPayrollAdjustmentBodyPaidAmountMin)
@@ -269,7 +267,6 @@ export const UpsertPayrollAdjustmentBody = zod.object({
 export const UpsertPayrollAdjustmentResponse = zod.object({
   "employeeId": zod.number().int(),
   "month": zod.string(),
-  "advanceAmount": zod.number(),
   "taxRelief": zod.number(),
   "manualDeduction": zod.number(),
   "paidAmount": zod.number()
