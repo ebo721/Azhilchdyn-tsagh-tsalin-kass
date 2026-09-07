@@ -80,7 +80,7 @@ async function getPayrollSummary(month: string) {
       ["present", "late"].includes(record.status) && Number(String(record.date).slice(8, 10)) <= 15
     ).length;
     const calculatedAdvance = employee.employeeType === "shift"
-      ? money(firstHalfDaysWorked * Number(employee.baseSalary) * 0.5)
+      ? money(firstHalfDaysWorked * Number(employee.baseSalary))
       : money(Number(employee.baseSalary) * 0.5);
     const advanceAmount = money(approvedAdvanceMap.get(employee.id) ?? calculatedAdvance);
     const manualDeduction = money(Number(adjustment?.manualDeduction ?? 0));
@@ -161,7 +161,7 @@ async function getPayrollAdvanceSummary(month: string) {
       daysWorked,
       dailySalary,
       totalSalary,
-      advanceAmount: money(totalSalary * 0.5),
+      advanceAmount: employee.employeeType === "shift" ? totalSalary : money(totalSalary * 0.5),
     };
   });
   return {
