@@ -14,12 +14,14 @@ function signature(payload: string) {
   return createHmac("sha256", secret()).update(payload).digest("base64url");
 }
 
-export function createHrSession() {
-  const payload = Buffer.from(JSON.stringify({ role: "hr", exp: Date.now() + SESSION_SECONDS * 1000 })).toString("base64url");
+export type StaffRole = "admin" | "hr";
+
+export function createStaffSession(role: StaffRole) {
+  const payload = Buffer.from(JSON.stringify({ role, exp: Date.now() + SESSION_SECONDS * 1000 })).toString("base64url");
   return `${payload}.${signature(payload)}`;
 }
 
-export function getHrRole(req: Request): "hr" | null {
+export function getStaffRole(req: Request): StaffRole | null {
   const rawCookie = req.headers.cookie?.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${COOKIE_NAME}=`));
   const token = rawCookie?.slice(COOKIE_NAME.length + 1);
   if (!token) return null;
@@ -31,7 +33,7 @@ export function getHrRole(req: Request): "hr" | null {
   if (suppliedBuffer.length !== expectedBuffer.length || !timingSafeEqual(suppliedBuffer, expectedBuffer)) return null;
   try {
     const data = JSON.parse(Buffer.from(payload, "base64url").toString()) as { role?: string; exp?: number };
-    return data.role === "hr" && typeof data.exp === "number" && data.exp > Date.now() ? "hr" : null;
+    return (data.role === "hr" || data.role === "admin") && typeof data.exp === "number" && data.exp > Date.now() ? data.role : null;
   } catch {
     return null;
   }

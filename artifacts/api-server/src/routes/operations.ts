@@ -30,13 +30,18 @@ import {
   payrollAdjustmentsTable,
   payrollAdvanceApprovalsTable,
 } from "@workspace/db";
-import { getHrRole } from "../lib/hr-session";
+import { getStaffRole } from "../lib/hr-session";
 
 const router: IRouter = Router();
 
 router.use((req, res, next) => {
-  if (getHrRole(req) !== "hr") {
+  const role = getStaffRole(req);
+  if (!role) {
     res.status(401).json({ error: "Нэвтрэх шаардлагатай" });
+    return;
+  }
+  if (role === "admin") {
+    next();
     return;
   }
   const allowedPrefixes = ["/employees", "/attendance", "/hour-balance"];
