@@ -164,13 +164,13 @@ function StatusPill({ value }: { value: string }) {
   return <span className={cn('inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold', styles[value] ?? 'bg-muted text-muted-foreground')} data-testid={`status-pill-${value}`}>{labels[value] ?? value}</span>;
 }
 
-function PageHeading({ eyebrow, title, detail, action }: { eyebrow: string; title: string; detail: string; action?: ReactNode }) {
+function PageHeading({ eyebrow, title, detail, action }: { eyebrow?: string; title: string; detail?: string; action?: ReactNode }) {
   return (
     <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
       <div>
-        <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[.2em] text-primary">{eyebrow}</p>
+        {eyebrow && <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[.2em] text-primary">{eyebrow}</p>}
         <h1 className="font-sans text-3xl font-bold tracking-[-.04em] text-foreground sm:text-[2.25rem]" data-testid="heading-page">{title}</h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{detail}</p>
+        {detail && <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{detail}</p>}
       </div>
       {action}
     </div>
@@ -413,9 +413,7 @@ function HourBalance() {
   const query = useGetHourBalance({ month });
   return <div className="page-enter">
     <PageHeading
-      eyebrow="Сарын нийлбэр / hour balance"
       title="Цагийн баланс"
-      detail="Ажилтан бүрийн сонгосон сарын нийт ажилласан цаг болон ээлжийн задаргааг харна."
       action={<div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3"><CalendarDays className="size-4 text-primary" /><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="h-10 bg-transparent text-sm outline-none" data-testid="input-hour-balance-month" /></div>}
     />
     {query.isLoading ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><LoadingBlock className="h-32" /><LoadingBlock className="h-32" /><LoadingBlock className="h-32" /><LoadingBlock className="h-32" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : <>
