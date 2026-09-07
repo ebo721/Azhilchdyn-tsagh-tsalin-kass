@@ -4,6 +4,7 @@ import {
   CreateShiftBody,
   CreateCashTransactionBody,
   CreateEmployeeBody,
+  DeleteAttendanceQueryParams,
   CopyPreviousShiftPlansBody,
   CopyPreviousShiftPlansResponse,
   ApprovePayrollAdvanceBody,
@@ -656,6 +657,19 @@ router.put("/attendance", async (req, res, next) => {
       date: String(record.date),
       hours: Number(record.hours),
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/attendance", async (req, res, next) => {
+  try {
+    const input = DeleteAttendanceQueryParams.parse(req.query);
+    await db.delete(attendanceTable).where(and(
+      eq(attendanceTable.employeeId, input.employeeId),
+      eq(attendanceTable.date, input.date),
+    ));
+    res.status(204).send();
   } catch (error) {
     next(error);
   }

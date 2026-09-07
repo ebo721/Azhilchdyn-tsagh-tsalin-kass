@@ -202,6 +202,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Attendance"
+    delete:
+      operationId: deleteAttendance
+      tags: [attendance]
+      summary: Clear an employee attendance record for a day
+      parameters:
+        - in: query
+          name: employeeId
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: date
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Attendance record cleared
   /attendance/shifts:
     get:
       operationId: listShifts

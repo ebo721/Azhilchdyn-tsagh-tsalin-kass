@@ -247,6 +247,17 @@ export const UpsertAttendanceResponse = zod.object({
 
 
 /**
+ * @summary Clear an employee attendance record for a day
+ */
+export const DeleteAttendanceQueryParams = zod.object({
+  "employeeId": zod.coerce.number().int(),
+  "date": zod.coerce.string()
+})
+
+export const DeleteAttendanceResponse = zod.void()
+
+
+/**
  * @summary List reusable shift schedules
  */
 export const ListShiftsResponseItem = zod.object({

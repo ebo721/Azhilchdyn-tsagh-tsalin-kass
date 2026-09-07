@@ -21,6 +21,7 @@ export * from './cashTransactionInput';
 export * from './cashTransactionInputType';
 export * from './cashTransactionType';
 export * from './dashboard';
+export * from './deleteAttendanceParams';
 export * from './employee';
 export * from './employeeEmployeeType';
 export * from './employeeInput';
