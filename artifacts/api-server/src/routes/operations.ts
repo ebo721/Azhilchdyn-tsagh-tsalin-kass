@@ -29,6 +29,9 @@ import {
   UpdateCashTransactionBody,
   UpdateCashTransactionParams,
   DeleteCashTransactionParams,
+  CreateInventoryPurchaseBody,
+  CreateInventoryPurchaseResponse,
+  ListInventoryPurchasesResponse,
   ListEmployeesResponse,
   UpsertPayrollAdjustmentBody,
   UpdatePayrollAdvancePaymentBody,
@@ -49,6 +52,8 @@ import {
   employeeShiftPlansTable,
   payrollAdjustmentsTable,
   payrollAdvanceApprovalsTable,
+  inventoryPurchasesTable,
+  inventoryPurchaseItemsTable,
   shiftTemplatesTable,
 } from "@workspace/db";
 import { getStaffRole } from "../lib/hr-session";
@@ -1194,6 +1199,87 @@ router.post("/cash/closures", async (req, res, next) => {
       id: saved.id,
       date: saved.date,
       closedAt: saved.closedAt.toISOString(),
+    }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/inventory/purchases", async (_req, res, next) => {
+  try {
+    const [purchases, items] = await Promise.all([
+      db.select().from(inventoryPurchasesTable).orderBy(desc(inventoryPurchasesTable.date), desc(inventoryPurchasesTable.id)),
+      db.select().from(inventoryPurchaseItemsTable).orderBy(inventoryPurchaseItemsTable.id),
+    ]);
+    res.json(ListInventoryPurchasesResponse.parse(purchases.map((purchase) => ({
+      id: purchase.id,
+      date: purchase.date,
+      totalAmount: Number(purchase.totalAmount),
+      createdAt: purchase.createdAt.toISOString(),
+      items: items
+        .filter((item) => item.purchaseId === purchase.id)
+        .map((item) => ({
+          id: item.id,
+          name: item.name,
+          unit: item.unit,
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice),
+          totalAmount: Number(item.totalAmount),
+        })),
+    }))));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/inventory/purchases", async (req, res, next) => {
+  try {
+    const input = CreateInventoryPurchaseBody.parse(req.body);
+    if (!isValidCalendarDate(input.date)) {
+      res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
+      return;
+    }
+    const normalizedItems = input.items.map((item) => ({
+      ...item,
+      name: item.name.trim(),
+      totalAmount: money(item.quantity * item.unitPrice),
+    }));
+    if (normalizedItems.some((item) => !item.name)) {
+      res.status(400).json({ error: "Барааны нэр хоосон байж болохгүй" });
+      return;
+    }
+    const totalAmount = money(normalizedItems.reduce((total, item) => total + item.totalAmount, 0));
+    const result = await db.transaction(async (tx) => {
+      const [purchase] = await tx
+        .insert(inventoryPurchasesTable)
+        .values({ date: input.date, totalAmount })
+        .returning();
+      const savedItems = await tx
+        .insert(inventoryPurchaseItemsTable)
+        .values(normalizedItems.map((item) => ({
+          purchaseId: purchase.id,
+          name: item.name,
+          unit: item.unit,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalAmount: item.totalAmount,
+        })))
+        .returning();
+      return { purchase, savedItems };
+    });
+    res.status(201).json(CreateInventoryPurchaseResponse.parse({
+      id: result.purchase.id,
+      date: result.purchase.date,
+      totalAmount: Number(result.purchase.totalAmount),
+      createdAt: result.purchase.createdAt.toISOString(),
+      items: result.savedItems.map((item) => ({
+        id: item.id,
+        name: item.name,
+        unit: item.unit,
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice),
+        totalAmount: Number(item.totalAmount),
+      })),
     }));
   } catch (error) {
     next(error);

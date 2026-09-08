@@ -755,3 +755,61 @@ export const CloseCashDayResponse = zod.object({
 })
 
 
+/**
+ * @summary List inventory purchases
+ */
+export const ListInventoryPurchasesResponseItem = zod.object({
+  "id": zod.number().int(),
+  "date": zod.string(),
+  "totalAmount": zod.number(),
+  "createdAt": zod.string(),
+  "items": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "totalAmount": zod.number()
+}))
+})
+export const ListInventoryPurchasesResponse = zod.array(ListInventoryPurchasesResponseItem)
+
+
+/**
+ * @summary Register a bulk inventory purchase
+ */
+export const createInventoryPurchaseBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+export const createInventoryPurchaseBodyItemsItemQuantityExclusiveMin = 0;
+
+export const createInventoryPurchaseBodyItemsItemUnitPriceMin = 0;
+
+
+
+
+export const CreateInventoryPurchaseBody = zod.object({
+  "date": zod.string().regex(createInventoryPurchaseBodyDateRegExp),
+  "items": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "unit": zod.enum(['ширхэг', 'кг', 'грамм', 'литр', 'мл', 'метр', 'багц', 'хайрцаг']),
+  "quantity": zod.number().gt(createInventoryPurchaseBodyItemsItemQuantityExclusiveMin),
+  "unitPrice": zod.number().min(createInventoryPurchaseBodyItemsItemUnitPriceMin)
+})).min(1)
+})
+
+export const CreateInventoryPurchaseResponse = zod.object({
+  "id": zod.number().int(),
+  "date": zod.string(),
+  "totalAmount": zod.number(),
+  "createdAt": zod.string(),
+  "items": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "totalAmount": zod.number()
+}))
+})
+
+

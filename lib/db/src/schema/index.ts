@@ -102,6 +102,23 @@ export const cashClosuresTable = pgTable("cash_closures", {
   closedAt: timestamp("closed_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const inventoryPurchasesTable = pgTable("inventory_purchases", {
+  id: serial("id").primaryKey(),
+  date: date("date", { mode: "string" }).notNull(),
+  totalAmount: numeric("total_amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const inventoryPurchaseItemsTable = pgTable("inventory_purchase_items", {
+  id: serial("id").primaryKey(),
+  purchaseId: integer("purchase_id").notNull().references(() => inventoryPurchasesTable.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  unit: text("unit").notNull(),
+  quantity: numeric("quantity", { precision: 12, scale: 3, mode: "number" }).notNull(),
+  unitPrice: numeric("unit_price", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  totalAmount: numeric("total_amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+});
+
 export const insertEmployeeSchema = createInsertSchema(employeesTable).omit({
   id: true,
   joinedAt: true,
@@ -124,3 +141,5 @@ export type PayrollAdjustment = typeof payrollAdjustmentsTable.$inferSelect;
 export type PayrollAdvanceApproval = typeof payrollAdvanceApprovalsTable.$inferSelect;
 export type CashTransaction = typeof cashTransactionsTable.$inferSelect;
 export type CashClosure = typeof cashClosuresTable.$inferSelect;
+export type InventoryPurchase = typeof inventoryPurchasesTable.$inferSelect;
+export type InventoryPurchaseItem = typeof inventoryPurchaseItemsTable.$inferSelect;

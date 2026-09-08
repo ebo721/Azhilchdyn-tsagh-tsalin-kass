@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { useFieldArray, useForm } from 'react-hook-form';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -25,6 +25,7 @@ import {
   LogOut,
   Menu,
   Pencil,
+  PackageOpen,
   Plus,
   Receipt,
   RefreshCw,
@@ -52,6 +53,7 @@ import {
   getListCashTransactionsQueryKey,
   getListCashClosuresQueryKey,
   getListEmployeesQueryKey,
+  getListInventoryPurchasesQueryKey,
   useCopyPreviousShiftPlans,
   useCreateCashTransaction,
   useUpdateCashTransaction,
@@ -72,6 +74,8 @@ import {
   useListCashTransactions,
   useListCashClosures,
   useListEmployees,
+  useListInventoryPurchases,
+  useCreateInventoryPurchase,
   useListShiftPlans,
   useListShifts,
   useLoginHrManager,
@@ -121,6 +125,7 @@ const nav = [
   { href: '/hour-balance', label: 'Цагийн баланс', icon: Timer },
   { href: '/payroll', label: 'Цалин', icon: Banknote },
   { href: '/cash', label: 'Касс', icon: WalletCards },
+  { href: '/inventory', label: 'Бараа материал', icon: PackageOpen },
 ];
 
 function LoadingBlock({ className = '' }: { className?: string }) {
@@ -666,6 +671,74 @@ function Cash() {
   </div>;
 }
 
+const inventoryUnits = ['ширхэг', 'кг', 'грамм', 'литр', 'мл', 'метр', 'багц', 'хайрцаг'] as const;
+type InventoryForm = {
+  date: string;
+  items: Array<{ name: string; unit: typeof inventoryUnits[number]; quantity: string; unitPrice: string }>;
+};
+
+function Inventory() {
+  const query = useListInventoryPurchases();
+  const create = useCreateInventoryPurchase();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const form = useForm<InventoryForm>({
+    defaultValues: { date: today(), items: [{ name: '', unit: 'ширхэг', quantity: '1', unitPrice: '' }] },
+  });
+  const rows = useFieldArray({ control: form.control, name: 'items' });
+  const watchedItems = form.watch('items');
+  const grandTotal = watchedItems.reduce((total, item) => total + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), 0);
+  const openForm = () => {
+    form.reset({ date: today(), items: [{ name: '', unit: 'ширхэг', quantity: '1', unitPrice: '' }] });
+    setOpen(true);
+  };
+  const submit = (values: InventoryForm) => {
+    create.mutate({
+      data: {
+        date: values.date,
+        items: values.items.map((item) => ({
+          name: item.name,
+          unit: item.unit,
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice),
+        })),
+      },
+    }, {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListInventoryPurchasesQueryKey() });
+        setOpen(false);
+      },
+    });
+  };
+  return <div className="page-enter">
+    <div className="mb-6 flex justify-end"><Button onClick={openForm} data-testid="button-add-inventory-purchase"><Plus className="size-4" />Худалдан авалт бүртгэх</Button></div>
+    <section className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="flex items-center justify-between border-b border-border px-5 py-4"><h2 className="text-base font-bold">Худалдан авалтын жагсаалт</h2><span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{query.data?.length ?? 0} бүртгэл</span></div>
+      {query.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-20" /><LoadingBlock className="h-20" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : !query.data?.length ? <EmptyState title="Худалдан авалт бүртгэгдээгүй" detail="Бараа материалын эхний худалдан авалтаа бүртгэнэ үү." icon={PackageOpen} /> : <div className="divide-y divide-border">{query.data.map((purchase) => <div className="p-5" key={purchase.id} data-testid={`inventory-purchase-${purchase.id}`}>
+        <div className="mb-4 flex items-center justify-between gap-4"><div><p className="text-sm font-bold">{dateLabel(purchase.date)}</p><p className="mt-1 text-xs text-muted-foreground">{purchase.items.length} төрлийн бараа</p></div><p className="font-mono text-base font-bold text-primary">{money(purchase.totalAmount)}</p></div>
+        <div className="overflow-x-auto"><table className="w-full min-w-[650px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-3 py-2">Бараа материал</th><th className="px-3 py-2">Хэмжих нэгж</th><th className="px-3 py-2 text-right">Тоо</th><th className="px-3 py-2 text-right">Үнэ</th><th className="px-3 py-2 text-right">Нийт</th></tr></thead><tbody className="divide-y divide-border">{purchase.items.map((item) => <tr key={item.id}><td className="px-3 py-3 text-sm font-semibold">{item.name}</td><td className="px-3 py-3 text-sm text-muted-foreground">{item.unit}</td><td className="px-3 py-3 text-right font-mono text-sm">{item.quantity}</td><td className="px-3 py-3 text-right font-mono text-sm">{money(item.unitPrice)}</td><td className="px-3 py-3 text-right font-mono text-sm font-bold">{money(item.totalAmount)}</td></tr>)}</tbody></table></div>
+      </div>)}</div>}
+    </section>
+    {open && <Modal title="Бараа материалын худалдан авалт" detail="Нэг бүртгэлд олон барааны мөр нэмж болно." onClose={() => setOpen(false)}>
+      <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-5">
+        <label className="block space-y-2 text-xs font-semibold">Худалдан авалтын огноо<input type="date" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('date', { required: true })} data-testid="input-inventory-purchase-date" /></label>
+        <div className="max-h-[52vh] space-y-3 overflow-y-auto pr-1">{rows.fields.map((field, index) => {
+          const item = watchedItems[index];
+          const total = (Number(item?.quantity) || 0) * (Number(item?.unitPrice) || 0);
+          return <div className="rounded-xl border border-border bg-secondary/20 p-3" key={field.id}>
+            <div className="mb-3 flex items-center justify-between"><span className="text-xs font-bold">Бараа {index + 1}</span>{rows.fields.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => rows.remove(index)} aria-label={`${index + 1}-р барааг устгах`}><Trash2 className="size-4" /></Button>}</div>
+            <div className="grid gap-3 sm:grid-cols-2"><label className="space-y-1 text-xs font-semibold">Барааны нэр<input className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register(`items.${index}.name`, { required: true })} data-testid={`input-inventory-name-${index}`} /></label><label className="space-y-1 text-xs font-semibold">Хэмжих нэгж<select className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register(`items.${index}.unit`, { required: true })} data-testid={`select-inventory-unit-${index}`}>{inventoryUnits.map((unit) => <option value={unit} key={unit}>{unit}</option>)}</select></label><label className="space-y-1 text-xs font-semibold">Тоо<input type="number" min="0.001" step="0.001" className="h-9 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register(`items.${index}.quantity`, { required: true, min: 0.001 })} data-testid={`input-inventory-quantity-${index}`} /></label><label className="space-y-1 text-xs font-semibold">Үнэ<input type="number" min="0" step="0.01" className="h-9 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register(`items.${index}.unitPrice`, { required: true, min: 0 })} data-testid={`input-inventory-price-${index}`} /></label></div>
+            <div className="mt-3 flex justify-end text-sm"><span className="text-muted-foreground">Нийт:&nbsp;</span><strong className="font-mono">{money(total)}</strong></div>
+          </div>;
+        })}</div>
+        <Button type="button" variant="outline" className="w-full" onClick={() => rows.append({ name: '', unit: 'ширхэг', quantity: '1', unitPrice: '' })} data-testid="button-add-inventory-row"><Plus className="size-4" />Бараа нэмэх</Button>
+        <div className="flex items-center justify-between rounded-xl bg-primary/10 px-4 py-3"><span className="text-sm font-bold">Нийт дүн</span><strong className="font-mono text-lg text-primary">{money(grandTotal)}</strong></div>
+        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Болих</Button><Button type="submit" disabled={create.isPending} data-testid="button-save-inventory-purchase">{create.isPending ? 'Хадгалж байна...' : 'Бүртгэх'}</Button></div>
+      </form></Form>
+    </Modal>}
+  </div>;
+}
+
 function HrLogin() {
   const login = useLoginHrManager();
   const qc = useQueryClient();
@@ -687,7 +760,7 @@ function Router() {
   if (session.isLoading) return <div className="grid min-h-[100dvh] place-items-center"><LoadingBlock className="size-12" /></div>;
   if (!role) return <HrLogin />;
   const signOut = () => logout.mutate(undefined, { onSuccess: () => { queryClient.clear(); navigate('/'); } });
-  return <ErrorBoundary resetKey={location}><AppShell role={role} onLogout={signOut}>{role === 'admin' ? <Switch><Route path="/" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route component={NotFound} /></Switch> : role === 'hr' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route component={Employees} /></Switch> : <Switch><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route component={HourBalance} /></Switch>}</AppShell></ErrorBoundary>;
+  return <ErrorBoundary resetKey={location}><AppShell role={role} onLogout={signOut}>{role === 'admin' ? <Switch><Route path="/" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/inventory" component={Inventory} /><Route component={NotFound} /></Switch> : role === 'hr' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route component={Employees} /></Switch> : <Switch><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route component={HourBalance} /></Switch>}</AppShell></ErrorBoundary>;
 }
 
 function App() {

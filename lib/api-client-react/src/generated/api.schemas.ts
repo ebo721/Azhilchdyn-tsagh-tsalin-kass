@@ -444,6 +444,54 @@ export interface CashSummary {
   todayExpense: number;
 }
 
+export interface InventoryPurchaseItem {
+  id: number;
+  name: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  totalAmount: number;
+}
+
+export interface InventoryPurchase {
+  id: number;
+  date: string;
+  totalAmount: number;
+  createdAt: string;
+  items: InventoryPurchaseItem[];
+}
+
+export type InventoryPurchaseItemInputUnit = typeof InventoryPurchaseItemInputUnit[keyof typeof InventoryPurchaseItemInputUnit];
+
+
+export const InventoryPurchaseItemInputUnit = {
+  ширхэг: 'ширхэг',
+  кг: 'кг',
+  грамм: 'грамм',
+  литр: 'литр',
+  мл: 'мл',
+  метр: 'метр',
+  багц: 'багц',
+  хайрцаг: 'хайрцаг',
+} as const;
+
+export interface InventoryPurchaseItemInput {
+  /** @minLength 1 */
+  name: string;
+  unit: InventoryPurchaseItemInputUnit;
+  /** @exclusiveMinimum 0 */
+  quantity: number;
+  /** @minimum 0 */
+  unitPrice: number;
+}
+
+export interface InventoryPurchaseInput {
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
+  date: string;
+  /** @minItems 1 */
+  items: InventoryPurchaseItemInput[];
+}
+
 export type ListAttendanceParams = {
 date?: string;
 /**
