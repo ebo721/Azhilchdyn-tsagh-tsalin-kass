@@ -395,6 +395,16 @@ export const CashTransactionType = {
   expense: 'expense',
 } as const;
 
+export type CashTransactionTransactionKind = typeof CashTransactionTransactionKind[keyof typeof CashTransactionTransactionKind];
+
+
+export const CashTransactionTransactionKind = {
+  manual: 'manual',
+  payroll: 'payroll',
+  payroll_advance: 'payroll_advance',
+  inventory_purchase: 'inventory_purchase',
+} as const;
+
 export interface CashTransaction {
   id: number;
   type: CashTransactionType;
@@ -404,6 +414,7 @@ export interface CashTransaction {
   date: string;
   createdAt: string;
   editable: boolean;
+  transactionKind: CashTransactionTransactionKind;
 }
 
 export type CashTransactionInputType = typeof CashTransactionInputType[keyof typeof CashTransactionInputType];

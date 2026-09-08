@@ -21,6 +21,7 @@ export * from './cashSummary';
 export * from './cashTransaction';
 export * from './cashTransactionInput';
 export * from './cashTransactionInputType';
+export * from './cashTransactionTransactionKind';
 export * from './cashTransactionType';
 export * from './dashboard';
 export * from './deleteAttendanceParams';

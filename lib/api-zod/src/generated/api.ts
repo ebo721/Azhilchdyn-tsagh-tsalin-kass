@@ -650,7 +650,8 @@ export const ListCashTransactionsResponseItem = zod.object({
   "amount": zod.number(),
   "date": zod.string(),
   "createdAt": zod.string(),
-  "editable": zod.boolean()
+  "editable": zod.boolean(),
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase'])
 })
 export const ListCashTransactionsResponse = zod.array(ListCashTransactionsResponseItem)
 
@@ -680,7 +681,8 @@ export const CreateCashTransactionResponse = zod.object({
   "amount": zod.number(),
   "date": zod.string(),
   "createdAt": zod.string(),
-  "editable": zod.boolean()
+  "editable": zod.boolean(),
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase'])
 })
 
 
@@ -713,7 +715,8 @@ export const UpdateCashTransactionResponse = zod.object({
   "amount": zod.number(),
   "date": zod.string(),
   "createdAt": zod.string(),
-  "editable": zod.boolean()
+  "editable": zod.boolean(),
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase'])
 })
 
 

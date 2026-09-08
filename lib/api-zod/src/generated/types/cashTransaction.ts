@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CashTransactionTransactionKind } from './cashTransactionTransactionKind';
 import type { CashTransactionType } from './cashTransactionType';
 
 export interface CashTransaction {
@@ -16,4 +17,5 @@ export interface CashTransaction {
   date: string;
   createdAt: string;
   editable: boolean;
+  transactionKind: CashTransactionTransactionKind;
 }

@@ -1000,7 +1000,7 @@ components:
         paymentDate: { type: ["string", "null"] }
     CashTransaction:
       type: object
-      required: [id, type, category, description, amount, date, createdAt, editable]
+      required: [id, type, category, description, amount, date, createdAt, editable, transactionKind]
       properties:
         id: { type: integer }
         type: { type: string, enum: [income, expense] }
@@ -1010,6 +1010,7 @@ components:
         date: { type: string }
         createdAt: { type: string }
         editable: { type: boolean }
+        transactionKind: { type: string, enum: [manual, payroll, payroll_advance, inventory_purchase] }
     CashTransactionInput:
       type: object
       required: [type, category, description, amount, date]

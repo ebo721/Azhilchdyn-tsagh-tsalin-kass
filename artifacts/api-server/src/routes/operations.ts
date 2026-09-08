@@ -1093,6 +1093,7 @@ router.get("/cash/transactions", async (_req, res, next) => {
       date: String(transaction.date),
       createdAt: String(transaction.createdAt),
       editable: transaction.sourceType === null,
+      transactionKind: transaction.sourceType ?? "manual",
     }))));
   } catch (error) {
     next(error);
@@ -1113,6 +1114,7 @@ router.post("/cash/transactions", async (req, res, next) => {
       date: String(transaction.date),
       createdAt: String(transaction.createdAt),
       editable: true,
+      transactionKind: "manual",
     });
   } catch (error) {
     next(error);
@@ -1147,6 +1149,7 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
       date: String(transaction.date),
       createdAt: String(transaction.createdAt),
       editable: true,
+      transactionKind: "manual",
     });
   } catch (error) {
     next(error);
