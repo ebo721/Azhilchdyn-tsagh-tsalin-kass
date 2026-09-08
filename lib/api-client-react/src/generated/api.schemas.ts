@@ -485,6 +485,7 @@ export const CashTransactionTransactionKind = {
   payroll_advance: 'payroll_advance',
   inventory_purchase: 'inventory_purchase',
   fixed_asset_purchase: 'fixed_asset_purchase',
+  bank_transaction: 'bank_transaction',
 } as const;
 
 export interface CashTransaction {
@@ -503,13 +504,12 @@ export interface CashTransaction {
   transactionKind: CashTransactionTransactionKind;
 }
 
-export type CashTransactionSuggestion = CashTransaction & {
-  score: number;
-};
-
-export interface BankTransactionCashLinkInput {
-  /** @minimum 1 */
-  cashTransactionId: number;
+export interface BankTransactionCashTransferInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  category: string;
 }
 
 export type CashTransactionInputType = typeof CashTransactionInputType[keyof typeof CashTransactionInputType];

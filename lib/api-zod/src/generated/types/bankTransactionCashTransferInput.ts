@@ -6,7 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface BankTransactionCashLinkInput {
-  /** @minimum 1 */
-  cashTransactionId: number;
+export interface BankTransactionCashTransferInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  category: string;
 }

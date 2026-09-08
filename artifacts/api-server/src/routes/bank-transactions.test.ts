@@ -15,10 +15,14 @@ describe("bank transaction route", () => {
 
   after(() => server.close());
 
-  it("requires a staff session for statements, suggestions, and XLSX imports", async () => {
-    const [list, suggestions, importFile] = await Promise.all([
+  it("requires a staff session for statements, transfers, and XLSX imports", async () => {
+    const [list, transfer, importFile] = await Promise.all([
       fetch(`${baseUrl}/api/bank-transactions`),
-      fetch(`${baseUrl}/api/bank-transactions/1/cash-suggestions`),
+      fetch(`${baseUrl}/api/bank-transactions/1/transfer-to-cash`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ category: "Бусад" }),
+      }),
       fetch(`${baseUrl}/api/bank-transactions/import`, {
         method: "POST",
         headers: { "content-type": "application/octet-stream" },
@@ -26,7 +30,7 @@ describe("bank transaction route", () => {
       }),
     ]);
     assert.equal(list.status, 401);
-    assert.equal(suggestions.status, 401);
+    assert.equal(transfer.status, 401);
     assert.equal(importFile.status, 401);
   });
 });

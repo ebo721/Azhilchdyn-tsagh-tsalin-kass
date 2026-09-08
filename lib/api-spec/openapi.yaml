@@ -726,35 +726,20 @@ paths:
     post:
       operationId: transferBankTransactionToCash
       tags: [bank-transactions]
-      summary: Link a bank transaction to an existing cash transaction
+      summary: Create a verified cash transaction from a bank transaction
       parameters:
         - $ref: "#/components/parameters/Id"
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/BankTransactionCashLinkInput" }
+            schema: { $ref: "#/components/schemas/BankTransactionCashTransferInput" }
       responses:
         "200":
-          description: Linked cash transaction
+          description: Bank transaction linked to its created cash transaction
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BankTransaction" }
-  /bank-transactions/{id}/cash-suggestions:
-    get:
-      operationId: listBankTransactionCashSuggestions
-      tags: [bank-transactions]
-      summary: Suggest existing unlinked cash transactions for a bank transaction
-      parameters:
-        - $ref: "#/components/parameters/Id"
-      responses:
-        "200":
-          description: Ranked cash transaction suggestions
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/CashTransactionSuggestion" }
   /bank-transactions/{id}:
     delete:
       operationId: deleteBankTransaction
@@ -1463,19 +1448,12 @@ components:
         bankVerifiedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string }
         editable: { type: boolean }
-        transactionKind: { type: string, enum: [manual, payroll, payroll_advance, inventory_purchase, fixed_asset_purchase] }
-    CashTransactionSuggestion:
-      allOf:
-        - $ref: "#/components/schemas/CashTransaction"
-        - type: object
-          required: [score]
-          properties:
-            score: { type: number }
-    BankTransactionCashLinkInput:
+        transactionKind: { type: string, enum: [manual, payroll, payroll_advance, inventory_purchase, fixed_asset_purchase, bank_transaction] }
+    BankTransactionCashTransferInput:
       type: object
-      required: [cashTransactionId]
+      required: [category]
       properties:
-        cashTransactionId: { type: integer, minimum: 1 }
+        category: { type: string, minLength: 1, maxLength: 200 }
     CashTransactionInput:
       type: object
       required: [type, category, description, amount, date]

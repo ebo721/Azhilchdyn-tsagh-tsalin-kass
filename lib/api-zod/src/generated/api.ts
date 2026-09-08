@@ -794,7 +794,7 @@ export const ListCashTransactionsResponseItem = zod.object({
   "bankVerifiedAt": zod.coerce.date().nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
-  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase'])
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'bank_transaction'])
 })
 export const ListCashTransactionsResponse = zod.array(ListCashTransactionsResponseItem)
 
@@ -827,7 +827,7 @@ export const CreateCashTransactionResponse = zod.object({
   "bankVerifiedAt": zod.coerce.date().nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
-  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase'])
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'bank_transaction'])
 })
 
 
@@ -863,7 +863,7 @@ export const UpdateCashTransactionResponse = zod.object({
   "bankVerifiedAt": zod.coerce.date().nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
-  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase'])
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'bank_transaction'])
 })
 
 
@@ -944,17 +944,18 @@ export const ImportKapitronBankTransactionsResponse = zod.object({
 
 
 /**
- * @summary Link a bank transaction to an existing cash transaction
+ * @summary Create a verified cash transaction from a bank transaction
  */
 export const TransferBankTransactionToCashParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+export const transferBankTransactionToCashBodyCategoryMax = 200;
 
 
 
 export const TransferBankTransactionToCashBody = zod.object({
-  "cashTransactionId": zod.number().int().min(1)
+  "category": zod.string().min(1).max(transferBankTransactionToCashBodyCategoryMax)
 })
 
 export const TransferBankTransactionToCashResponse = zod.object({
@@ -971,31 +972,6 @@ export const TransferBankTransactionToCashResponse = zod.object({
   "cashTransactionId": zod.number().int().nullable(),
   "createdAt": zod.coerce.date()
 })
-
-
-/**
- * @summary Suggest existing unlinked cash transactions for a bank transaction
- */
-export const ListBankTransactionCashSuggestionsParams = zod.object({
-  "id": zod.coerce.number().int()
-})
-
-export const ListBankTransactionCashSuggestionsResponseItem = zod.object({
-  "id": zod.number().int(),
-  "type": zod.enum(['income', 'expense']),
-  "category": zod.string(),
-  "description": zod.string(),
-  "amount": zod.number(),
-  "date": zod.string(),
-  "bankTransactionId": zod.number().int().nullable(),
-  "bankVerifiedAt": zod.coerce.date().nullable(),
-  "createdAt": zod.string(),
-  "editable": zod.boolean(),
-  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase'])
-}).and(zod.object({
-  "score": zod.number()
-}))
-export const ListBankTransactionCashSuggestionsResponse = zod.array(ListBankTransactionCashSuggestionsResponseItem)
 
 
 /**
