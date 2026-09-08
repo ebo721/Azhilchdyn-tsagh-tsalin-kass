@@ -366,4 +366,51 @@ describe("effective-dated payroll salary", () => {
     assert.equal(overpaid.carryoverAmount, -150_000);
     assert.equal(overpaid.payable, balanced.payable - 150_000);
   });
+
+  it("allows correcting salary history without changing an already paid amount", async () => {
+    const [historyRow] = await db.select()
+      .from(employeeSalaryHistoryTable)
+      .where(eq(employeeSalaryHistoryTable.employeeId, employeeId))
+      .orderBy(employeeSalaryHistoryTable.effectiveFrom)
+      .limit(1);
+    assert.ok(historyRow);
+
+    const paidAmount = 750_000;
+    await db.insert(payrollAdjustmentsTable).values({
+      employeeId,
+      month: "2099-01",
+      paidAmount,
+      paymentDate: "2099-01-31",
+      secondPaidAmount: 0,
+      manualDeduction: 0,
+      taxRelief: 0,
+    });
+
+    const response = await fetch(
+      `${baseUrl}/api/employees/${employeeId}/salary-history/${historyRow.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          cookie: adminCookie,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          effectiveFrom: "2099-01-07",
+          baseSalary: 1_200_000,
+          socialInsuranceSalary: 0,
+        }),
+      },
+    );
+    assert.equal(response.status, 200);
+
+    const [adjustment] = await db.select()
+      .from(payrollAdjustmentsTable)
+      .where(eq(payrollAdjustmentsTable.employeeId, employeeId));
+    assert.equal(Number(adjustment.paidAmount), paidAmount);
+
+    const [employee] = await db.select()
+      .from(employeesTable)
+      .where(eq(employeesTable.id, employeeId));
+    assert.equal(employee.joinedAt, "2099-01-08");
+  });
 });

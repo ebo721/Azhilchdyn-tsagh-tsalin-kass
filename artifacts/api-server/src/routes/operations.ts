@@ -760,31 +760,12 @@ router.patch("/employees/:id/salary-history/:historyId", async (req, res, next) 
       res.status(409).json({ error: "Энэ огноонд цалингийн өөр мөр бүртгэлтэй байна" });
       return;
     }
-    const affectedFrom = effectiveFrom < String(history[index].effectiveFrom)
-      ? effectiveFrom
-      : String(history[index].effectiveFrom);
-    const paidPayroll = await db.select({
-      month: payrollAdjustmentsTable.month,
-      paidAmount: payrollAdjustmentsTable.paidAmount,
-      secondPaidAmount: payrollAdjustmentsTable.secondPaidAmount,
-    }).from(payrollAdjustmentsTable).where(eq(payrollAdjustmentsTable.employeeId, id));
-    const affectedPaidMonth = paidPayroll.find((row) =>
-      row.month >= affectedFrom.slice(0, 7)
-      && (Number(row.paidAmount) > 0 || Number(row.secondPaidAmount) > 0)
-    );
-    if (affectedPaidMonth) {
-      res.status(409).json({ error: `${affectedPaidMonth.month} сарын олгосон цалинд нөлөөлөх тул засах боломжгүй` });
-      return;
-    }
     const updated = await db.transaction(async (tx) => {
       const [row] = await tx.update(employeeSalaryHistoryTable).set({
         effectiveFrom,
         baseSalary: input.baseSalary,
         socialInsuranceSalary: input.socialInsuranceSalary,
       }).where(eq(employeeSalaryHistoryTable.id, historyId)).returning();
-      if (index === 0) {
-        await tx.update(employeesTable).set({ joinedAt: effectiveFrom }).where(eq(employeesTable.id, id));
-      }
       if (index === history.length - 1) {
         await tx.update(employeesTable).set({
           baseSalary: input.baseSalary,
