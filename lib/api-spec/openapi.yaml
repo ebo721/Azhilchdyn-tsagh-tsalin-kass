@@ -712,6 +712,35 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/InventorySupplier"
+  /inventory/suppliers/{id}:
+    put:
+      operationId: updateInventorySupplier
+      tags: [inventory]
+      summary: Rename an inventory supplier and its purchase history
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventorySupplierUpdate"
+      responses:
+        "200":
+          description: Updated inventory supplier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventorySupplier"
+    delete:
+      operationId: deleteInventorySupplier
+      tags: [inventory]
+      summary: Remove a supplier from the supplier directory without deleting purchase history
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Supplier removed
   /inventory/items:
     get:
       operationId: listInventoryItems
@@ -1331,6 +1360,11 @@ components:
           minItems: 1
           items:
             $ref: "#/components/schemas/InventoryPurchaseItemInput"
+    InventorySupplierUpdate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
     InventorySupplierItem:
       type: object
       required: [name, unit, quantity, totalAmount]

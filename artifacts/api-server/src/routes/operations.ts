@@ -33,6 +33,10 @@ import {
   CreateInventoryPurchaseResponse,
   ListInventoryPurchasesResponse,
   ListInventorySuppliersResponse,
+  UpdateInventorySupplierBody,
+  UpdateInventorySupplierParams,
+  UpdateInventorySupplierResponse,
+  DeleteInventorySupplierParams,
   ListInventoryItemsResponse,
   UpdateInventoryItemBody,
   UpdateInventoryItemParams,
@@ -73,7 +77,7 @@ import {
   UpdateEmployeeBody,
   UpdateEmployeeParams,
 } from "@workspace/api-zod";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import {
   attendanceTable,
   cashTransactionsTable,
@@ -182,6 +186,7 @@ const deletionTargetPatterns = [
   /^\/fixed-assets\/\d+$/,
   /^\/inventory\/issues\/\d+$/,
   /^\/inventory\/purchases\/\d+$/,
+  /^\/inventory\/suppliers\/\d+$/,
 ];
 const roleCanRequestDeletion = (role: StaffRole, targetPath: string) => role === "admin"
   || (role === "hr" && (targetPath.startsWith("/employees/") || targetPath.startsWith("/attendance")))
@@ -1725,6 +1730,94 @@ router.get("/inventory/suppliers", async (_req, res, next) => {
         items: [...groupedItems.values()].map((item) => ({ ...item, totalAmount: money(item.totalAmount) })),
       };
     })));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/inventory/suppliers/:id", async (req, res, next) => {
+  try {
+    const { id } = UpdateInventorySupplierParams.parse(req.params);
+    const input = UpdateInventorySupplierBody.parse(req.body);
+    const name = input.name.normalize("NFKC").trim().replace(/\s+/g, " ");
+    if (!name) {
+      res.status(400).json({ error: "Харилцагчийн нэр хоосон байж болохгүй" });
+      return;
+    }
+    const normalizedName = name.toLocaleLowerCase("mn-MN");
+    const [supplier] = await db.select().from(inventorySuppliersTable).where(eq(inventorySuppliersTable.id, id));
+    if (!supplier) {
+      res.status(404).json({ error: "Харилцагч олдсонгүй" });
+      return;
+    }
+    const [duplicate] = await db.select({ id: inventorySuppliersTable.id })
+      .from(inventorySuppliersTable)
+      .where(eq(inventorySuppliersTable.normalizedName, normalizedName));
+    if (duplicate && duplicate.id !== id) {
+      res.status(409).json({ error: "Ийм нэртэй харилцагч аль хэдийн байна" });
+      return;
+    }
+    const allPurchases = await db.select().from(inventoryPurchasesTable);
+    const matchingPurchases = allPurchases.filter((purchase) =>
+      purchase.documentName.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("mn-MN") === supplier.normalizedName
+    );
+    const purchaseIds = matchingPurchases.map((purchase) => purchase.id);
+    const updatedSupplier = await db.transaction(async (tx) => {
+      const [updated] = await tx.update(inventorySuppliersTable)
+        .set({ name, normalizedName })
+        .where(eq(inventorySuppliersTable.id, id))
+        .returning();
+      if (purchaseIds.length > 0) {
+        await tx.update(inventoryPurchasesTable)
+          .set({ documentName: name })
+          .where(inArray(inventoryPurchasesTable.id, purchaseIds));
+        await tx.update(cashTransactionsTable)
+          .set({ description: name })
+          .where(and(
+            eq(cashTransactionsTable.sourceType, "inventory_purchase"),
+            inArray(cashTransactionsTable.sourceKey, purchaseIds.map((purchaseId) => `purchase:${purchaseId}`)),
+          ));
+      }
+      return updated;
+    });
+    const purchaseItems = purchaseIds.length > 0
+      ? await db.select().from(inventoryPurchaseItemsTable).where(inArray(inventoryPurchaseItemsTable.purchaseId, purchaseIds))
+      : [];
+    const groupedItems = new Map<string, { name: string; unit: string; quantity: number; totalAmount: number }>();
+    for (const item of purchaseItems) {
+      const key = `${item.name.trim().toLocaleLowerCase("mn-MN")}\u0000${item.unit}`;
+      const grouped = groupedItems.get(key);
+      if (grouped) {
+        grouped.quantity += Number(item.quantity);
+        grouped.totalAmount += Number(item.totalAmount);
+      } else {
+        groupedItems.set(key, { name: item.name, unit: item.unit, quantity: Number(item.quantity), totalAmount: Number(item.totalAmount) });
+      }
+    }
+    res.json(UpdateInventorySupplierResponse.parse({
+      id: updatedSupplier.id,
+      name: updatedSupplier.name,
+      purchaseCount: matchingPurchases.length,
+      totalAmount: money(matchingPurchases.reduce((total, purchase) => total + Number(purchase.totalAmount), 0)),
+      items: [...groupedItems.values()].map((item) => ({ ...item, totalAmount: money(item.totalAmount) })),
+    }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/inventory/suppliers/:id", async (req, res, next) => {
+  try {
+    const { id } = DeleteInventorySupplierParams.parse(req.params);
+    const [supplier] = await db.select({ id: inventorySuppliersTable.id })
+      .from(inventorySuppliersTable)
+      .where(eq(inventorySuppliersTable.id, id));
+    if (!supplier) {
+      res.status(404).json({ error: "Харилцагч олдсонгүй" });
+      return;
+    }
+    await db.delete(inventorySuppliersTable).where(eq(inventorySuppliersTable.id, id));
+    res.status(204).send();
   } catch (error) {
     next(error);
   }

@@ -55,6 +55,7 @@ export * from './inventoryPurchaseItemInput';
 export * from './inventoryPurchaseItemInputUnit';
 export * from './inventorySupplier';
 export * from './inventorySupplierItem';
+export * from './inventorySupplierUpdate';
 export * from './listAttendanceParams';
 export * from './listShiftPlansParams';
 export * from './loginInput';

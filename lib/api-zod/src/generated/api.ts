@@ -982,6 +982,44 @@ export const ListInventorySuppliersResponse = zod.array(ListInventorySuppliersRe
 
 
 /**
+ * @summary Rename an inventory supplier and its purchase history
+ */
+export const UpdateInventorySupplierParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+
+export const UpdateInventorySupplierBody = zod.object({
+  "name": zod.string().min(1)
+})
+
+export const UpdateInventorySupplierResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "purchaseCount": zod.number().int(),
+  "totalAmount": zod.number(),
+  "items": zod.array(zod.object({
+  "name": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "totalAmount": zod.number()
+}))
+})
+
+
+/**
+ * @summary Remove a supplier from the supplier directory without deleting purchase history
+ */
+export const DeleteInventorySupplierParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteInventorySupplierResponse = zod.void()
+
+
+/**
  * @summary List inventory catalog and stock
  */
 export const ListInventoryItemsResponseItem = zod.object({

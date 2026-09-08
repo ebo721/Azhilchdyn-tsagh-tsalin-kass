@@ -559,6 +559,11 @@ export interface InventoryPurchaseInput {
   items: InventoryPurchaseItemInput[];
 }
 
+export interface InventorySupplierUpdate {
+  /** @minLength 1 */
+  name: string;
+}
+
 export interface InventorySupplierItem {
   name: string;
   unit: string;

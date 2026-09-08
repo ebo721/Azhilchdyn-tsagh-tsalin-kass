@@ -83,6 +83,7 @@ import {
   useListEmployees,
   useListInventoryPurchases,
   useListInventorySuppliers,
+  useUpdateInventorySupplier,
   useCreateInventoryPurchase,
   useListInventoryItems,
   useUpdateInventoryItem,
@@ -863,6 +864,7 @@ type InventoryForm = {
 function Inventory() {
   const purchasesQuery = useListInventoryPurchases();
   const suppliers = useListInventorySuppliers();
+  const updateSupplier = useUpdateInventorySupplier();
   const catalog = useListInventoryItems();
   const updateCatalogItem = useUpdateInventoryItem();
   const issues = useListInventoryIssues();
@@ -877,6 +879,8 @@ function Inventory() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<InventoryPurchase | null>(null);
   const [selectedPurchase, setSelectedPurchase] = useState<InventoryPurchase | null>(null);
+  const [selectedSupplier, setSelectedSupplier] = useState<InventorySupplier | null>(null);
+  const [editingSupplier, setEditingSupplier] = useState<InventorySupplier | null>(null);
   const [stockSearch, setStockSearch] = useState('');
   const [inventoryTab, setInventoryTab] = useState<'stock' | 'purchases' | 'suppliers' | 'issues'>('stock');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
@@ -892,6 +896,7 @@ function Inventory() {
     defaultValues: { inventoryItemId: '', date: today(), quantity: '', purpose: '' },
   });
   const categoryForm = useForm<{ category: string }>({ defaultValues: { category: '' } });
+  const supplierForm = useForm<{ name: string }>({ defaultValues: { name: '' } });
   const watchedItems = form.watch('items');
   const grandTotal = watchedItems.reduce((total, item) => total + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), 0);
   const purchasePageCount = Math.max(1, Math.ceil((purchasesQuery.data?.length ?? 0) / inventoryPurchasesPerPage));
@@ -985,6 +990,30 @@ function Inventory() {
     if (!window.confirm(`"${purchase.supplierName}" худалдан авалтыг устгах уу?`)) return;
     deletion.request(`/inventory/purchases/${purchase.id}`, `${purchase.supplierName} · ${money(purchase.totalAmount)}`);
   };
+  const openSupplierEdit = (supplier: InventorySupplier) => {
+    setEditingSupplier(supplier);
+    supplierForm.reset({ name: supplier.name });
+  };
+  const submitSupplier = (values: { name: string }) => {
+    if (!editingSupplier) return;
+    updateSupplier.mutate({ id: editingSupplier.id, data: values }, {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListInventorySuppliersQueryKey() });
+        qc.invalidateQueries({ queryKey: getListInventoryPurchasesQueryKey() });
+        qc.invalidateQueries({ queryKey: getListCashTransactionsQueryKey() });
+        setEditingSupplier(null);
+      },
+    });
+  };
+  const deleteSupplier = (supplier: InventorySupplier) => {
+    if (!window.confirm(`"${supplier.name}" харилцагчийг сангаас устгах уу? Худалдан авалтын түүх устахгүй.`)) return;
+    deletion.request(`/inventory/suppliers/${supplier.id}`, `${supplier.name} харилцагч`);
+  };
+  const selectedSupplierPurchases = selectedSupplier
+    ? purchasesQuery.data?.filter((purchase) =>
+      purchase.supplierName.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('mn-MN')
+      === selectedSupplier.name.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('mn-MN')) ?? []
+    : [];
   const openIssueForm = () => {
     setEditingIssue(null);
     issueForm.reset({ inventoryItemId: '', date: today(), quantity: '', purpose: '' });
@@ -1042,8 +1071,17 @@ function Inventory() {
     </div>}
     {inventoryTab === 'suppliers' && <section className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-5 py-4"><h2 className="text-base font-bold">Харилцагчид</h2><span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{suppliers.data?.length ?? 0} харилцагч</span></div>
-      {suppliers.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-20" /><LoadingBlock className="h-20" /></div> : suppliers.isError ? <ErrorBlock onRetry={() => suppliers.refetch()} /> : !suppliers.data?.length ? <EmptyState title="Харилцагч бүртгэгдээгүй" detail="Худалдан авалт бүртгэхэд харилцагч автоматаар нэмэгдэнэ." icon={PackageOpen} /> : <><div className="divide-y divide-border md:hidden">{suppliers.data.map((supplier: InventorySupplier) => <article key={supplier.id} className="p-4" data-testid={`inventory-supplier-mobile-${supplier.id}`}><h3 className="text-sm font-bold">{supplier.name}</h3><div className="mt-3 grid grid-cols-2 gap-3"><div><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Нийт худалдан авалт</p><p className="mt-1 font-mono text-sm font-bold text-primary">{money(supplier.totalAmount)}</p></div><div><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Худалдан авалтын баримт</p><p className="mt-1 font-mono text-sm font-bold">{supplier.purchaseCount}</p></div></div></article>)}</div><div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[600px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Харилцагч</th><th className="px-5 py-3 text-right">Нийт худалдан авалт</th><th className="px-5 py-3 text-right">Худалдан авалтын баримт</th></tr></thead><tbody className="divide-y divide-border">{suppliers.data.map((supplier: InventorySupplier) => <tr key={supplier.id} data-testid={`inventory-supplier-${supplier.id}`}><td className="px-5 py-4 text-sm font-semibold">{supplier.name}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold text-primary">{money(supplier.totalAmount)}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold">{supplier.purchaseCount}</td></tr>)}</tbody></table></div></>}
+      {suppliers.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-20" /><LoadingBlock className="h-20" /></div> : suppliers.isError ? <ErrorBlock onRetry={() => suppliers.refetch()} /> : !suppliers.data?.length ? <EmptyState title="Харилцагч бүртгэгдээгүй" detail="Худалдан авалт бүртгэхэд харилцагч автоматаар нэмэгдэнэ." icon={PackageOpen} /> : <>
+        <div className="divide-y divide-border md:hidden">{suppliers.data.map((supplier: InventorySupplier) => <article key={supplier.id} className="p-4" data-testid={`inventory-supplier-mobile-${supplier.id}`}><h3 className="text-sm font-bold">{supplier.name}</h3><div className="mt-3 grid grid-cols-2 gap-3"><div><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Нийт худалдан авалт</p><p className="mt-1 font-mono text-sm font-bold text-primary">{money(supplier.totalAmount)}</p></div><div><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Худалдан авалтын баримт</p><p className="mt-1 font-mono text-sm font-bold">{supplier.purchaseCount}</p></div></div><div className="mt-3 flex justify-end gap-1"><Button variant="outline" size="sm" onClick={() => setSelectedSupplier(supplier)} data-testid={`button-view-supplier-${supplier.id}`}>Дэлгэрэнгүй<ChevronRight className="size-4" /></Button><Button size="icon" variant="ghost" onClick={() => openSupplierEdit(supplier)} data-testid={`button-edit-supplier-${supplier.id}`}><Pencil className="size-4" /></Button><Button size="icon" variant="ghost" disabled={deletion.isPending} onClick={() => deleteSupplier(supplier)} data-testid={`button-delete-supplier-${supplier.id}`}><Trash2 className="size-4" /></Button></div></article>)}</div>
+        <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[760px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Харилцагч</th><th className="px-5 py-3 text-right">Нийт худалдан авалт</th><th className="px-5 py-3 text-right">Худалдан авалтын баримт</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{suppliers.data.map((supplier: InventorySupplier) => <tr key={supplier.id} data-testid={`inventory-supplier-${supplier.id}`}><td className="px-5 py-4 text-sm font-semibold">{supplier.name}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold text-primary">{money(supplier.totalAmount)}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold">{supplier.purchaseCount}</td><td className="px-5 py-4"><div className="flex justify-end gap-1"><Button variant="outline" size="sm" onClick={() => setSelectedSupplier(supplier)} data-testid={`button-view-supplier-${supplier.id}`}>Дэлгэрэнгүй<ChevronRight className="size-4" /></Button><Button size="icon" variant="ghost" onClick={() => openSupplierEdit(supplier)} data-testid={`button-edit-supplier-${supplier.id}`}><Pencil className="size-4" /></Button><Button size="icon" variant="ghost" disabled={deletion.isPending} onClick={() => deleteSupplier(supplier)} data-testid={`button-delete-supplier-${supplier.id}`}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>
+      </>}
     </section>}
+    {editingSupplier && <Modal title="Харилцагчийн нэр засах" detail="Холбоотой худалдан авалт болон кассын тайлбар шинэ нэртэй хамт шинэчлэгдэнэ." onClose={() => setEditingSupplier(null)}>
+      <Form {...supplierForm}><form onSubmit={supplierForm.handleSubmit(submitSupplier)} className="space-y-5" data-testid="form-inventory-supplier-edit"><label className="block space-y-2 text-xs font-semibold">Харилцагчийн нэр<input className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...supplierForm.register('name', { required: true })} data-testid="input-inventory-supplier-edit-name" /></label>{updateSupplier.isError && <p className="text-xs font-semibold text-destructive">Нэрийг хадгалахад алдаа гарлаа. Ижил нэртэй харилцагч байгаа эсэхийг шалгана уу.</p>}<div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setEditingSupplier(null)}>Болих</Button><Button type="submit" disabled={updateSupplier.isPending}>{updateSupplier.isPending ? 'Хадгалж байна...' : 'Хадгалах'}</Button></div></form></Form>
+    </Modal>}
+    {selectedSupplier && <Modal title={selectedSupplier.name} detail={`${selectedSupplierPurchases.length} худалдан авалт · ${money(selectedSupplierPurchases.reduce((total, purchase) => total + purchase.totalAmount, 0))}`} onClose={() => setSelectedSupplier(null)} wide>
+      {!selectedSupplierPurchases.length ? <EmptyState title="Худалдан авалтын түүх алга" detail="Энэ харилцагчтай холбоотой худалдан авалт олдсонгүй." icon={PackageOpen} /> : <div className="max-h-[62vh] overflow-y-auto"><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-3 py-2">Огноо</th><th className="px-3 py-2">Баримт</th><th className="px-3 py-2 text-right">Барааны төрөл</th><th className="px-3 py-2 text-right">Нийт дүн</th><th className="px-3 py-2 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{selectedSupplierPurchases.map((purchase) => <tr key={purchase.id}><td className="px-3 py-3 text-sm font-semibold">{dateLabel(purchase.date)}</td><td className="px-3 py-3 text-sm">{purchase.hasReceipt ? 'Баримттай' : 'Баримтгүй'}</td><td className="px-3 py-3 text-right font-mono text-sm">{purchase.items.length}</td><td className="px-3 py-3 text-right font-mono text-sm font-bold text-primary">{money(purchase.totalAmount)}</td><td className="px-3 py-3 text-right"><Button size="sm" variant="outline" onClick={() => { setSelectedSupplier(null); setSelectedPurchase(purchase); }}>Худалдан авалт үзэх</Button></td></tr>)}</tbody></table></div></div>}
+    </Modal>}
     {selectedPurchase && <Modal title={selectedPurchase.supplierName} detail={`${dateLabel(selectedPurchase.date)} · ${selectedPurchase.hasReceipt ? 'Баримттай' : 'Баримтгүй'} · ${money(selectedPurchase.totalAmount)}`} onClose={() => setSelectedPurchase(null)}>
       <div className="max-h-[62vh] overflow-y-auto"><div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-3 py-2">Барааны нэр</th><th className="px-3 py-2">Ангилал</th><th className="px-3 py-2">Нэгж</th><th className="px-3 py-2 text-right">Тоо</th><th className="px-3 py-2 text-right">Нэгж үнэ</th><th className="px-3 py-2 text-right">Нийт дүн</th></tr></thead><tbody className="divide-y divide-border">{selectedPurchase.items.map((item) => <tr key={item.id}><td className="px-3 py-3 text-sm font-semibold">{item.name}</td><td className="px-3 py-3 text-sm text-muted-foreground">{item.category}</td><td className="px-3 py-3 text-sm text-muted-foreground">{item.unit}</td><td className="px-3 py-3 text-right font-mono text-sm">{item.quantity}</td><td className="px-3 py-3 text-right font-mono text-sm">{money(item.unitPrice)}</td><td className="px-3 py-3 text-right font-mono text-sm font-bold">{money(item.totalAmount)}</td></tr>)}</tbody></table></div></div>
     </Modal>}

@@ -50,6 +50,7 @@ import type {
   InventoryPurchase,
   InventoryPurchaseInput,
   InventorySupplier,
+  InventorySupplierUpdate,
   ListAttendanceParams,
   ListShiftPlansParams,
   LoginInput,
@@ -3286,6 +3287,149 @@ export function useListInventorySuppliers<TData = Awaited<ReturnType<typeof list
 
 
 
+
+export const getUpdateInventorySupplierUrl = (id: number,) => {
+
+
+
+
+  return `/api/inventory/suppliers/${id}`
+}
+
+/**
+ * @summary Rename an inventory supplier and its purchase history
+ */
+export const updateInventorySupplier = async (id: number,
+    inventorySupplierUpdate: InventorySupplierUpdate, options?: Parameters<typeof customFetch>[1]): Promise<InventorySupplier> => {
+
+  return customFetch<InventorySupplier>(getUpdateInventorySupplierUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(inventorySupplierUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateInventorySupplierMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInventorySupplier>>, TError,{id: number;data: BodyType<InventorySupplierUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateInventorySupplier>>, TError,{id: number;data: BodyType<InventorySupplierUpdate>}, TContext> => {
+
+const mutationKey = ['updateInventorySupplier'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateInventorySupplier>>, {id: number;data: BodyType<InventorySupplierUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateInventorySupplier(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateInventorySupplierMutationResult = NonNullable<Awaited<ReturnType<typeof updateInventorySupplier>>>
+    export type UpdateInventorySupplierMutationBody = BodyType<InventorySupplierUpdate>
+    export type UpdateInventorySupplierMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Rename an inventory supplier and its purchase history
+ */
+export const useUpdateInventorySupplier = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInventorySupplier>>, TError,{id: number;data: BodyType<InventorySupplierUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateInventorySupplier>>,
+        TError,
+        {id: number;data: BodyType<InventorySupplierUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateInventorySupplierMutationOptions(options));
+    }
+
+export const getDeleteInventorySupplierUrl = (id: number,) => {
+
+
+
+
+  return `/api/inventory/suppliers/${id}`
+}
+
+/**
+ * @summary Remove a supplier from the supplier directory without deleting purchase history
+ */
+export const deleteInventorySupplier = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteInventorySupplierUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteInventorySupplierMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteInventorySupplier>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteInventorySupplier>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteInventorySupplier'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteInventorySupplier>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteInventorySupplier(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteInventorySupplierMutationResult = NonNullable<Awaited<ReturnType<typeof deleteInventorySupplier>>>
+
+    export type DeleteInventorySupplierMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Remove a supplier from the supplier directory without deleting purchase history
+ */
+export const useDeleteInventorySupplier = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteInventorySupplier>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteInventorySupplier>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteInventorySupplierMutationOptions(options));
+    }
 
 export const getListInventoryItemsUrl = () => {
 
