@@ -3,6 +3,19 @@ import { after, before, describe, it } from "node:test";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import app from "../app.ts";
+import { isExcludedBankFee } from "./bank-transactions.ts";
+
+describe("bank statement fee filtering", () => {
+  it("excludes 50₮ message notification fees", () => {
+    assert.equal(isExcludedBankFee(50, "Мессэж мэдэгдэл шимтгэл"), true);
+    assert.equal(isExcludedBankFee(50, "МЭССЭЖ МЭДЭГДЛИЙН ШИМТГЭЛ"), true);
+  });
+
+  it("keeps unrelated 50₮ transactions", () => {
+    assert.equal(isExcludedBankFee(50, "Данс хооронд шилжүүлэг"), false);
+    assert.equal(isExcludedBankFee(50, "Мессэж мэдэгдэл"), false);
+  });
+});
 
 describe("bank transaction route", () => {
   let server: Server;

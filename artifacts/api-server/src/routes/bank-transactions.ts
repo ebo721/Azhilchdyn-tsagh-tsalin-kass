@@ -167,6 +167,15 @@ const response = (row: typeof bankTransactionsTable.$inferSelect) => ({
   createdAt: row.createdAt.toISOString(),
 });
 
+export const isExcludedBankFee = (amount: number, description: string) => {
+  const normalizedDescription = description.toLocaleUpperCase("mn-MN");
+  return (amount === 200 && normalizedDescription.includes("ШИМТГЭЛ"))
+    || (amount === 50
+      && (normalizedDescription.includes("МЕССЭЖ") || normalizedDescription.includes("МЭССЭЖ"))
+      && normalizedDescription.includes("МЭДЭГД")
+      && normalizedDescription.includes("ШИМТГЭЛ"));
+};
+
 router.get("/bank-accounts", async (_req, res, next) => {
   try {
     const rows = await db.select().from(bankAccountsTable).orderBy(bankAccountsTable.bankName, bankAccountsTable.accountNumber);
@@ -226,7 +235,7 @@ router.post("/bank-transactions/import", raw({ type: "application/octet-stream",
       const amount = income || expense;
       const account = row["Харьцсан данс / Нэр"];
       const description = row["Гүйлгээний утга"];
-      if (amount === 200 && description.toLocaleUpperCase("mn-MN").includes("ШИМТГЭЛ")) return [];
+      if (isExcludedBankFee(amount, description)) return [];
       const legacyFingerprint = createHash("sha256").update(JSON.stringify([
         transactionAt.toISOString(),
         amount,
