@@ -303,6 +303,18 @@ describe("effective-dated payroll salary", () => {
     assert.equal(balanced.carryoverAmount, 0);
 
     await db.update(payrollAdjustmentsTable)
+      .set({ paidAmount: januaryLine.payable - 1 })
+      .where(eq(payrollAdjustmentsTable.id, adjustment.id));
+    const oneTugrikUnder = await getFebruaryLine();
+    assert.equal(oneTugrikUnder.carryoverAmount, 0);
+
+    await db.update(payrollAdjustmentsTable)
+      .set({ paidAmount: januaryLine.payable + 1 })
+      .where(eq(payrollAdjustmentsTable.id, adjustment.id));
+    const oneTugrikOver = await getFebruaryLine();
+    assert.equal(oneTugrikOver.carryoverAmount, 0);
+
+    await db.update(payrollAdjustmentsTable)
       .set({ paidAmount: januaryLine.payable - 100_000 })
       .where(eq(payrollAdjustmentsTable.id, adjustment.id));
     const underpaid = await getFebruaryLine();

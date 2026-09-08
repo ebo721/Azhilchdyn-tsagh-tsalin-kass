@@ -17,6 +17,8 @@ Salary-history correction may change its effective date, base salary, and social
 
 Each month's signed payroll balance carries forward into the next month's take-home pay: underpayment increases it, overpayment decreases it, and any excess balance continues across later months until fully offset.
 
+Treat signed payroll balances from -1₮ through +1₮ as zero. Display underpayments in parentheses and overpayments as ordinary positive amounts, without text labels.
+
 **Why:** The user explicitly chose workday-based proration and confirmed that the inactive date is inclusive. Historical payroll must remain based on the salary that applied at the time rather than the employee's latest salary.
 
 **How to apply:** Preserve effective-dated salary history whenever salary inputs change. When replacing a salary from an effective date, remove that employee's history on or after the date before inserting the replacement. For payroll changes, resolve rates by date, exclude leave dates, include inactive employees whose employment overlaps the requested month, and reject retroactive salary changes or history deletion that would affect an already-paid month.

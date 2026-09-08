@@ -394,7 +394,8 @@ async function getPayrollSummary(month: string, existingData?: PayrollCalculatio
     const carryoverAmount = money(previousLineMap.get(employee.id)?.balanceAmount ?? 0);
     const payableBeforePayment = money(gross - deductions + carryoverAmount);
     const payable = money(Math.max(0, payableBeforePayment));
-    const balanceAmount = money(payableBeforePayment - paidAmount);
+    const rawBalanceAmount = payableBeforePayment - paidAmount;
+    const balanceAmount = money(Math.abs(rawBalanceAmount) <= 1 ? 0 : rawBalanceAmount);
     const remainingAmount = money(Math.max(0, balanceAmount));
     const overpaidAmount = money(Math.max(0, -balanceAmount));
     return {
