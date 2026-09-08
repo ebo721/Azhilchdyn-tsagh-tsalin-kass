@@ -18,6 +18,7 @@ describe("effective-dated payroll salary", () => {
   let baseUrl: string;
   let adminCookie: string;
   let employeeId: number;
+  let insuredEmployeeId: number;
 
   before(async () => {
     process.env.SESSION_SECRET = "payroll-salary-history-test";
@@ -66,6 +67,28 @@ describe("effective-dated payroll salary", () => {
       hours: 0,
       status: "leave",
     });
+    const [insuredEmployee] = await db.insert(employeesTable).values({
+      name: `Insured salary test ${process.pid}`,
+      role: "Test",
+      phone: "",
+      employeeType: "office",
+      salaryType: "monthly",
+      baseSalary: 2_000_000,
+      socialInsuranceSalary: 1_000_000,
+      payrollTaxExempt: false,
+      monthlyExpectedWorkDays: 0,
+      status: "active",
+      joinedAt: "2099-01-01",
+    }).returning({ id: employeesTable.id });
+    insuredEmployeeId = insuredEmployee.id;
+    await db.insert(employeeSalaryHistoryTable).values({
+      employeeId: insuredEmployeeId,
+      effectiveFrom: "2099-01-01",
+      employeeType: "office",
+      baseSalary: 2_000_000,
+      socialInsuranceSalary: 1_000_000,
+      payrollTaxExempt: false,
+    });
     server = app.listen(0);
     const address = server.address() as AddressInfo;
     baseUrl = `http://127.0.0.1:${address.port}`;
@@ -73,6 +96,7 @@ describe("effective-dated payroll salary", () => {
 
   after(async () => {
     await db.delete(employeesTable).where(eq(employeesTable.id, employeeId));
+    await db.delete(employeesTable).where(eq(employeesTable.id, insuredEmployeeId));
     server.close();
   });
 
@@ -101,5 +125,31 @@ describe("effective-dated payroll salary", () => {
 
     assert.equal(line.gross, Math.round(expectedGross * 100) / 100);
     assert.equal(line.payable, line.gross);
+  });
+
+  it("calculates insurance, income tax, and relief from the insurance salary", async () => {
+    const response = await fetch(`${baseUrl}/api/payroll?month=2099-01`, {
+      headers: { cookie: adminCookie },
+    });
+    assert.equal(response.status, 200);
+    const payroll = await response.json() as {
+      lines: Array<{
+        employeeId: number;
+        socialInsuranceSalary: number;
+        socialInsurance: number;
+        taxableIncome: number;
+        calculatedIncomeTax: number;
+        taxRelief: number;
+        incomeTax: number;
+      }>;
+    };
+    const line = payroll.lines.find((item) => item.employeeId === insuredEmployeeId);
+    assert.ok(line);
+    assert.equal(line.socialInsuranceSalary, 1_000_000);
+    assert.equal(line.socialInsurance, 115_000);
+    assert.equal(line.taxableIncome, 885_000);
+    assert.equal(line.calculatedIncomeTax, 88_500);
+    assert.equal(line.taxRelief, 18_000);
+    assert.equal(line.incomeTax, 70_500);
   });
 });
