@@ -133,8 +133,30 @@ const queryClient = new QueryClient();
 
 function useQueueDeletion() {
   const mutation = useCreateDeletionRequest();
+  const session = useGetAuthSession();
   const qc = useQueryClient();
-  const request = (targetPath: string, label: string) => {
+  const [directPending, setDirectPending] = useState(false);
+  const [directError, setDirectError] = useState(false);
+  const request = async (targetPath: string, label: string) => {
+    if (session.data?.role === 'admin') {
+      setDirectPending(true);
+      setDirectError(false);
+      try {
+        const response = await fetch(`/api${targetPath}`, { method: 'DELETE', credentials: 'include' });
+        if (!response.ok) {
+          const body = await response.json().catch(() => null) as { error?: string } | null;
+          throw new Error(body?.error || 'Устгах боломжгүй байна.');
+        }
+        await qc.invalidateQueries();
+        window.alert(`${label} устгагдлаа.`);
+      } catch (error) {
+        setDirectError(true);
+        window.alert(error instanceof Error ? error.message : 'Устгах боломжгүй байна.');
+      } finally {
+        setDirectPending(false);
+      }
+      return;
+    }
     mutation.mutate({ data: { targetPath, label } }, {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getListDeletionRequestsQueryKey() });
@@ -142,7 +164,7 @@ function useQueueDeletion() {
       },
     });
   };
-  return { request, isPending: mutation.isPending, isError: mutation.isError };
+  return { request, isAdmin: session.data?.role === 'admin', isPending: mutation.isPending || directPending, isError: mutation.isError || directError };
 }
 
 const money = (value = 0) => `${new Intl.NumberFormat('mn-MN').format(value)} ₮`;
@@ -372,7 +394,7 @@ function Employees() {
   const [modal, setModal] = useState<{ open: boolean; employee?: Employee }>({ open: false });
   const [search, setSearch] = useState('');
   const employees = useMemo(() => (query.data ?? []).filter((e) => `${e.name} ${e.role} ${e.phone}`.toLowerCase().includes(search.toLowerCase())), [query.data, search]);
-  const del = (employee: Employee) => { if (window.confirm(`${employee.name}-г устгах хүсэлт гаргах уу?`)) deletion.request(`/employees/${employee.id}`, `${employee.name} ажилтны бүртгэл`); };
+  const del = (employee: Employee) => { if (window.confirm(`${employee.name}-г устгах уу?`)) deletion.request(`/employees/${employee.id}`, `${employee.name} ажилтны бүртгэл`); };
   return <div className="page-enter"><div className="mb-6 flex justify-end"><Button onClick={() => setModal({ open: true })} data-testid="button-add-employee"><Plus className="size-4" />Ажилтан нэмэх</Button></div><section className="overflow-hidden rounded-2xl border border-border bg-card"><div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm font-bold">Бүх ажилтан <span className="ml-1 font-mono text-xs text-muted-foreground">{query.data?.length ?? 0}</span></p><div className="relative w-full sm:w-64"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" placeholder="Нэрээр хайх" data-testid="input-search-employees" /></div></div>{query.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : employees.length === 0 ? <EmptyState title="Ажилтан олдсонгүй" detail={search ? 'Хайлтын үгээ өөрчлөөд үзнэ үү.' : 'Эхний ажилтнаа бүртгэж эхлээрэй.'} icon={UsersRound} /> : <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3 font-bold">Ажилтан</th><th className="px-5 py-3 font-bold">Утас</th><th className="px-5 py-3 font-bold">Ажилтны төрөл</th><th className="px-5 py-3 font-bold">Цалин</th><th className="px-5 py-3 font-bold">НДШ-ийн цалин</th><th className="px-5 py-3 font-bold">Төлөв</th><th className="px-5 py-3 text-right font-bold">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{employees.map((employee) => <tr className="group transition-colors hover:bg-secondary/35" key={employee.id} data-testid={`row-employee-${employee.id}`}><td className="px-5 py-4"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent/30 text-xs font-bold text-foreground">{employee.name.slice(0, 1)}</span><div><p className="text-sm font-semibold">{employee.name}</p><p className="text-xs text-muted-foreground">{employee.role}</p></div></div></td><td className="px-5 py-4 text-sm text-muted-foreground">{employee.phone || '—'}</td><td className="px-5 py-4 text-sm">{employee.employeeType === EmployeeEmployeeType.office ? 'Оффис' : 'Ээлжийн'}</td><td className="px-5 py-4"><p className="font-mono text-sm">{money(employee.baseSalary)}</p><p className="text-[10px] text-muted-foreground">{employee.employeeType === EmployeeEmployeeType.office ? 'сарын' : 'өдрийн'}</p></td><td className="px-5 py-4 font-mono text-sm">{money(employee.socialInsuranceSalary)}</td><td className="px-5 py-4"><StatusPill value={employee.status} /></td><td className="px-5 py-4"><div className="flex justify-end gap-1"><button className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={() => setModal({ open: true, employee })} aria-label={`${employee.name} засах`} data-testid={`button-edit-employee-${employee.id}`}><Pencil className="size-4" /></button><button className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => del(employee)} aria-label={`${employee.name} устгах хүсэлт`} data-testid={`button-delete-employee-${employee.id}`}><Trash2 className="size-4" /></button></div></td></tr>)}</tbody></table></div>}</section>{modal.open && <EmployeeModal employee={modal.employee} onClose={() => setModal({ open: false })} />}</div>;
 }
 
@@ -397,7 +419,7 @@ function ShiftSettingsModal({ onClose }: { onClose: () => void }) {
     form.reset({ name: shift.name, startTime: shift.startTime, endTime: shift.endTime });
   };
   const del = (shift: Shift) => {
-    if (!window.confirm(`${shift.name} ээлжийг устгах хүсэлт гаргах уу?`)) return;
+    if (!window.confirm(`${shift.name} ээлжийг устгах уу?`)) return;
     deletion.request(`/attendance/shifts/${shift.id}`, `${shift.name} ээлж`);
   };
   return <Modal title="Ээлжийн тохиргоо" detail="Ээлжийн нэр болон өдөр бүрийн эхлэх, тарах цагийг удирдана." onClose={onClose}>
@@ -445,7 +467,7 @@ function AttendancePage() {
     };
     if (!value) {
       const employeeName = activeEmployees.find((employee) => employee.id === employeeId)?.name ?? `#${employeeId}`;
-      if (window.confirm(`${employeeName} ажилтны ${dateLabel(date)}-ны ирцийг устгах хүсэлт гаргах уу?`)) {
+      if (window.confirm(`${employeeName} ажилтны ${dateLabel(date)}-ны ирцийг устгах уу?`)) {
         deletion.request(`/attendance?employeeId=${employeeId}&date=${date}`, `${employeeName} · ${dateLabel(date)}-ны ирц`);
       }
       return;
@@ -594,7 +616,7 @@ function Payroll() {
     });
   };
   const revertApproval = () => {
-    if (!window.confirm(`${month} сарын урьдчилгаа цалингийн батлалтыг устгах хүсэлт гаргах уу?`)) return;
+    if (!window.confirm(`${month} сарын урьдчилгаа цалингийн батлалтыг устгах уу?`)) return;
     deletion.request(`/payroll-advance/approval?month=${month}`, `${month} сарын урьдчилгаа цалингийн батлалт`);
   };
   const setAdvancePaid = (employeeId: number, paid: boolean, existingAmount: number, existingDate?: string | null) => {
@@ -706,7 +728,7 @@ function Cash() {
     else create.mutate({ data }, options);
   };
   const deleteRow = (row: CashTransaction) => {
-    if (!window.confirm(`${row.description} гүйлгээг устгах хүсэлт гаргах уу?`)) return;
+    if (!window.confirm(`${row.description} гүйлгээг устгах уу?`)) return;
     deletion.request(`/cash/transactions/${row.id}`, `${row.description} кассын гүйлгээ`);
   };
   return <div className="page-enter">
@@ -790,7 +812,7 @@ function FixedAssets() {
     });
   };
   const deleteAsset = (asset: FixedAsset) => {
-    if (!window.confirm(`"${asset.name}" хөрөнгийг устгах хүсэлт гаргах уу?${asset.purchased ? ' Батлагдвал холбоотой кассын зарлага мөн устна.' : ''}`)) return;
+    if (!window.confirm(`"${asset.name}" хөрөнгийг устгах уу?${asset.purchased ? ' Холбоотой кассын зарлага мөн устна.' : ''}`)) return;
     deletion.request(`/fixed-assets/${asset.id}`, `${asset.name} эд хөрөнгө`);
   };
   return <div className="page-enter">
@@ -944,7 +966,7 @@ function Inventory() {
       .map((item) => ({ ...item, purchaseId: purchase.id, date: purchase.date }))) ?? []
     : [];
   const deletePurchase = (purchase: InventoryPurchase) => {
-    if (!window.confirm(`"${purchase.supplierName}" худалдан авалтыг устгах хүсэлт гаргах уу?`)) return;
+    if (!window.confirm(`"${purchase.supplierName}" худалдан авалтыг устгах уу?`)) return;
     deletion.request(`/inventory/purchases/${purchase.id}`, `${purchase.supplierName} · ${money(purchase.totalAmount)}`);
   };
   const openIssueForm = () => {
@@ -981,7 +1003,7 @@ function Inventory() {
     else createIssue.mutate({ data }, options);
   };
   const deleteIssue = (issue: InventoryIssue) => {
-    if (!window.confirm(`${issue.itemName} барааны ${issue.quantity} ${issue.unit} зарлагыг устгах хүсэлт гаргах уу?`)) return;
+    if (!window.confirm(`${issue.itemName} барааны ${issue.quantity} ${issue.unit} зарлагыг устгах уу?`)) return;
     deletion.request(`/inventory/issues/${issue.id}`, `${issue.itemName} · ${issue.quantity} ${issue.unit} зарлага`);
   };
   return <div className="page-enter">
