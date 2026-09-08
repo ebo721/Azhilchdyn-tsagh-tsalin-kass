@@ -32,6 +32,7 @@ import {
   CreateInventoryPurchaseBody,
   CreateInventoryPurchaseResponse,
   ListInventoryPurchasesResponse,
+  ListInventorySuppliersResponse,
   ListInventoryItemsResponse,
   UpdateInventoryItemBody,
   UpdateInventoryItemParams,
@@ -82,6 +83,7 @@ import {
   payrollAdjustmentsTable,
   payrollAdvanceApprovalsTable,
   inventoryPurchasesTable,
+  inventorySuppliersTable,
   inventoryPurchaseItemsTable,
   inventoryItemsTable,
   inventoryIssuesTable,
@@ -1599,7 +1601,7 @@ router.get("/inventory/purchases", async (_req, res, next) => {
     const closedDates = new Set(closures.map((closure) => closure.date));
     res.json(ListInventoryPurchasesResponse.parse(purchases.map((purchase) => ({
       id: purchase.id,
-      documentName: purchase.documentName,
+      supplierName: purchase.documentName,
       hasReceipt: purchase.hasReceipt,
       date: purchase.date,
       totalAmount: Number(purchase.totalAmount),
@@ -1618,6 +1620,42 @@ router.get("/inventory/purchases", async (_req, res, next) => {
           totalAmount: Number(item.totalAmount),
         })),
     }))));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/inventory/suppliers", async (_req, res, next) => {
+  try {
+    const [suppliers, purchases, purchaseItems] = await Promise.all([
+      db.select().from(inventorySuppliersTable).orderBy(inventorySuppliersTable.name),
+      db.select().from(inventoryPurchasesTable),
+      db.select().from(inventoryPurchaseItemsTable),
+    ]);
+    const normalized = (name: string) => name.trim().toLocaleLowerCase("mn-MN");
+    res.json(ListInventorySuppliersResponse.parse(suppliers.map((supplier) => {
+      const supplierPurchases = purchases.filter((purchase) => normalized(purchase.documentName) === supplier.normalizedName);
+      const purchaseIds = new Set(supplierPurchases.map((purchase) => purchase.id));
+      const groupedItems = new Map<string, { name: string; unit: string; quantity: number; totalAmount: number }>();
+      for (const item of purchaseItems) {
+        if (!purchaseIds.has(item.purchaseId)) continue;
+        const key = `${item.name.trim().toLocaleLowerCase("mn-MN")}\u0000${item.unit}`;
+        const existing = groupedItems.get(key);
+        if (existing) {
+          existing.quantity += Number(item.quantity);
+          existing.totalAmount += Number(item.totalAmount);
+        } else {
+          groupedItems.set(key, { name: item.name, unit: item.unit, quantity: Number(item.quantity), totalAmount: Number(item.totalAmount) });
+        }
+      }
+      return {
+        id: supplier.id,
+        name: supplier.name,
+        purchaseCount: supplierPurchases.length,
+        totalAmount: money(supplierPurchases.reduce((total, purchase) => total + Number(purchase.totalAmount), 0)),
+        items: [...groupedItems.values()].map((item) => ({ ...item, totalAmount: money(item.totalAmount) })),
+      };
+    })));
   } catch (error) {
     next(error);
   }
@@ -1833,9 +1871,9 @@ router.delete("/inventory/issues/:id", async (req, res, next) => {
 router.post("/inventory/purchases", async (req, res, next) => {
   try {
     const input = CreateInventoryPurchaseBody.parse(req.body);
-    const documentName = input.documentName.trim();
-    if (!documentName) {
-      res.status(400).json({ error: "Баримтын нэр хоосон байж болохгүй" });
+    const supplierName = input.supplierName.trim();
+    if (!supplierName) {
+      res.status(400).json({ error: "Харилцагчийн нэр хоосон байж болохгүй" });
       return;
     }
     if (!isValidCalendarDate(input.date)) {
@@ -1858,9 +1896,22 @@ router.post("/inventory/purchases", async (req, res, next) => {
     }
     const totalAmount = money(normalizedItems.reduce((total, item) => total + item.totalAmount, 0));
     const result = await db.transaction(async (tx) => {
+      const normalizedSupplierName = supplierName.toLocaleLowerCase("mn-MN");
+      let [supplier] = await tx.select().from(inventorySuppliersTable)
+        .where(eq(inventorySuppliersTable.normalizedName, normalizedSupplierName));
+      if (!supplier) {
+        [supplier] = await tx.insert(inventorySuppliersTable).values({
+          name: supplierName,
+          normalizedName: normalizedSupplierName,
+        }).onConflictDoNothing().returning();
+        if (!supplier) {
+          [supplier] = await tx.select().from(inventorySuppliersTable)
+            .where(eq(inventorySuppliersTable.normalizedName, normalizedSupplierName));
+        }
+      }
       const [purchase] = await tx
         .insert(inventoryPurchasesTable)
-        .values({ documentName, hasReceipt: input.hasReceipt, date: input.date, totalAmount })
+        .values({ documentName: supplier.name, hasReceipt: input.hasReceipt, date: input.date, totalAmount })
         .returning();
       const purchaseLines = [];
       for (const item of normalizedItems) {
@@ -1895,7 +1946,7 @@ router.post("/inventory/purchases", async (req, res, next) => {
       await tx.insert(cashTransactionsTable).values({
         type: "expense",
         category: "Бараа материал",
-        description: documentName,
+        description: supplier.name,
         amount: totalAmount,
         date: input.date,
         sourceType: "inventory_purchase",
@@ -1905,7 +1956,7 @@ router.post("/inventory/purchases", async (req, res, next) => {
     });
     res.status(201).json(CreateInventoryPurchaseResponse.parse({
       id: result.purchase.id,
-      documentName: result.purchase.documentName,
+      supplierName: result.purchase.documentName,
       hasReceipt: result.purchase.hasReceipt,
       date: result.purchase.date,
       totalAmount: Number(result.purchase.totalAmount),
@@ -1931,9 +1982,9 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
   try {
     const { id } = UpdateInventoryPurchaseParams.parse(req.params);
     const input = UpdateInventoryPurchaseBody.parse(req.body);
-    const documentName = input.documentName.trim();
-    if (!documentName) {
-      res.status(400).json({ error: "Баримтын нэр хоосон байж болохгүй" });
+    const supplierName = input.supplierName.trim();
+    if (!supplierName) {
+      res.status(400).json({ error: "Харилцагчийн нэр хоосон байж болохгүй" });
       return;
     }
     const [existing] = await db.select().from(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, id));
@@ -1961,6 +2012,19 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
     }
     const totalAmount = money(normalizedItems.reduce((total, item) => total + item.totalAmount, 0));
     const result = await db.transaction(async (tx) => {
+      const normalizedSupplierName = supplierName.toLocaleLowerCase("mn-MN");
+      let [supplier] = await tx.select().from(inventorySuppliersTable)
+        .where(eq(inventorySuppliersTable.normalizedName, normalizedSupplierName));
+      if (!supplier) {
+        [supplier] = await tx.insert(inventorySuppliersTable).values({
+          name: supplierName,
+          normalizedName: normalizedSupplierName,
+        }).onConflictDoNothing().returning();
+        if (!supplier) {
+          [supplier] = await tx.select().from(inventorySuppliersTable)
+            .where(eq(inventorySuppliersTable.normalizedName, normalizedSupplierName));
+        }
+      }
       const oldLines = await tx.select().from(inventoryPurchaseItemsTable).where(eq(inventoryPurchaseItemsTable.purchaseId, id));
       for (const oldLine of oldLines) {
         if (oldLine.inventoryItemId) {
@@ -2001,7 +2065,7 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
       }
       const savedItems = await tx.insert(inventoryPurchaseItemsTable).values(purchaseLines).returning();
       const [purchase] = await tx.update(inventoryPurchasesTable).set({
-        documentName,
+        documentName: supplier.name,
         hasReceipt: input.hasReceipt,
         date: input.date,
         totalAmount,
@@ -2009,20 +2073,20 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
       await tx.insert(cashTransactionsTable).values({
         type: "expense",
         category: "Бараа материал",
-        description: documentName,
+        description: supplier.name,
         amount: totalAmount,
         date: input.date,
         sourceType: "inventory_purchase",
         sourceKey: `purchase:${id}`,
       }).onConflictDoUpdate({
         target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
-        set: { description: documentName, amount: totalAmount, date: input.date },
+        set: { description: supplier.name, amount: totalAmount, date: input.date },
       });
       return { purchase, savedItems };
     });
     res.json(UpdateInventoryPurchaseResponse.parse({
       id: result.purchase.id,
-      documentName: result.purchase.documentName,
+      supplierName: result.purchase.documentName,
       hasReceipt: result.purchase.hasReceipt,
       date: result.purchase.date,
       totalAmount: Number(result.purchase.totalAmount),

@@ -111,6 +111,13 @@ export const inventoryPurchasesTable = pgTable("inventory_purchases", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const inventorySuppliersTable = pgTable("inventory_suppliers", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  normalizedName: text("normalized_name").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const inventoryItemsTable = pgTable("inventory_items", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -187,6 +194,7 @@ export type PayrollAdvanceApproval = typeof payrollAdvanceApprovalsTable.$inferS
 export type CashTransaction = typeof cashTransactionsTable.$inferSelect;
 export type CashClosure = typeof cashClosuresTable.$inferSelect;
 export type InventoryPurchase = typeof inventoryPurchasesTable.$inferSelect;
+export type InventorySupplier = typeof inventorySuppliersTable.$inferSelect;
 export type InventoryPurchaseItem = typeof inventoryPurchaseItemsTable.$inferSelect;
 export type InventoryItem = typeof inventoryItemsTable.$inferSelect;
 export type InventoryIssue = typeof inventoryIssuesTable.$inferSelect;

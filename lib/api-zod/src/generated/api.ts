@@ -763,7 +763,7 @@ export const CloseCashDayResponse = zod.object({
  */
 export const ListInventoryPurchasesResponseItem = zod.object({
   "id": zod.number().int(),
-  "documentName": zod.string(),
+  "supplierName": zod.string(),
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
   "totalAmount": zod.number(),
@@ -798,7 +798,7 @@ export const createInventoryPurchaseBodyItemsItemUnitPriceMin = 0;
 
 
 export const CreateInventoryPurchaseBody = zod.object({
-  "documentName": zod.string().min(1),
+  "supplierName": zod.string().min(1),
   "hasReceipt": zod.boolean(),
   "date": zod.string().regex(createInventoryPurchaseBodyDateRegExp),
   "items": zod.array(zod.object({
@@ -813,7 +813,7 @@ export const CreateInventoryPurchaseBody = zod.object({
 
 export const CreateInventoryPurchaseResponse = zod.object({
   "id": zod.number().int(),
-  "documentName": zod.string(),
+  "supplierName": zod.string(),
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
   "totalAmount": zod.number(),
@@ -851,7 +851,7 @@ export const updateInventoryPurchaseBodyItemsItemUnitPriceMin = 0;
 
 
 export const UpdateInventoryPurchaseBody = zod.object({
-  "documentName": zod.string().min(1),
+  "supplierName": zod.string().min(1),
   "hasReceipt": zod.boolean(),
   "date": zod.string().regex(updateInventoryPurchaseBodyDateRegExp),
   "items": zod.array(zod.object({
@@ -866,7 +866,7 @@ export const UpdateInventoryPurchaseBody = zod.object({
 
 export const UpdateInventoryPurchaseResponse = zod.object({
   "id": zod.number().int(),
-  "documentName": zod.string(),
+  "supplierName": zod.string(),
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
   "totalAmount": zod.number(),
@@ -893,6 +893,24 @@ export const DeleteInventoryPurchaseParams = zod.object({
 })
 
 export const DeleteInventoryPurchaseResponse = zod.void()
+
+
+/**
+ * @summary List inventory suppliers with aggregated purchases
+ */
+export const ListInventorySuppliersResponseItem = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "purchaseCount": zod.number().int(),
+  "totalAmount": zod.number(),
+  "items": zod.array(zod.object({
+  "name": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "totalAmount": zod.number()
+}))
+})
+export const ListInventorySuppliersResponse = zod.array(ListInventorySuppliersResponseItem)
 
 
 /**

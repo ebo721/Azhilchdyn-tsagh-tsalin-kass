@@ -49,6 +49,7 @@ import type {
   InventoryItemUpdate,
   InventoryPurchase,
   InventoryPurchaseInput,
+  InventorySupplier,
   ListAttendanceParams,
   ListShiftPlansParams,
   LoginInput,
@@ -2911,6 +2912,83 @@ export const useDeleteInventoryPurchase = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getDeleteInventoryPurchaseMutationOptions(options));
     }
+
+export const getListInventorySuppliersUrl = () => {
+
+
+
+
+  return `/api/inventory/suppliers`
+}
+
+/**
+ * @summary List inventory suppliers with aggregated purchases
+ */
+export const listInventorySuppliers = async ( options?: Parameters<typeof customFetch>[1]): Promise<InventorySupplier[]> => {
+
+  return customFetch<InventorySupplier[]>(getListInventorySuppliersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListInventorySuppliersQueryKey = () => {
+    return [
+    `/api/inventory/suppliers`
+    ] as const;
+    }
+
+
+export const getListInventorySuppliersQueryOptions = <TData = Awaited<ReturnType<typeof listInventorySuppliers>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInventorySuppliers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListInventorySuppliersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listInventorySuppliers>>> = ({ signal }) => listInventorySuppliers({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listInventorySuppliers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListInventorySuppliersQueryResult = NonNullable<Awaited<ReturnType<typeof listInventorySuppliers>>>
+export type ListInventorySuppliersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List inventory suppliers with aggregated purchases
+ */
+
+export function useListInventorySuppliers<TData = Awaited<ReturnType<typeof listInventorySuppliers>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInventorySuppliers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListInventorySuppliersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListInventoryItemsUrl = () => {
 

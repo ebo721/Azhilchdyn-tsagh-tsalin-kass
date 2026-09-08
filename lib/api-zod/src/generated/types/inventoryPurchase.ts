@@ -9,7 +9,7 @@ import type { InventoryPurchaseItem } from './inventoryPurchaseItem';
 
 export interface InventoryPurchase {
   id: number;
-  documentName: string;
+  supplierName: string;
   hasReceipt: boolean;
   date: string;
   totalAmount: number;

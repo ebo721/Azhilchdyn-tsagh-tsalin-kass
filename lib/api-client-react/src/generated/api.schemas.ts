@@ -471,7 +471,7 @@ export interface InventoryPurchaseItem {
 
 export interface InventoryPurchase {
   id: number;
-  documentName: string;
+  supplierName: string;
   hasReceipt: boolean;
   date: string;
   totalAmount: number;
@@ -509,12 +509,27 @@ export interface InventoryPurchaseItemInput {
 
 export interface InventoryPurchaseInput {
   /** @minLength 1 */
-  documentName: string;
+  supplierName: string;
   hasReceipt: boolean;
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
   date: string;
   /** @minItems 1 */
   items: InventoryPurchaseItemInput[];
+}
+
+export interface InventorySupplierItem {
+  name: string;
+  unit: string;
+  quantity: number;
+  totalAmount: number;
+}
+
+export interface InventorySupplier {
+  id: number;
+  name: string;
+  purchaseCount: number;
+  totalAmount: number;
+  items: InventorySupplierItem[];
 }
 
 export interface InventoryItem {

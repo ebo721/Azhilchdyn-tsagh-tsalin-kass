@@ -633,6 +633,20 @@ paths:
       responses:
         "204":
           description: Deleted inventory purchase
+  /inventory/suppliers:
+    get:
+      operationId: listInventorySuppliers
+      tags: [inventory]
+      summary: List inventory suppliers with aggregated purchases
+      responses:
+        "200":
+          description: Inventory suppliers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventorySupplier"
   /inventory/items:
     get:
       operationId: listInventoryItems
@@ -1196,10 +1210,10 @@ components:
         totalAmount: { type: number }
     InventoryPurchase:
       type: object
-      required: [id, documentName, hasReceipt, date, totalAmount, createdAt, editable, items]
+      required: [id, supplierName, hasReceipt, date, totalAmount, createdAt, editable, items]
       properties:
         id: { type: integer }
-        documentName: { type: string }
+        supplierName: { type: string }
         hasReceipt: { type: boolean }
         date: { type: string }
         totalAmount: { type: number }
@@ -1223,9 +1237,9 @@ components:
         unitPrice: { type: number, minimum: 0 }
     InventoryPurchaseInput:
       type: object
-      required: [documentName, hasReceipt, date, items]
+      required: [supplierName, hasReceipt, date, items]
       properties:
-        documentName: { type: string, minLength: 1 }
+        supplierName: { type: string, minLength: 1 }
         hasReceipt: { type: boolean }
         date:
           type: string
@@ -1235,6 +1249,26 @@ components:
           minItems: 1
           items:
             $ref: "#/components/schemas/InventoryPurchaseItemInput"
+    InventorySupplierItem:
+      type: object
+      required: [name, unit, quantity, totalAmount]
+      properties:
+        name: { type: string }
+        unit: { type: string }
+        quantity: { type: number }
+        totalAmount: { type: number }
+    InventorySupplier:
+      type: object
+      required: [id, name, purchaseCount, totalAmount, items]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        purchaseCount: { type: integer }
+        totalAmount: { type: number }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InventorySupplierItem"
     InventoryItem:
       type: object
       required: [id, name, category, unit, quantity, createdAt]
