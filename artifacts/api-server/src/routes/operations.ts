@@ -621,6 +621,10 @@ router.patch("/employees/:id", async (req, res, next) => {
         .where(eq(employeesTable.id, id))
         .returning();
       if (salaryChanged && salaryEffectiveDate) {
+        await tx.delete(employeeSalaryHistoryTable).where(and(
+          eq(employeeSalaryHistoryTable.employeeId, id),
+          gte(employeeSalaryHistoryTable.effectiveFrom, salaryEffectiveDate),
+        ));
         await tx.insert(employeeSalaryHistoryTable).values({
           employeeId: id,
           effectiveFrom: salaryEffectiveDate,
@@ -628,14 +632,6 @@ router.patch("/employees/:id", async (req, res, next) => {
           baseSalary: employeeInput.baseSalary ?? Number(current.baseSalary),
           socialInsuranceSalary: employeeInput.socialInsuranceSalary ?? Number(current.socialInsuranceSalary),
           payrollTaxExempt: employeeInput.payrollTaxExempt ?? current.payrollTaxExempt,
-        }).onConflictDoUpdate({
-          target: [employeeSalaryHistoryTable.employeeId, employeeSalaryHistoryTable.effectiveFrom],
-          set: {
-            employeeType: employeeInput.employeeType ?? current.employeeType,
-            baseSalary: employeeInput.baseSalary ?? Number(current.baseSalary),
-            socialInsuranceSalary: employeeInput.socialInsuranceSalary ?? Number(current.socialInsuranceSalary),
-            payrollTaxExempt: employeeInput.payrollTaxExempt ?? current.payrollTaxExempt,
-          },
         });
       }
       return updated;

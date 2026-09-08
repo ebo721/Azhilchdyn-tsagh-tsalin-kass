@@ -152,4 +152,53 @@ describe("effective-dated payroll salary", () => {
     assert.equal(line.taxRelief, 18_000);
     assert.equal(line.incomeTax, 70_500);
   });
+
+  it("replaces later salary history when a new salary is effective from an earlier date", async () => {
+    const response = await fetch(`${baseUrl}/api/employees/${employeeId}`, {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        cookie: adminCookie,
+      },
+      body: JSON.stringify({
+        baseSalary: 3_300_000,
+        salaryEffectiveDate: "2099-01-08",
+      }),
+    });
+    assert.equal(response.status, 200);
+
+    const history = await db.select()
+      .from(employeeSalaryHistoryTable)
+      .where(eq(employeeSalaryHistoryTable.employeeId, employeeId));
+    assert.deepEqual(
+      history.map((row) => ({
+        effectiveFrom: row.effectiveFrom,
+        baseSalary: Number(row.baseSalary),
+      })),
+      [{ effectiveFrom: "2099-01-08", baseSalary: 3_300_000 }],
+    );
+
+    const payrollResponse = await fetch(`${baseUrl}/api/payroll?month=2099-01`, {
+      headers: { cookie: adminCookie },
+    });
+    assert.equal(payrollResponse.status, 200);
+    const payroll = await payrollResponse.json() as {
+      lines: Array<{ employeeId: number; gross: number }>;
+    };
+    const line = payroll.lines.find((item) => item.employeeId === employeeId);
+    assert.ok(line);
+
+    const allWeekdays = Array.from({ length: 31 }, (_, index) => {
+      const day = index + 1;
+      const date = `2099-01-${String(day).padStart(2, "0")}`;
+      const weekday = new Date(Date.UTC(2099, 0, day)).getUTCDay();
+      return { date, isWeekday: weekday >= 1 && weekday <= 5 };
+    }).filter((item) => item.isWeekday);
+    const paidDays = allWeekdays.filter((item) =>
+      item.date >= "2099-01-08"
+      && item.date <= "2099-01-23"
+      && item.date !== "2099-01-20"
+    ).length;
+    assert.equal(line.gross, Math.round((paidDays * 3_300_000 / allWeekdays.length) * 100) / 100);
+  });
 });
