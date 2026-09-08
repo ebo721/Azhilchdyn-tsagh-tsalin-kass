@@ -600,6 +600,8 @@ export interface InventoryItem {
 
 export interface InventoryItemUpdate {
   /** @minLength 1 */
+  name: string;
+  /** @minLength 1 */
   category: string;
 }
 

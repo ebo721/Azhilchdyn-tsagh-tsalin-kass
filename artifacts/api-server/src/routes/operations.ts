@@ -1852,19 +1852,28 @@ router.put("/inventory/items/:id", async (req, res, next) => {
   try {
     const { id } = UpdateInventoryItemParams.parse(req.params);
     const input = UpdateInventoryItemBody.parse(req.body);
+    const name = input.name.normalize("NFKC").trim().replace(/\s+/g, " ");
+    const normalizedName = name.toLocaleLowerCase("mn-MN");
     const category = input.category.trim();
-    if (!category) {
-      res.status(400).json({ error: "Ангилал хоосон байж болохгүй" });
+    if (!name || !category) {
+      res.status(400).json({ error: "Барааны нэр болон ангилал хоосон байж болохгүй" });
+      return;
+    }
+    const [duplicate] = await db.select({ id: inventoryItemsTable.id })
+      .from(inventoryItemsTable)
+      .where(eq(inventoryItemsTable.normalizedName, normalizedName));
+    if (duplicate && duplicate.id !== id) {
+      res.status(409).json({ error: "Ийм нэртэй бараа материал аль хэдийн байна" });
       return;
     }
     const item = await db.transaction(async (tx) => {
       const [updatedItem] = await tx.update(inventoryItemsTable)
-        .set({ category })
+        .set({ name, normalizedName, category })
         .where(eq(inventoryItemsTable.id, id))
         .returning();
       if (updatedItem) {
         await tx.update(inventoryPurchaseItemsTable)
-          .set({ category })
+          .set({ name, category })
           .where(eq(inventoryPurchaseItemsTable.inventoryItemId, id));
       }
       return updatedItem;

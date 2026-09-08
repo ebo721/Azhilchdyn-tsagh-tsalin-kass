@@ -1124,7 +1124,9 @@ export const UpdateInventoryItemParams = zod.object({
 
 
 
+
 export const UpdateInventoryItemBody = zod.object({
+  "name": zod.string().min(1),
   "category": zod.string().min(1)
 })
 

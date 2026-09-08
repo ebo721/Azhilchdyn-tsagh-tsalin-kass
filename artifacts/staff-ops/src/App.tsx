@@ -902,7 +902,7 @@ function Inventory() {
   const issueForm = useForm<{ inventoryItemId: string; date: string; quantity: string; purpose: string }>({
     defaultValues: { inventoryItemId: '', date: today(), quantity: '', purpose: '' },
   });
-  const categoryForm = useForm<{ category: string }>({ defaultValues: { category: '' } });
+  const categoryForm = useForm<{ name: string; category: string }>({ defaultValues: { name: '', category: '' } });
   const supplierForm = useForm<{ name: string }>({ defaultValues: { name: '' } });
   const paymentForm = useForm<{ date: string; amount: string }>({ defaultValues: { date: today(), amount: '' } });
   const watchedItems = form.watch('items');
@@ -977,13 +977,15 @@ function Inventory() {
   };
   const editCategory = (item: InventoryItem) => {
     setCategoryItem(item);
-    categoryForm.reset({ category: item.category });
+    categoryForm.reset({ name: item.name, category: item.category });
   };
-  const submitCategory = (values: { category: string }) => {
+  const submitCategory = (values: { name: string; category: string }) => {
     if (!categoryItem) return;
-    updateCatalogItem.mutate({ id: categoryItem.id, data: { category: values.category } }, {
+    updateCatalogItem.mutate({ id: categoryItem.id, data: values }, {
       onSuccess: () => {
         catalog.refetch();
+        qc.invalidateQueries({ queryKey: getListInventoryPurchasesQueryKey() });
+        qc.invalidateQueries({ queryKey: getListInventorySuppliersQueryKey() });
         setCategoryItem(null);
       },
     });
@@ -1132,10 +1134,11 @@ function Inventory() {
     {selectedItem && <Modal title={selectedItem.name} detail={`${selectedItem.category} · Үлдэгдэл ${selectedItem.quantity} ${selectedItem.unit}`} onClose={() => setSelectedItem(null)}>
       {!selectedItemHistory.length ? <EmptyState title="Худалдан авалтын түүх алга" detail="Энэ бараанд холбогдох худалдан авалт олдсонгүй." icon={PackageOpen} /> : <div className="max-h-[60vh] overflow-y-auto"><div className="overflow-x-auto"><table className="w-full min-w-[560px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-3 py-2">Огноо</th><th className="px-3 py-2 text-right">Тоо</th><th className="px-3 py-2">Нэгж</th><th className="px-3 py-2 text-right">Нэгж үнэ</th><th className="px-3 py-2 text-right">Нийт үнэ</th></tr></thead><tbody className="divide-y divide-border">{selectedItemHistory.map((line) => <tr key={`${line.purchaseId}-${line.id}`}><td className="px-3 py-3 text-sm font-semibold">{dateLabel(line.date)}</td><td className="px-3 py-3 text-right font-mono text-sm">{line.quantity}</td><td className="px-3 py-3 text-sm text-muted-foreground">{line.unit}</td><td className="px-3 py-3 text-right font-mono text-sm">{money(line.unitPrice)}</td><td className="px-3 py-3 text-right font-mono text-sm font-bold">{money(line.totalAmount)}</td></tr>)}</tbody></table></div></div>}
     </Modal>}
-    {categoryItem && <Modal title="Барааны ангилал засах" detail={categoryItem.name} onClose={() => setCategoryItem(null)}>
+    {categoryItem && <Modal title="Бараа материал засах" detail={`${categoryItem.quantity} ${categoryItem.unit} үлдэгдэлтэй`} onClose={() => setCategoryItem(null)}>
       <Form {...categoryForm}><form onSubmit={categoryForm.handleSubmit(submitCategory)} className="space-y-5" data-testid="form-inventory-category">
+        <label className="block space-y-2 text-xs font-semibold">Бараа материалын нэр<input className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...categoryForm.register('name', { required: true })} data-testid="input-inventory-name-edit" /></label>
         <label className="block space-y-2 text-xs font-semibold">Ангилал<input className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...categoryForm.register('category', { required: true })} data-testid="input-inventory-category-edit" /></label>
-        {updateCatalogItem.isError && <p className="text-xs font-semibold text-destructive">Ангиллыг хадгалахад алдаа гарлаа.</p>}
+        {updateCatalogItem.isError && <p className="text-xs font-semibold text-destructive">Мэдээллийг хадгалахад алдаа гарлаа. Ижил нэртэй бараа байгаа эсэхийг шалгана уу.</p>}
         <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setCategoryItem(null)}>Болих</Button><Button type="submit" disabled={updateCatalogItem.isPending} data-testid="button-save-inventory-category">{updateCatalogItem.isPending ? 'Хадгалж байна...' : 'Хадгалах'}</Button></div>
       </form></Form>
     </Modal>}
