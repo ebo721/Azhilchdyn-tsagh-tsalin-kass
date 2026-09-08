@@ -43,6 +43,7 @@ export * from './hourBalanceLine';
 export * from './inventoryIssue';
 export * from './inventoryIssueInput';
 export * from './inventoryItem';
+export * from './inventoryItemUpdate';
 export * from './inventoryPurchase';
 export * from './inventoryPurchaseInput';
 export * from './inventoryPurchaseItem';

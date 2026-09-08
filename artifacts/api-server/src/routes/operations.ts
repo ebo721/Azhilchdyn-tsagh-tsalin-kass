@@ -33,6 +33,9 @@ import {
   CreateInventoryPurchaseResponse,
   ListInventoryPurchasesResponse,
   ListInventoryItemsResponse,
+  UpdateInventoryItemBody,
+  UpdateInventoryItemParams,
+  UpdateInventoryItemResponse,
   UpdateInventoryPurchaseBody,
   UpdateInventoryPurchaseParams,
   UpdateInventoryPurchaseResponse,
@@ -1336,6 +1339,33 @@ router.get("/inventory/items", async (_req, res, next) => {
       quantity: Number(item.quantity),
       createdAt: item.createdAt.toISOString(),
     }))));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/inventory/items/:id", async (req, res, next) => {
+  try {
+    const { id } = UpdateInventoryItemParams.parse(req.params);
+    const input = UpdateInventoryItemBody.parse(req.body);
+    const category = input.category.trim();
+    if (!category) {
+      res.status(400).json({ error: "Ангилал хоосон байж болохгүй" });
+      return;
+    }
+    const [item] = await db.update(inventoryItemsTable)
+      .set({ category })
+      .where(eq(inventoryItemsTable.id, id))
+      .returning();
+    if (!item) {
+      res.status(404).json({ error: "Бараа материал олдсонгүй" });
+      return;
+    }
+    res.json(UpdateInventoryItemResponse.parse({
+      ...item,
+      quantity: Number(item.quantity),
+      createdAt: item.createdAt.toISOString(),
+    }));
   } catch (error) {
     next(error);
   }

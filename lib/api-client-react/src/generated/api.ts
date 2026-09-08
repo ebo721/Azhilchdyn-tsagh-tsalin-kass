@@ -44,6 +44,7 @@ import type {
   InventoryIssue,
   InventoryIssueInput,
   InventoryItem,
+  InventoryItemUpdate,
   InventoryPurchase,
   InventoryPurchaseInput,
   ListAttendanceParams,
@@ -2985,6 +2986,78 @@ export function useListInventoryItems<TData = Awaited<ReturnType<typeof listInve
 
 
 
+
+export const getUpdateInventoryItemUrl = (id: number,) => {
+
+
+
+
+  return `/api/inventory/items/${id}`
+}
+
+/**
+ * @summary Update inventory item category
+ */
+export const updateInventoryItem = async (id: number,
+    inventoryItemUpdate: InventoryItemUpdate, options?: Parameters<typeof customFetch>[1]): Promise<InventoryItem> => {
+
+  return customFetch<InventoryItem>(getUpdateInventoryItemUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(inventoryItemUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateInventoryItemMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInventoryItem>>, TError,{id: number;data: BodyType<InventoryItemUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateInventoryItem>>, TError,{id: number;data: BodyType<InventoryItemUpdate>}, TContext> => {
+
+const mutationKey = ['updateInventoryItem'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateInventoryItem>>, {id: number;data: BodyType<InventoryItemUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateInventoryItem(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateInventoryItemMutationResult = NonNullable<Awaited<ReturnType<typeof updateInventoryItem>>>
+    export type UpdateInventoryItemMutationBody = BodyType<InventoryItemUpdate>
+    export type UpdateInventoryItemMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update inventory item category
+ */
+export const useUpdateInventoryItem = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInventoryItem>>, TError,{id: number;data: BodyType<InventoryItemUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateInventoryItem>>,
+        TError,
+        {id: number;data: BodyType<InventoryItemUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateInventoryItemMutationOptions(options));
+    }
 
 export const getListInventoryIssuesUrl = () => {
 

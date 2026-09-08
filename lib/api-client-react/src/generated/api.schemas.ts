@@ -520,6 +520,11 @@ export interface InventoryItem {
   createdAt: string;
 }
 
+export interface InventoryItemUpdate {
+  /** @minLength 1 */
+  category: string;
+}
+
 export interface InventoryIssue {
   id: number;
   inventoryItemId: number;

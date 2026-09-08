@@ -898,6 +898,30 @@ export const ListInventoryItemsResponse = zod.array(ListInventoryItemsResponseIt
 
 
 /**
+ * @summary Update inventory item category
+ */
+export const UpdateInventoryItemParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+
+export const UpdateInventoryItemBody = zod.object({
+  "category": zod.string().min(1)
+})
+
+export const UpdateInventoryItemResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "createdAt": zod.string()
+})
+
+
+/**
  * @summary List inventory issues
  */
 export const ListInventoryIssuesResponseItem = zod.object({

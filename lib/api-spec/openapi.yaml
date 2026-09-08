@@ -647,6 +647,26 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/InventoryItem"
+  /inventory/items/{id}:
+    put:
+      operationId: updateInventoryItem
+      tags: [inventory]
+      summary: Update inventory item category
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryItemUpdate"
+      responses:
+        "200":
+          description: Updated inventory item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
   /inventory/issues:
     get:
       operationId: listInventoryIssues
@@ -1133,6 +1153,11 @@ components:
         unit: { type: string }
         quantity: { type: number }
         createdAt: { type: string }
+    InventoryItemUpdate:
+      type: object
+      required: [category]
+      properties:
+        category: { type: string, minLength: 1 }
     InventoryIssue:
       type: object
       required: [id, inventoryItemId, itemName, unit, date, quantity, purpose, createdAt]
