@@ -1686,10 +1686,18 @@ router.put("/inventory/items/:id", async (req, res, next) => {
       res.status(400).json({ error: "Ангилал хоосон байж болохгүй" });
       return;
     }
-    const [item] = await db.update(inventoryItemsTable)
-      .set({ category })
-      .where(eq(inventoryItemsTable.id, id))
-      .returning();
+    const item = await db.transaction(async (tx) => {
+      const [updatedItem] = await tx.update(inventoryItemsTable)
+        .set({ category })
+        .where(eq(inventoryItemsTable.id, id))
+        .returning();
+      if (updatedItem) {
+        await tx.update(inventoryPurchaseItemsTable)
+          .set({ category })
+          .where(eq(inventoryPurchaseItemsTable.inventoryItemId, id));
+      }
+      return updatedItem;
+    });
     if (!item) {
       res.status(404).json({ error: "Бараа материал олдсонгүй" });
       return;
