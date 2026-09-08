@@ -1,26 +1,42 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { after, before, describe, it } from "node:test";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { UpsertShiftPlanBody } from "@workspace/api-zod";
+import { db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import app from "../app.ts";
 import { createStaffSession, hrCookie } from "../lib/hr-session.ts";
 
 describe("PUT /api/attendance/shift-plans", () => {
-  let server: Server;
+  let server: Server | undefined;
   let baseUrl: string;
   let adminCookie: string;
+  let testUserId: number | undefined;
 
-  before(() => {
+  before(async () => {
     process.env.SESSION_SECRET = "shift-plan-date-regression-test";
-    adminCookie = `${hrCookie.name}=${createStaffSession("admin")}`;
+    const uniqueName = `operations-shift-plan-${process.pid}-${randomUUID()}`;
+    const [testUser] = await db.insert(usersTable).values({
+      username: uniqueName,
+      normalizedUsername: uniqueName,
+      role: "admin",
+      passwordHash: "not-used-by-session-tests",
+    }).returning();
+    assert.ok(testUser);
+    testUserId = testUser.id;
+    adminCookie = `${hrCookie.name}=${createStaffSession(testUser)}`;
     server = app.listen(0);
     const address = server.address() as AddressInfo;
     baseUrl = `http://127.0.0.1:${address.port}`;
   });
 
-  after(() => {
-    server.close();
+  after(async () => {
+    server?.close();
+    if (testUserId !== undefined) {
+      await db.delete(usersTable).where(eq(usersTable.id, testUserId));
+    }
   });
 
   it("rejects a nonexistent calendar date with 400", async () => {
@@ -50,20 +66,33 @@ describe("PUT /api/attendance/shift-plans", () => {
 });
 
 describe("calendar month request validation", () => {
-  let server: Server;
+  let server: Server | undefined;
   let baseUrl: string;
   let adminCookie: string;
+  let testUserId: number | undefined;
 
-  before(() => {
+  before(async () => {
     process.env.SESSION_SECRET = "calendar-month-regression-test";
-    adminCookie = `${hrCookie.name}=${createStaffSession("admin")}`;
+    const uniqueName = `operations-calendar-month-${process.pid}-${randomUUID()}`;
+    const [testUser] = await db.insert(usersTable).values({
+      username: uniqueName,
+      normalizedUsername: uniqueName,
+      role: "admin",
+      passwordHash: "not-used-by-session-tests",
+    }).returning();
+    assert.ok(testUser);
+    testUserId = testUser.id;
+    adminCookie = `${hrCookie.name}=${createStaffSession(testUser)}`;
     server = app.listen(0);
     const address = server.address() as AddressInfo;
     baseUrl = `http://127.0.0.1:${address.port}`;
   });
 
-  after(() => {
-    server.close();
+  after(async () => {
+    server?.close();
+    if (testUserId !== undefined) {
+      await db.delete(usersTable).where(eq(usersTable.id, testUserId));
+    }
   });
 
   for (const month of ["2026-00", "2026-13"]) {
