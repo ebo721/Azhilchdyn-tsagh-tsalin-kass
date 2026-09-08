@@ -473,4 +473,8 @@
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
   }
+
+  [data-testid^='value-payroll-remaining-'] {
+    min-width: 10rem;
+  }
 }
