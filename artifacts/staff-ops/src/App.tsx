@@ -102,8 +102,16 @@ import NotFound from '@/pages/not-found';
 const queryClient = new QueryClient();
 
 const money = (value = 0) => `${new Intl.NumberFormat('mn-MN').format(value)} ₮`;
-const dateLabel = (value: string) =>
-  new Intl.DateTimeFormat('mn-MN', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value));
+const dateLabel = (value: string) => {
+  const calendarDate = /^\d{4}-(\d{2})-(\d{2})$/.exec(value);
+  if (calendarDate) {
+    const [year, month, day] = value.split('-').map(Number);
+    return `${year} оны ${month}-р сарын ${day}`;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return `${date.getFullYear()} оны ${date.getMonth() + 1}-р сарын ${date.getDate()}`;
+};
 const today = () => new Date().toISOString().slice(0, 10);
 const currentMonth = () => new Date().toISOString().slice(0, 7);
 const calendarDays = (month: string) => {
