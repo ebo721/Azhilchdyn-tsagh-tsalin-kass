@@ -4,6 +4,7 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { eq } from "drizzle-orm";
 import {
+  attendanceTable,
   db,
   employeesTable,
   employeeSalaryHistoryTable,
@@ -57,6 +58,14 @@ describe("effective-dated payroll salary", () => {
         payrollTaxExempt: true,
       },
     ]);
+    await db.insert(attendanceTable).values({
+      employeeId,
+      date: "2099-01-20",
+      clockIn: "",
+      clockOut: "",
+      hours: 0,
+      status: "leave",
+    });
     server = app.listen(0);
     const address = server.address() as AddressInfo;
     baseUrl = `http://127.0.0.1:${address.port}`;
@@ -67,7 +76,7 @@ describe("effective-dated payroll salary", () => {
     server.close();
   });
 
-  it("prorates old and new monthly salaries over inclusive employment workdays", async () => {
+  it("prorates old and new monthly salaries and excludes leave days", async () => {
     const response = await fetch(`${baseUrl}/api/payroll?month=2099-01`, {
       headers: { cookie: adminCookie },
     });
@@ -86,6 +95,7 @@ describe("effective-dated payroll salary", () => {
     }).filter((item) => item.isWeekday);
     const expectedGross = allWeekdays.reduce((total, item) => {
       if (item.date < "2099-01-08" || item.date > "2099-01-23") return total;
+      if (item.date === "2099-01-20") return total;
       return total + (item.date < "2099-01-18" ? 1_100_000 : 2_200_000) / allWeekdays.length;
     }, 0);
 

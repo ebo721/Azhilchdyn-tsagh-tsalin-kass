@@ -316,7 +316,10 @@ async function getPayrollSummary(month: string) {
     const eligibleWeekdays = weekdays.filter((date) =>
       date >= employee.joinedAt && (!employee.inactiveAt || date <= employee.inactiveAt)
     );
-    const officeGross = eligibleWeekdays.reduce((total, date) => {
+    const paidWeekdays = eligibleWeekdays.filter((date) =>
+      !employeeRecords.some((record) => String(record.date) === date && record.status === "leave")
+    );
+    const officeGross = paidWeekdays.reduce((total, date) => {
       const salary = salaryAt(employee, salaryHistory, date);
       return total + (salary.employeeType === "office" ? Number(salary.baseSalary) / weekdays.length : 0);
     }, 0);
@@ -327,7 +330,7 @@ async function getPayrollSummary(month: string) {
         return total + (salary.employeeType === "shift" ? Number(salary.baseSalary) : 0);
       }, 0);
     const gross = money(officeGross + shiftGross);
-    const socialInsuranceSalary = money(eligibleWeekdays.reduce((total, date) => {
+    const socialInsuranceSalary = money(paidWeekdays.reduce((total, date) => {
       const salary = salaryAt(employee, salaryHistory, date);
       return total + (salary.payrollTaxExempt ? 0 : Number(salary.socialInsuranceSalary) / weekdays.length);
     }, 0));
