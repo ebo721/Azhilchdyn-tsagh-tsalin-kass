@@ -165,7 +165,7 @@ const mongolianWeekdayLabel = (value: string) => {
 };
 
 const nav = [
-  { href: '/', label: 'Тойм', icon: LayoutDashboard },
+  { href: '/', label: 'Статистик', icon: LayoutDashboard },
   { href: '/employees', label: 'Ажилчид', icon: UsersRound },
   { href: '/attendance', label: 'Ирц', icon: Clock3 },
   { href: '/hour-balance', label: 'Цагийн баланс', icon: Timer },
@@ -264,7 +264,7 @@ function AppShell({ children, role, onLogout }: { children: ReactNode; role: 'ad
       : role === 'warehouse'
         ? nav.filter((item) => ['/inventory', '/fixed-assets'].includes(item.href))
         : nav;
-  const active = visibleNav.find((item) => item.href === location)?.label ?? 'Тойм';
+  const active = visibleNav.find((item) => item.href === location)?.label ?? 'Статистик';
   return (
     <div className="min-h-[100dvh] bg-background app-grid">
       {role !== 'viewer' && <aside className={cn('fixed inset-y-0 left-0 z-40 flex w-[248px] flex-col bg-sidebar px-4 py-5 text-sidebar-foreground transition-transform duration-200 lg:translate-x-0', mobileOpen ? 'translate-x-0' : '-translate-x-full')} data-testid="navigation-sidebar">
@@ -287,7 +287,7 @@ function AppShell({ children, role, onLogout }: { children: ReactNode; role: 'ad
       <main className={cn('min-h-[100dvh]', role !== 'viewer' && 'lg:pl-[248px]')}>
         <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-border/70 bg-background/90 px-5 backdrop-blur-md sm:px-8" data-testid="top-header">
           <div className="flex items-center gap-3">{role !== 'viewer' && <button className="grid size-9 place-items-center rounded-xl border border-border bg-card lg:hidden" onClick={() => setMobileOpen(true)} data-testid="button-open-navigation"><Menu className="size-4" /></button>}<p className="text-sm font-semibold">{active}</p></div>
-          <div className="flex items-center gap-3"><span className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex"><span className="size-2 rounded-full bg-primary" />{role === 'hr' ? 'Хүний нөөцийн менежер' : role === 'accountant' ? 'Нягтлан' : role === 'warehouse' ? 'Нярав' : role === 'viewer' ? 'Тойм харах эрх' : 'Ерөнхий админ'}</span><button onClick={onLogout} className="grid size-9 place-items-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground" aria-label="Системээс гарах" data-testid="button-logout"><LogOut className="size-4" /></button><div className="grid size-9 place-items-center rounded-xl bg-primary text-xs font-bold text-primary-foreground" data-testid="avatar-owner">{role === 'hr' ? 'HR' : role === 'accountant' ? 'НТ' : role === 'warehouse' ? 'НЯ' : role === 'viewer' ? 'Т' : 'АД'}</div></div>
+          <div className="flex items-center gap-3"><span className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex"><span className="size-2 rounded-full bg-primary" />{role === 'hr' ? 'Хүний нөөцийн менежер' : role === 'accountant' ? 'Нягтлан' : role === 'warehouse' ? 'Нярав' : role === 'viewer' ? 'Статистик харах эрх' : 'Ерөнхий админ'}</span><button onClick={onLogout} className="grid size-9 place-items-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground" aria-label="Системээс гарах" data-testid="button-logout"><LogOut className="size-4" /></button><div className="grid size-9 place-items-center rounded-xl bg-primary text-xs font-bold text-primary-foreground" data-testid="avatar-owner">{role === 'hr' ? 'HR' : role === 'accountant' ? 'НТ' : role === 'warehouse' ? 'НЯ' : role === 'viewer' ? 'СТ' : 'АД'}</div></div>
         </header>
         <div className="mx-auto max-w-[1440px] p-5 sm:p-8">{children}</div>
       </main>
@@ -300,23 +300,19 @@ function Dashboard() {
   const data = query.data;
   return (
     <div className="page-enter">
-      <div className="mb-7 flex justify-end"><Link href="/attendance" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground transition-transform hover:-translate-y-0.5" data-testid="link-dashboard-attendance"><Clock3 className="size-4" />Ирц бүртгэх</Link></div>
-      {query.isLoading ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : (
+      {query.isLoading ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <StatCard label="Нийт ажилтан" value={`${data?.employeeCount ?? 0}`} meta="Бүртгэлтэй ажилтан" icon={UsersRound} />
             <StatCard label="Өнөөдөр ирсэн" value={`${data?.presentToday ?? 0} хүн`} meta="Ирцийн бүртгэлээс" icon={Check} tone="gold" />
-            <StatCard label="Энэ сарын цалин" value={money(data?.monthlyPayroll)} meta="Тооцоолсон нийт дүн" icon={Banknote} tone="blue" />
+            <StatCard label="Өмнөх сарын цалин" value={money(data?.previousMonthPayrollExpense)} meta="Бодитоор олгосон нийт зардал" icon={Banknote} tone="blue" />
+            <StatCard label="Өмнөх сарын материал" value={money(data?.previousMonthInventoryExpense)} meta="Худалдан авсан нийт зардал" icon={PackageOpen} tone="teal" />
             <StatCard label="Кассын үлдэгдэл" value={money(data?.cashBalance)} meta="Одоогийн бэлэн мөнгө" icon={WalletCards} tone="orange" />
           </div>
-          <div className="mt-6 grid gap-6 xl:grid-cols-[1.25fr_.75fr]">
+          <div className="mt-6">
             <section className="overflow-hidden rounded-2xl border border-border bg-card" data-testid="panel-recent-activity">
               <div className="flex items-center justify-between border-b border-border px-5 py-4"><div><p className="font-mono text-[10px] font-bold uppercase tracking-[.18em] text-primary">Live log</p><h2 className="mt-1 text-base font-bold">Сүүлийн хөдөлгөөн</h2></div><Activity className="size-4 text-muted-foreground" /></div>
               {data?.recentActivity?.length ? <div className="divide-y divide-border">{data.recentActivity.map((item) => <div className="flex gap-4 px-5 py-4 transition-colors hover:bg-secondary/45" key={item.id} data-testid={`row-activity-${item.id}`}><div className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-secondary text-primary"><Activity className="size-4" /></div><div className="min-w-0 flex-1"><p className="text-sm font-semibold">{item.title}</p><p className="mt-0.5 truncate text-xs text-muted-foreground">{item.detail}</p></div><time className="shrink-0 font-mono text-[10px] text-muted-foreground">{dateLabel(item.createdAt)}</time></div>)}</div> : <EmptyState title="Одоогоор хөдөлгөөн алга" detail="Ирц, цалин эсвэл кассын шинэ бүртгэл энд харагдана." icon={Activity} />}
-            </section>
-            <section className="rounded-2xl bg-primary p-6 text-primary-foreground" data-testid="panel-quick-actions">
-              <p className="font-mono text-[10px] font-bold uppercase tracking-[.18em] text-accent">Quick actions</p><h2 className="mt-3 max-w-xs text-2xl font-bold leading-tight tracking-[-.03em]">Өдрийн ажлыг замбараатай эхлүүл.</h2>
-              <div className="mt-7 space-y-2">{[{ href: '/employees', label: 'Ажилтан нэмэх', icon: UserRound }, { href: '/payroll', label: 'Цалингийн тойм харах', icon: Receipt }, { href: '/cash', label: 'Кассын гүйлгээ оруулах', icon: Coins }].map(({ href, label, icon: Icon }) => <Link href={href} key={href} className="flex items-center gap-3 rounded-xl border border-primary-foreground/15 bg-primary-foreground/8 px-3 py-3 text-sm font-semibold transition-colors hover:bg-primary-foreground/15" data-testid={`link-quick-${label}`}><Icon className="size-4 text-accent" />{label}<ChevronRight className="ml-auto size-4 opacity-60" /></Link>)}</div>
             </section>
           </div>
         </>

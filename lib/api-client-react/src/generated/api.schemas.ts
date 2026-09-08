@@ -47,7 +47,8 @@ export interface Activity {
 export interface Dashboard {
   employeeCount: number;
   presentToday: number;
-  monthlyPayroll: number;
+  previousMonthPayrollExpense: number;
+  previousMonthInventoryExpense: number;
   cashBalance: number;
   recentActivity: Activity[];
 }

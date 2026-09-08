@@ -367,13 +367,25 @@ async function getPayrollAdvanceSummary(month: string) {
 
 router.get("/dashboard", async (_req, res, next) => {
   try {
-    const [employees, records, transactions] = await Promise.all([
+    const [employees, records, transactions, inventoryPurchases] = await Promise.all([
       db.select().from(employeesTable),
       db.select().from(attendanceTable),
       db.select().from(cashTransactionsTable).orderBy(desc(cashTransactionsTable.createdAt)),
+      db.select({
+        date: inventoryPurchasesTable.date,
+        totalAmount: inventoryPurchasesTable.totalAmount,
+      }).from(inventoryPurchasesTable),
     ]);
     const todayRecords = records.filter((record) => String(record.date) === today());
-    const payroll = await getPayrollSummary(currentMonth());
+    const previousMonthValue = previousMonth(currentMonth());
+    const previousMonthPayrollExpense = transactions
+      .filter((transaction) => transaction.date.startsWith(previousMonthValue)
+        && transaction.type === "expense"
+        && (transaction.sourceType === "payroll" || transaction.sourceType === "payroll_advance"))
+      .reduce((total, transaction) => total + Number(transaction.amount), 0);
+    const previousMonthInventoryExpense = inventoryPurchases
+      .filter((purchase) => purchase.date.startsWith(previousMonthValue))
+      .reduce((total, purchase) => total + Number(purchase.totalAmount), 0);
     const balance = transactions.reduce(
       (total, transaction) =>
         total + (transaction.type === "income" ? Number(transaction.amount) : -Number(transaction.amount)),
@@ -399,7 +411,8 @@ router.get("/dashboard", async (_req, res, next) => {
     const data = GetDashboardResponse.parse({
       employeeCount: employees.filter((employee) => employee.status === "active").length,
       presentToday: todayRecords.filter((record) => ["present", "late"].includes(record.status)).length,
-      monthlyPayroll: payroll.totalNet,
+      previousMonthPayrollExpense: money(previousMonthPayrollExpense),
+      previousMonthInventoryExpense: money(previousMonthInventoryExpense),
       cashBalance: money(balance),
       recentActivity: [...recentAttendance, ...recentCash]
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
