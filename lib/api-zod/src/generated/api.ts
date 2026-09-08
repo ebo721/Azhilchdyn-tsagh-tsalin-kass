@@ -562,11 +562,14 @@ export const RevertPayrollAdvanceApprovalResponse = zod.object({
  * @summary Mark an approved employee payroll advance as paid or unpaid
  */
 export const updatePayrollAdvancePaymentBodyMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+export const updatePayrollAdvancePaymentBodyAdvanceAmountMin = 0;
+
 
 
 export const UpdatePayrollAdvancePaymentBody = zod.object({
   "month": zod.string().regex(updatePayrollAdvancePaymentBodyMonthRegExp),
   "employeeId": zod.number().int(),
+  "advanceAmount": zod.number().min(updatePayrollAdvancePaymentBodyAdvanceAmountMin),
   "paid": zod.boolean(),
   "paymentDate": zod.string().nullish()
 })

@@ -370,6 +370,8 @@ export interface PayrollAdvancePaymentInput {
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])$ */
   month: string;
   employeeId: number;
+  /** @minimum 0 */
+  advanceAmount: number;
   paid: boolean;
   /** @nullable */
   paymentDate?: string | null;

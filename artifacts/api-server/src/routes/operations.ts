@@ -905,7 +905,12 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
     }
     const lines: Array<Record<string, unknown>> = sourceLines.map((line) => (
           Number(line.employeeId) === input.employeeId
-            ? { ...line, paid: input.paid, paymentDate: input.paid ? input.paymentDate : null }
+            ? {
+                ...line,
+                advanceAmount: money(input.advanceAmount),
+                paid: input.paid,
+                paymentDate: input.paid ? input.paymentDate : null,
+              }
             : {
                 ...line,
                 paid: line.paid === true,
@@ -920,10 +925,11 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
     }
     const sourceType = "payroll_advance";
     const sourceKey = `${input.month}:${input.employeeId}`;
+    const totalAmount = money(lines.reduce((total, line) => total + Number(line.advanceAmount), 0));
     await db.transaction(async (tx) => {
       await tx
         .update(payrollAdvanceApprovalsTable)
-        .set({ lines })
+        .set({ lines, totalAmount })
         .where(eq(payrollAdvanceApprovalsTable.id, approval.id));
 
       if (input.paid && input.paymentDate) {
