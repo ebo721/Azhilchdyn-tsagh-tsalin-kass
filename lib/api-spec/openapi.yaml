@@ -740,6 +740,39 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BankTransaction" }
+  /bank-transactions/{id}/cash-suggestions:
+    get:
+      operationId: listBankTransactionCashSuggestions
+      tags: [bank-transactions]
+      summary: List matching unlinked cash transactions for a bank transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Ranked cash transaction suggestions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CashTransactionSuggestion" }
+  /bank-transactions/{id}/link-cash:
+    post:
+      operationId: linkBankTransactionToCash
+      tags: [bank-transactions]
+      summary: Verify an existing cash transaction against a bank transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankTransactionCashLinkInput" }
+      responses:
+        "200":
+          description: Bank transaction linked to the existing cash transaction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankTransaction" }
   /bank-transactions/{id}:
     delete:
       operationId: deleteBankTransaction
@@ -1454,6 +1487,27 @@ components:
       required: [category]
       properties:
         category: { type: string, minLength: 1, maxLength: 200 }
+    BankTransactionCashLinkInput:
+      type: object
+      required: [cashTransactionId]
+      properties:
+        cashTransactionId: { type: integer, minimum: 1 }
+    CashTransactionSuggestion:
+      type: object
+      required: [id, type, category, description, amount, date, bankTransactionId, bankVerifiedAt, createdAt, editable, transactionKind, score]
+      properties:
+        id: { type: integer }
+        type: { type: string, enum: [income, expense] }
+        category: { type: string }
+        description: { type: string }
+        amount: { type: number }
+        date: { type: string }
+        bankTransactionId: { type: ["integer", "null"] }
+        bankVerifiedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string }
+        editable: { type: boolean }
+        transactionKind: { type: string, enum: [manual, payroll, payroll_advance, inventory_purchase, fixed_asset_purchase, bank_transaction] }
+        score: { type: number }
     CashTransactionInput:
       type: object
       required: [type, category, description, amount, date]

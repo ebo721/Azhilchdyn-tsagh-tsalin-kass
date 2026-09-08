@@ -8,12 +8,17 @@ import { promisify } from "node:util";
 import {
   DeleteBankTransactionParams,
   ImportKapitronBankTransactionsResponse,
+  LinkBankTransactionToCashBody,
+  LinkBankTransactionToCashParams,
+  LinkBankTransactionToCashResponse,
+  ListBankTransactionCashSuggestionsParams,
+  ListBankTransactionCashSuggestionsResponse,
   ListBankTransactionsResponse,
   TransferBankTransactionToCashBody,
   TransferBankTransactionToCashParams,
   TransferBankTransactionToCashResponse,
 } from "@workspace/api-zod";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte } from "drizzle-orm";
 import { bankTransactionsTable, cashClosuresTable, cashTransactionsTable, db, deletionRequestsTable } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session";
 
@@ -77,6 +82,46 @@ function parseDate(value: string): Date | null {
 function parseAmount(value: string) {
   const amount = Number(value.replace(/[\s,]/g, ""));
   return Number.isFinite(amount) ? Math.abs(amount) : 0;
+}
+
+function calendarDateOffset(date: string, offset: number) {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + offset);
+  return value.toISOString().slice(0, 10);
+}
+
+function descriptionTokens(value: string) {
+  return new Set(value.toLocaleLowerCase("mn-MN").match(/[\p{L}\p{N}]+/gu) ?? []);
+}
+
+function suggestionScore(bank: typeof bankTransactionsTable.$inferSelect, cash: typeof cashTransactionsTable.$inferSelect) {
+  const bankDate = bank.transactionAt.toISOString().slice(0, 10);
+  const distance = Math.abs((Date.parse(`${cash.date}T00:00:00Z`) - Date.parse(`${bankDate}T00:00:00Z`)) / 86_400_000);
+  const bankAmount = Number(bank.amount);
+  const cashAmount = Number(cash.amount);
+  const amountCloseness = Math.max(0, 1 - Math.abs(bankAmount - cashAmount) / Math.max(bankAmount, cashAmount, 1));
+  const bankTokens = descriptionTokens(bank.description);
+  const cashTokens = descriptionTokens(cash.description);
+  const overlap = [...bankTokens].filter((token) => cashTokens.has(token)).length;
+  const tokenOverlap = overlap / Math.max(new Set([...bankTokens, ...cashTokens]).size, 1);
+  return Math.round((0.4 * (1 - distance / 7) + 0.35 * amountCloseness + 0.25 * tokenOverlap) * 10_000) / 100;
+}
+
+function cashSuggestionResponse(row: typeof cashTransactionsTable.$inferSelect, score: number) {
+  return {
+    id: row.id,
+    type: row.type as "income" | "expense",
+    category: row.category,
+    description: row.description,
+    amount: Number(row.amount),
+    date: String(row.date),
+    bankTransactionId: row.bankTransactionId,
+    bankVerifiedAt: row.bankVerifiedAt?.toISOString() ?? null,
+    createdAt: row.createdAt.toISOString(),
+    editable: row.sourceType === null,
+    transactionKind: (row.sourceType ?? "manual") as "manual" | "payroll" | "payroll_advance" | "inventory_purchase" | "fixed_asset_purchase" | "bank_transaction",
+    score,
+  };
 }
 
 async function readXlsx(buffer: Buffer) {
@@ -214,6 +259,91 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
       const [bank] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id));
       if (bank && (bank.cashTransactionId !== null || bank.transferredAt !== null)) {
         res.json(TransferBankTransactionToCashResponse.parse(response(bank)));
+        return;
+      }
+      res.status(409).json({ error: "Банк эсвэл кассын гүйлгээ аль хэдийн холбогдсон байна" });
+      return;
+    }
+    next(error);
+  }
+});
+
+router.get("/bank-transactions/:id/cash-suggestions", async (req, res, next) => {
+  try {
+    const { id } = ListBankTransactionCashSuggestionsParams.parse(req.params);
+    const [bank] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id));
+    if (!bank) {
+      res.status(404).json({ error: "Банкны гүйлгээ олдсонгүй" });
+      return;
+    }
+    const bankDate = bank.transactionAt.toISOString().slice(0, 10);
+    const candidates = await db.select().from(cashTransactionsTable).where(and(
+      eq(cashTransactionsTable.type, bank.type),
+      isNull(cashTransactionsTable.bankTransactionId),
+      gte(cashTransactionsTable.date, calendarDateOffset(bankDate, -7)),
+      lte(cashTransactionsTable.date, calendarDateOffset(bankDate, 7)),
+    ));
+    const suggestions = candidates.map((cash) => ({ cash, score: suggestionScore(bank, cash) }))
+      .sort((left, right) => right.score - left.score || left.cash.id - right.cash.id)
+      .slice(0, 10)
+      .map(({ cash, score }) => cashSuggestionResponse(cash, score));
+    res.json(ListBankTransactionCashSuggestionsResponse.parse(suggestions));
+  } catch (error) { next(error); }
+});
+
+router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
+  try {
+    const { id } = LinkBankTransactionToCashParams.parse(req.params);
+    const { cashTransactionId } = LinkBankTransactionToCashBody.parse(req.body);
+    const result = await db.transaction(async (tx) => {
+      const [[bank], [cash]] = await Promise.all([
+        tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id)),
+        tx.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, cashTransactionId)),
+      ]);
+      if (!bank) return "missing-bank" as const;
+      if (!cash) return "missing-cash" as const;
+      if (bank.cashTransactionId !== null || bank.transferredAt !== null) {
+        return bank.cashTransactionId === cashTransactionId ? bank : "resolved" as const;
+      }
+      if (cash.type !== bank.type) return "type-mismatch" as const;
+      if (cash.bankTransactionId !== null) return "cash-linked" as const;
+      const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, String(cash.date)));
+      if (closed) return "closed" as const;
+      const verifiedAt = new Date();
+      const [linkedCash] = await tx.update(cashTransactionsTable)
+        .set({ bankTransactionId: id, bankVerifiedAt: verifiedAt })
+        .where(and(eq(cashTransactionsTable.id, cashTransactionId), isNull(cashTransactionsTable.bankTransactionId)))
+        .returning({ id: cashTransactionsTable.id });
+      if (!linkedCash) throw new BankCashLinkConflictError();
+      const [linkedBank] = await tx.update(bankTransactionsTable)
+        .set({ cashTransactionId, transferredAt: verifiedAt })
+        .where(and(eq(bankTransactionsTable.id, id), isNull(bankTransactionsTable.cashTransactionId), isNull(bankTransactionsTable.transferredAt)))
+        .returning();
+      if (!linkedBank) throw new BankCashLinkConflictError();
+      return linkedBank;
+    });
+    if (result === "missing-bank" || result === "missing-cash") {
+      res.status(404).json({ error: result === "missing-bank" ? "Банкны гүйлгээ олдсонгүй" : "Кассын гүйлгээ олдсонгүй" });
+      return;
+    }
+    if (typeof result === "string") {
+      const errors = {
+        resolved: "Банкны гүйлгээ аль хэдийн холбогдсон байна",
+        "type-mismatch": "Банк болон кассын гүйлгээний төрөл таарахгүй байна",
+        "cash-linked": "Кассын гүйлгээ аль хэдийн банкны гүйлгээнд холбогдсон байна",
+        closed: "Өндөрлөсөн өдрийн кассын гүйлгээг холбох боломжгүй",
+      };
+      res.status(409).json({ error: errors[result] });
+      return;
+    }
+    res.json(LinkBankTransactionToCashResponse.parse(response(result)));
+  } catch (error) {
+    if (error instanceof BankCashLinkConflictError || (error as { code?: string }).code === "23505") {
+      const { id } = LinkBankTransactionToCashParams.parse(req.params);
+      const { cashTransactionId } = LinkBankTransactionToCashBody.parse(req.body);
+      const [bank] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id));
+      if (bank?.cashTransactionId === cashTransactionId && bank.transferredAt !== null) {
+        res.json(LinkBankTransactionToCashResponse.parse(response(bank)));
         return;
       }
       res.status(409).json({ error: "Банк эсвэл кассын гүйлгээ аль хэдийн холбогдсон байна" });

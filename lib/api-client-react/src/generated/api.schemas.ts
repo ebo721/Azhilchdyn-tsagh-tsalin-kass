@@ -512,6 +512,48 @@ export interface BankTransactionCashTransferInput {
   category: string;
 }
 
+export interface BankTransactionCashLinkInput {
+  /** @minimum 1 */
+  cashTransactionId: number;
+}
+
+export type CashTransactionSuggestionType = typeof CashTransactionSuggestionType[keyof typeof CashTransactionSuggestionType];
+
+
+export const CashTransactionSuggestionType = {
+  income: 'income',
+  expense: 'expense',
+} as const;
+
+export type CashTransactionSuggestionTransactionKind = typeof CashTransactionSuggestionTransactionKind[keyof typeof CashTransactionSuggestionTransactionKind];
+
+
+export const CashTransactionSuggestionTransactionKind = {
+  manual: 'manual',
+  payroll: 'payroll',
+  payroll_advance: 'payroll_advance',
+  inventory_purchase: 'inventory_purchase',
+  fixed_asset_purchase: 'fixed_asset_purchase',
+  bank_transaction: 'bank_transaction',
+} as const;
+
+export interface CashTransactionSuggestion {
+  id: number;
+  type: CashTransactionSuggestionType;
+  category: string;
+  description: string;
+  amount: number;
+  date: string;
+  /** @nullable */
+  bankTransactionId: number | null;
+  /** @nullable */
+  bankVerifiedAt: string | null;
+  createdAt: string;
+  editable: boolean;
+  transactionKind: CashTransactionSuggestionTransactionKind;
+  score: number;
+}
+
 export type CashTransactionInputType = typeof CashTransactionInputType[keyof typeof CashTransactionInputType];
 
 

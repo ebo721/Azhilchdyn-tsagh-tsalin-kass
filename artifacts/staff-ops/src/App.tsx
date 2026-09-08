@@ -56,6 +56,7 @@ import {
   getListShiftsQueryKey,
   getListCashTransactionsQueryKey,
   getListBankTransactionsQueryKey,
+  getListBankTransactionCashSuggestionsQueryKey,
   getListCashClosuresQueryKey,
   getListEmployeesQueryKey,
   getListEmployeeSalaryHistoryQueryKey,
@@ -126,6 +127,8 @@ import {
   useUpdateUser,
   useDeleteUser,
   useImportKapitronBankTransactions,
+  useLinkBankTransactionToCash,
+  useListBankTransactionCashSuggestions,
   useTransferBankTransactionToCash,
   type Employee,
   type EmployeeSalaryHistory,
@@ -139,6 +142,7 @@ import {
   type Shift,
   type User,
   type BankTransaction,
+  type CashTransactionSuggestion,
 } from '@workspace/api-client-react';
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import NotFound from '@/pages/not-found';
@@ -979,6 +983,7 @@ function BankTransactions() {
   const cashTransactions = useListCashTransactions();
   const importStatement = useImportKapitronBankTransactions();
   const transfer = useTransferBankTransactionToCash();
+  const linkToCash = useLinkBankTransactionToCash();
   const deletion = useQueueDeletion();
   const session = useGetAuthSession();
   const qc = useQueryClient();
@@ -986,6 +991,7 @@ function BankTransactions() {
   const [importResult, setImportResult] = useState<{ imported: number; skippedDuplicate: number; skippedZero: number } | null>(null);
   const [selectedBank, setSelectedBank] = useState<BankTransaction | null>(null);
   const [category, setCategory] = useState('');
+  const suggestions = useListBankTransactionCashSuggestions(selectedBank?.id ?? 0, { query: { queryKey: getListBankTransactionCashSuggestionsQueryKey(selectedBank?.id ?? 0), enabled: Boolean(selectedBank) } });
   const canManage = session.data?.role === 'admin' || session.data?.role === 'accountant';
   const categories = useMemo(() => [...new Set((cashTransactions.data ?? []).map((transaction) => transaction.category.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [cashTransactions.data]);
   const refreshBankTransactions = () => qc.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
@@ -1031,31 +1037,52 @@ function BankTransactions() {
       onError: (error) => window.alert(error instanceof Error ? error.message : 'Кассын гүйлгээ үүсгэхэд алдаа гарлаа.'),
     });
   };
+  const linkCashTransaction = (cashTransaction: CashTransactionSuggestion) => {
+    if (!selectedBank) return;
+    linkToCash.mutate({ id: selectedBank.id, data: { cashTransactionId: cashTransaction.id } }, {
+      onSuccess: () => {
+        refreshAfterTransfer();
+        closeCashTransfer();
+      },
+      onError: (error) => window.alert(error instanceof Error ? error.message : 'Кассын гүйлгээтэй холбох үед алдаа гарлаа.'),
+    });
+  };
   const deleteRow = (row: BankTransaction) => {
     if (!window.confirm(`"${row.description || row.counterparty || 'Банкны гүйлгээ'}" гүйлгээг устгах уу?`)) return;
     void deletion.request(`/bank-transactions/${row.id}`, `${row.description || row.counterparty || 'Банкны'} гүйлгээ`).then(refreshBankTransactions);
   };
   return <div className="page-enter">
-    <PageHeading eyebrow="Kapitron / bank statement" title="Банкны гүйлгээ" detail="Банкны огноо, дүн, тайлбараар шинэ кассын гүйлгээ үүсгэнэ." action={canManage ? <><input ref={fileInput} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={importFile} className="sr-only" aria-label="Kapitron банкны хуулга сонгох" data-testid="input-bank-transactions-import" /><Button onClick={() => fileInput.current?.click()} disabled={importStatement.isPending} data-testid="button-import-bank-transactions"><Upload className="size-4" />{importStatement.isPending ? 'Хуулга уншиж байна...' : 'Капитрон банкны хуулга уншуулах'}</Button></> : undefined} />
+    <PageHeading eyebrow="Kapitron / bank statement" title="Банкны гүйлгээ" detail="Банкны гүйлгээг ижил төстэй кассын мөртэй холбох эсвэл шинээр касст үүсгэнэ." action={canManage ? <><input ref={fileInput} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={importFile} className="sr-only" aria-label="Kapitron банкны хуулга сонгох" data-testid="input-bank-transactions-import" /><Button onClick={() => fileInput.current?.click()} disabled={importStatement.isPending} data-testid="button-import-bank-transactions"><Upload className="size-4" />{importStatement.isPending ? 'Хуулга уншиж байна...' : 'Капитрон банкны хуулга уншуулах'}</Button></> : undefined} />
     {importResult && <div className="mb-5 flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-xs text-foreground" role="status" data-testid="bank-import-result"><span><strong>{importResult.imported}</strong> гүйлгээ импортлогдлоо</span><span><strong>{importResult.skippedDuplicate}</strong> давхардал алгасагдлаа</span><span><strong>{importResult.skippedZero}</strong> тэг дүн алгасагдлаа</span></div>}
     <section className="overflow-hidden rounded-2xl border border-border bg-card" data-testid="panel-bank-transactions">
-      <div className="border-b border-border px-5 py-4"><h2 className="text-base font-bold">Импортлосон банкны гүйлгээ</h2><p className="mt-1 text-xs text-muted-foreground">Банкны огноо, дүн, тайлбараас шинэ кассын гүйлгээ үүснэ. Үүсгэсэн мөр жагсаалтаас алга болж, кассын мөр банкны хуулгаар баталгаажсан гэж тэмдэглэгдэнэ.</p></div>
+      <div className="border-b border-border px-5 py-4"><h2 className="text-base font-bold">Импортлосон банкны гүйлгээ</h2><p className="mt-1 text-xs text-muted-foreground">Банкны гүйлгээг ижил төстэй кассын мөртэй холбох эсвэл шинээр касст үүсгэж болно. Холбогдсон мөр жагсаалтаас алга болж, кассын мөр банкны хуулгаар баталгаажсан гэж тэмдэглэгдэнэ.</p></div>
       {list.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : list.isError ? <ErrorBlock onRetry={() => list.refetch()} /> : !list.data?.length ? <EmptyState title="Банкны хүлээгдэж буй гүйлгээ алга" detail="Kapitron банкны .xlsx хуулгыг уншуулж эхлээрэй." icon={Landmark} /> : <div className="overflow-x-auto"><table className="w-full min-w-[920px] text-left" data-testid="table-bank-transactions"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Гүйлгээний огноо</th><th className="px-5 py-3">Төрөл</th><th className="px-5 py-3">Данс</th><th className="px-5 py-3">Гүйлгээний утга</th><th className="px-5 py-3 text-right">Дүн</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{list.data.map((row) => {
         const income = row.type === 'income';
-        return <tr key={row.id} className="transition-colors hover:bg-secondary/35" data-testid={`row-bank-transaction-${row.id}`}><td className="whitespace-nowrap px-5 py-4 font-mono text-xs">{bankDateTimeLabel(row.transactionAt)}</td><td className="px-5 py-4"><span className={cn('inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold', income ? 'bg-primary/10 text-primary' : 'bg-orange-100 text-orange-800')}>{income ? 'Орлого' : 'Зарлага'}</span></td><td className="max-w-52 px-5 py-4 text-sm">{row.account || '—'}</td><td className="max-w-96 px-5 py-4 text-sm font-medium">{row.description || '—'}</td><td className={cn('whitespace-nowrap px-5 py-4 text-right font-mono text-sm font-bold', income ? 'text-primary' : 'text-orange-800')}>{income ? '+' : '−'}{money(row.amount)}</td><td className="px-5 py-4"><div className="flex justify-end gap-1">{canManage && <><Button size="sm" variant="outline" disabled={transfer.isPending} onClick={() => openCashTransfer(row)} aria-label={`${row.description || 'Банкны гүйлгээг'} касс руу шилжүүлэх`} data-testid={`button-transfer-bank-transaction-${row.id}`}>Касс руу шилжүүлэх</Button><Button size="icon" variant="ghost" disabled={deletion.isPending} onClick={() => deleteRow(row)} aria-label={`${row.description || 'Банкны гүйлгээг'} устгах`} data-testid={`button-delete-bank-transaction-${row.id}`}><Trash2 className="size-4" /></Button></>}</div></td></tr>;
+        return <tr key={row.id} className="transition-colors hover:bg-secondary/35" data-testid={`row-bank-transaction-${row.id}`}><td className="whitespace-nowrap px-5 py-4 font-mono text-xs">{bankDateTimeLabel(row.transactionAt)}</td><td className="px-5 py-4"><span className={cn('inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold', income ? 'bg-primary/10 text-primary' : 'bg-orange-100 text-orange-800')}>{income ? 'Орлого' : 'Зарлага'}</span></td><td className="max-w-52 px-5 py-4 text-sm">{row.account || '—'}</td><td className="max-w-96 px-5 py-4 text-sm font-medium">{row.description || '—'}</td><td className={cn('whitespace-nowrap px-5 py-4 text-right font-mono text-sm font-bold', income ? 'text-primary' : 'text-orange-800')}>{income ? '+' : '−'}{money(row.amount)}</td><td className="px-5 py-4"><div className="flex justify-end gap-1">{canManage && <><Button size="sm" variant="outline" disabled={transfer.isPending || linkToCash.isPending} onClick={() => openCashTransfer(row)} aria-label={`${row.description || 'Банкны гүйлгээг'} касс руу шилжүүлэх`} data-testid={`button-transfer-bank-transaction-${row.id}`}>Касс руу шилжүүлэх</Button><Button size="icon" variant="ghost" disabled={deletion.isPending} onClick={() => deleteRow(row)} aria-label={`${row.description || 'Банкны гүйлгээг'} устгах`} data-testid={`button-delete-bank-transaction-${row.id}`}><Trash2 className="size-4" /></Button></>}</div></td></tr>;
       })}</tbody></table></div>}
     </section>
-    {selectedBank && <Modal title="Касст шинээр үүсгэх" detail="Банкны огноо, төрөл, гүйлгээний утга болон дүнгээр шинэ кассын гүйлгээ үүснэ." onClose={closeCashTransfer}>
+    {selectedBank && <Modal title="Касс руу баталгаажуулах" detail="Ижил төстэй кассын гүйлгээтэй холбох эсвэл шинээр касст үүсгэнэ." onClose={closeCashTransfer}>
       <form className="space-y-5" onSubmit={(event) => { event.preventDefault(); createCashTransaction(); }} data-testid="form-bank-transfer-to-cash">
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-2 text-xs font-semibold">Банкны огноо<input readOnly value={bankDateTimeLabel(selectedBank.transactionAt)} className="h-10 w-full rounded-lg border border-input bg-muted px-3 font-mono text-sm" aria-label="Банкны огноо" data-testid="input-bank-transfer-date" /></label>
           <label className="space-y-2 text-xs font-semibold">Төрөл<input readOnly value={selectedBank.type === 'income' ? 'Орлого' : 'Зарлага'} className="h-10 w-full rounded-lg border border-input bg-muted px-3 text-sm" aria-label="Банкны гүйлгээний төрөл" data-testid="input-bank-transfer-type" /></label>
           <label className="space-y-2 text-xs font-semibold sm:col-span-2">Гүйлгээний утга<input readOnly value={selectedBank.description} className="h-10 w-full rounded-lg border border-input bg-muted px-3 text-sm" aria-label="Банкны гүйлгээний утга" data-testid="input-bank-transfer-description" /></label>
           <label className="space-y-2 text-xs font-semibold">Дүн<input readOnly value={money(selectedBank.amount)} className="h-10 w-full rounded-lg border border-input bg-muted px-3 font-mono text-sm" aria-label="Банкны гүйлгээний дүн" data-testid="input-bank-transfer-amount" /></label>
-          <label className="space-y-2 text-xs font-semibold">Ангилал<input value={category} onChange={(event) => setCategory(event.target.value)} list="cash-category-options" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" placeholder="Ангилал сонгох эсвэл шинээр бичих" aria-label="Ангилал" data-testid="input-bank-transfer-category" required /></label>
         </div>
-        <datalist id="cash-category-options">{categories.map((existingCategory) => <option key={existingCategory} value={existingCategory} />)}</datalist>
-        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={closeCashTransfer} data-testid="button-cancel-bank-transfer">Болих</Button><Button type="submit" disabled={!category.trim() || transfer.isPending} data-testid="button-confirm-bank-transfer">{transfer.isPending ? 'Үүсгэж байна...' : 'Касст шинээр үүсгэх'}</Button></div>
+        <section aria-labelledby="cash-suggestions-title" data-testid="section-bank-cash-suggestions">
+          <h3 id="cash-suggestions-title" className="text-sm font-bold">Ижил төстэй кассын гүйлгээ</h3>
+          <p className="mt-1 text-xs text-muted-foreground">Огноо, төрөл, тайлбар, дүнгээр санал болгосон холбогдоогүй кассын мөрүүд.</p>
+          <div className="mt-3 space-y-3">
+            {suggestions.isLoading ? <><LoadingBlock className="h-24" /><LoadingBlock className="h-24" /></> : suggestions.isError ? <ErrorBlock onRetry={() => suggestions.refetch()} /> : !suggestions.data?.length ? <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground" data-testid="empty-bank-cash-suggestions">Холбох ижил төстэй кассын гүйлгээ олдсонгүй.</p> : suggestions.data.map((suggestion) => <article key={suggestion.id} className="rounded-xl border border-border bg-secondary/25 p-4" data-testid={`card-bank-cash-suggestion-${suggestion.id}`}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{suggestion.description}</p>{(suggestion.bankVerifiedAt || suggestion.bankTransactionId) && <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">Банкны хуулгаар баталгаажсан</span>}</div><p className="mt-1 text-xs text-muted-foreground">{dateLabel(suggestion.date)} · {suggestion.type === 'income' ? 'Орлого' : 'Зарлага'} · {suggestion.category}</p><p className="mt-1 text-xs text-muted-foreground">Тохирц: {suggestion.score.toFixed(2)}% ({suggestion.score >= 80 ? 'өндөр' : suggestion.score >= 50 ? 'дунд' : 'бага'})</p></div><div className="shrink-0 text-right"><p className={cn('font-mono text-sm font-bold', suggestion.type === 'income' ? 'text-primary' : 'text-orange-800')}>{suggestion.type === 'income' ? '+' : '−'}{money(suggestion.amount)}</p><Button type="button" size="sm" className="mt-2" disabled={transfer.isPending || linkToCash.isPending} onClick={() => linkCashTransaction(suggestion)} aria-label={`${suggestion.description} кассын гүйлгээтэй холбох`} data-testid={`button-link-bank-transaction-to-cash-${suggestion.id}`}>{linkToCash.isPending ? 'Холбож байна...' : 'Энэ гүйлгээтэй холбох'}</Button></div></div></article>)}
+          </div>
+        </section>
+        <div className="flex items-center gap-3" aria-label="эсвэл"><div className="h-px flex-1 bg-border" /><span className="text-xs font-semibold text-muted-foreground">эсвэл</span><div className="h-px flex-1 bg-border" /></div>
+        <section aria-labelledby="create-cash-title">
+          <h3 id="create-cash-title" className="text-sm font-bold">Касст шинээр үүсгэх</h3>
+          <label className="mt-3 block space-y-2 text-xs font-semibold">Ангилал<input value={category} onChange={(event) => setCategory(event.target.value)} list="cash-category-options" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" placeholder="Ангилал сонгох эсвэл шинээр бичих" aria-label="Шинэ кассын гүйлгээний ангилал" data-testid="input-bank-transfer-category" required /></label>
+          <datalist id="cash-category-options">{categories.map((existingCategory) => <option key={existingCategory} value={existingCategory} />)}</datalist>
+        </section>
+        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={closeCashTransfer} disabled={transfer.isPending || linkToCash.isPending} data-testid="button-cancel-bank-transfer">Болих</Button><Button type="submit" disabled={!category.trim() || transfer.isPending || linkToCash.isPending} data-testid="button-confirm-bank-transfer">{transfer.isPending ? 'Үүсгэж байна...' : 'Касст шинээр үүсгэх'}</Button></div>
       </form>
     </Modal>}
   </div>;

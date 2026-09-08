@@ -25,6 +25,7 @@ import type {
   AttendanceToggleInput,
   AuthSession,
   BankTransaction,
+  BankTransactionCashLinkInput,
   BankTransactionCashTransferInput,
   BankTransactionImportResult,
   CashClosure,
@@ -32,6 +33,7 @@ import type {
   CashSummary,
   CashTransaction,
   CashTransactionInput,
+  CashTransactionSuggestion,
   Dashboard,
   DeleteAttendanceParams,
   DeletionRequest,
@@ -3368,6 +3370,155 @@ export const useTransferBankTransactionToCash = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getTransferBankTransactionToCashMutationOptions(options));
+    }
+
+export const getListBankTransactionCashSuggestionsUrl = (id: number,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}/cash-suggestions`
+}
+
+/**
+ * @summary List matching unlinked cash transactions for a bank transaction
+ */
+export const listBankTransactionCashSuggestions = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<CashTransactionSuggestion[]> => {
+
+  return customFetch<CashTransactionSuggestion[]>(getListBankTransactionCashSuggestionsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListBankTransactionCashSuggestionsQueryKey = (id: number,) => {
+    return [
+    `/api/bank-transactions/${id}/cash-suggestions`
+    ] as const;
+    }
+
+
+export const getListBankTransactionCashSuggestionsQueryOptions = <TData = Awaited<ReturnType<typeof listBankTransactionCashSuggestions>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankTransactionCashSuggestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListBankTransactionCashSuggestionsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBankTransactionCashSuggestions>>> = ({ signal }) => listBankTransactionCashSuggestions(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBankTransactionCashSuggestions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListBankTransactionCashSuggestionsQueryResult = NonNullable<Awaited<ReturnType<typeof listBankTransactionCashSuggestions>>>
+export type ListBankTransactionCashSuggestionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List matching unlinked cash transactions for a bank transaction
+ */
+
+export function useListBankTransactionCashSuggestions<TData = Awaited<ReturnType<typeof listBankTransactionCashSuggestions>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankTransactionCashSuggestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListBankTransactionCashSuggestionsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getLinkBankTransactionToCashUrl = (id: number,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}/link-cash`
+}
+
+/**
+ * @summary Verify an existing cash transaction against a bank transaction
+ */
+export const linkBankTransactionToCash = async (id: number,
+    bankTransactionCashLinkInput: BankTransactionCashLinkInput, options?: Parameters<typeof customFetch>[1]): Promise<BankTransaction> => {
+
+  return customFetch<BankTransaction>(getLinkBankTransactionToCashUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bankTransactionCashLinkInput)
+  }
+);}
+
+
+
+
+
+export const getLinkBankTransactionToCashMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionToCash>>, TError,{id: number;data: BodyType<BankTransactionCashLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionToCash>>, TError,{id: number;data: BodyType<BankTransactionCashLinkInput>}, TContext> => {
+
+const mutationKey = ['linkBankTransactionToCash'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof linkBankTransactionToCash>>, {id: number;data: BodyType<BankTransactionCashLinkInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  linkBankTransactionToCash(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LinkBankTransactionToCashMutationResult = NonNullable<Awaited<ReturnType<typeof linkBankTransactionToCash>>>
+    export type LinkBankTransactionToCashMutationBody = BodyType<BankTransactionCashLinkInput>
+    export type LinkBankTransactionToCashMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Verify an existing cash transaction against a bank transaction
+ */
+export const useLinkBankTransactionToCash = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionToCash>>, TError,{id: number;data: BodyType<BankTransactionCashLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof linkBankTransactionToCash>>,
+        TError,
+        {id: number;data: BodyType<BankTransactionCashLinkInput>},
+        TContext
+      > => {
+      return useMutation(getLinkBankTransactionToCashMutationOptions(options));
     }
 
 export const getDeleteBankTransactionUrl = (id: number,) => {

@@ -975,6 +975,60 @@ export const TransferBankTransactionToCashResponse = zod.object({
 
 
 /**
+ * @summary List matching unlinked cash transactions for a bank transaction
+ */
+export const ListBankTransactionCashSuggestionsParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const ListBankTransactionCashSuggestionsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "type": zod.enum(['income', 'expense']),
+  "category": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "date": zod.string(),
+  "bankTransactionId": zod.number().int().nullable(),
+  "bankVerifiedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.string(),
+  "editable": zod.boolean(),
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'bank_transaction']),
+  "score": zod.number()
+})
+export const ListBankTransactionCashSuggestionsResponse = zod.array(ListBankTransactionCashSuggestionsResponseItem)
+
+
+/**
+ * @summary Verify an existing cash transaction against a bank transaction
+ */
+export const LinkBankTransactionToCashParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+
+export const LinkBankTransactionToCashBody = zod.object({
+  "cashTransactionId": zod.number().int().min(1)
+})
+
+export const LinkBankTransactionToCashResponse = zod.object({
+  "id": zod.number().int(),
+  "transactionAt": zod.coerce.date(),
+  "type": zod.enum(['income', 'expense']),
+  "amount": zod.number(),
+  "account": zod.string(),
+  "counterparty": zod.string(),
+  "description": zod.string(),
+  "executedAt": zod.coerce.date().nullable(),
+  "balance": zod.number().nullable(),
+  "transferredAt": zod.coerce.date().nullable(),
+  "cashTransactionId": zod.number().int().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Delete an untransferred bank transaction
  */
 export const DeleteBankTransactionParams = zod.object({
