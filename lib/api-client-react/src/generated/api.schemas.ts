@@ -15,6 +15,7 @@ export const AuthSessionRole = {
   admin: 'admin',
   hr: 'hr',
   accountant: 'accountant',
+  warehouse: 'warehouse',
 } as const;
 
 export interface AuthSession {

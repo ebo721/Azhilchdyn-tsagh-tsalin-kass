@@ -721,7 +721,7 @@ components:
       required: [authenticated, role, username]
       properties:
         authenticated: { type: boolean }
-        role: { type: [string, "null"], enum: [admin, hr, accountant, null] }
+        role: { type: [string, "null"], enum: [admin, hr, accountant, warehouse, null] }
         username: { type: [string, "null"] }
     LoginInput:
       type: object

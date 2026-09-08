@@ -6,14 +6,14 @@ const router: IRouter = Router();
 
 router.get("/auth/me", (req, res) => {
   const role = getStaffRole(req);
-  const username = role === "admin" ? "admin" : role === "accountant" ? "saacc" : role === "hr" ? "sahr" : null;
+  const username = role === "admin" ? "admin" : role === "accountant" ? "saacc" : role === "hr" ? "sahr" : role === "warehouse" ? "satre" : null;
   res.json(role ? { authenticated: true, role, username } : { authenticated: false, role: null, username: null });
 });
 
 router.post("/auth/login", (req, res) => {
   const username = typeof req.body?.username === "string" ? req.body.username : "";
-  const role: StaffRole | null = username === "admin" ? "admin" : username === "sahr" ? "hr" : username === "saacc" ? "accountant" : null;
-  const configuredPassword = role === "admin" ? process.env["ADMIN_PASSWORD"] : role === "hr" ? process.env["HR_MANAGER_PASSWORD"] : role === "accountant" ? process.env["ACCOUNTANT_PASSWORD"] : undefined;
+  const role: StaffRole | null = username === "admin" ? "admin" : username === "sahr" ? "hr" : username === "saacc" ? "accountant" : username === "satre" ? "warehouse" : null;
+  const configuredPassword = role === "admin" ? process.env["ADMIN_PASSWORD"] : role === "hr" ? process.env["HR_MANAGER_PASSWORD"] : role === "accountant" ? process.env["ACCOUNTANT_PASSWORD"] : role === "warehouse" ? process.env["WAREHOUSE_PASSWORD"] : undefined;
   if (role && !configuredPassword) {
     res.status(503).json({ error: "Login is not configured" });
     return;

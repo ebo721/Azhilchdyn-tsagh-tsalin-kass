@@ -14,7 +14,7 @@ function signature(payload: string) {
   return createHmac("sha256", secret()).update(payload).digest("base64url");
 }
 
-export type StaffRole = "admin" | "hr" | "accountant";
+export type StaffRole = "admin" | "hr" | "accountant" | "warehouse";
 
 export function createStaffSession(role: StaffRole) {
   const payload = Buffer.from(JSON.stringify({ role, exp: Date.now() + SESSION_SECONDS * 1000 })).toString("base64url");
@@ -33,7 +33,7 @@ export function getStaffRole(req: Request): StaffRole | null {
   if (suppliedBuffer.length !== expectedBuffer.length || !timingSafeEqual(suppliedBuffer, expectedBuffer)) return null;
   try {
     const data = JSON.parse(Buffer.from(payload, "base64url").toString()) as { role?: string; exp?: number };
-    return (data.role === "hr" || data.role === "admin" || data.role === "accountant") && typeof data.exp === "number" && data.exp > Date.now() ? data.role : null;
+    return (data.role === "hr" || data.role === "admin" || data.role === "accountant" || data.role === "warehouse") && typeof data.exp === "number" && data.exp > Date.now() ? data.role : null;
   } catch {
     return null;
   }

@@ -100,12 +100,14 @@ router.use((req, res, next) => {
   }
   const allowedPrefixes = role === "hr"
     ? ["/employees", "/attendance", "/hour-balance"]
-    : ["/hour-balance", "/payroll"];
+    : role === "accountant"
+      ? ["/hour-balance", "/payroll"]
+      : ["/inventory"];
   if (allowedPrefixes.some((prefix) => req.path.startsWith(prefix))) {
     next();
     return;
   }
-  res.status(403).json({ error: "Хүний нөөцийн менежер энэ хэсэгт хандах эрхгүй" });
+  res.status(403).json({ error: "Энэ хэсэгт хандах эрхгүй" });
 });
 
 const today = () => new Date().toISOString().slice(0, 10);
