@@ -678,6 +678,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryIssue"
+  /inventory/issues/{id}:
+    put:
+      operationId: updateInventoryIssue
+      tags: [inventory]
+      summary: Update inventory issue and rebalance stock
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryIssueInput"
+      responses:
+        "200":
+          description: Updated inventory issue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryIssue"
+    delete:
+      operationId: deleteInventoryIssue
+      tags: [inventory]
+      summary: Delete inventory issue and restore stock
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Deleted inventory issue
 components:
   parameters:
     Id:

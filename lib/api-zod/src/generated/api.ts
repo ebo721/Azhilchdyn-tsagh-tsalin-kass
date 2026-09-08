@@ -938,3 +938,45 @@ export const CreateInventoryIssueResponse = zod.object({
 })
 
 
+/**
+ * @summary Update inventory issue and rebalance stock
+ */
+export const UpdateInventoryIssueParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const updateInventoryIssueBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const updateInventoryIssueBodyQuantityExclusiveMin = 0;
+
+
+
+
+export const UpdateInventoryIssueBody = zod.object({
+  "inventoryItemId": zod.number().int(),
+  "date": zod.string().regex(updateInventoryIssueBodyDateRegExp),
+  "quantity": zod.number().gt(updateInventoryIssueBodyQuantityExclusiveMin),
+  "purpose": zod.string().min(1)
+})
+
+export const UpdateInventoryIssueResponse = zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "itemName": zod.string(),
+  "unit": zod.string(),
+  "date": zod.string(),
+  "quantity": zod.number(),
+  "purpose": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete inventory issue and restore stock
+ */
+export const DeleteInventoryIssueParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteInventoryIssueResponse = zod.void()
+
+

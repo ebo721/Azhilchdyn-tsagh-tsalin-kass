@@ -40,6 +40,10 @@ import {
   CreateInventoryIssueBody,
   CreateInventoryIssueResponse,
   ListInventoryIssuesResponse,
+  UpdateInventoryIssueBody,
+  UpdateInventoryIssueParams,
+  UpdateInventoryIssueResponse,
+  DeleteInventoryIssueParams,
   ListEmployeesResponse,
   UpsertPayrollAdjustmentBody,
   UpdatePayrollAdvancePaymentBody,
@@ -1339,6 +1343,89 @@ router.post("/inventory/issues", async (req, res, next) => {
       purpose: result.issue.purpose,
       createdAt: result.issue.createdAt.toISOString(),
     }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/inventory/issues/:id", async (req, res, next) => {
+  try {
+    const { id } = UpdateInventoryIssueParams.parse(req.params);
+    const input = UpdateInventoryIssueBody.parse(req.body);
+    if (!isValidCalendarDate(input.date)) {
+      res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
+      return;
+    }
+    const purpose = input.purpose.trim();
+    if (!purpose) {
+      res.status(400).json({ error: "Зориулалт хоосон байж болохгүй" });
+      return;
+    }
+    const result = await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(inventoryIssuesTable).where(eq(inventoryIssuesTable.id, id));
+      if (!existing) return { status: "not-found" as const };
+      const [newItem] = await tx.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, input.inventoryItemId));
+      if (!newItem) return { status: "item-not-found" as const };
+      const available = Number(newItem.quantity) + (existing.inventoryItemId === input.inventoryItemId ? Number(existing.quantity) : 0);
+      if (available < input.quantity) return { status: "insufficient" as const };
+      await tx.update(inventoryItemsTable)
+        .set({ quantity: sql`${inventoryItemsTable.quantity} + ${existing.quantity}` })
+        .where(eq(inventoryItemsTable.id, existing.inventoryItemId));
+      await tx.update(inventoryItemsTable)
+        .set({ quantity: sql`${inventoryItemsTable.quantity} - ${input.quantity}` })
+        .where(eq(inventoryItemsTable.id, input.inventoryItemId));
+      const [issue] = await tx.update(inventoryIssuesTable).set({
+        inventoryItemId: input.inventoryItemId,
+        date: input.date,
+        quantity: input.quantity,
+        purpose,
+      }).where(eq(inventoryIssuesTable.id, id)).returning();
+      return { status: "updated" as const, issue, item: newItem };
+    });
+    if (result.status === "not-found") {
+      res.status(404).json({ error: "Зарлагын бүртгэл олдсонгүй" });
+      return;
+    }
+    if (result.status === "item-not-found") {
+      res.status(404).json({ error: "Бараа материал олдсонгүй" });
+      return;
+    }
+    if (result.status === "insufficient") {
+      res.status(409).json({ error: "Барааны үлдэгдэл хүрэлцэхгүй байна" });
+      return;
+    }
+    res.json(UpdateInventoryIssueResponse.parse({
+      id: result.issue.id,
+      inventoryItemId: result.issue.inventoryItemId,
+      itemName: result.item.name,
+      unit: result.item.unit,
+      date: result.issue.date,
+      quantity: Number(result.issue.quantity),
+      purpose: result.issue.purpose,
+      createdAt: result.issue.createdAt.toISOString(),
+    }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/inventory/issues/:id", async (req, res, next) => {
+  try {
+    const { id } = DeleteInventoryIssueParams.parse(req.params);
+    const deleted = await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(inventoryIssuesTable).where(eq(inventoryIssuesTable.id, id));
+      if (!existing) return false;
+      await tx.update(inventoryItemsTable)
+        .set({ quantity: sql`${inventoryItemsTable.quantity} + ${existing.quantity}` })
+        .where(eq(inventoryItemsTable.id, existing.inventoryItemId));
+      await tx.delete(inventoryIssuesTable).where(eq(inventoryIssuesTable.id, id));
+      return true;
+    });
+    if (!deleted) {
+      res.status(404).json({ error: "Зарлагын бүртгэл олдсонгүй" });
+      return;
+    }
+    res.status(204).send();
   } catch (error) {
     next(error);
   }
