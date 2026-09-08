@@ -17,6 +17,8 @@ Salary-history correction may change its effective date, base salary, and social
 
 Each month's signed payroll balance carries forward into the next month's take-home pay: underpayment increases it, overpayment decreases it, and any excess balance continues across later months until fully offset.
 
+In payroll reporting, split the brought-forward balance into salary payable (prior underpayment owed to the employee) and salary receivable (prior overpayment recoverable from the employee), while retaining the current-month difference.
+
 Treat signed payroll balances from -1₮ through +1₮ as zero. Display underpayments in parentheses and overpayments as ordinary positive amounts, without text labels.
 
 An office employee must have at least one attendance record in a month before base salary or payroll taxes are calculated. A month with no attendance contributes zero new salary and zero new balance.
