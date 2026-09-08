@@ -677,10 +677,6 @@ function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; m
           <span className="font-bold text-foreground">Олговол зохих цалин</span>
           <strong className="font-mono text-primary">{money(line.payable)}</strong>
         </div>
-        <div className="mt-2 flex justify-between">
-          <span>Одоогийн зөрүү</span>
-          <strong className="font-mono text-primary">{line.remainingAmount > 0 ? `(${money(line.remainingAmount)})` : line.overpaidAmount > 0 ? money(line.overpaidAmount) : money(0)}</strong>
-        </div>
       </div>
       <div className="rounded-xl border border-accent/50 bg-accent/15 p-4"><div className="flex items-center justify-between"><span className="text-xs font-semibold">{line.employeeType === 'shift' ? 'Урьдчилгаа цалин' : 'Урьдчилгаа цалин · 50%'}</span><strong className="font-mono text-sm">{money(line.advanceAmount)}</strong></div></div>
       <div className="grid gap-4 sm:grid-cols-2">
