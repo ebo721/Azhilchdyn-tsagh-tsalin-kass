@@ -651,7 +651,7 @@ export const ListCashTransactionsResponseItem = zod.object({
   "date": zod.string(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
-  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase'])
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase'])
 })
 export const ListCashTransactionsResponse = zod.array(ListCashTransactionsResponseItem)
 
@@ -682,7 +682,7 @@ export const CreateCashTransactionResponse = zod.object({
   "date": zod.string(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
-  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase'])
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase'])
 })
 
 
@@ -716,7 +716,7 @@ export const UpdateCashTransactionResponse = zod.object({
   "date": zod.string(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
-  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase'])
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase'])
 })
 
 
@@ -981,5 +981,51 @@ export const DeleteInventoryIssueParams = zod.object({
 })
 
 export const DeleteInventoryIssueResponse = zod.void()
+
+
+/**
+ * @summary List equipment and fixed assets
+ */
+export const ListFixedAssetsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "unitPrice": zod.number(),
+  "quantity": zod.number().int(),
+  "totalAmount": zod.number(),
+  "date": zod.string(),
+  "purchased": zod.boolean(),
+  "createdAt": zod.string()
+})
+export const ListFixedAssetsResponse = zod.array(ListFixedAssetsResponseItem)
+
+
+/**
+ * @summary Register equipment or fixed asset
+ */
+
+export const createFixedAssetBodyUnitPriceMin = 0;
+
+
+export const createFixedAssetBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+export const CreateFixedAssetBody = zod.object({
+  "name": zod.string().min(1),
+  "unitPrice": zod.number().min(createFixedAssetBodyUnitPriceMin),
+  "quantity": zod.number().int().min(1),
+  "date": zod.string().regex(createFixedAssetBodyDateRegExp),
+  "purchased": zod.boolean()
+})
+
+export const CreateFixedAssetResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "unitPrice": zod.number(),
+  "quantity": zod.number().int(),
+  "totalAmount": zod.number(),
+  "date": zod.string(),
+  "purchased": zod.boolean(),
+  "createdAt": zod.string()
+})
 
 

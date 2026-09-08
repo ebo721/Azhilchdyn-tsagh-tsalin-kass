@@ -33,6 +33,8 @@ export * from './employeeStatus';
 export * from './employeeUpdate';
 export * from './employeeUpdateEmployeeType';
 export * from './employeeUpdateStatus';
+export * from './fixedAsset';
+export * from './fixedAssetInput';
 export * from './getHourBalanceParams';
 export * from './getPayrollAdvanceParams';
 export * from './getPayrollParams';

@@ -44,6 +44,9 @@ import {
   UpdateInventoryIssueParams,
   UpdateInventoryIssueResponse,
   DeleteInventoryIssueParams,
+  CreateFixedAssetBody,
+  CreateFixedAssetResponse,
+  ListFixedAssetsResponse,
   ListEmployeesResponse,
   UpsertPayrollAdjustmentBody,
   UpdatePayrollAdvancePaymentBody,
@@ -68,6 +71,7 @@ import {
   inventoryPurchaseItemsTable,
   inventoryItemsTable,
   inventoryIssuesTable,
+  fixedAssetsTable,
   shiftTemplatesTable,
 } from "@workspace/db";
 import { getStaffRole } from "../lib/hr-session";
@@ -102,7 +106,7 @@ router.use((req, res, next) => {
     ? ["/employees", "/attendance", "/hour-balance"]
     : role === "accountant"
       ? ["/hour-balance", "/payroll"]
-      : ["/inventory"];
+      : ["/inventory", "/fixed-assets"];
   if (allowedPrefixes.some((prefix) => req.path.startsWith(prefix))) {
     next();
     return;
@@ -1218,6 +1222,71 @@ router.post("/cash/closures", async (req, res, next) => {
       id: saved.id,
       date: saved.date,
       closedAt: saved.closedAt.toISOString(),
+    }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/fixed-assets", async (_req, res, next) => {
+  try {
+    const rows = await db.select().from(fixedAssetsTable).orderBy(desc(fixedAssetsTable.date), desc(fixedAssetsTable.id));
+    res.json(ListFixedAssetsResponse.parse(rows.map((asset) => ({
+      ...asset,
+      unitPrice: Number(asset.unitPrice),
+      quantity: Number(asset.quantity),
+      totalAmount: money(Number(asset.unitPrice) * Number(asset.quantity)),
+      createdAt: asset.createdAt.toISOString(),
+    }))));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/fixed-assets", async (req, res, next) => {
+  try {
+    const input = CreateFixedAssetBody.parse(req.body);
+    if (!isValidCalendarDate(input.date)) {
+      res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
+      return;
+    }
+    const name = input.name.trim();
+    if (!name) {
+      res.status(400).json({ error: "Хөрөнгийн нэр хоосон байж болохгүй" });
+      return;
+    }
+    if (input.purchased && await isCashDateClosed(input.date)) {
+      res.status(409).json({ error: "Өндөрлөсөн өдөр худалдан авсан хөрөнгө бүртгэх боломжгүй" });
+      return;
+    }
+    const totalAmount = money(input.unitPrice * input.quantity);
+    const asset = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(fixedAssetsTable).values({
+        name,
+        unitPrice: input.unitPrice,
+        quantity: input.quantity,
+        date: input.date,
+        purchased: input.purchased,
+      }).returning();
+      if (input.purchased) {
+        await tx.insert(cashTransactionsTable).values({
+          type: "expense",
+          category: "Эд хөрөнгө",
+          description: `${name} (${input.quantity} ширхэг)`,
+          amount: totalAmount,
+          date: input.date,
+          sourceType: "fixed_asset_purchase",
+          sourceKey: `fixed-asset:${created.id}`,
+        });
+      }
+      return created;
+    });
+    res.status(201).json(CreateFixedAssetResponse.parse({
+      ...asset,
+      unitPrice: Number(asset.unitPrice),
+      quantity: Number(asset.quantity),
+      totalAmount,
+      createdAt: asset.createdAt.toISOString(),
     }));
   } catch (error) {
     next(error);

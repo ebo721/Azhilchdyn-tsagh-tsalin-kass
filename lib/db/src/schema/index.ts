@@ -140,6 +140,16 @@ export const inventoryIssuesTable = pgTable("inventory_issues", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const fixedAssetsTable = pgTable("fixed_assets", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  unitPrice: numeric("unit_price", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  quantity: integer("quantity").notNull(),
+  date: date("date", { mode: "string" }).notNull(),
+  purchased: boolean("purchased").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const insertEmployeeSchema = createInsertSchema(employeesTable).omit({
   id: true,
   joinedAt: true,
@@ -166,3 +176,4 @@ export type InventoryPurchase = typeof inventoryPurchasesTable.$inferSelect;
 export type InventoryPurchaseItem = typeof inventoryPurchaseItemsTable.$inferSelect;
 export type InventoryItem = typeof inventoryItemsTable.$inferSelect;
 export type InventoryIssue = typeof inventoryIssuesTable.$inferSelect;
+export type FixedAsset = typeof fixedAssetsTable.$inferSelect;

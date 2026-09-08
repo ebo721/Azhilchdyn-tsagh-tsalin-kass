@@ -55,6 +55,7 @@ import {
   getListEmployeesQueryKey,
   getListInventoryPurchasesQueryKey,
   getListInventoryIssuesQueryKey,
+  getListFixedAssetsQueryKey,
   useCopyPreviousShiftPlans,
   useCreateCashTransaction,
   useUpdateCashTransaction,
@@ -84,6 +85,8 @@ import {
   useCreateInventoryIssue,
   useUpdateInventoryIssue,
   useDeleteInventoryIssue,
+  useListFixedAssets,
+  useCreateFixedAsset,
   useListShiftPlans,
   useListShifts,
   useLoginHrManager,
@@ -101,6 +104,7 @@ import {
   type InventoryPurchase,
   type InventoryItem,
   type InventoryIssue,
+  type FixedAsset,
   type PayrollLine,
   type Shift,
 } from '@workspace/api-client-react';
@@ -145,6 +149,7 @@ const nav = [
   { href: '/payroll', label: 'Цалин', icon: Banknote },
   { href: '/cash', label: 'Касс', icon: WalletCards },
   { href: '/inventory', label: 'Бараа материал', icon: PackageOpen },
+  { href: '/fixed-assets', label: 'Эд хөрөнгө', icon: BriefcaseBusiness },
 ];
 
 function LoadingBlock({ className = '' }: { className?: string }) {
@@ -233,7 +238,7 @@ function AppShell({ children, role, onLogout }: { children: ReactNode; role: 'ad
     : role === 'accountant'
       ? nav.filter((item) => ['/hour-balance', '/payroll'].includes(item.href))
       : role === 'warehouse'
-        ? nav.filter((item) => item.href === '/inventory')
+        ? nav.filter((item) => ['/inventory', '/fixed-assets'].includes(item.href))
         : nav;
   const active = visibleNav.find((item) => item.href === location)?.label ?? 'Тойм';
   return (
@@ -635,6 +640,7 @@ const cashKindMeta = {
   payroll: { label: 'Цалин', className: 'border-blue-200 bg-blue-50 text-blue-700' },
   payroll_advance: { label: 'Цалин', className: 'border-blue-200 bg-blue-50 text-blue-700' },
   inventory_purchase: { label: 'Бараа материал', className: 'border-amber-200 bg-amber-50 text-amber-800' },
+  fixed_asset_purchase: { label: 'Эд хөрөнгө', className: 'border-emerald-200 bg-emerald-50 text-emerald-800' },
 } as const;
 
 function Cash() {
@@ -695,6 +701,52 @@ function Cash() {
         <label className="block space-y-2 text-xs font-semibold">Тайлбар<input className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('description', { required: true })} /></label>
         <label className="block space-y-2 text-xs font-semibold">Огноо<input type="date" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('date', { required: true })} /></label>
         <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Болих</Button><Button type="submit" disabled={create.isPending || update.isPending}>{create.isPending || update.isPending ? 'Хадгалж байна...' : 'Хадгалах'}</Button></div>
+      </form></Form>
+    </Modal>}
+  </div>;
+}
+
+type FixedAssetForm = { name: string; unitPrice: string; quantity: string; date: string; purchased: boolean };
+
+function FixedAssets() {
+  const list = useListFixedAssets();
+  const create = useCreateFixedAsset();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const form = useForm<FixedAssetForm>({ defaultValues: { name: '', unitPrice: '', quantity: '1', date: today(), purchased: false } });
+  const submit = (values: FixedAssetForm) => {
+    create.mutate({
+      data: {
+        name: values.name,
+        unitPrice: Number(values.unitPrice),
+        quantity: Number(values.quantity),
+        date: values.date,
+        purchased: values.purchased,
+      },
+    }, {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListFixedAssetsQueryKey() });
+        qc.invalidateQueries({ queryKey: getListCashTransactionsQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetCashSummaryQueryKey() });
+        form.reset({ name: '', unitPrice: '', quantity: '1', date: today(), purchased: false });
+        setOpen(false);
+      },
+    });
+  };
+  return <div className="page-enter">
+    <div className="mb-7 flex justify-end"><Button onClick={() => setOpen(true)} data-testid="button-add-fixed-asset"><Plus className="size-4" />Шинээр нэмэх</Button></div>
+    <section className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="border-b border-border px-5 py-4"><h2 className="text-base font-bold">Тоног төхөөрөмж, хөрөнгийн жагсаалт</h2></div>
+      {list.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : list.isError ? <ErrorBlock onRetry={() => list.refetch()} /> : !list.data?.length ? <EmptyState title="Эд хөрөнгө бүртгэгдээгүй" detail="Тоног төхөөрөмж эсвэл хөрөнгөө шинээр нэмнэ үү." icon={BriefcaseBusiness} /> : <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Огноо</th><th className="px-5 py-3">Нэр</th><th className="px-5 py-3 text-right">Үнэ</th><th className="px-5 py-3 text-right">Тоо ширхэг</th><th className="px-5 py-3 text-right">Нийт дүн</th><th className="px-5 py-3">Төлөв</th></tr></thead><tbody className="divide-y divide-border">{list.data.map((asset: FixedAsset) => <tr key={asset.id} data-testid={`row-fixed-asset-${asset.id}`}><td className="px-5 py-4 text-sm font-semibold">{dateLabel(asset.date)}</td><td className="px-5 py-4 text-sm font-semibold">{asset.name}</td><td className="px-5 py-4 text-right font-mono text-sm">{money(asset.unitPrice)}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold">{asset.quantity}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold">{money(asset.totalAmount)}</td><td className="px-5 py-4"><span className={cn('rounded-full border px-2 py-1 text-[10px] font-bold', asset.purchased ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-100 text-slate-700')}>{asset.purchased ? 'Худалдан авсан' : 'Бүртгэсэн'}</span></td></tr>)}</tbody></table></div>}
+    </section>
+    {open && <Modal title="Эд хөрөнгө шинээр нэмэх" detail="Тоног төхөөрөмж, хөрөнгийн мэдээллийг бүртгэнэ." onClose={() => setOpen(false)}>
+      <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-5" data-testid="form-fixed-asset">
+        <label className="block space-y-2 text-xs font-semibold">Нэр<input className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('name', { required: true })} data-testid="input-fixed-asset-name" /></label>
+        <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-xs font-semibold">Үнэ<input type="number" min="0" step="0.01" className="h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('unitPrice', { required: true, min: 0 })} data-testid="input-fixed-asset-price" /></label><label className="space-y-2 text-xs font-semibold">Тоо ширхэг<input type="number" min="1" step="1" className="h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('quantity', { required: true, min: 1 })} data-testid="input-fixed-asset-quantity" /></label></div>
+        <label className="block space-y-2 text-xs font-semibold">Огноо<input type="date" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('date', { required: true })} data-testid="input-fixed-asset-date" /></label>
+        <label className="flex items-center gap-3 rounded-xl border border-border bg-secondary/35 p-4 text-sm font-semibold"><input type="checkbox" className="size-4 accent-primary" {...form.register('purchased')} data-testid="checkbox-fixed-asset-purchased" /><span><span className="block">Худалдан авсан</span><span className="mt-0.5 block text-xs font-normal text-muted-foreground">Сонгосон үед нийт дүн кассын зарлагад давхар бүртгэгдэнэ.</span></span></label>
+        {create.isError && <p className="text-xs font-semibold text-destructive">Мэдээлэл буруу эсвэл сонгосон өдрийн касс өндөрлөсөн байна.</p>}
+        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Болих</Button><Button type="submit" disabled={create.isPending} data-testid="button-save-fixed-asset">{create.isPending ? 'Хадгалж байна...' : 'Хадгалах'}</Button></div>
       </form></Form>
     </Modal>}
   </div>;
@@ -913,12 +965,12 @@ function Router() {
   useEffect(() => {
     if (role === 'hr' && !['/employees', '/attendance', '/hour-balance'].includes(location)) navigate('/employees', { replace: true });
     if (role === 'accountant' && !['/hour-balance', '/payroll'].includes(location)) navigate('/hour-balance', { replace: true });
-    if (role === 'warehouse' && location !== '/inventory') navigate('/inventory', { replace: true });
+    if (role === 'warehouse' && !['/inventory', '/fixed-assets'].includes(location)) navigate('/inventory', { replace: true });
   }, [location, navigate, role]);
   if (session.isLoading) return <div className="grid min-h-[100dvh] place-items-center"><LoadingBlock className="size-12" /></div>;
   if (!role) return <HrLogin />;
   const signOut = () => logout.mutate(undefined, { onSuccess: () => { queryClient.clear(); navigate('/'); } });
-  return <ErrorBoundary resetKey={location}><AppShell role={role} onLogout={signOut}>{role === 'admin' ? <Switch><Route path="/" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/inventory" component={Inventory} /><Route component={NotFound} /></Switch> : role === 'hr' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route component={Employees} /></Switch> : role === 'accountant' ? <Switch><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route component={HourBalance} /></Switch> : <Switch><Route path="/inventory" component={Inventory} /><Route component={Inventory} /></Switch>}</AppShell></ErrorBoundary>;
+  return <ErrorBoundary resetKey={location}><AppShell role={role} onLogout={signOut}>{role === 'admin' ? <Switch><Route path="/" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route component={NotFound} /></Switch> : role === 'hr' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route component={Employees} /></Switch> : role === 'accountant' ? <Switch><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route component={HourBalance} /></Switch> : <Switch><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route component={Inventory} /></Switch>}</AppShell></ErrorBoundary>;
 }
 
 function App() {

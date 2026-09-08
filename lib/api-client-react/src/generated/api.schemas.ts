@@ -404,6 +404,7 @@ export const CashTransactionTransactionKind = {
   payroll: 'payroll',
   payroll_advance: 'payroll_advance',
   inventory_purchase: 'inventory_purchase',
+  fixed_asset_purchase: 'fixed_asset_purchase',
 } as const;
 
 export interface CashTransaction {
@@ -538,6 +539,29 @@ export interface InventoryIssueInput {
   quantity: number;
   /** @minLength 1 */
   purpose: string;
+}
+
+export interface FixedAsset {
+  id: number;
+  name: string;
+  unitPrice: number;
+  quantity: number;
+  totalAmount: number;
+  date: string;
+  purchased: boolean;
+  createdAt: string;
+}
+
+export interface FixedAssetInput {
+  /** @minLength 1 */
+  name: string;
+  /** @minimum 0 */
+  unitPrice: number;
+  /** @minimum 1 */
+  quantity: number;
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
+  date: string;
+  purchased: boolean;
 }
 
 export type ListAttendanceParams = {

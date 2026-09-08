@@ -14,4 +14,5 @@ export const CashTransactionTransactionKind = {
   payroll: 'payroll',
   payroll_advance: 'payroll_advance',
   inventory_purchase: 'inventory_purchase',
+  fixed_asset_purchase: 'fixed_asset_purchase',
 } as const;
