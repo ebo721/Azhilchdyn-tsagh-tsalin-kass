@@ -604,6 +604,7 @@ function Payroll() {
   const [month, setMonth] = useState(currentMonth());
   const [selectedLine, setSelectedLine] = useState<PayrollLine | null>(null);
   const [showAdvance, setShowAdvance] = useState(false);
+  const [advanceApprovalDate, setAdvanceApprovalDate] = useState(today());
   const [advanceDates, setAdvanceDates] = useState<Record<number, string>>({});
   const [advanceAmounts, setAdvanceAmounts] = useState<Record<number, string>>({});
   const query = useGetPayroll({ month });
@@ -621,8 +622,12 @@ function Payroll() {
     if (showAdvance && !advanceQuery.data?.approved) await advanceQuery.refetch();
   };
   const approve = () => {
-    if (!window.confirm(`${month} сарын урьдчилгаа цалинг батлах уу? Баталсны дараа энэ жагсаалтын дүн өөрчлөгдөхгүй.`)) return;
-    approveAdvance.mutate({ data: { month } }, {
+    if (!advanceApprovalDate) {
+      window.alert('Батлах огноог сонгоно уу.');
+      return;
+    }
+    if (!window.confirm(`${month} сарын урьдчилгаа цалинг ${advanceApprovalDate} огноогоор батлах уу? Баталсны дараа энэ жагсаалтын дүн өөрчлөгдөхгүй.`)) return;
+    approveAdvance.mutate({ data: { month, approvalDate: advanceApprovalDate } }, {
       onSuccess: () => qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey({ month }) }),
     });
   };
@@ -649,7 +654,7 @@ function Payroll() {
     {showAdvance && <section className="mb-6 overflow-hidden rounded-2xl border border-accent/60 bg-card shadow-sm" data-testid="section-payroll-advance">
       <div className="flex flex-col justify-between gap-4 border-b border-border bg-accent/10 px-5 py-4 sm:flex-row sm:items-center">
         <h2 className="text-lg font-bold">{month.replace('-', ' оны ')} сарын урьдчилгаа цалин</h2>
-        {advanceQuery.data?.approved ? <div className="flex flex-wrap items-center gap-2"><div className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground" data-testid="status-advance-approved"><Check className="mr-2 inline size-4" />Батлагдсан · {advanceQuery.data.approvedAt ? dateLabel(advanceQuery.data.approvedAt) : ''}</div><Button variant="outline" onClick={revertApproval} disabled={revertAdvanceApproval.isPending} data-testid="button-revert-payroll-advance">{revertAdvanceApproval.isPending ? 'Хүсэлт илгээж байна...' : 'Батлалт устгах хүсэлт'}</Button></div> : <Button onClick={approve} disabled={approveAdvance.isPending || advanceQuery.isLoading} data-testid="button-approve-payroll-advance"><Check className="size-4" />{approveAdvance.isPending ? 'Баталж байна...' : 'Урьдчилгаа батлах'}</Button>}
+        {advanceQuery.data?.approved ? <div className="flex flex-wrap items-center gap-2"><div className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground" data-testid="status-advance-approved"><Check className="mr-2 inline size-4" />Батлагдсан · {advanceQuery.data.approvalDate ? dateLabel(advanceQuery.data.approvalDate) : ''}</div><Button variant="outline" onClick={revertApproval} disabled={revertAdvanceApproval.isPending} data-testid="button-revert-payroll-advance">{revertAdvanceApproval.isPending ? 'Хүсэлт илгээж байна...' : 'Батлалт устгах хүсэлт'}</Button></div> : <div className="flex flex-wrap items-end gap-2"><label className="space-y-1 text-xs font-semibold">Батлах огноо<input type="date" value={advanceApprovalDate} onChange={(event) => setAdvanceApprovalDate(event.target.value)} className="block h-10 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="input-payroll-advance-approval-date" /></label><Button onClick={approve} disabled={approveAdvance.isPending || advanceQuery.isLoading} data-testid="button-approve-payroll-advance"><Check className="size-4" />{approveAdvance.isPending ? 'Баталж байна...' : 'Урьдчилгаа батлах'}</Button></div>}
       </div>
       {advanceQuery.isLoading ? <div className="p-5"><LoadingBlock className="h-36" /></div> : advanceQuery.isError ? <div className="p-5"><ErrorBlock onRetry={() => advanceQuery.refetch()} /></div> : <div className="overflow-x-auto">
         <table className="w-full min-w-[1280px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Ажилтан</th><th className="px-5 py-3 text-right">Үндсэн цалин</th><th className="px-5 py-3 text-right">Ажилласан хоног</th><th className="px-5 py-3 text-right">Өдрийн цалин</th><th className="px-5 py-3 text-right">Нийт олгох цалин</th><th className="px-5 py-3 text-right">Олгох урьдчилгаа</th><th className="px-5 py-3 text-center">Гүйлгээний огноо</th><th className="px-5 py-3 text-center">Төлөв</th></tr></thead>

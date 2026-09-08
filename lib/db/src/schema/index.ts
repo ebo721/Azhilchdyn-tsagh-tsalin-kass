@@ -90,6 +90,7 @@ export const payrollAdvanceApprovalsTable = pgTable("payroll_advance_approvals",
   month: text("month").notNull().unique(),
   lines: jsonb("lines").notNull(),
   totalAmount: numeric("total_amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  approvalDate: date("approval_date", { mode: "string" }).notNull(),
   approvedAt: timestamp("approved_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

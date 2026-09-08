@@ -10,6 +10,8 @@ import type { PayrollAdvanceLine } from './payrollAdvanceLine';
 export interface PayrollAdvanceSummary {
   month: string;
   approved: boolean;
+  /** @nullable */
+  approvalDate: string | null;
   approvedAt?: string;
   totalAmount: number;
   lines: PayrollAdvanceLine[];

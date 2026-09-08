@@ -1207,10 +1207,11 @@ components:
         paymentDate: { type: ["string", "null"] }
     PayrollAdvanceSummary:
       type: object
-      required: [month, approved, totalAmount, lines]
+      required: [month, approved, approvalDate, totalAmount, lines]
       properties:
         month: { type: string }
         approved: { type: boolean }
+        approvalDate: { type: ["string", "null"] }
         approvedAt: { type: string }
         totalAmount: { type: number }
         lines:
@@ -1219,9 +1220,10 @@ components:
             $ref: "#/components/schemas/PayrollAdvanceLine"
     PayrollAdvanceApprovalInput:
       type: object
-      required: [month]
+      required: [month, approvalDate]
       properties:
         month: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+        approvalDate: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' }
     PayrollAdvancePaymentInput:
       type: object
       required: [month, employeeId, advanceAmount, paid]

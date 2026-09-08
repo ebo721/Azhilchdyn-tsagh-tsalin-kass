@@ -406,6 +406,8 @@ export interface PayrollAdvanceLine {
 export interface PayrollAdvanceSummary {
   month: string;
   approved: boolean;
+  /** @nullable */
+  approvalDate: string | null;
   approvedAt?: string;
   totalAmount: number;
   lines: PayrollAdvanceLine[];
@@ -414,6 +416,8 @@ export interface PayrollAdvanceSummary {
 export interface PayrollAdvanceApprovalInput {
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])$ */
   month: string;
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
+  approvalDate: string;
 }
 
 export interface PayrollAdvancePaymentInput {

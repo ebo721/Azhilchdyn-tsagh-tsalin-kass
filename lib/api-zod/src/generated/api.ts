@@ -551,6 +551,7 @@ export const GetPayrollAdvanceQueryParams = zod.object({
 export const GetPayrollAdvanceResponse = zod.object({
   "month": zod.string(),
   "approved": zod.boolean(),
+  "approvalDate": zod.string().nullable(),
   "approvedAt": zod.string().optional(),
   "totalAmount": zod.number(),
   "lines": zod.array(zod.object({
@@ -572,15 +573,18 @@ export const GetPayrollAdvanceResponse = zod.object({
  * @summary Approve and freeze the monthly payroll advance
  */
 export const approvePayrollAdvanceBodyMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+export const approvePayrollAdvanceBodyApprovalDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
 
 
 export const ApprovePayrollAdvanceBody = zod.object({
-  "month": zod.string().regex(approvePayrollAdvanceBodyMonthRegExp)
+  "month": zod.string().regex(approvePayrollAdvanceBodyMonthRegExp),
+  "approvalDate": zod.string().regex(approvePayrollAdvanceBodyApprovalDateRegExp)
 })
 
 export const ApprovePayrollAdvanceResponse = zod.object({
   "month": zod.string(),
   "approved": zod.boolean(),
+  "approvalDate": zod.string().nullable(),
   "approvedAt": zod.string().optional(),
   "totalAmount": zod.number(),
   "lines": zod.array(zod.object({
@@ -611,6 +615,7 @@ export const RevertPayrollAdvanceApprovalQueryParams = zod.object({
 export const RevertPayrollAdvanceApprovalResponse = zod.object({
   "month": zod.string(),
   "approved": zod.boolean(),
+  "approvalDate": zod.string().nullable(),
   "approvedAt": zod.string().optional(),
   "totalAmount": zod.number(),
   "lines": zod.array(zod.object({
@@ -647,6 +652,7 @@ export const UpdatePayrollAdvancePaymentBody = zod.object({
 export const UpdatePayrollAdvancePaymentResponse = zod.object({
   "month": zod.string(),
   "approved": zod.boolean(),
+  "approvalDate": zod.string().nullable(),
   "approvedAt": zod.string().optional(),
   "totalAmount": zod.number(),
   "lines": zod.array(zod.object({

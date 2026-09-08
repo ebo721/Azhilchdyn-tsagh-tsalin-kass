@@ -8,6 +8,7 @@ import {
   db,
   employeesTable,
   payrollAdvanceApprovalsTable,
+  usersTable,
 } from "@workspace/db";
 import app from "../app.ts";
 import { createStaffSession, hrCookie } from "../lib/hr-session.ts";
@@ -21,7 +22,9 @@ describe("concurrent payroll advance payments", () => {
 
   before(async () => {
     process.env.SESSION_SECRET = "payroll-advance-concurrency-test";
-    adminCookie = `${hrCookie.name}=${createStaffSession("admin")}`;
+    const [admin] = await db.select().from(usersTable).where(eq(usersTable.role, "admin")).limit(1);
+    assert.ok(admin, "An admin database user is required for the integration test");
+    adminCookie = `${hrCookie.name}=${createStaffSession(admin)}`;
     server = app.listen(0);
     const address = server.address() as AddressInfo;
     baseUrl = `http://127.0.0.1:${address.port}`;
@@ -44,6 +47,7 @@ describe("concurrent payroll advance payments", () => {
     employeeIds = employees.map((employee) => employee.id);
     await db.insert(payrollAdvanceApprovalsTable).values({
       month,
+      approvalDate: `${month}-15`,
       totalAmount: 200_000,
       lines: employees.map((employee) => ({
         employeeId: employee.id,

@@ -332,6 +332,7 @@ async function getPayrollAdvanceSummary(month: string) {
     return {
       month,
       approved: true,
+      approvalDate: approval.approvalDate,
       approvedAt: approval.approvedAt.toISOString(),
       totalAmount: Number(approval.totalAmount),
       lines,
@@ -369,6 +370,7 @@ async function getPayrollAdvanceSummary(month: string) {
   return {
     month,
     approved: false,
+    approvalDate: null,
     totalAmount: money(lines.reduce((total, line) => total + line.advanceAmount, 0)),
     lines,
   };
@@ -1061,13 +1063,18 @@ router.get("/payroll-advance", async (req, res, next) => {
 
 router.post("/payroll-advance/approve", async (req, res, next) => {
   try {
-    const { month } = ApprovePayrollAdvanceBody.parse(req.body);
+    const { month, approvalDate } = ApprovePayrollAdvanceBody.parse(req.body);
+    if (!isValidCalendarDate(approvalDate)) {
+      res.status(400).json({ error: "Урьдчилгаа цалин батлах огноог зөв оруулна уу" });
+      return;
+    }
     const existing = await getPayrollAdvanceSummary(month);
     if (!existing.approved) {
       await db.insert(payrollAdvanceApprovalsTable).values({
         month,
         lines: existing.lines,
         totalAmount: existing.totalAmount,
+        approvalDate,
       }).onConflictDoNothing();
     }
     res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month)));
