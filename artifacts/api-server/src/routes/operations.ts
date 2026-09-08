@@ -367,9 +367,8 @@ async function getPayrollAdvanceSummary(month: string) {
 
 router.get("/dashboard", async (_req, res, next) => {
   try {
-    const [employees, records, transactions, inventoryPurchases, fixedAssets] = await Promise.all([
+    const [employees, transactions, inventoryPurchases, fixedAssets] = await Promise.all([
       db.select().from(employeesTable),
-      db.select().from(attendanceTable),
       db.select().from(cashTransactionsTable).orderBy(desc(cashTransactionsTable.createdAt)),
       db.select().from(inventoryPurchasesTable),
       db.select().from(fixedAssetsTable),
@@ -386,16 +385,6 @@ router.get("/dashboard", async (_req, res, next) => {
     const previousMonthInventoryExpense = inventoryPurchases
       .filter((purchase) => purchase.date.startsWith(previousMonthValue))
       .reduce((total, purchase) => total + Number(purchase.totalAmount), 0);
-    const recentAttendance = [...records]
-      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-      .slice(0, 3)
-      .map((record) => ({
-        id: `attendance-${record.id}`,
-        type: "attendance",
-        title: "Ирц бүртгэгдлээ",
-        detail: `${record.date} · ${record.clockIn}–${record.clockOut}`,
-        createdAt: String(record.createdAt),
-      }));
     const recentCash = transactions.slice(0, 3).map((transaction) => ({
       id: `cash-${transaction.id}`,
       type: "cash",
@@ -424,7 +413,7 @@ router.get("/dashboard", async (_req, res, next) => {
       previousMonthSalesIncome: money(previousMonthSalesIncome),
       previousMonthPayrollExpense: money(previousMonthPayrollExpense),
       previousMonthInventoryExpense: money(previousMonthInventoryExpense),
-      recentActivity: [...recentAttendance, ...recentCash, ...recentInventoryPurchases, ...recentFixedAssets]
+      recentActivity: [...recentCash, ...recentInventoryPurchases, ...recentFixedAssets]
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, 5),
     });
