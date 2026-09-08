@@ -548,11 +548,17 @@ router.put("/attendance/shift-plans", async (req, res, next) => {
 
 router.post("/attendance/shift-plans/copy-previous", async (req, res, next) => {
   try {
-    const { month, overwrite } = CopyPreviousShiftPlansBody.parse(req.body);
-    const sourceMonth = previousMonth(month);
+    const { sourceMonth, month, overwrite } = CopyPreviousShiftPlansBody.parse(req.body);
+    if (sourceMonth === month) {
+      res.status(400).json({ error: "Хуулах эх сар болон зорилтот сар ижил байж болохгүй" });
+      return;
+    }
     const targetDayCount = daysInMonth(month);
     const [activeEmployees, shifts, sourcePlans, targetPlans] = await Promise.all([
-      db.select({ id: employeesTable.id }).from(employeesTable).where(eq(employeesTable.status, "active")),
+      db.select({ id: employeesTable.id }).from(employeesTable).where(and(
+        eq(employeesTable.status, "active"),
+        eq(employeesTable.employeeType, "shift"),
+      )),
       db.select({ id: shiftTemplatesTable.id }).from(shiftTemplatesTable),
       db.select().from(employeeShiftPlansTable),
       db.select().from(employeeShiftPlansTable),

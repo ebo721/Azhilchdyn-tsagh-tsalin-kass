@@ -375,12 +375,14 @@ export const UpsertShiftPlanResponse = zod.union([zod.object({
 
 
 /**
- * @summary Copy valid active employee shift plans from the previous month
+ * @summary Copy valid active shift-employee plans from a selected month
  */
+export const copyPreviousShiftPlansBodySourceMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
 export const copyPreviousShiftPlansBodyMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
 
 
 export const CopyPreviousShiftPlansBody = zod.object({
+  "sourceMonth": zod.string().regex(copyPreviousShiftPlansBodySourceMonthRegExp),
   "month": zod.string().regex(copyPreviousShiftPlansBodyMonthRegExp),
   "overwrite": zod.boolean()
 })

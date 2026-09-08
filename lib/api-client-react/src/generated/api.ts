@@ -1488,7 +1488,7 @@ export const getCopyPreviousShiftPlansUrl = () => {
 }
 
 /**
- * @summary Copy valid active employee shift plans from the previous month
+ * @summary Copy valid active shift-employee plans from a selected month
  */
 export const copyPreviousShiftPlans = async (shiftPlanCopyInput: ShiftPlanCopyInput, options?: Parameters<typeof customFetch>[1]): Promise<ShiftPlanCopyResult> => {
 
@@ -1537,7 +1537,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type CopyPreviousShiftPlansMutationError = ErrorType<unknown>
 
     /**
- * @summary Copy valid active employee shift plans from the previous month
+ * @summary Copy valid active shift-employee plans from a selected month
  */
 export const useCopyPreviousShiftPlans = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof copyPreviousShiftPlans>>, TError,{data: BodyType<ShiftPlanCopyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
