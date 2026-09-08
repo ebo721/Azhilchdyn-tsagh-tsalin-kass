@@ -759,8 +759,20 @@ function Cash() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<CashTransaction | null>(null);
   const [open, setOpen] = useState(false);
+  const [filterMonth, setFilterMonth] = useState(currentMonth());
+  const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
   const form = useForm<CashForm>({ defaultValues: { type: 'income', category: '', description: '', amount: '', date: today() } });
   const closedDates = new Set(closures.data?.map((closure) => closure.date) ?? []);
+  const filteredTransactions = (list.data ?? []).filter((row) =>
+    row.date.startsWith(filterMonth)
+    && (filterType === 'all' || row.type === filterType)
+  );
+  const filteredIncome = filteredTransactions
+    .filter((row) => row.type === CashTransactionType.income)
+    .reduce((total, row) => total + Number(row.amount), 0);
+  const filteredExpense = filteredTransactions
+    .filter((row) => row.type === CashTransactionType.expense)
+    .reduce((total, row) => total + Number(row.amount), 0);
   const refresh = () => {
     qc.invalidateQueries({ queryKey: getListCashTransactionsQueryKey() });
     qc.invalidateQueries({ queryKey: getGetCashSummaryQueryKey() });
@@ -789,8 +801,14 @@ function Cash() {
   return <div className="page-enter">
     <div className="mb-7 flex flex-wrap items-center justify-end gap-2"><CashDayCloseControls /><Button onClick={startCreate} data-testid="button-add-cash"><Plus className="size-4" />Гүйлгээ оруулах</Button></div>
     <section className="overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="border-b border-border px-5 py-4"><h2 className="text-base font-bold">Сүүлийн гүйлгээ</h2></div>
-      {list.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : list.isError ? <ErrorBlock onRetry={() => list.refetch()} /> : !list.data?.length ? <EmptyState title="Гүйлгээний түүх хоосон" detail="Эхний орлого эсвэл зарлагаа оруулаарай." icon={WalletCards} /> : <div className="divide-y divide-border">{list.data.map((row) => {
+      <div className="flex flex-col justify-between gap-4 border-b border-border px-5 py-4 lg:flex-row lg:items-end">
+        <div><h2 className="text-base font-bold">Кассын гүйлгээ</h2><p className="mt-1 text-xs text-muted-foreground">Сар болон төрлөөр шүүж харах</p></div>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="space-y-1 text-xs font-semibold">Сар<input type="month" value={filterMonth} onChange={(event) => setFilterMonth(event.target.value)} className="block h-10 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="input-cash-filter-month" /></label>
+          <label className="space-y-1 text-xs font-semibold">Төрөл<select value={filterType} onChange={(event) => setFilterType(event.target.value as 'all' | 'income' | 'expense')} className="block h-10 min-w-36 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="select-cash-filter-type"><option value="all">Бүгд</option><option value="income">Орлого</option><option value="expense">Зарлага</option></select></label>
+        </div>
+      </div>
+      {list.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : list.isError ? <ErrorBlock onRetry={() => list.refetch()} /> : !filteredTransactions.length ? <EmptyState title="Шүүлтэд тохирох гүйлгээ алга" detail="Өөр сар эсвэл гүйлгээний төрөл сонгоно уу." icon={WalletCards} /> : <div className="divide-y divide-border">{filteredTransactions.map((row) => {
         const closed = closedDates.has(row.date);
         const kind = cashKindMeta[row.transactionKind];
         return <div className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-secondary/35" key={row.id} data-testid={`row-cash-${row.id}`}>
@@ -800,6 +818,11 @@ function Cash() {
           <p className={cn('font-mono text-sm font-bold', row.type === CashTransactionType.income ? 'text-primary' : 'text-orange-800')}>{row.type === CashTransactionType.income ? '+' : '−'}{money(row.amount)}</p>
         </div>;
       })}</div>}
+      {!list.isLoading && !list.isError && <div className="grid gap-px border-t-2 border-border bg-border sm:grid-cols-3" data-testid="cash-filter-totals">
+        <div className="bg-primary/5 px-5 py-4"><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Нийт орлого</p><p className="mt-1 font-mono text-base font-bold text-primary" data-testid="value-filtered-cash-income">{money(filteredIncome)}</p></div>
+        <div className="bg-orange-50 px-5 py-4"><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Нийт зарлага</p><p className="mt-1 font-mono text-base font-bold text-orange-800" data-testid="value-filtered-cash-expense">{money(filteredExpense)}</p></div>
+        <div className="bg-secondary/40 px-5 py-4"><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Цэвэр дүн</p><p className={cn('mt-1 font-mono text-base font-bold', filteredIncome - filteredExpense >= 0 ? 'text-primary' : 'text-orange-800')} data-testid="value-filtered-cash-net">{money(filteredIncome - filteredExpense)}</p></div>
+      </div>}
     </section>
     {open && <Modal title={editing ? 'Кассын гүйлгээ засах' : 'Кассын гүйлгээ'} detail="Гүйлгээний төрөл, дүн болон огноог оруулна." onClose={() => setOpen(false)}>
       <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-5" data-testid="form-cash">
