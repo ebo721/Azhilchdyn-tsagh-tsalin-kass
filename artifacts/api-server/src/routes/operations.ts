@@ -373,6 +373,37 @@ router.delete("/employees/:id", async (req, res, next) => {
       res.status(400).json({ error: "Invalid employee id" });
       return;
     }
+    const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, id));
+    if (!employee) {
+      res.status(404).json({ error: "Ажилтан олдсонгүй" });
+      return;
+    }
+    const attendance = await db
+      .select({ id: attendanceTable.id })
+      .from(attendanceTable)
+      .where(eq(attendanceTable.employeeId, id))
+      .limit(1);
+    if (attendance.length) {
+      res.status(409).json({ error: "Ирцийн бүртгэлтэй ажилтанг устгах боломжгүй" });
+      return;
+    }
+    const adjustments = await db
+      .select({ paidAmount: payrollAdjustmentsTable.paidAmount })
+      .from(payrollAdjustmentsTable)
+      .where(eq(payrollAdjustmentsTable.employeeId, id));
+    const hasPaidPayroll = adjustments.some((row) => Number(row.paidAmount) > 0);
+    const approvals = await db
+      .select({ lines: payrollAdvanceApprovalsTable.lines })
+      .from(payrollAdvanceApprovalsTable);
+    const hasPaidAdvance = approvals.some((approval) =>
+      Array.isArray(approval.lines) && (approval.lines as Array<Record<string, unknown>>).some((line) =>
+        Number(line.employeeId) === id && line.paid === true,
+      ),
+    );
+    if (hasPaidPayroll || hasPaidAdvance) {
+      res.status(409).json({ error: "Цалин олгосон түүхтэй ажилтанг устгах боломжгүй" });
+      return;
+    }
     await db.delete(employeesTable).where(eq(employeesTable.id, id));
     res.status(204).send();
   } catch (error) {
