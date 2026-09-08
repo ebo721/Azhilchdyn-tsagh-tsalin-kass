@@ -520,9 +520,9 @@ router.get("/dashboard", async (_req, res, next) => {
       .filter((transaction) => transaction.date.startsWith(previousMonthValue) && transaction.type === "income")
       .reduce((total, transaction) => total + Number(transaction.amount), 0);
     const previousMonthPayrollExpense = transactions
-      .filter((transaction) => transaction.date.startsWith(previousMonthValue)
-        && transaction.type === "expense"
-        && (transaction.sourceType === "payroll" || transaction.sourceType === "payroll_advance"))
+      .filter((transaction) => transaction.type === "expense"
+        && (transaction.sourceType === "payroll" || transaction.sourceType === "payroll_advance")
+        && transaction.sourceKey?.startsWith(`${previousMonthValue}:`))
       .reduce((total, transaction) => total + Number(transaction.amount), 0);
     const previousMonthInventoryExpense = inventoryPurchases
       .filter((purchase) => purchase.date.startsWith(previousMonthValue))
