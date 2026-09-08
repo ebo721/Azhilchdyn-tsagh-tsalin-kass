@@ -367,17 +367,17 @@ async function getPayrollAdvanceSummary(month: string) {
 
 router.get("/dashboard", async (_req, res, next) => {
   try {
-    const [employees, records, transactions, inventoryPurchases] = await Promise.all([
+    const [employees, records, transactions, inventoryPurchases, fixedAssets] = await Promise.all([
       db.select().from(employeesTable),
       db.select().from(attendanceTable),
       db.select().from(cashTransactionsTable).orderBy(desc(cashTransactionsTable.createdAt)),
-      db.select({
-        date: inventoryPurchasesTable.date,
-        totalAmount: inventoryPurchasesTable.totalAmount,
-      }).from(inventoryPurchasesTable),
+      db.select().from(inventoryPurchasesTable),
+      db.select().from(fixedAssetsTable),
     ]);
-    const todayRecords = records.filter((record) => String(record.date) === today());
     const previousMonthValue = previousMonth(currentMonth());
+    const previousMonthSalesIncome = transactions
+      .filter((transaction) => transaction.date.startsWith(previousMonthValue) && transaction.type === "income")
+      .reduce((total, transaction) => total + Number(transaction.amount), 0);
     const previousMonthPayrollExpense = transactions
       .filter((transaction) => transaction.date.startsWith(previousMonthValue)
         && transaction.type === "expense"
@@ -386,11 +386,6 @@ router.get("/dashboard", async (_req, res, next) => {
     const previousMonthInventoryExpense = inventoryPurchases
       .filter((purchase) => purchase.date.startsWith(previousMonthValue))
       .reduce((total, purchase) => total + Number(purchase.totalAmount), 0);
-    const balance = transactions.reduce(
-      (total, transaction) =>
-        total + (transaction.type === "income" ? Number(transaction.amount) : -Number(transaction.amount)),
-      0,
-    );
     const recentAttendance = [...records]
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
       .slice(0, 3)
@@ -408,13 +403,28 @@ router.get("/dashboard", async (_req, res, next) => {
       detail: `${transaction.description} · ${money(Number(transaction.amount)).toLocaleString()}₮`,
       createdAt: String(transaction.createdAt),
     }));
+    const recentInventoryPurchases = inventoryPurchases.map((purchase) => ({
+      id: `inventory-purchase-${purchase.id}`,
+      type: "inventory_purchase",
+      title: "Бараа материал худалдан авлаа",
+      detail: `${purchase.documentName} · ${money(Number(purchase.totalAmount)).toLocaleString()}₮`,
+      createdAt: String(purchase.createdAt),
+    }));
+    const recentFixedAssets = fixedAssets
+      .filter((asset) => asset.purchased)
+      .map((asset) => ({
+        id: `fixed-asset-${asset.id}`,
+        type: "fixed_asset_purchase",
+        title: "Эд хөрөнгө худалдан авлаа",
+        detail: `${asset.name} · ${asset.quantity} ш · ${money(Number(asset.unitPrice) * asset.quantity).toLocaleString()}₮`,
+        createdAt: String(asset.createdAt),
+      }));
     const data = GetDashboardResponse.parse({
       employeeCount: employees.filter((employee) => employee.status === "active").length,
-      presentToday: todayRecords.filter((record) => ["present", "late"].includes(record.status)).length,
+      previousMonthSalesIncome: money(previousMonthSalesIncome),
       previousMonthPayrollExpense: money(previousMonthPayrollExpense),
       previousMonthInventoryExpense: money(previousMonthInventoryExpense),
-      cashBalance: money(balance),
-      recentActivity: [...recentAttendance, ...recentCash]
+      recentActivity: [...recentAttendance, ...recentCash, ...recentInventoryPurchases, ...recentFixedAssets]
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, 5),
     });

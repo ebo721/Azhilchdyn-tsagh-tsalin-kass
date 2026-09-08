@@ -33,6 +33,7 @@ import {
   ShieldCheck,
   Timer,
   Trash2,
+  TrendingUp,
   UserRound,
   UsersRound,
   WalletCards,
@@ -300,14 +301,13 @@ function Dashboard() {
   const data = query.data;
   return (
     <div className="page-enter">
-      {query.isLoading ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : (
+      {query.isLoading ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            <StatCard label="Нийт ажилтан" value={`${data?.employeeCount ?? 0}`} meta="Бүртгэлтэй ажилтан" icon={UsersRound} />
-            <StatCard label="Өнөөдөр ирсэн" value={`${data?.presentToday ?? 0} хүн`} meta="Ирцийн бүртгэлээс" icon={Check} tone="gold" />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard label="Өмнөх сарын борлуулалт" value={money(data?.previousMonthSalesIncome)} meta="Борлуулалтын нийт орлого" icon={TrendingUp} tone="gold" />
             <StatCard label="Өмнөх сарын цалин" value={money(data?.previousMonthPayrollExpense)} meta="Бодитоор олгосон нийт зардал" icon={Banknote} tone="blue" />
             <StatCard label="Өмнөх сарын материал" value={money(data?.previousMonthInventoryExpense)} meta="Худалдан авсан нийт зардал" icon={PackageOpen} tone="teal" />
-            <StatCard label="Кассын үлдэгдэл" value={money(data?.cashBalance)} meta="Одоогийн бэлэн мөнгө" icon={WalletCards} tone="orange" />
+            <StatCard label="Нийт ажилтан" value={`${data?.employeeCount ?? 0}`} meta="Бүртгэлтэй ажилтан" icon={UsersRound} tone="orange" />
           </div>
           <div className="mt-6">
             <section className="overflow-hidden rounded-2xl border border-border bg-card" data-testid="panel-recent-activity">

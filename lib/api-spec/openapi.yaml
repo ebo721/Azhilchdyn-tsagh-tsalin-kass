@@ -877,13 +877,12 @@ components:
         - status
     Dashboard:
       type: object
-      required: [employeeCount, presentToday, previousMonthPayrollExpense, previousMonthInventoryExpense, cashBalance, recentActivity]
+      required: [employeeCount, previousMonthSalesIncome, previousMonthPayrollExpense, previousMonthInventoryExpense, recentActivity]
       properties:
         employeeCount: { type: integer }
-        presentToday: { type: integer }
+        previousMonthSalesIncome: { type: number }
         previousMonthPayrollExpense: { type: number }
         previousMonthInventoryExpense: { type: number }
-        cashBalance: { type: number }
         recentActivity:
           type: array
           items:

@@ -44,10 +44,9 @@ export const HealthCheckResponse = zod.object({
  */
 export const GetDashboardResponse = zod.object({
   "employeeCount": zod.number().int(),
-  "presentToday": zod.number().int(),
+  "previousMonthSalesIncome": zod.number(),
   "previousMonthPayrollExpense": zod.number(),
   "previousMonthInventoryExpense": zod.number(),
-  "cashBalance": zod.number(),
   "recentActivity": zod.array(zod.object({
   "id": zod.string(),
   "type": zod.string(),
