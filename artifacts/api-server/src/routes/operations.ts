@@ -144,7 +144,8 @@ router.use(async (req, res, next) => {
     next();
     return;
   }
-  if (role === "viewer" && req.method === "GET" && req.path === "/dashboard") {
+  const viewerReadPrefixes = ["/employees", "/attendance", "/hour-balance", "/payroll", "/payroll-advance", "/cash", "/inventory", "/fixed-assets"];
+  if (role === "viewer" && req.method === "GET" && viewerReadPrefixes.some((prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`))) {
     next();
     return;
   }

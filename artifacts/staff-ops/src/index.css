@@ -327,6 +327,29 @@
   [data-role='accountant'] [data-testid^='button-delete-employee-'] {
     display: none;
   }
+
+  [data-role='viewer'] [data-testid^='button-add-'],
+  [data-role='viewer'] [data-testid^='button-edit-'],
+  [data-role='viewer'] [data-testid^='button-delete-'],
+  [data-role='viewer'] [data-testid^='button-save-'],
+  [data-role='viewer'] [data-testid^='button-advance-paid-'],
+  [data-role='viewer'] [data-testid^='button-payroll-adjustment-'],
+  [data-role='viewer'] [data-testid='button-approve-payroll-advance'],
+  [data-role='viewer'] [data-testid='button-close-cash-day'],
+  [data-role='viewer'] [data-testid='button-copy-previous-shift-plans'],
+  [data-role='viewer'] [data-testid='button-pull-payroll-attendance'],
+  [data-role='viewer'] [data-testid='button-revert-payroll-advance'],
+  [data-role='viewer'] [data-testid='button-cash-expense'],
+  [data-role='viewer'] [data-testid='button-cash-income'],
+  [data-role='viewer'] [data-testid='button-shift-settings'] {
+    display: none;
+  }
+
+  [data-role='viewer'] [data-testid^='select-attendance-'],
+  [data-role='viewer'] [data-testid^='select-shift-plan-'] {
+    pointer-events: none;
+    opacity: 0.75;
+  }
   .text-balance { text-wrap: balance; }
   .app-grid {
     background-image: linear-gradient(hsl(var(--foreground) / .035) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground) / .035) 1px, transparent 1px);
