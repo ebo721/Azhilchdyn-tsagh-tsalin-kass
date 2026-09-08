@@ -517,6 +517,9 @@ export interface InventoryPurchase {
   hasReceipt: boolean;
   date: string;
   totalAmount: number;
+  paid: boolean;
+  paymentDate?: string | null;
+  paymentAmount?: number | null;
   createdAt: string;
   editable: boolean;
   items: InventoryPurchaseItem[];
@@ -557,6 +560,13 @@ export interface InventoryPurchaseInput {
   date: string;
   /** @minItems 1 */
   items: InventoryPurchaseItemInput[];
+}
+
+export interface InventoryPurchasePaymentInput {
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
+  date: string;
+  /** @exclusiveMinimum 0 */
+  amount: number;
 }
 
 export interface InventorySupplierUpdate {

@@ -45,6 +45,11 @@ import {
   UpdateInventoryPurchaseParams,
   UpdateInventoryPurchaseResponse,
   DeleteInventoryPurchaseParams,
+  ConfirmInventoryPurchasePaymentBody,
+  ConfirmInventoryPurchasePaymentParams,
+  ConfirmInventoryPurchasePaymentResponse,
+  CancelInventoryPurchasePaymentParams,
+  CancelInventoryPurchasePaymentResponse,
   CreateInventoryIssueBody,
   CreateInventoryIssueResponse,
   ListInventoryIssuesResponse,
@@ -1680,6 +1685,9 @@ router.get("/inventory/purchases", async (_req, res, next) => {
       hasReceipt: purchase.hasReceipt,
       date: purchase.date,
       totalAmount: Number(purchase.totalAmount),
+      paid: purchase.paymentDate !== null,
+      paymentDate: purchase.paymentDate,
+      paymentAmount: purchase.paymentAmount === null ? null : Number(purchase.paymentAmount),
       createdAt: purchase.createdAt.toISOString(),
       editable: !closedDates.has(purchase.date),
       items: items
@@ -2114,15 +2122,6 @@ router.post("/inventory/purchases", async (req, res, next) => {
         });
       }
       const savedItems = await tx.insert(inventoryPurchaseItemsTable).values(purchaseLines).returning();
-      await tx.insert(cashTransactionsTable).values({
-        type: "expense",
-        category: "Бараа материал",
-        description: supplier.name,
-        amount: totalAmount,
-        date: input.date,
-        sourceType: "inventory_purchase",
-        sourceKey: `purchase:${purchase.id}`,
-      });
       return { purchase, savedItems };
     });
     res.status(201).json(CreateInventoryPurchaseResponse.parse({
@@ -2131,6 +2130,9 @@ router.post("/inventory/purchases", async (req, res, next) => {
       hasReceipt: result.purchase.hasReceipt,
       date: result.purchase.date,
       totalAmount: Number(result.purchase.totalAmount),
+      paid: false,
+      paymentDate: null,
+      paymentAmount: null,
       createdAt: result.purchase.createdAt.toISOString(),
       editable: true,
       items: result.savedItems.map((item) => ({
@@ -2241,18 +2243,14 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
         date: input.date,
         totalAmount,
       }).where(eq(inventoryPurchasesTable.id, id)).returning();
-      await tx.insert(cashTransactionsTable).values({
-        type: "expense",
-        category: "Бараа материал",
-        description: supplier.name,
-        amount: totalAmount,
-        date: input.date,
-        sourceType: "inventory_purchase",
-        sourceKey: `purchase:${id}`,
-      }).onConflictDoUpdate({
-        target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
-        set: { description: supplier.name, amount: totalAmount, date: input.date },
-      });
+      if (existing.paymentDate) {
+        await tx.update(cashTransactionsTable)
+          .set({ description: supplier.name })
+          .where(and(
+            eq(cashTransactionsTable.sourceType, "inventory_purchase"),
+            eq(cashTransactionsTable.sourceKey, `purchase:${id}`),
+          ));
+      }
       return { purchase, savedItems };
     });
     res.json(UpdateInventoryPurchaseResponse.parse({
@@ -2261,6 +2259,9 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
       hasReceipt: result.purchase.hasReceipt,
       date: result.purchase.date,
       totalAmount: Number(result.purchase.totalAmount),
+      paid: result.purchase.paymentDate !== null,
+      paymentDate: result.purchase.paymentDate,
+      paymentAmount: result.purchase.paymentAmount === null ? null : Number(result.purchase.paymentAmount),
       createdAt: result.purchase.createdAt.toISOString(),
       editable: true,
       items: result.savedItems.map((item) => ({
@@ -2279,6 +2280,106 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
   }
 });
 
+async function inventoryPurchaseResponse(id: number) {
+  const [purchase] = await db.select().from(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, id));
+  if (!purchase) return null;
+  const [items, closure] = await Promise.all([
+    db.select().from(inventoryPurchaseItemsTable).where(eq(inventoryPurchaseItemsTable.purchaseId, id)),
+    db.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, purchase.date)),
+  ]);
+  return {
+    id: purchase.id,
+    supplierName: purchase.documentName,
+    hasReceipt: purchase.hasReceipt,
+    date: purchase.date,
+    totalAmount: Number(purchase.totalAmount),
+    paid: purchase.paymentDate !== null,
+    paymentDate: purchase.paymentDate,
+    paymentAmount: purchase.paymentAmount === null ? null : Number(purchase.paymentAmount),
+    createdAt: purchase.createdAt.toISOString(),
+    editable: closure.length === 0,
+    items: items.map((item) => ({
+      id: item.id,
+      inventoryItemId: item.inventoryItemId,
+      name: item.name,
+      category: item.category,
+      unit: item.unit,
+      quantity: Number(item.quantity),
+      unitPrice: Number(item.unitPrice),
+      totalAmount: Number(item.totalAmount),
+    })),
+  };
+}
+
+router.put("/inventory/purchases/:id/payment", async (req, res, next) => {
+  try {
+    const { id } = ConfirmInventoryPurchasePaymentParams.parse(req.params);
+    const input = ConfirmInventoryPurchasePaymentBody.parse(req.body);
+    if (!isValidCalendarDate(input.date)) {
+      res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
+      return;
+    }
+    const [existing] = await db.select().from(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, id));
+    if (!existing) {
+      res.status(404).json({ error: "Худалдан авалт олдсонгүй" });
+      return;
+    }
+    if ((existing.paymentDate && await isCashDateClosed(existing.paymentDate)) || await isCashDateClosed(input.date)) {
+      res.status(409).json({ error: "Өндөрлөсөн өдрийн төлбөрийг өөрчлөх боломжгүй" });
+      return;
+    }
+    await db.transaction(async (tx) => {
+      await tx.update(inventoryPurchasesTable)
+        .set({ paymentDate: input.date, paymentAmount: money(input.amount) })
+        .where(eq(inventoryPurchasesTable.id, id));
+      await tx.insert(cashTransactionsTable).values({
+        type: "expense",
+        category: "Бараа материал",
+        description: existing.documentName,
+        amount: money(input.amount),
+        date: input.date,
+        sourceType: "inventory_purchase",
+        sourceKey: `purchase:${id}`,
+      }).onConflictDoUpdate({
+        target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
+        set: { description: existing.documentName, amount: money(input.amount), date: input.date },
+      });
+    });
+    const response = await inventoryPurchaseResponse(id);
+    res.json(ConfirmInventoryPurchasePaymentResponse.parse(response));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/inventory/purchases/:id/payment", async (req, res, next) => {
+  try {
+    const { id } = CancelInventoryPurchasePaymentParams.parse(req.params);
+    const [existing] = await db.select().from(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, id));
+    if (!existing) {
+      res.status(404).json({ error: "Худалдан авалт олдсонгүй" });
+      return;
+    }
+    if (existing.paymentDate && await isCashDateClosed(existing.paymentDate)) {
+      res.status(409).json({ error: "Өндөрлөсөн өдрийн төлбөрийг цуцлах боломжгүй" });
+      return;
+    }
+    await db.transaction(async (tx) => {
+      await tx.update(inventoryPurchasesTable)
+        .set({ paymentDate: null, paymentAmount: null })
+        .where(eq(inventoryPurchasesTable.id, id));
+      await tx.delete(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "inventory_purchase"),
+        eq(cashTransactionsTable.sourceKey, `purchase:${id}`),
+      ));
+    });
+    const response = await inventoryPurchaseResponse(id);
+    res.json(CancelInventoryPurchasePaymentResponse.parse(response));
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.delete("/inventory/purchases/:id", async (req, res, next) => {
   try {
     const { id } = DeleteInventoryPurchaseParams.parse(req.params);
@@ -2287,7 +2388,7 @@ router.delete("/inventory/purchases/:id", async (req, res, next) => {
       res.status(404).json({ error: "Худалдан авалт олдсонгүй" });
       return;
     }
-    if (await isCashDateClosed(existing.date)) {
+    if (await isCashDateClosed(existing.date) || (existing.paymentDate && await isCashDateClosed(existing.paymentDate))) {
       res.status(409).json({ error: "Өндөрлөсөн өдрийн худалдан авалтыг устгах боломжгүй" });
       return;
     }

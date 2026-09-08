@@ -13,6 +13,9 @@ export interface InventoryPurchase {
   hasReceipt: boolean;
   date: string;
   totalAmount: number;
+  paid: boolean;
+  paymentDate?: string | null;
+  paymentAmount?: number | null;
   createdAt: string;
   editable: boolean;
   items: InventoryPurchaseItem[];

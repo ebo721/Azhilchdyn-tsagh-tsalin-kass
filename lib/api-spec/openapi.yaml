@@ -698,6 +698,39 @@ paths:
       responses:
         "204":
           description: Deleted inventory purchase
+  /inventory/purchases/{id}/payment:
+    put:
+      operationId: confirmInventoryPurchasePayment
+      tags: [inventory]
+      summary: Mark an inventory purchase as paid and create its cash expense
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryPurchasePaymentInput"
+      responses:
+        "200":
+          description: Payment confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryPurchase"
+    delete:
+      operationId: cancelInventoryPurchasePayment
+      tags: [inventory]
+      summary: Cancel an inventory purchase payment and remove its cash expense
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Payment cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryPurchase"
   /inventory/suppliers:
     get:
       operationId: listInventorySuppliers
@@ -1321,13 +1354,16 @@ components:
         totalAmount: { type: number }
     InventoryPurchase:
       type: object
-      required: [id, supplierName, hasReceipt, date, totalAmount, createdAt, editable, items]
+      required: [id, supplierName, hasReceipt, date, totalAmount, paid, createdAt, editable, items]
       properties:
         id: { type: integer }
         supplierName: { type: string }
         hasReceipt: { type: boolean }
         date: { type: string }
         totalAmount: { type: number }
+        paid: { type: boolean }
+        paymentDate: { type: string, nullable: true }
+        paymentAmount: { type: number, nullable: true }
         createdAt: { type: string }
         editable: { type: boolean }
         items:
@@ -1360,6 +1396,14 @@ components:
           minItems: 1
           items:
             $ref: "#/components/schemas/InventoryPurchaseItemInput"
+    InventoryPurchasePaymentInput:
+      type: object
+      required: [date, amount]
+      properties:
+        date:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$'
+        amount: { type: number, exclusiveMinimum: 0 }
     InventorySupplierUpdate:
       type: object
       required: [name]

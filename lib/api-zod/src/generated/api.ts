@@ -835,6 +835,9 @@ export const ListInventoryPurchasesResponseItem = zod.object({
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
   "totalAmount": zod.number(),
+  "paid": zod.boolean(),
+  "paymentDate": zod.string().nullish(),
+  "paymentAmount": zod.number().nullish(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
   "items": zod.array(zod.object({
@@ -885,6 +888,9 @@ export const CreateInventoryPurchaseResponse = zod.object({
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
   "totalAmount": zod.number(),
+  "paid": zod.boolean(),
+  "paymentDate": zod.string().nullish(),
+  "paymentAmount": zod.number().nullish(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
   "items": zod.array(zod.object({
@@ -938,6 +944,9 @@ export const UpdateInventoryPurchaseResponse = zod.object({
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
   "totalAmount": zod.number(),
+  "paid": zod.boolean(),
+  "paymentDate": zod.string().nullish(),
+  "paymentAmount": zod.number().nullish(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
   "items": zod.array(zod.object({
@@ -961,6 +970,78 @@ export const DeleteInventoryPurchaseParams = zod.object({
 })
 
 export const DeleteInventoryPurchaseResponse = zod.void()
+
+
+/**
+ * @summary Mark an inventory purchase as paid and create its cash expense
+ */
+export const ConfirmInventoryPurchasePaymentParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const confirmInventoryPurchasePaymentBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const confirmInventoryPurchasePaymentBodyAmountExclusiveMin = 0;
+
+
+
+export const ConfirmInventoryPurchasePaymentBody = zod.object({
+  "date": zod.string().regex(confirmInventoryPurchasePaymentBodyDateRegExp),
+  "amount": zod.number().gt(confirmInventoryPurchasePaymentBodyAmountExclusiveMin)
+})
+
+export const ConfirmInventoryPurchasePaymentResponse = zod.object({
+  "id": zod.number().int(),
+  "supplierName": zod.string(),
+  "hasReceipt": zod.boolean(),
+  "date": zod.string(),
+  "totalAmount": zod.number(),
+  "paid": zod.boolean(),
+  "paymentDate": zod.string().nullish(),
+  "paymentAmount": zod.number().nullish(),
+  "createdAt": zod.string(),
+  "editable": zod.boolean(),
+  "items": zod.array(zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "totalAmount": zod.number()
+}))
+})
+
+
+/**
+ * @summary Cancel an inventory purchase payment and remove its cash expense
+ */
+export const CancelInventoryPurchasePaymentParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const CancelInventoryPurchasePaymentResponse = zod.object({
+  "id": zod.number().int(),
+  "supplierName": zod.string(),
+  "hasReceipt": zod.boolean(),
+  "date": zod.string(),
+  "totalAmount": zod.number(),
+  "paid": zod.boolean(),
+  "paymentDate": zod.string().nullish(),
+  "paymentAmount": zod.number().nullish(),
+  "createdAt": zod.string(),
+  "editable": zod.boolean(),
+  "items": zod.array(zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "totalAmount": zod.number()
+}))
+})
 
 
 /**

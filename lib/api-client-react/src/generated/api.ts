@@ -49,6 +49,7 @@ import type {
   InventoryItemUpdate,
   InventoryPurchase,
   InventoryPurchaseInput,
+  InventoryPurchasePaymentInput,
   InventorySupplier,
   InventorySupplierUpdate,
   ListAttendanceParams,
@@ -3209,6 +3210,149 @@ export const useDeleteInventoryPurchase = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteInventoryPurchaseMutationOptions(options));
+    }
+
+export const getConfirmInventoryPurchasePaymentUrl = (id: number,) => {
+
+
+
+
+  return `/api/inventory/purchases/${id}/payment`
+}
+
+/**
+ * @summary Mark an inventory purchase as paid and create its cash expense
+ */
+export const confirmInventoryPurchasePayment = async (id: number,
+    inventoryPurchasePaymentInput: InventoryPurchasePaymentInput, options?: Parameters<typeof customFetch>[1]): Promise<InventoryPurchase> => {
+
+  return customFetch<InventoryPurchase>(getConfirmInventoryPurchasePaymentUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(inventoryPurchasePaymentInput)
+  }
+);}
+
+
+
+
+
+export const getConfirmInventoryPurchasePaymentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmInventoryPurchasePayment>>, TError,{id: number;data: BodyType<InventoryPurchasePaymentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmInventoryPurchasePayment>>, TError,{id: number;data: BodyType<InventoryPurchasePaymentInput>}, TContext> => {
+
+const mutationKey = ['confirmInventoryPurchasePayment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmInventoryPurchasePayment>>, {id: number;data: BodyType<InventoryPurchasePaymentInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  confirmInventoryPurchasePayment(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmInventoryPurchasePaymentMutationResult = NonNullable<Awaited<ReturnType<typeof confirmInventoryPurchasePayment>>>
+    export type ConfirmInventoryPurchasePaymentMutationBody = BodyType<InventoryPurchasePaymentInput>
+    export type ConfirmInventoryPurchasePaymentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Mark an inventory purchase as paid and create its cash expense
+ */
+export const useConfirmInventoryPurchasePayment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmInventoryPurchasePayment>>, TError,{id: number;data: BodyType<InventoryPurchasePaymentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmInventoryPurchasePayment>>,
+        TError,
+        {id: number;data: BodyType<InventoryPurchasePaymentInput>},
+        TContext
+      > => {
+      return useMutation(getConfirmInventoryPurchasePaymentMutationOptions(options));
+    }
+
+export const getCancelInventoryPurchasePaymentUrl = (id: number,) => {
+
+
+
+
+  return `/api/inventory/purchases/${id}/payment`
+}
+
+/**
+ * @summary Cancel an inventory purchase payment and remove its cash expense
+ */
+export const cancelInventoryPurchasePayment = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<InventoryPurchase> => {
+
+  return customFetch<InventoryPurchase>(getCancelInventoryPurchasePaymentUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getCancelInventoryPurchasePaymentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelInventoryPurchasePayment>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelInventoryPurchasePayment>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['cancelInventoryPurchasePayment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelInventoryPurchasePayment>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  cancelInventoryPurchasePayment(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelInventoryPurchasePaymentMutationResult = NonNullable<Awaited<ReturnType<typeof cancelInventoryPurchasePayment>>>
+
+    export type CancelInventoryPurchasePaymentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Cancel an inventory purchase payment and remove its cash expense
+ */
+export const useCancelInventoryPurchasePayment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelInventoryPurchasePayment>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelInventoryPurchasePayment>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getCancelInventoryPurchasePaymentMutationOptions(options));
     }
 
 export const getListInventorySuppliersUrl = () => {

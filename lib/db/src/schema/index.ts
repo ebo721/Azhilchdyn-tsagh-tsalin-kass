@@ -120,6 +120,8 @@ export const inventoryPurchasesTable = pgTable("inventory_purchases", {
   hasReceipt: boolean("has_receipt").notNull().default(false),
   date: date("date", { mode: "string" }).notNull(),
   totalAmount: numeric("total_amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  paymentDate: date("payment_date", { mode: "string" }),
+  paymentAmount: numeric("payment_amount", { precision: 14, scale: 2, mode: "number" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

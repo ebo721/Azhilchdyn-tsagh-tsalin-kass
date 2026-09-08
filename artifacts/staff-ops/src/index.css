@@ -346,7 +346,8 @@
   }
 
   [data-role='viewer'] [data-testid^='select-attendance-'],
-  [data-role='viewer'] [data-testid^='select-shift-plan-'] {
+  [data-role='viewer'] [data-testid^='select-shift-plan-'],
+  [data-role='viewer'] [data-testid^='checkbox-inventory-payment-'] {
     pointer-events: none;
     opacity: 0.75;
   }

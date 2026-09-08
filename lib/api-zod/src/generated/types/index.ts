@@ -53,6 +53,7 @@ export * from './inventoryPurchaseInput';
 export * from './inventoryPurchaseItem';
 export * from './inventoryPurchaseItemInput';
 export * from './inventoryPurchaseItemInputUnit';
+export * from './inventoryPurchasePaymentInput';
 export * from './inventorySupplier';
 export * from './inventorySupplierItem';
 export * from './inventorySupplierUpdate';
