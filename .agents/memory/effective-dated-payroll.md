@@ -19,6 +19,8 @@ Each month's signed payroll balance carries forward into the next month's take-h
 
 In payroll reporting, split the brought-forward balance into salary payable (prior underpayment owed to the employee) and salary receivable (prior overpayment recoverable from the employee), while retaining the current-month difference.
 
+In the payroll adjustment dialog, show the settlement equation explicitly: current-month take-home pay + salary payable − salary receivable = salary due for payment.
+
 Treat signed payroll balances from -1₮ through +1₮ as zero. Display underpayments in parentheses and overpayments as ordinary positive amounts, without text labels.
 
 An office employee must have at least one attendance record in a month before base salary or payroll taxes are calculated. A month with no attendance contributes zero new salary and zero new balance.

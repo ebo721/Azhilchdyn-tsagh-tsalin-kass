@@ -660,7 +660,28 @@ function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; m
   };
   return <Modal title={`${line.employeeName} · Цалингийн тохируулга`} detail={`${month.replace('-', ' оны ')} сарын урьдчилгаа, хөнгөлөлт, суутгал болон шилжүүлсэн дүнг оруулна.`} onClose={onClose}>
     <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-5" data-testid="form-payroll-adjustment">
-      <div className="rounded-xl border border-border bg-secondary/40 p-4 text-xs text-muted-foreground"><div className="flex justify-between"><span>Тооцсон сүүл цалин</span><strong className="font-mono text-foreground">{money(line.payable)}</strong></div><div className="mt-2 flex justify-between"><span>Одоогийн дутуу дүн</span><strong className="font-mono text-primary">{money(line.remainingAmount)}</strong></div></div>
+      <div className="rounded-xl border border-border bg-secondary/40 p-4 text-xs text-muted-foreground">
+        <div className="flex justify-between">
+          <span>Гарт олгох цалин</span>
+          <strong className="font-mono text-foreground">{money(Math.max(0, line.gross - line.deductions))}</strong>
+        </div>
+        <div className="mt-2 flex justify-between">
+          <span>Цалингийн өглөг (+)</span>
+          <strong className="font-mono text-orange-800">{money(Math.max(0, line.carryoverAmount))}</strong>
+        </div>
+        <div className="mt-2 flex justify-between">
+          <span>Цалингийн авлага (−)</span>
+          <strong className="font-mono text-sky-700">{money(Math.max(0, -line.carryoverAmount))}</strong>
+        </div>
+        <div className="mt-3 flex justify-between border-t border-border pt-3 text-sm">
+          <span className="font-bold text-foreground">Олговол зохих цалин</span>
+          <strong className="font-mono text-primary">{money(line.payable)}</strong>
+        </div>
+        <div className="mt-2 flex justify-between">
+          <span>Одоогийн зөрүү</span>
+          <strong className="font-mono text-primary">{line.remainingAmount > 0 ? `(${money(line.remainingAmount)})` : line.overpaidAmount > 0 ? money(line.overpaidAmount) : money(0)}</strong>
+        </div>
+      </div>
       <div className="rounded-xl border border-accent/50 bg-accent/15 p-4"><div className="flex items-center justify-between"><span className="text-xs font-semibold">{line.employeeType === 'shift' ? 'Урьдчилгаа цалин' : 'Урьдчилгаа цалин · 50%'}</span><strong className="font-mono text-sm">{money(line.advanceAmount)}</strong></div></div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2 text-xs font-semibold"><span>ХХОАТ хөнгөлөлт</span><div className="mt-1 flex h-10 w-full items-center rounded-lg border border-input bg-secondary/40 px-3 font-mono text-sm">{money(line.taxRelief)}</div><p className="text-[11px] font-normal text-muted-foreground">НДШ тооцох цалингийн шатлалаар автоматаар тооцно.</p></div>
