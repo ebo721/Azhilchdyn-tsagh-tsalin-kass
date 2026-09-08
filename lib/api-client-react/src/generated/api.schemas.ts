@@ -141,6 +141,14 @@ export interface EmployeeSalaryHistory {
   createdAt: string;
 }
 
+export interface EmployeeSalaryHistoryUpdate {
+  effectiveFrom: string;
+  /** @minimum 0 */
+  baseSalary: number;
+  /** @minimum 0 */
+  socialInsuranceSalary: number;
+}
+
 export type EmployeeInputEmployeeType = typeof EmployeeInputEmployeeType[keyof typeof EmployeeInputEmployeeType];
 
 

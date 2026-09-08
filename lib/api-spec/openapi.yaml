@@ -201,6 +201,29 @@ paths:
                 items:
                   $ref: "#/components/schemas/EmployeeSalaryHistory"
   /employees/{id}/salary-history/{historyId}:
+    patch:
+      operationId: updateEmployeeSalaryHistory
+      tags: [employees]
+      summary: Correct a salary history entry
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - in: path
+          name: historyId
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmployeeSalaryHistoryUpdate"
+      responses:
+        "200":
+          description: Updated salary history entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmployeeSalaryHistory"
     delete:
       operationId: deleteEmployeeSalaryHistory
       tags: [employees]
@@ -1110,6 +1133,13 @@ components:
         socialInsuranceSalary: { type: number }
         payrollTaxExempt: { type: boolean }
         createdAt: { type: string }
+    EmployeeSalaryHistoryUpdate:
+      type: object
+      required: [effectiveFrom, baseSalary, socialInsuranceSalary]
+      properties:
+        effectiveFrom: { type: string, format: date }
+        baseSalary: { type: number, minimum: 0 }
+        socialInsuranceSalary: { type: number, minimum: 0 }
     EmployeeInput:
       type: object
       required: [name, role, phone, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, monthlyExpectedWorkDays, joinedAt]

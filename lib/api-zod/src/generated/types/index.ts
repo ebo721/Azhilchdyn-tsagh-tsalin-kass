@@ -35,6 +35,7 @@ export * from './employeeInput';
 export * from './employeeInputEmployeeType';
 export * from './employeeSalaryHistory';
 export * from './employeeSalaryHistoryEmployeeType';
+export * from './employeeSalaryHistoryUpdate';
 export * from './employeeStatus';
 export * from './employeeUpdate';
 export * from './employeeUpdateEmployeeType';

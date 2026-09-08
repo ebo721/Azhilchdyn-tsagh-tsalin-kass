@@ -36,6 +36,7 @@ import type {
   Employee,
   EmployeeInput,
   EmployeeSalaryHistory,
+  EmployeeSalaryHistoryUpdate,
   EmployeeUpdate,
   FixedAsset,
   FixedAssetInput,
@@ -1043,6 +1044,80 @@ export function useListEmployeeSalaryHistory<TData = Awaited<ReturnType<typeof l
 
 
 
+
+export const getUpdateEmployeeSalaryHistoryUrl = (id: number,
+    historyId: number,) => {
+
+
+
+
+  return `/api/employees/${id}/salary-history/${historyId}`
+}
+
+/**
+ * @summary Correct a salary history entry
+ */
+export const updateEmployeeSalaryHistory = async (id: number,
+    historyId: number,
+    employeeSalaryHistoryUpdate: EmployeeSalaryHistoryUpdate, options?: Parameters<typeof customFetch>[1]): Promise<EmployeeSalaryHistory> => {
+
+  return customFetch<EmployeeSalaryHistory>(getUpdateEmployeeSalaryHistoryUrl(id,historyId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(employeeSalaryHistoryUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateEmployeeSalaryHistoryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEmployeeSalaryHistory>>, TError,{id: number;historyId: number;data: BodyType<EmployeeSalaryHistoryUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateEmployeeSalaryHistory>>, TError,{id: number;historyId: number;data: BodyType<EmployeeSalaryHistoryUpdate>}, TContext> => {
+
+const mutationKey = ['updateEmployeeSalaryHistory'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateEmployeeSalaryHistory>>, {id: number;historyId: number;data: BodyType<EmployeeSalaryHistoryUpdate>}> = (props) => {
+          const {id,historyId,data} = props ?? {};
+
+          return  updateEmployeeSalaryHistory(id,historyId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateEmployeeSalaryHistoryMutationResult = NonNullable<Awaited<ReturnType<typeof updateEmployeeSalaryHistory>>>
+    export type UpdateEmployeeSalaryHistoryMutationBody = BodyType<EmployeeSalaryHistoryUpdate>
+    export type UpdateEmployeeSalaryHistoryMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Correct a salary history entry
+ */
+export const useUpdateEmployeeSalaryHistory = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEmployeeSalaryHistory>>, TError,{id: number;historyId: number;data: BodyType<EmployeeSalaryHistoryUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateEmployeeSalaryHistory>>,
+        TError,
+        {id: number;historyId: number;data: BodyType<EmployeeSalaryHistoryUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateEmployeeSalaryHistoryMutationOptions(options));
+    }
 
 export const getDeleteEmployeeSalaryHistoryUrl = (id: number,
     historyId: number,) => {

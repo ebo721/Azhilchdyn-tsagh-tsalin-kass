@@ -246,6 +246,38 @@ export const ListEmployeeSalaryHistoryResponse = zod.array(ListEmployeeSalaryHis
 
 
 /**
+ * @summary Correct a salary history entry
+ */
+export const UpdateEmployeeSalaryHistoryParams = zod.object({
+  "id": zod.coerce.number().int(),
+  "historyId": zod.coerce.number().int()
+})
+
+export const updateEmployeeSalaryHistoryBodyBaseSalaryMin = 0;
+
+export const updateEmployeeSalaryHistoryBodySocialInsuranceSalaryMin = 0;
+
+
+
+export const UpdateEmployeeSalaryHistoryBody = zod.object({
+  "effectiveFrom": zod.coerce.date(),
+  "baseSalary": zod.number().min(updateEmployeeSalaryHistoryBodyBaseSalaryMin),
+  "socialInsuranceSalary": zod.number().min(updateEmployeeSalaryHistoryBodySocialInsuranceSalaryMin)
+})
+
+export const UpdateEmployeeSalaryHistoryResponse = zod.object({
+  "id": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "effectiveFrom": zod.string(),
+  "employeeType": zod.enum(['shift', 'office']),
+  "baseSalary": zod.number(),
+  "socialInsuranceSalary": zod.number(),
+  "payrollTaxExempt": zod.boolean(),
+  "createdAt": zod.string()
+})
+
+
+/**
  * @summary Delete an incorrect salary history entry
  */
 export const DeleteEmployeeSalaryHistoryParams = zod.object({

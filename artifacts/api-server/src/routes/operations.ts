@@ -75,6 +75,9 @@ import {
   ListEmployeeSalaryHistoryParams,
   ListEmployeeSalaryHistoryResponse,
   DeleteEmployeeSalaryHistoryParams,
+  UpdateEmployeeSalaryHistoryBody,
+  UpdateEmployeeSalaryHistoryParams,
+  UpdateEmployeeSalaryHistoryResponse,
   DeletePayrollAdjustmentTransactionParams,
   UpsertPayrollAdjustmentBody,
   UpdatePayrollAdvancePaymentBody,
@@ -686,6 +689,82 @@ router.get("/employees/:id/salary-history", async (req, res, next) => {
       effectiveFrom: String(row.effectiveFrom),
       createdAt: row.createdAt.toISOString(),
     }))));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch("/employees/:id/salary-history/:historyId", async (req, res, next) => {
+  try {
+    const { id, historyId } = UpdateEmployeeSalaryHistoryParams.parse(req.params);
+    const input = UpdateEmployeeSalaryHistoryBody.parse(req.body);
+    const effectiveFrom = calendarDateText(input.effectiveFrom);
+    if (!isValidCalendarDate(effectiveFrom)) {
+      res.status(400).json({ error: "Цалин хүчинтэй болох огноо буруу байна" });
+      return;
+    }
+    const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, id));
+    if (!employee) {
+      res.status(404).json({ error: "Ажилтан олдсонгүй" });
+      return;
+    }
+    const history = await db.select().from(employeeSalaryHistoryTable)
+      .where(eq(employeeSalaryHistoryTable.employeeId, id))
+      .orderBy(employeeSalaryHistoryTable.effectiveFrom);
+    const index = history.findIndex((row) => row.id === historyId);
+    if (index < 0) {
+      res.status(404).json({ error: "Цалингийн түүх олдсонгүй" });
+      return;
+    }
+    if (effectiveFrom < String(employee.joinedAt)) {
+      res.status(400).json({ error: "Цалингийн огноо ажилд орсон огнооноос өмнө байж болохгүй" });
+      return;
+    }
+    if (index === 0 && effectiveFrom !== String(employee.joinedAt)) {
+      res.status(409).json({ error: "Анхны цалингийн огноо ажилд орсон огноотой ижил байх ёстой" });
+      return;
+    }
+    if (history.some((row) => row.id !== historyId && String(row.effectiveFrom) === effectiveFrom)) {
+      res.status(409).json({ error: "Энэ огноонд цалингийн өөр мөр бүртгэлтэй байна" });
+      return;
+    }
+    const affectedFrom = effectiveFrom < String(history[index].effectiveFrom)
+      ? effectiveFrom
+      : String(history[index].effectiveFrom);
+    const paidPayroll = await db.select({
+      month: payrollAdjustmentsTable.month,
+      paidAmount: payrollAdjustmentsTable.paidAmount,
+      secondPaidAmount: payrollAdjustmentsTable.secondPaidAmount,
+    }).from(payrollAdjustmentsTable).where(eq(payrollAdjustmentsTable.employeeId, id));
+    const affectedPaidMonth = paidPayroll.find((row) =>
+      row.month >= affectedFrom.slice(0, 7)
+      && (Number(row.paidAmount) > 0 || Number(row.secondPaidAmount) > 0)
+    );
+    if (affectedPaidMonth) {
+      res.status(409).json({ error: `${affectedPaidMonth.month} сарын олгосон цалинд нөлөөлөх тул засах боломжгүй` });
+      return;
+    }
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx.update(employeeSalaryHistoryTable).set({
+        effectiveFrom,
+        baseSalary: input.baseSalary,
+        socialInsuranceSalary: input.socialInsuranceSalary,
+      }).where(eq(employeeSalaryHistoryTable.id, historyId)).returning();
+      if (index === history.length - 1) {
+        await tx.update(employeesTable).set({
+          baseSalary: input.baseSalary,
+          socialInsuranceSalary: input.socialInsuranceSalary,
+        }).where(eq(employeesTable.id, id));
+      }
+      return row;
+    });
+    res.json(UpdateEmployeeSalaryHistoryResponse.parse({
+      ...updated,
+      baseSalary: Number(updated.baseSalary),
+      socialInsuranceSalary: Number(updated.socialInsuranceSalary),
+      effectiveFrom: String(updated.effectiveFrom),
+      createdAt: updated.createdAt.toISOString(),
+    }));
   } catch (error) {
     next(error);
   }
