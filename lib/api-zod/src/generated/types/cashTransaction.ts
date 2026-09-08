@@ -15,4 +15,5 @@ export interface CashTransaction {
   amount: number;
   date: string;
   createdAt: string;
+  editable: boolean;
 }

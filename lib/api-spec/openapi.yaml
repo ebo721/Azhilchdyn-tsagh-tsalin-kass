@@ -513,6 +513,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CashTransaction"
+  /cash/transactions/{id}:
+    put:
+      operationId: updateCashTransaction
+      tags: [cash]
+      summary: Update an open manual cash transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashTransactionInput"
+      responses:
+        "200":
+          description: Updated cash transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashTransaction"
+    delete:
+      operationId: deleteCashTransaction
+      tags: [cash]
+      summary: Delete an open manual cash transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Deleted cash transaction
   /cash/closures:
     get:
       operationId: listCashClosures
@@ -837,7 +866,7 @@ components:
         paymentDate: { type: ["string", "null"] }
     CashTransaction:
       type: object
-      required: [id, type, category, description, amount, date, createdAt]
+      required: [id, type, category, description, amount, date, createdAt, editable]
       properties:
         id: { type: integer }
         type: { type: string, enum: [income, expense] }
@@ -846,6 +875,7 @@ components:
         amount: { type: number }
         date: { type: string }
         createdAt: { type: string }
+        editable: { type: boolean }
     CashTransactionInput:
       type: object
       required: [type, category, description, amount, date]

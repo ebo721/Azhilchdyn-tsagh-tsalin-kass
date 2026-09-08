@@ -26,6 +26,9 @@ import {
   ListCashTransactionsResponse,
   ListCashClosuresResponse,
   CloseCashDayResponse,
+  UpdateCashTransactionBody,
+  UpdateCashTransactionParams,
+  DeleteCashTransactionParams,
   ListEmployeesResponse,
   UpsertPayrollAdjustmentBody,
   UpdatePayrollAdvancePaymentBody,
@@ -1070,6 +1073,7 @@ router.get("/cash/transactions", async (_req, res, next) => {
       amount: Number(transaction.amount),
       date: String(transaction.date),
       createdAt: String(transaction.createdAt),
+      editable: transaction.sourceType === null,
     }))));
   } catch (error) {
     next(error);
@@ -1089,7 +1093,65 @@ router.post("/cash/transactions", async (req, res, next) => {
       amount: Number(transaction.amount),
       date: String(transaction.date),
       createdAt: String(transaction.createdAt),
+      editable: true,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/cash/transactions/:id", async (req, res, next) => {
+  try {
+    const { id } = UpdateCashTransactionParams.parse(req.params);
+    const input = UpdateCashTransactionBody.parse(req.body);
+    const [existing] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, id));
+    if (!existing) {
+      res.status(404).json({ error: "Кассын гүйлгээ олдсонгүй" });
+      return;
+    }
+    if (existing.sourceType !== null) {
+      res.status(409).json({ error: "Автомат гүйлгээг эх үүсвэр цэснээс засна уу" });
+      return;
+    }
+    if (await isCashDateClosed(String(existing.date)) || await isCashDateClosed(input.date)) {
+      res.status(409).json({ error: "Өндөрлөсөн өдрийн гүйлгээг засах боломжгүй" });
+      return;
+    }
+    const [transaction] = await db
+      .update(cashTransactionsTable)
+      .set(input)
+      .where(eq(cashTransactionsTable.id, id))
+      .returning();
+    res.json({
+      ...transaction,
+      amount: Number(transaction.amount),
+      date: String(transaction.date),
+      createdAt: String(transaction.createdAt),
+      editable: true,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/cash/transactions/:id", async (req, res, next) => {
+  try {
+    const { id } = DeleteCashTransactionParams.parse(req.params);
+    const [existing] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, id));
+    if (!existing) {
+      res.status(404).json({ error: "Кассын гүйлгээ олдсонгүй" });
+      return;
+    }
+    if (existing.sourceType !== null) {
+      res.status(409).json({ error: "Автомат гүйлгээг эх үүсвэр цэснээс өөрчилнө үү" });
+      return;
+    }
+    if (await isCashDateClosed(String(existing.date))) {
+      res.status(409).json({ error: "Өндөрлөсөн өдрийн гүйлгээг устгах боломжгүй" });
+      return;
+    }
+    await db.delete(cashTransactionsTable).where(eq(cashTransactionsTable.id, id));
+    res.status(204).send();
   } catch (error) {
     next(error);
   }

@@ -403,6 +403,7 @@ export interface CashTransaction {
   amount: number;
   date: string;
   createdAt: string;
+  editable: boolean;
 }
 
 export type CashTransactionInputType = typeof CashTransactionInputType[keyof typeof CashTransactionInputType];

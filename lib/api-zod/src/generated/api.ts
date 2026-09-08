@@ -649,7 +649,8 @@ export const ListCashTransactionsResponseItem = zod.object({
   "description": zod.string(),
   "amount": zod.number(),
   "date": zod.string(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "editable": zod.boolean()
 })
 export const ListCashTransactionsResponse = zod.array(ListCashTransactionsResponseItem)
 
@@ -678,8 +679,52 @@ export const CreateCashTransactionResponse = zod.object({
   "description": zod.string(),
   "amount": zod.number(),
   "date": zod.string(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "editable": zod.boolean()
 })
+
+
+/**
+ * @summary Update an open manual cash transaction
+ */
+export const UpdateCashTransactionParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+export const updateCashTransactionBodyAmountMin = 0;
+
+
+
+export const UpdateCashTransactionBody = zod.object({
+  "type": zod.enum(['income', 'expense']),
+  "category": zod.string().min(1),
+  "description": zod.string().min(1),
+  "amount": zod.number().min(updateCashTransactionBodyAmountMin),
+  "date": zod.string()
+})
+
+export const UpdateCashTransactionResponse = zod.object({
+  "id": zod.number().int(),
+  "type": zod.enum(['income', 'expense']),
+  "category": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "date": zod.string(),
+  "createdAt": zod.string(),
+  "editable": zod.boolean()
+})
+
+
+/**
+ * @summary Delete an open manual cash transaction
+ */
+export const DeleteCashTransactionParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteCashTransactionResponse = zod.void()
 
 
 /**
