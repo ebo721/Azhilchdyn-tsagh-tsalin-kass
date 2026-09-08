@@ -117,9 +117,14 @@ export const cashTransactionsTable = pgTable("cash_transactions", {
   date: date("date").notNull(),
   sourceType: text("source_type"),
   sourceKey: text("source_key"),
+  // This intentionally has no FK because bankTransactionsTable is declared below.
+  // bank_transactions.cash_transaction_id remains the referential link.
+  bankTransactionId: integer("bank_transaction_id"),
+  bankVerifiedAt: timestamp("bank_verified_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("cash_transactions_source_idx").on(table.sourceType, table.sourceKey),
+  uniqueIndex("cash_transactions_bank_transaction_idx").on(table.bankTransactionId),
 ]);
 
 export const cashClosuresTable = pgTable("cash_closures", {

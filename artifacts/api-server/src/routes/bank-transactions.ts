@@ -9,10 +9,13 @@ import {
   DeleteBankTransactionParams,
   ImportKapitronBankTransactionsResponse,
   ListBankTransactionsResponse,
+  ListBankTransactionCashSuggestionsParams,
+  ListBankTransactionCashSuggestionsResponse,
+  TransferBankTransactionToCashBody,
   TransferBankTransactionToCashParams,
   TransferBankTransactionToCashResponse,
 } from "@workspace/api-zod";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { bankTransactionsTable, cashClosuresTable, cashTransactionsTable, db, deletionRequestsTable } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session";
 
@@ -22,6 +25,8 @@ const maxUploadBytes = 10 * 1024 * 1024;
 const maxXmlBytes = 8 * 1024 * 1024;
 const maxRows = 20_000;
 const requiredHeaders = ["Огноо", "Зарлага", "Орлого", "Exchange", "Харьцсан данс / Нэр", "Үлдэгдэл", "Гүйлгээний утга", "Гүйлгээ хийсэн огноо"];
+
+class BankCashLinkConflictError extends Error {}
 
 router.use(async (req, res, next) => {
   const session = await getStaffSession(req);
@@ -114,7 +119,9 @@ const response = (row: typeof bankTransactionsTable.$inferSelect) => ({
 
 router.get("/bank-transactions", async (_req, res, next) => {
   try {
-    const rows = await db.select().from(bankTransactionsTable).orderBy(desc(bankTransactionsTable.transactionAt), desc(bankTransactionsTable.id));
+    const rows = await db.select().from(bankTransactionsTable)
+      .where(and(isNull(bankTransactionsTable.cashTransactionId), isNull(bankTransactionsTable.transferredAt)))
+      .orderBy(desc(bankTransactionsTable.transactionAt), desc(bankTransactionsTable.id));
     res.json(ListBankTransactionsResponse.parse(rows.map(response)));
   } catch (error) { next(error); }
 });
@@ -161,22 +168,102 @@ router.post("/bank-transactions/import", raw({ type: "application/octet-stream",
   } catch (error) { next(error); }
 });
 
+function calendarDateDistance(first: string, second: string) {
+  const asUtc = (value: string) => {
+    const [year, month, day] = value.split("-").map(Number);
+    return Date.UTC(year, month - 1, day);
+  };
+  return Math.abs(asUtc(first) - asUtc(second)) / 86_400_000;
+}
+
+function descriptionTokens(value: string) {
+  return new Set(value.toLocaleLowerCase("mn-MN").split(/[^\p{L}\p{N}]+/u).filter((token) => token.length > 1));
+}
+
+function tokenOverlap(first: string, second: string) {
+  const a = descriptionTokens(first);
+  const b = descriptionTokens(second);
+  const union = new Set([...a, ...b]);
+  return union.size === 0 ? 0 : [...a].filter((token) => b.has(token)).length / union.size;
+}
+
+router.get("/bank-transactions/:id/cash-suggestions", async (req, res, next) => {
+  try {
+    const { id } = ListBankTransactionCashSuggestionsParams.parse(req.params);
+    const [bank] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id));
+    if (!bank) {
+      res.status(404).json({ error: "Банкны гүйлгээ олдсонгүй" });
+      return;
+    }
+    if (bank.cashTransactionId || bank.transferredAt) {
+      res.json(ListBankTransactionCashSuggestionsResponse.parse([]));
+      return;
+    }
+    const [cashRows, linkedRows] = await Promise.all([
+      db.select().from(cashTransactionsTable).where(and(eq(cashTransactionsTable.type, bank.type), isNull(cashTransactionsTable.bankTransactionId))),
+      db.select({ cashTransactionId: bankTransactionsTable.cashTransactionId }).from(bankTransactionsTable)
+        .where(isNotNull(bankTransactionsTable.cashTransactionId)),
+    ]);
+    const linkedCashIds = new Set(linkedRows.map((row) => row.cashTransactionId!));
+    const bankDate = bank.transactionAt.toISOString().slice(0, 10);
+    const bankAmount = Number(bank.amount);
+    const suggestions = cashRows
+      .filter((cash) => !linkedCashIds.has(cash.id))
+      .map((cash) => {
+        const dateDistance = calendarDateDistance(bankDate, String(cash.date));
+        const amountDifference = Math.abs(bankAmount - Number(cash.amount));
+        const relativeAmountDifference = amountDifference / Math.max(bankAmount, Number(cash.amount), 1);
+        const overlap = tokenOverlap(`${bank.counterparty} ${bank.description}`, cash.description);
+        return { cash, dateDistance, amountDifference, relativeAmountDifference, overlap,
+          score: Math.max(0, 100 - dateDistance * 8 - relativeAmountDifference * 40 - amountDifference / Math.max(bankAmount, 1) * 20 + overlap * 20) };
+      })
+      .filter((candidate) => candidate.dateDistance <= 7)
+      .sort((a, b) => a.dateDistance - b.dateDistance
+        || a.relativeAmountDifference - b.relativeAmountDifference
+        || a.amountDifference - b.amountDifference
+        || b.overlap - a.overlap)
+      .slice(0, 10)
+      .map(({ cash, score }) => ({
+        id: cash.id, type: cash.type as "income" | "expense", category: cash.category, description: cash.description,
+        amount: Number(cash.amount), date: String(cash.date), bankTransactionId: cash.bankTransactionId,
+        bankVerifiedAt: cash.bankVerifiedAt?.toISOString() ?? null, createdAt: String(cash.createdAt),
+        editable: cash.sourceType === null, transactionKind: cash.sourceType ?? "manual", score,
+      }));
+    res.json(ListBankTransactionCashSuggestionsResponse.parse(suggestions));
+  } catch (error) { next(error); }
+});
+
 router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) => {
   try {
     const { id } = TransferBankTransactionToCashParams.parse(req.params);
+    const { cashTransactionId } = TransferBankTransactionToCashBody.parse(req.body);
     const result = await db.transaction(async (tx) => {
       const [bank] = await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id));
       if (!bank) return null;
-      const date = bank.transactionAt.toISOString().slice(0, 10);
-      const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, date));
+      if (bank.cashTransactionId !== null || bank.transferredAt !== null) {
+        return bank.cashTransactionId === cashTransactionId ? bank : "conflict" as const;
+      }
+      const [cash] = await tx.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, cashTransactionId));
+      if (!cash) return "cash-not-found" as const;
+      if (cash.type !== bank.type) return "type-mismatch" as const;
+      if (cash.bankTransactionId !== null) return "conflict" as const;
+      const [alreadyLinked] = await tx.select({ id: bankTransactionsTable.id }).from(bankTransactionsTable)
+        .where(eq(bankTransactionsTable.cashTransactionId, cashTransactionId));
+      if (alreadyLinked) return "conflict" as const;
+      const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, String(cash.date)));
       if (closed) return "closed" as const;
-      const [cash] = await tx.insert(cashTransactionsTable).values({
-        type: bank.type, category: "Банкнаас шилжүүлсэн", description: bank.description || bank.counterparty || "Банкны гүйлгээ",
-        amount: bank.amount, date, sourceType: "bank_transaction", sourceKey: String(bank.id),
-      }).onConflictDoNothing().returning({ id: cashTransactionsTable.id });
-      const cashId = cash?.id ?? (await tx.select({ id: cashTransactionsTable.id }).from(cashTransactionsTable).where(and(eq(cashTransactionsTable.sourceType, "bank_transaction"), eq(cashTransactionsTable.sourceKey, String(bank.id)))))[0]?.id;
-      const [updated] = await tx.update(bankTransactionsTable).set({ transferredAt: bank.transferredAt ?? new Date(), cashTransactionId: cashId }).where(eq(bankTransactionsTable.id, id)).returning();
-      return updated!;
+      const verifiedAt = new Date();
+      const [verifiedCash] = await tx.update(cashTransactionsTable)
+        .set({ bankTransactionId: id, bankVerifiedAt: verifiedAt })
+        .where(and(eq(cashTransactionsTable.id, cashTransactionId), isNull(cashTransactionsTable.bankTransactionId)))
+        .returning({ id: cashTransactionsTable.id });
+      if (!verifiedCash) throw new BankCashLinkConflictError();
+      const [updated] = await tx.update(bankTransactionsTable)
+        .set({ transferredAt: verifiedAt, cashTransactionId })
+        .where(and(eq(bankTransactionsTable.id, id), isNull(bankTransactionsTable.cashTransactionId), isNull(bankTransactionsTable.transferredAt)))
+        .returning();
+      if (!updated) throw new BankCashLinkConflictError();
+      return updated;
     });
     if (result === null) {
       res.status(404).json({ error: "Банкны гүйлгээ олдсонгүй" });
@@ -186,8 +273,26 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
       res.status(409).json({ error: "Өндөрлөсөн өдрийн касс руу шилжүүлэх боломжгүй" });
       return;
     }
+    if (result === "cash-not-found") {
+      res.status(404).json({ error: "Кассын гүйлгээ олдсонгүй" });
+      return;
+    }
+    if (result === "type-mismatch") {
+      res.status(409).json({ error: "Банк болон кассын гүйлгээний төрөл таарахгүй байна" });
+      return;
+    }
+    if (result === "conflict") {
+      res.status(409).json({ error: "Банк эсвэл кассын гүйлгээ аль хэдийн холбогдсон байна" });
+      return;
+    }
     res.json(TransferBankTransactionToCashResponse.parse(response(result)));
-  } catch (error) { next(error); }
+  } catch (error) {
+    if (error instanceof BankCashLinkConflictError || (error as { code?: string }).code === "23505") {
+      res.status(409).json({ error: "Банк эсвэл кассын гүйлгээ аль хэдийн холбогдсон байна" });
+      return;
+    }
+    next(error);
+  }
 });
 
 router.delete("/bank-transactions/:id", async (req, res, next) => {

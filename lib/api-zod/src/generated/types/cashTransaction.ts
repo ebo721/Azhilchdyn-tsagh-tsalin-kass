@@ -15,6 +15,10 @@ export interface CashTransaction {
   description: string;
   amount: number;
   date: string;
+  /** @nullable */
+  bankTransactionId: number | null;
+  /** @nullable */
+  bankVerifiedAt: Date | null;
   createdAt: string;
   editable: boolean;
   transactionKind: CashTransactionTransactionKind;

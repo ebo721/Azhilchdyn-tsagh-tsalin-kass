@@ -494,9 +494,22 @@ export interface CashTransaction {
   description: string;
   amount: number;
   date: string;
+  /** @nullable */
+  bankTransactionId: number | null;
+  /** @nullable */
+  bankVerifiedAt: string | null;
   createdAt: string;
   editable: boolean;
   transactionKind: CashTransactionTransactionKind;
+}
+
+export type CashTransactionSuggestion = CashTransaction & {
+  score: number;
+};
+
+export interface BankTransactionCashLinkInput {
+  /** @minimum 1 */
+  cashTransactionId: number;
 }
 
 export type CashTransactionInputType = typeof CashTransactionInputType[keyof typeof CashTransactionInputType];
