@@ -716,12 +716,14 @@ router.patch("/employees/:id/salary-history/:historyId", async (req, res, next) 
       res.status(404).json({ error: "Цалингийн түүх олдсонгүй" });
       return;
     }
-    if (effectiveFrom < String(employee.joinedAt)) {
+    if (index > 0 && effectiveFrom < String(employee.joinedAt)) {
       res.status(400).json({ error: "Цалингийн огноо ажилд орсон огнооноос өмнө байж болохгүй" });
       return;
     }
-    if (index === 0 && effectiveFrom !== String(employee.joinedAt)) {
-      res.status(409).json({ error: "Анхны цалингийн огноо ажилд орсон огноотой ижил байх ёстой" });
+    const previous = history[index - 1];
+    const next = history[index + 1];
+    if ((previous && effectiveFrom <= String(previous.effectiveFrom)) || (next && effectiveFrom >= String(next.effectiveFrom))) {
+      res.status(409).json({ error: "Хүчинтэй огноо өмнөх болон дараагийн цалингийн огнооны хооронд байх ёстой" });
       return;
     }
     if (history.some((row) => row.id !== historyId && String(row.effectiveFrom) === effectiveFrom)) {
@@ -750,6 +752,9 @@ router.patch("/employees/:id/salary-history/:historyId", async (req, res, next) 
         baseSalary: input.baseSalary,
         socialInsuranceSalary: input.socialInsuranceSalary,
       }).where(eq(employeeSalaryHistoryTable.id, historyId)).returning();
+      if (index === 0) {
+        await tx.update(employeesTable).set({ joinedAt: effectiveFrom }).where(eq(employeesTable.id, id));
+      }
       if (index === history.length - 1) {
         await tx.update(employeesTable).set({
           baseSalary: input.baseSalary,
