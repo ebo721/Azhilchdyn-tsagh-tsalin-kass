@@ -175,7 +175,7 @@ router.use(async (req, res, next) => {
   const allowedPrefixes = role === "hr"
     ? ["/employees", "/attendance", "/hour-balance"]
       : role === "accountant"
-        ? ["/hour-balance", "/payroll", "/bank-transactions"]
+        ? ["/hour-balance", "/payroll", "/cash", "/bank-transactions"]
       : role === "warehouse"
         ? ["/inventory", "/fixed-assets"]
         : [];
