@@ -666,6 +666,10 @@ function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; m
           <strong className="font-mono text-foreground">{money(Math.max(0, line.gross - line.deductions))}</strong>
         </div>
         <div className="mt-2 flex justify-between">
+          <span>Олгосон цалин (−)</span>
+          <strong className="font-mono text-foreground">{money(line.paidAmount)}</strong>
+        </div>
+        <div className="mt-2 flex justify-between">
           <span>Цалингийн өглөг (+)</span>
           <strong className="font-mono text-orange-800">{money(Math.max(0, line.carryoverAmount))}</strong>
         </div>
@@ -675,7 +679,7 @@ function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; m
         </div>
         <div className="mt-3 flex justify-between border-t border-border pt-3 text-sm">
           <span className="font-bold text-foreground">Олговол зохих цалин</span>
-          <strong className="font-mono text-primary">{money(line.payable)}</strong>
+          <strong className="font-mono text-primary">{money(line.balanceAmount)}</strong>
         </div>
       </div>
       <div className="rounded-xl border border-accent/50 bg-accent/15 p-4"><div className="flex items-center justify-between"><span className="text-xs font-semibold">{line.employeeType === 'shift' ? 'Урьдчилгаа цалин' : 'Урьдчилгаа цалин · 50%'}</span><strong className="font-mono text-sm">{money(line.advanceAmount)}</strong></div></div>

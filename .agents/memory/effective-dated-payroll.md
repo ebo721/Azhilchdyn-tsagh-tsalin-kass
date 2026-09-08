@@ -19,7 +19,7 @@ Each month's signed payroll balance carries forward into the next month's take-h
 
 In payroll reporting, split the brought-forward balance into salary payable (prior underpayment owed to the employee) and salary receivable (prior overpayment recoverable from the employee), while retaining the current-month difference.
 
-In the payroll adjustment dialog, show the settlement equation explicitly: current-month take-home pay + salary payable − salary receivable = salary due for payment.
+In the payroll adjustment dialog, show the settlement equation explicitly: current-month take-home pay − paid salary + salary payable − salary receivable = salary due for payment.
 
 The payroll table's “Сүүл цалин” column and its footer total show current-month take-home pay only; brought-forward salary payable/receivable remain separate and are included only in salary due for payment.
 
