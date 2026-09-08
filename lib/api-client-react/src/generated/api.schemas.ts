@@ -587,6 +587,7 @@ export const DeletionRequestStatus = {
   executing: 'executing',
   completed: 'completed',
   failed: 'failed',
+  cancelled: 'cancelled',
 } as const;
 
 export interface DeletionRequest {

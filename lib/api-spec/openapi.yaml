@@ -832,6 +832,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeletionRequest"
+  /deletion-requests/{id}/cancel:
+    post:
+      operationId: cancelDeletionRequest
+      tags: [deletion-requests]
+      summary: Cancel a queued deletion request
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Cancelled deletion request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletionRequest"
 components:
   parameters:
     Id:
@@ -1285,7 +1299,7 @@ components:
         targetPath: { type: string }
         label: { type: string }
         requesterRole: { type: string, enum: [admin, hr, accountant, warehouse] }
-        status: { type: string, enum: [pending, executing, completed, failed] }
+        status: { type: string, enum: [pending, executing, completed, failed, cancelled] }
         requestedAt: { type: string }
         approvedAt: { type: ["string", "null"] }
         completedAt: { type: ["string", "null"] }

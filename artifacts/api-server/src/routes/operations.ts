@@ -59,6 +59,8 @@ import {
   ListDeletionRequestsResponse,
   ApproveDeletionRequestParams,
   ApproveDeletionRequestResponse,
+  CancelDeletionRequestParams,
+  CancelDeletionRequestResponse,
   ListEmployeesResponse,
   UpsertPayrollAdjustmentBody,
   UpdatePayrollAdvancePaymentBody,
@@ -1365,6 +1367,31 @@ router.post("/deletion-requests/:id/approve", async (req, res, next) => {
       completedAt: new Date(),
     }).where(eq(deletionRequestsTable.id, id)).returning();
     res.json(ApproveDeletionRequestResponse.parse(deletionRequestResponse(completed ?? executing)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/deletion-requests/:id/cancel", async (req, res, next) => {
+  try {
+    const { id } = CancelDeletionRequestParams.parse(req.params);
+    if (getStaffRole(req) !== "admin") {
+      res.status(403).json({ error: "Зөвхөн ерөнхий админ устгах хүсэлтийг цуцална" });
+      return;
+    }
+    const [cancelled] = await db.update(deletionRequestsTable).set({
+      status: "cancelled",
+      completedAt: new Date(),
+      error: null,
+    }).where(and(
+      eq(deletionRequestsTable.id, id),
+      eq(deletionRequestsTable.status, "pending"),
+    )).returning();
+    if (!cancelled) {
+      res.status(409).json({ error: "Хүлээгдэж буй устгах хүсэлт олдсонгүй" });
+      return;
+    }
+    res.json(CancelDeletionRequestResponse.parse(deletionRequestResponse(cancelled)));
   } catch (error) {
     next(error);
   }

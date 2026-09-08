@@ -3862,3 +3862,74 @@ export const useApproveDeletionRequest = <TError = ErrorType<unknown>,
       return useMutation(getApproveDeletionRequestMutationOptions(options));
     }
 
+export const getCancelDeletionRequestUrl = (id: number,) => {
+
+
+
+
+  return `/api/deletion-requests/${id}/cancel`
+}
+
+/**
+ * @summary Cancel a queued deletion request
+ */
+export const cancelDeletionRequest = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<DeletionRequest> => {
+
+  return customFetch<DeletionRequest>(getCancelDeletionRequestUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCancelDeletionRequestMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelDeletionRequest>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelDeletionRequest>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['cancelDeletionRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelDeletionRequest>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  cancelDeletionRequest(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelDeletionRequestMutationResult = NonNullable<Awaited<ReturnType<typeof cancelDeletionRequest>>>
+
+    export type CancelDeletionRequestMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Cancel a queued deletion request
+ */
+export const useCancelDeletionRequest = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelDeletionRequest>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelDeletionRequest>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getCancelDeletionRequestMutationOptions(options));
+    }
+

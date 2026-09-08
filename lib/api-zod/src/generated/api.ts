@@ -1105,7 +1105,7 @@ export const ListDeletionRequestsResponseItem = zod.object({
   "targetPath": zod.string(),
   "label": zod.string(),
   "requesterRole": zod.enum(['admin', 'hr', 'accountant', 'warehouse']),
-  "status": zod.enum(['pending', 'executing', 'completed', 'failed']),
+  "status": zod.enum(['pending', 'executing', 'completed', 'failed', 'cancelled']),
   "requestedAt": zod.string(),
   "approvedAt": zod.string().nullish(),
   "completedAt": zod.string().nullish(),
@@ -1131,7 +1131,7 @@ export const CreateDeletionRequestResponse = zod.object({
   "targetPath": zod.string(),
   "label": zod.string(),
   "requesterRole": zod.enum(['admin', 'hr', 'accountant', 'warehouse']),
-  "status": zod.enum(['pending', 'executing', 'completed', 'failed']),
+  "status": zod.enum(['pending', 'executing', 'completed', 'failed', 'cancelled']),
   "requestedAt": zod.string(),
   "approvedAt": zod.string().nullish(),
   "completedAt": zod.string().nullish(),
@@ -1151,7 +1151,27 @@ export const ApproveDeletionRequestResponse = zod.object({
   "targetPath": zod.string(),
   "label": zod.string(),
   "requesterRole": zod.enum(['admin', 'hr', 'accountant', 'warehouse']),
-  "status": zod.enum(['pending', 'executing', 'completed', 'failed']),
+  "status": zod.enum(['pending', 'executing', 'completed', 'failed', 'cancelled']),
+  "requestedAt": zod.string(),
+  "approvedAt": zod.string().nullish(),
+  "completedAt": zod.string().nullish(),
+  "error": zod.string().nullish()
+})
+
+
+/**
+ * @summary Cancel a queued deletion request
+ */
+export const CancelDeletionRequestParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const CancelDeletionRequestResponse = zod.object({
+  "id": zod.number().int(),
+  "targetPath": zod.string(),
+  "label": zod.string(),
+  "requesterRole": zod.enum(['admin', 'hr', 'accountant', 'warehouse']),
+  "status": zod.enum(['pending', 'executing', 'completed', 'failed', 'cancelled']),
   "requestedAt": zod.string(),
   "approvedAt": zod.string().nullish(),
   "completedAt": zod.string().nullish(),
