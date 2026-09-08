@@ -26,4 +26,8 @@ export interface EmployeeUpdate {
      */
   monthlyExpectedWorkDays?: number;
   status?: EmployeeUpdateStatus;
+  joinedAt?: Date;
+  /** @nullable */
+  inactiveAt?: string | null;
+  salaryEffectiveDate?: Date;
 }

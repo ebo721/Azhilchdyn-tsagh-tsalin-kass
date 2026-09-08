@@ -24,4 +24,5 @@ export interface EmployeeInput {
      * @maximum 31
      */
   monthlyExpectedWorkDays: number;
+  joinedAt: Date;
 }

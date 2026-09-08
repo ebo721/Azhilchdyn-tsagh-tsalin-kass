@@ -24,8 +24,22 @@ export const employeesTable = pgTable("employees", {
   payrollTaxExempt: boolean("payroll_tax_exempt").notNull().default(false),
   monthlyExpectedWorkDays: integer("monthly_expected_work_days").notNull().default(0),
   status: text("status").notNull().default("active"),
-  joinedAt: date("joined_at").notNull().defaultNow(),
+  joinedAt: date("joined_at", { mode: "string" }).notNull().defaultNow(),
+  inactiveAt: date("inactive_at", { mode: "string" }),
 });
+
+export const employeeSalaryHistoryTable = pgTable("employee_salary_history", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => employeesTable.id, { onDelete: "cascade" }),
+  effectiveFrom: date("effective_from", { mode: "string" }).notNull(),
+  employeeType: text("employee_type").notNull(),
+  baseSalary: numeric("base_salary", { precision: 12, scale: 2, mode: "number" }).notNull(),
+  socialInsuranceSalary: numeric("social_insurance_salary", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
+  payrollTaxExempt: boolean("payroll_tax_exempt").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("employee_salary_history_employee_effective_idx").on(table.employeeId, table.effectiveFrom),
+]);
 
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -187,7 +201,6 @@ export const deletionRequestsTable = pgTable("deletion_requests", {
 
 export const insertEmployeeSchema = createInsertSchema(employeesTable).omit({
   id: true,
-  joinedAt: true,
 });
 export const insertAttendanceSchema = createInsertSchema(attendanceTable).omit({
   id: true,
@@ -200,6 +213,7 @@ export const insertCashTransactionSchema = createInsertSchema(cashTransactionsTa
 });
 
 export type Employee = typeof employeesTable.$inferSelect;
+export type EmployeeSalaryHistory = typeof employeeSalaryHistoryTable.$inferSelect;
 export type User = typeof usersTable.$inferSelect;
 export type ShiftTemplate = typeof shiftTemplatesTable.$inferSelect;
 export type EmployeeShiftPlan = typeof employeeShiftPlansTable.$inferSelect;

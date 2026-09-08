@@ -118,6 +118,8 @@ export interface Employee {
   monthlyExpectedWorkDays: number;
   status: EmployeeStatus;
   joinedAt: string;
+  /** @nullable */
+  inactiveAt: string | null;
 }
 
 export type EmployeeInputEmployeeType = typeof EmployeeInputEmployeeType[keyof typeof EmployeeInputEmployeeType];
@@ -145,6 +147,7 @@ export interface EmployeeInput {
      * @maximum 31
      */
   monthlyExpectedWorkDays: number;
+  joinedAt: string;
 }
 
 export type EmployeeUpdateEmployeeType = typeof EmployeeUpdateEmployeeType[keyof typeof EmployeeUpdateEmployeeType];
@@ -181,6 +184,10 @@ export interface EmployeeUpdate {
      */
   monthlyExpectedWorkDays?: number;
   status?: EmployeeUpdateStatus;
+  joinedAt?: string;
+  /** @nullable */
+  inactiveAt?: string | null;
+  salaryEffectiveDate?: string;
 }
 
 export type AttendanceStatus = typeof AttendanceStatus[keyof typeof AttendanceStatus];

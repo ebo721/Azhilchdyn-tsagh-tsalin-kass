@@ -1054,7 +1054,7 @@ components:
         createdAt: { type: string }
     Employee:
       type: object
-      required: [id, name, role, phone, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, monthlyExpectedWorkDays, status, joinedAt]
+      required: [id, name, role, phone, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, monthlyExpectedWorkDays, status, joinedAt, inactiveAt]
       properties:
         id: { type: integer }
         name: { type: string }
@@ -1067,9 +1067,10 @@ components:
         monthlyExpectedWorkDays: { type: integer }
         status: { type: string, enum: [active, inactive] }
         joinedAt: { type: string }
+        inactiveAt: { type: [string, "null"] }
     EmployeeInput:
       type: object
-      required: [name, role, phone, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, monthlyExpectedWorkDays]
+      required: [name, role, phone, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, monthlyExpectedWorkDays, joinedAt]
       properties:
         name: { type: string, minLength: 1 }
         role: { type: string, minLength: 1 }
@@ -1079,6 +1080,7 @@ components:
         socialInsuranceSalary: { type: number, minimum: 0 }
         payrollTaxExempt: { type: boolean }
         monthlyExpectedWorkDays: { type: integer, minimum: 0, maximum: 31 }
+        joinedAt: { type: string, format: date }
     EmployeeUpdate:
       type: object
       properties:
@@ -1091,6 +1093,9 @@ components:
         payrollTaxExempt: { type: boolean }
         monthlyExpectedWorkDays: { type: integer, minimum: 0, maximum: 31 }
         status: { type: string, enum: [active, inactive] }
+        joinedAt: { type: string, format: date }
+        inactiveAt: { type: [string, "null"] }
+        salaryEffectiveDate: { type: string, format: date }
     Attendance:
       type: object
       required: [id, employeeId, employeeName, date, clockIn, clockOut, hours, status]

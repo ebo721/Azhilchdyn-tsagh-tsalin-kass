@@ -20,4 +20,6 @@ export interface Employee {
   monthlyExpectedWorkDays: number;
   status: EmployeeStatus;
   joinedAt: string;
+  /** @nullable */
+  inactiveAt: string | null;
 }

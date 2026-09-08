@@ -1,2 +1,3 @@
 - [OpenAPI calendar-date validation](openapi-calendar-date-validation.md) — Orval cannot combine string date format and pattern; keep shape in schema and calendar checks at the route boundary.
 - [Orval DELETE parameter collisions](orval-delete-parameter-collisions.md) — Mixed path and query parameters on DELETE can generate duplicate Zod exports; prefer path-only parameters.
+- [Effective-dated payroll](effective-dated-payroll.md) — Prorate monthly salary by Mon–Fri workdays; employment end dates are inclusive and paid months stay immutable.
