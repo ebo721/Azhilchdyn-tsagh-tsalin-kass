@@ -91,7 +91,7 @@ import {
   deletionRequestsTable,
   shiftTemplatesTable,
 } from "@workspace/db";
-import { getStaffRole, type StaffRole } from "../lib/hr-session";
+import { getStaffRole, getStaffSession, type StaffRole } from "../lib/hr-session";
 import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment";
 import { planShiftPlanCopy } from "../lib/shift-plan-copy";
 
@@ -105,9 +105,9 @@ async function isCashDateClosed(date: string) {
   return Boolean(closure);
 }
 
-router.use((req, res, next) => {
-  const role = getStaffRole(req);
-  if (!role) {
+router.use(async (req, res, next) => {
+  const session = await getStaffSession(req);
+  if (!session) {
     res.status(401).json({ error: "Нэвтрэх шаардлагатай" });
     return;
   }
@@ -130,6 +130,7 @@ router.use((req, res, next) => {
     }).catch(next);
     return;
   }
+  const role = session.role as StaffRole;
   if (role === "admin") {
     next();
     return;
@@ -1023,7 +1024,7 @@ router.post("/payroll-advance/approve", async (req, res, next) => {
 
 router.delete("/payroll-advance/approval", async (req, res, next) => {
   try {
-    if (getStaffRole(req) !== "admin") {
+    if (await getStaffRole(req) !== "admin") {
       res.status(403).json({ error: "Урьдчилгаа цалингийн батлалтыг зөвхөн ерөнхий админ буцаана" });
       return;
     }
@@ -1314,7 +1315,7 @@ router.get("/deletion-requests", async (_req, res, next) => {
 router.post("/deletion-requests", async (req, res, next) => {
   try {
     const input = CreateDeletionRequestBody.parse(req.body);
-    const role = getStaffRole(req);
+    const role = await getStaffRole(req);
     const targetPath = input.targetPath.trim();
     const label = input.label.trim();
     if (!role || !deletionTargetPatterns.some((pattern) => pattern.test(targetPath)) || !roleCanRequestDeletion(role, targetPath)) {
@@ -1347,7 +1348,7 @@ router.post("/deletion-requests", async (req, res, next) => {
 router.post("/deletion-requests/:id/approve", async (req, res, next) => {
   try {
     const { id } = ApproveDeletionRequestParams.parse(req.params);
-    if (getStaffRole(req) !== "admin") {
+    if (await getStaffRole(req) !== "admin") {
       res.status(403).json({ error: "Зөвхөн ерөнхий админ устгах хүсэлтийг батална" });
       return;
     }
@@ -1395,7 +1396,7 @@ router.post("/deletion-requests/:id/approve", async (req, res, next) => {
 router.post("/deletion-requests/:id/cancel", async (req, res, next) => {
   try {
     const { id } = CancelDeletionRequestParams.parse(req.params);
-    if (getStaffRole(req) !== "admin") {
+    if (await getStaffRole(req) !== "admin") {
       res.status(403).json({ error: "Зөвхөн ерөнхий админ устгах хүсэлтийг цуцална" });
       return;
     }

@@ -27,6 +27,17 @@ export const employeesTable = pgTable("employees", {
   joinedAt: date("joined_at").notNull().defaultNow(),
 });
 
+export const usersTable = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull(),
+  normalizedUsername: text("normalized_username").notNull().unique(),
+  role: text("role").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  tokenVersion: integer("token_version").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
 export const shiftTemplatesTable = pgTable("shift_templates", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -186,6 +197,7 @@ export const insertCashTransactionSchema = createInsertSchema(cashTransactionsTa
 });
 
 export type Employee = typeof employeesTable.$inferSelect;
+export type User = typeof usersTable.$inferSelect;
 export type ShiftTemplate = typeof shiftTemplatesTable.$inferSelect;
 export type EmployeeShiftPlan = typeof employeeShiftPlansTable.$inferSelect;
 export type Attendance = typeof attendanceTable.$inferSelect;

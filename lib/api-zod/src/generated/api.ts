@@ -10,6 +10,7 @@ import * as zod from 'zod';
 
 export const GetAuthSessionResponse = zod.object({
   "authenticated": zod.boolean(),
+  "id": zod.number().int().nullable(),
   "role": zod.union([zod.literal('admin'),zod.literal('hr'),zod.literal('accountant'),zod.literal('warehouse'),zod.literal('viewer'),zod.literal(null)]).nullable(),
   "username": zod.string().nullable()
 })
@@ -22,12 +23,58 @@ export const LoginHrManagerBody = zod.object({
 
 export const LoginHrManagerResponse = zod.object({
   "authenticated": zod.boolean(),
+  "id": zod.number().int().nullable(),
   "role": zod.union([zod.literal('admin'),zod.literal('hr'),zod.literal('accountant'),zod.literal('warehouse'),zod.literal('viewer'),zod.literal(null)]).nullable(),
   "username": zod.string().nullable()
 })
 
 
 export const LogoutHrManagerResponse = zod.void()
+
+
+/**
+ * @summary List users (admin only)
+ */
+export const ListUsersResponseItem = zod.object({
+  "id": zod.number().int(),
+  "username": zod.string(),
+  "role": zod.enum(['admin', 'hr', 'accountant', 'warehouse', 'viewer'])
+})
+export const ListUsersResponse = zod.array(ListUsersResponseItem)
+
+
+/**
+ * @summary Update username, role, or password (admin only)
+ */
+export const UpdateUserParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+
+
+export const UpdateUserBody = zod.object({
+  "username": zod.string().min(1),
+  "role": zod.enum(['admin', 'hr', 'accountant', 'warehouse', 'viewer']),
+  "newPassword": zod.string().min(1).optional()
+})
+
+export const UpdateUserResponse = zod.object({
+  "id": zod.number().int(),
+  "username": zod.string(),
+  "role": zod.enum(['admin', 'hr', 'accountant', 'warehouse', 'viewer'])
+})
+
+
+/**
+ * @summary Delete a user (admin only)
+ */
+export const DeleteUserParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteUserResponse = zod.void()
 
 
 /**

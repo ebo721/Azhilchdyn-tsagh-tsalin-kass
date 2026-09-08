@@ -75,3 +75,7 @@ export * from './shiftPlan';
 export * from './shiftPlanCopyInput';
 export * from './shiftPlanCopyResult';
 export * from './shiftPlanInput';
+export * from './user';
+export * from './userRole';
+export * from './userUpdateInput';
+export * from './userUpdateInputRole';

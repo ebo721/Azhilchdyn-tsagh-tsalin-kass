@@ -22,9 +22,47 @@ export const AuthSessionRole = {
 export interface AuthSession {
   authenticated: boolean;
   /** @nullable */
+  id: number | null;
+  /** @nullable */
   role: AuthSessionRole;
   /** @nullable */
   username: string | null;
+}
+
+export type UserRole = typeof UserRole[keyof typeof UserRole];
+
+
+export const UserRole = {
+  admin: 'admin',
+  hr: 'hr',
+  accountant: 'accountant',
+  warehouse: 'warehouse',
+  viewer: 'viewer',
+} as const;
+
+export interface User {
+  id: number;
+  username: string;
+  role: UserRole;
+}
+
+export type UserUpdateInputRole = typeof UserUpdateInputRole[keyof typeof UserUpdateInputRole];
+
+
+export const UserUpdateInputRole = {
+  admin: 'admin',
+  hr: 'hr',
+  accountant: 'accountant',
+  warehouse: 'warehouse',
+  viewer: 'viewer',
+} as const;
+
+export interface UserUpdateInput {
+  /** @minLength 1 */
+  username: string;
+  role: UserUpdateInputRole;
+  /** @minLength 1 */
+  newPassword?: string;
 }
 
 export interface LoginInput {

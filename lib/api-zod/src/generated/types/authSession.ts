@@ -10,6 +10,8 @@ import type { AuthSessionRole } from './authSessionRole';
 export interface AuthSession {
   authenticated: boolean;
   /** @nullable */
+  id: number | null;
+  /** @nullable */
   role: AuthSessionRole;
   /** @nullable */
   username: string | null;

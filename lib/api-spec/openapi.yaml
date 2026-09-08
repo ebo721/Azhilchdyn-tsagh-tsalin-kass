@@ -24,6 +24,8 @@ tags:
     description: Monthly hour balances
   - name: cash
     description: Cash register transactions
+  - name: users
+    description: Admin user management
 paths:
   /auth/me:
     get:
@@ -57,6 +59,46 @@ paths:
       responses:
         "204":
           description: Logged out
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List users (admin only)
+      responses:
+        "200":
+          description: Users without password data
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/User" }
+  /users/{id}:
+    put:
+      operationId: updateUser
+      tags: [users]
+      summary: Update username, role, or password (admin only)
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserUpdateInput" }
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete a user (admin only)
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: User deleted
   /healthz:
     get:
       operationId: healthCheck
@@ -871,11 +913,26 @@ components:
   schemas:
     AuthSession:
       type: object
-      required: [authenticated, role, username]
+      required: [authenticated, id, role, username]
       properties:
         authenticated: { type: boolean }
+        id: { type: [integer, "null"] }
         role: { type: [string, "null"], enum: [admin, hr, accountant, warehouse, viewer, null] }
         username: { type: [string, "null"] }
+    User:
+      type: object
+      required: [id, username, role]
+      properties:
+        id: { type: integer }
+        username: { type: string }
+        role: { type: string, enum: [admin, hr, accountant, warehouse, viewer] }
+    UserUpdateInput:
+      type: object
+      required: [username, role]
+      properties:
+        username: { type: string, minLength: 1 }
+        role: { type: string, enum: [admin, hr, accountant, warehouse, viewer] }
+        newPassword: { type: string, minLength: 1 }
     LoginInput:
       type: object
       required: [username, password]
