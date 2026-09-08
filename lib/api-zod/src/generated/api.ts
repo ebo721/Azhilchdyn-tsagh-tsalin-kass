@@ -894,6 +894,39 @@ export const DeleteCashTransactionResponse = zod.void()
 
 
 /**
+ * @summary Update the income month of an open bank-originated cash income
+ */
+export const UpdateBankCashTransactionIncomeMonthParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const updateBankCashTransactionIncomeMonthBodyIncomeMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+
+
+export const UpdateBankCashTransactionIncomeMonthBody = zod.object({
+  "incomeMonth": zod.string().regex(updateBankCashTransactionIncomeMonthBodyIncomeMonthRegExp)
+})
+
+export const updateBankCashTransactionIncomeMonthResponseIncomeMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+
+
+export const UpdateBankCashTransactionIncomeMonthResponse = zod.object({
+  "id": zod.number().int(),
+  "type": zod.enum(['income', 'expense']),
+  "category": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "date": zod.string(),
+  "incomeMonth": zod.string().regex(updateBankCashTransactionIncomeMonthResponseIncomeMonthRegExp).nullable(),
+  "bankTransactionId": zod.number().int().nullable(),
+  "bankVerifiedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.string(),
+  "editable": zod.boolean(),
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'bank_transaction'])
+})
+
+
+/**
  * @summary List closed cash dates
  */
 export const ListCashClosuresResponseItem = zod.object({

@@ -32,6 +32,7 @@ import type {
   BankTransactionImportResult,
   CashClosure,
   CashClosureInput,
+  CashIncomeMonthUpdate,
   CashSummary,
   CashTransaction,
   CashTransactionInput,
@@ -3006,6 +3007,78 @@ export const useDeleteCashTransaction = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteCashTransactionMutationOptions(options));
+    }
+
+export const getUpdateBankCashTransactionIncomeMonthUrl = (id: number,) => {
+
+
+
+
+  return `/api/cash/transactions/${id}/income-month`
+}
+
+/**
+ * @summary Update the income month of an open bank-originated cash income
+ */
+export const updateBankCashTransactionIncomeMonth = async (id: number,
+    cashIncomeMonthUpdate: CashIncomeMonthUpdate, options?: Parameters<typeof customFetch>[1]): Promise<CashTransaction> => {
+
+  return customFetch<CashTransaction>(getUpdateBankCashTransactionIncomeMonthUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(cashIncomeMonthUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateBankCashTransactionIncomeMonthMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBankCashTransactionIncomeMonth>>, TError,{id: number;data: BodyType<CashIncomeMonthUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateBankCashTransactionIncomeMonth>>, TError,{id: number;data: BodyType<CashIncomeMonthUpdate>}, TContext> => {
+
+const mutationKey = ['updateBankCashTransactionIncomeMonth'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateBankCashTransactionIncomeMonth>>, {id: number;data: BodyType<CashIncomeMonthUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateBankCashTransactionIncomeMonth(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateBankCashTransactionIncomeMonthMutationResult = NonNullable<Awaited<ReturnType<typeof updateBankCashTransactionIncomeMonth>>>
+    export type UpdateBankCashTransactionIncomeMonthMutationBody = BodyType<CashIncomeMonthUpdate>
+    export type UpdateBankCashTransactionIncomeMonthMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update the income month of an open bank-originated cash income
+ */
+export const useUpdateBankCashTransactionIncomeMonth = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBankCashTransactionIncomeMonth>>, TError,{id: number;data: BodyType<CashIncomeMonthUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateBankCashTransactionIncomeMonth>>,
+        TError,
+        {id: number;data: BodyType<CashIncomeMonthUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateBankCashTransactionIncomeMonthMutationOptions(options));
     }
 
 export const getListCashClosuresUrl = () => {

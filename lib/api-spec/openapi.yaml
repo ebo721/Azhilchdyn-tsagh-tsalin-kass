@@ -662,6 +662,26 @@ paths:
       responses:
         "204":
           description: Deleted cash transaction
+  /cash/transactions/{id}/income-month:
+    patch:
+      operationId: updateBankCashTransactionIncomeMonth
+      tags: [cash]
+      summary: Update the income month of an open bank-originated cash income
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashIncomeMonthUpdate"
+      responses:
+        "200":
+          description: Updated cash transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashTransaction"
   /cash/closures:
     get:
       operationId: listCashClosures
@@ -1608,6 +1628,11 @@ components:
         amount: { type: number, minimum: 0 }
         date: { type: string }
         incomeMonth: { type: ["string", "null"], pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+    CashIncomeMonthUpdate:
+      type: object
+      required: [incomeMonth]
+      properties:
+        incomeMonth: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
     CashClosure:
       type: object
       required: [id, date, closedAt]

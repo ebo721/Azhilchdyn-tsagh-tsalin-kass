@@ -28,6 +28,9 @@ import {
   CloseCashDayResponse,
   UpdateCashTransactionBody,
   UpdateCashTransactionParams,
+  UpdateBankCashTransactionIncomeMonthBody,
+  UpdateBankCashTransactionIncomeMonthParams,
+  UpdateBankCashTransactionIncomeMonthResponse,
   DeleteCashTransactionParams,
   CreateInventoryPurchaseBody,
   CreateInventoryPurchaseResponse,
@@ -1664,6 +1667,43 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
       editable: true,
       transactionKind: "manual",
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch("/cash/transactions/:id/income-month", async (req, res, next) => {
+  try {
+    const { id } = UpdateBankCashTransactionIncomeMonthParams.parse(req.params);
+    const { incomeMonth } = UpdateBankCashTransactionIncomeMonthBody.parse(req.body);
+    const [existing] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, id));
+    if (!existing) {
+      res.status(404).json({ error: "Кассын гүйлгээ олдсонгүй" });
+      return;
+    }
+    if (existing.sourceType !== "bank_transaction" || existing.type !== "income") {
+      res.status(409).json({ error: "Зөвхөн банкнаас орсон кассын орлогын хамаарах сарыг засах боломжтой" });
+      return;
+    }
+    if (await isCashDateClosed(String(existing.date))) {
+      res.status(409).json({ error: "Өндөрлөсөн өдрийн гүйлгээг засах боломжгүй" });
+      return;
+    }
+    const [transaction] = await db
+      .update(cashTransactionsTable)
+      .set({ incomeMonth })
+      .where(eq(cashTransactionsTable.id, id))
+      .returning();
+    res.json(UpdateBankCashTransactionIncomeMonthResponse.parse({
+      ...transaction,
+      amount: Number(transaction.amount),
+      date: String(transaction.date),
+      bankTransactionId: transaction.bankTransactionId,
+      bankVerifiedAt: transaction.bankVerifiedAt?.toISOString() ?? null,
+      createdAt: String(transaction.createdAt),
+      editable: false,
+      transactionKind: "bank_transaction",
+    }));
   } catch (error) {
     next(error);
   }

@@ -24,6 +24,7 @@ export * from './bankTransactionImportResult';
 export * from './bankTransactionType';
 export * from './cashClosure';
 export * from './cashClosureInput';
+export * from './cashIncomeMonthUpdate';
 export * from './cashSummary';
 export * from './cashTransaction';
 export * from './cashTransactionInput';

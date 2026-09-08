@@ -640,6 +640,11 @@ export interface CashTransactionInput {
   incomeMonth: string | null;
 }
 
+export interface CashIncomeMonthUpdate {
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])$ */
+  incomeMonth: string;
+}
+
 export interface CashClosure {
   id: number;
   date: string;
