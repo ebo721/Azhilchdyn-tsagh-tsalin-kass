@@ -537,6 +537,42 @@ export interface CashSummary {
   todayExpense: number;
 }
 
+export type BankTransactionType = typeof BankTransactionType[keyof typeof BankTransactionType];
+
+
+export const BankTransactionType = {
+  income: 'income',
+  expense: 'expense',
+} as const;
+
+export interface BankTransaction {
+  id: number;
+  transactionAt: string;
+  type: BankTransactionType;
+  amount: number;
+  account: string;
+  counterparty: string;
+  description: string;
+  /** @nullable */
+  executedAt: string | null;
+  /** @nullable */
+  balance: number | null;
+  /** @nullable */
+  transferredAt: string | null;
+  /** @nullable */
+  cashTransactionId: number | null;
+  createdAt: string;
+}
+
+export interface BankTransactionImportResult {
+  /** @minimum 0 */
+  imported: number;
+  /** @minimum 0 */
+  skippedDuplicate: number;
+  /** @minimum 0 */
+  skippedZero: number;
+}
+
 export interface InventoryPurchaseItem {
   id: number;
   inventoryItemId: number;

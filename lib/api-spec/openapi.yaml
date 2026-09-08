@@ -24,6 +24,8 @@ tags:
     description: Monthly hour balances
   - name: cash
     description: Cash register transactions
+  - name: bank-transactions
+    description: Bank statement transactions
   - name: users
     description: Admin user management
 paths:
@@ -691,6 +693,58 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CashClosure"
+  /bank-transactions:
+    get:
+      operationId: listBankTransactions
+      tags: [bank-transactions]
+      summary: List imported bank transactions
+      responses:
+        "200":
+          description: Bank transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BankTransaction" }
+  /bank-transactions/import:
+    post:
+      operationId: importKapitronBankTransactions
+      tags: [bank-transactions]
+      summary: Import a Kapitron XLSX statement
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "201":
+          description: Imported transaction counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankTransactionImportResult" }
+  /bank-transactions/{id}/transfer-to-cash:
+    post:
+      operationId: transferBankTransactionToCash
+      tags: [bank-transactions]
+      summary: Transfer a bank transaction to cash
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Linked cash transaction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankTransaction" }
+  /bank-transactions/{id}:
+    delete:
+      operationId: deleteBankTransaction
+      tags: [bank-transactions]
+      summary: Delete an untransferred bank transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Deleted
   /inventory/purchases:
     get:
       operationId: listInventoryPurchases
@@ -1420,6 +1474,29 @@ components:
         expense: { type: number }
         todayIncome: { type: number }
         todayExpense: { type: number }
+    BankTransaction:
+      type: object
+      required: [id, transactionAt, type, amount, account, counterparty, description, executedAt, balance, transferredAt, cashTransactionId, createdAt]
+      properties:
+        id: { type: integer }
+        transactionAt: { type: string, format: date-time }
+        type: { type: string, enum: [income, expense] }
+        amount: { type: number }
+        account: { type: string }
+        counterparty: { type: string }
+        description: { type: string }
+        executedAt: { type: ["string", "null"], format: date-time }
+        balance: { type: ["number", "null"] }
+        transferredAt: { type: ["string", "null"], format: date-time }
+        cashTransactionId: { type: ["integer", "null"] }
+        createdAt: { type: string, format: date-time }
+    BankTransactionImportResult:
+      type: object
+      required: [imported, skippedDuplicate, skippedZero]
+      properties:
+        imported: { type: integer, minimum: 0 }
+        skippedDuplicate: { type: integer, minimum: 0 }
+        skippedZero: { type: integer, minimum: 0 }
     InventoryPurchaseItem:
       type: object
       required: [id, inventoryItemId, name, category, unit, quantity, unitPrice, totalAmount]

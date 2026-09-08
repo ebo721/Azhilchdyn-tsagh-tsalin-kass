@@ -128,6 +128,25 @@ export const cashClosuresTable = pgTable("cash_closures", {
   closedAt: timestamp("closed_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const bankTransactionsTable = pgTable("bank_transactions", {
+  id: serial("id").primaryKey(),
+  transactionAt: timestamp("transaction_at", { withTimezone: true, precision: 0 }).notNull(),
+  type: text("type").notNull(),
+  amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  account: text("account").notNull().default(""),
+  counterparty: text("counterparty").notNull().default(""),
+  balance: numeric("balance", { precision: 14, scale: 2, mode: "number" }),
+  description: text("description").notNull().default(""),
+  executedAt: timestamp("executed_at", { withTimezone: true, precision: 0 }),
+  fingerprint: text("fingerprint").notNull(),
+  transferredAt: timestamp("transferred_at", { withTimezone: true, precision: 0 }),
+  cashTransactionId: integer("cash_transaction_id").references(() => cashTransactionsTable.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("bank_transactions_fingerprint_idx").on(table.fingerprint),
+  uniqueIndex("bank_transactions_cash_transaction_idx").on(table.cashTransactionId),
+]);
+
 export const inventoryPurchasesTable = pgTable("inventory_purchases", {
   id: serial("id").primaryKey(),
   documentName: text("document_name").notNull().default("Худалдан авалтын баримт"),
@@ -222,6 +241,7 @@ export type PayrollAdjustment = typeof payrollAdjustmentsTable.$inferSelect;
 export type PayrollAdvanceApproval = typeof payrollAdvanceApprovalsTable.$inferSelect;
 export type CashTransaction = typeof cashTransactionsTable.$inferSelect;
 export type CashClosure = typeof cashClosuresTable.$inferSelect;
+export type BankTransaction = typeof bankTransactionsTable.$inferSelect;
 export type InventoryPurchase = typeof inventoryPurchasesTable.$inferSelect;
 export type InventorySupplier = typeof inventorySuppliersTable.$inferSelect;
 export type InventoryPurchaseItem = typeof inventoryPurchaseItemsTable.$inferSelect;

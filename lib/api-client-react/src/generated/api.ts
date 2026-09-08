@@ -24,6 +24,8 @@ import type {
   AttendanceInput,
   AttendanceToggleInput,
   AuthSession,
+  BankTransaction,
+  BankTransactionImportResult,
   CashClosure,
   CashClosureInput,
   CashSummary,
@@ -3145,6 +3147,296 @@ export const useCloseCashDay = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCloseCashDayMutationOptions(options));
+    }
+
+export const getListBankTransactionsUrl = () => {
+
+
+
+
+  return `/api/bank-transactions`
+}
+
+/**
+ * @summary List imported bank transactions
+ */
+export const listBankTransactions = async ( options?: Parameters<typeof customFetch>[1]): Promise<BankTransaction[]> => {
+
+  return customFetch<BankTransaction[]>(getListBankTransactionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListBankTransactionsQueryKey = () => {
+    return [
+    `/api/bank-transactions`
+    ] as const;
+    }
+
+
+export const getListBankTransactionsQueryOptions = <TData = Awaited<ReturnType<typeof listBankTransactions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankTransactions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListBankTransactionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBankTransactions>>> = ({ signal }) => listBankTransactions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBankTransactions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListBankTransactionsQueryResult = NonNullable<Awaited<ReturnType<typeof listBankTransactions>>>
+export type ListBankTransactionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List imported bank transactions
+ */
+
+export function useListBankTransactions<TData = Awaited<ReturnType<typeof listBankTransactions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankTransactions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListBankTransactionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getImportKapitronBankTransactionsUrl = () => {
+
+
+
+
+  return `/api/bank-transactions/import`
+}
+
+/**
+ * @summary Import a Kapitron XLSX statement
+ */
+export const importKapitronBankTransactions = async (importKapitronBankTransactionsBody: Blob, options?: Parameters<typeof customFetch>[1]): Promise<BankTransactionImportResult> => {
+
+  return customFetch<BankTransactionImportResult>(getImportKapitronBankTransactionsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream', ...options?.headers },
+    body: importKapitronBankTransactionsBody
+  }
+);}
+
+
+
+
+
+export const getImportKapitronBankTransactionsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importKapitronBankTransactions>>, TError,{data: BodyType<Blob>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importKapitronBankTransactions>>, TError,{data: BodyType<Blob>}, TContext> => {
+
+const mutationKey = ['importKapitronBankTransactions'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importKapitronBankTransactions>>, {data: BodyType<Blob>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  importKapitronBankTransactions(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportKapitronBankTransactionsMutationResult = NonNullable<Awaited<ReturnType<typeof importKapitronBankTransactions>>>
+    export type ImportKapitronBankTransactionsMutationBody = BodyType<Blob>
+    export type ImportKapitronBankTransactionsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Import a Kapitron XLSX statement
+ */
+export const useImportKapitronBankTransactions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importKapitronBankTransactions>>, TError,{data: BodyType<Blob>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importKapitronBankTransactions>>,
+        TError,
+        {data: BodyType<Blob>},
+        TContext
+      > => {
+      return useMutation(getImportKapitronBankTransactionsMutationOptions(options));
+    }
+
+export const getTransferBankTransactionToCashUrl = (id: number,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}/transfer-to-cash`
+}
+
+/**
+ * @summary Transfer a bank transaction to cash
+ */
+export const transferBankTransactionToCash = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<BankTransaction> => {
+
+  return customFetch<BankTransaction>(getTransferBankTransactionToCashUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getTransferBankTransactionToCashMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof transferBankTransactionToCash>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof transferBankTransactionToCash>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['transferBankTransactionToCash'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof transferBankTransactionToCash>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  transferBankTransactionToCash(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TransferBankTransactionToCashMutationResult = NonNullable<Awaited<ReturnType<typeof transferBankTransactionToCash>>>
+
+    export type TransferBankTransactionToCashMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Transfer a bank transaction to cash
+ */
+export const useTransferBankTransactionToCash = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof transferBankTransactionToCash>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof transferBankTransactionToCash>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getTransferBankTransactionToCashMutationOptions(options));
+    }
+
+export const getDeleteBankTransactionUrl = (id: number,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}`
+}
+
+/**
+ * @summary Delete an untransferred bank transaction
+ */
+export const deleteBankTransaction = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteBankTransactionUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteBankTransactionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBankTransaction>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteBankTransaction>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteBankTransaction'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteBankTransaction>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteBankTransaction(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteBankTransactionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteBankTransaction>>>
+
+    export type DeleteBankTransactionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete an untransferred bank transaction
+ */
+export const useDeleteBankTransaction = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBankTransaction>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteBankTransaction>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteBankTransactionMutationOptions(options));
     }
 
 export const getListInventoryPurchasesUrl = () => {

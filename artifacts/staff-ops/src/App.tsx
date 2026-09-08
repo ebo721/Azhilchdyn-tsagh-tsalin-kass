@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ChangeEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -21,6 +21,7 @@ import {
   Clock3,
   Coins,
   LayoutDashboard,
+  Landmark,
   LockKeyhole,
   LogOut,
   Menu,
@@ -34,6 +35,7 @@ import {
   Timer,
   Trash2,
   TrendingUp,
+  Upload,
   UserRound,
   UsersRound,
   WalletCards,
@@ -53,6 +55,7 @@ import {
   getListShiftPlansQueryKey,
   getListShiftsQueryKey,
   getListCashTransactionsQueryKey,
+  getListBankTransactionsQueryKey,
   getListCashClosuresQueryKey,
   getListEmployeesQueryKey,
   getListEmployeeSalaryHistoryQueryKey,
@@ -80,6 +83,7 @@ import {
   useGetPayrollAdvance,
   useListAttendance,
   useListCashTransactions,
+  useListBankTransactions,
   useListCashClosures,
   useListEmployees,
   useListEmployeeSalaryHistory,
@@ -121,6 +125,8 @@ import {
   useUpdateShift,
   useUpdateUser,
   useDeleteUser,
+  useImportKapitronBankTransactions,
+  useTransferBankTransactionToCash,
   type Employee,
   type EmployeeSalaryHistory,
   type CashTransaction,
@@ -132,6 +138,7 @@ import {
   type PayrollLine,
   type Shift,
   type User,
+  type BankTransaction,
 } from '@workspace/api-client-react';
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import NotFound from '@/pages/not-found';
@@ -213,6 +220,7 @@ const nav = [
   { href: '/hour-balance', label: 'Цагийн баланс', icon: Timer },
   { href: '/payroll', label: 'Цалин', icon: Banknote },
   { href: '/cash', label: 'Касс', icon: WalletCards },
+  { href: '/bank-transactions', label: 'Банкны гүйлгээ', icon: Landmark },
   { href: '/inventory', label: 'Бараа материал', icon: PackageOpen },
   { href: '/fixed-assets', label: 'Эд хөрөнгө', icon: BriefcaseBusiness },
   { href: '/deletion-requests', label: 'Устгах хүсэлт', icon: ShieldCheck },
@@ -303,11 +311,11 @@ function AppShell({ children, role, onLogout }: { children: ReactNode; role: 'ad
   const visibleNav = role === 'hr'
     ? nav.filter((item) => ['/employees', '/attendance', '/hour-balance'].includes(item.href))
     : role === 'accountant'
-      ? nav.filter((item) => ['/employees', '/hour-balance', '/payroll'].includes(item.href))
+      ? nav.filter((item) => ['/employees', '/hour-balance', '/payroll', '/bank-transactions'].includes(item.href))
       : role === 'warehouse'
         ? nav.filter((item) => ['/inventory', '/fixed-assets'].includes(item.href))
         : role === 'viewer'
-          ? nav.filter((item) => ['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/inventory', '/fixed-assets'].includes(item.href))
+          ? nav.filter((item) => ['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/inventory', '/fixed-assets'].includes(item.href))
           : nav;
   const active = visibleNav.find((item) => item.href === location)?.label ?? 'Статистик';
   return (
@@ -944,6 +952,86 @@ function Cash() {
   </div>;
 }
 
+function bankDateTimeLabel(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    // The statement timestamp is a bank-local wall-clock value stored without
+    // applying an offset. Format its UTC fields so the Excel clock stays exact.
+    timeZone: 'UTC',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date).reduce<Record<string, string>>((result, part) => {
+    result[part.type] = part.value;
+    return result;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
+function BankTransactions() {
+  const list = useListBankTransactions();
+  const importStatement = useImportKapitronBankTransactions();
+  const transfer = useTransferBankTransactionToCash();
+  const deletion = useQueueDeletion();
+  const session = useGetAuthSession();
+  const qc = useQueryClient();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [importResult, setImportResult] = useState<{ imported: number; skippedDuplicate: number; skippedZero: number } | null>(null);
+  const canManage = session.data?.role === 'admin' || session.data?.role === 'accountant';
+  const refreshBankTransactions = () => qc.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
+  const refreshAfterTransfer = () => {
+    refreshBankTransactions();
+    qc.invalidateQueries({ queryKey: getListCashTransactionsQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetCashSummaryQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+  };
+  const importFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+      window.alert('Зөвхөн .xlsx өргөтгөлтэй Kapitron банкны хуулга сонгоно уу.');
+      return;
+    }
+    setImportResult(null);
+    importStatement.mutate({ data: file }, {
+      onSuccess: (result) => {
+        setImportResult(result);
+        refreshBankTransactions();
+      },
+      onError: (error) => window.alert(error instanceof Error ? error.message : 'Банкны хуулга уншихад алдаа гарлаа.'),
+    });
+  };
+  const transferToCash = (row: BankTransaction) => {
+    if (!window.confirm(`"${row.description || row.counterparty || 'Банкны гүйлгээ'}" гүйлгээг касс руу шилжүүлэх үү?`)) return;
+    transfer.mutate({ id: row.id }, {
+      onSuccess: refreshAfterTransfer,
+      onError: (error) => window.alert(error instanceof Error ? error.message : 'Касс руу шилжүүлэхэд алдаа гарлаа.'),
+    });
+  };
+  const deleteRow = (row: BankTransaction) => {
+    if (!window.confirm(`"${row.description || row.counterparty || 'Банкны гүйлгээ'}" гүйлгээг устгах уу?`)) return;
+    void deletion.request(`/bank-transactions/${row.id}`, `${row.description || row.counterparty || 'Банкны'} гүйлгээ`).then(refreshBankTransactions);
+  };
+  return <div className="page-enter">
+    <PageHeading eyebrow="Kapitron / bank statement" title="Банкны гүйлгээ" detail="Kapitron банкны хуулгыг уншуулж, шаардлагатай гүйлгээг касс руу шилжүүлнэ." action={canManage ? <><input ref={fileInput} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={importFile} className="sr-only" aria-label="Kapitron банкны хуулга сонгох" data-testid="input-bank-transactions-import" /><Button onClick={() => fileInput.current?.click()} disabled={importStatement.isPending} data-testid="button-import-bank-transactions"><Upload className="size-4" />{importStatement.isPending ? 'Хуулга уншиж байна...' : 'Капитрон банкны хуулга уншуулах'}</Button></> : undefined} />
+    {importResult && <div className="mb-5 flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-xs text-foreground" role="status" data-testid="bank-import-result"><span><strong>{importResult.imported}</strong> гүйлгээ импортлогдлоо</span><span><strong>{importResult.skippedDuplicate}</strong> давхардал алгасагдлаа</span><span><strong>{importResult.skippedZero}</strong> тэг дүн алгасагдлаа</span></div>}
+    <section className="overflow-hidden rounded-2xl border border-border bg-card" data-testid="panel-bank-transactions">
+      <div className="border-b border-border px-5 py-4"><h2 className="text-base font-bold">Импортлосон банкны гүйлгээ</h2><p className="mt-1 text-xs text-muted-foreground">Касс руу шилжүүлсэн гүйлгээг дахин шилжүүлэх болон устгах боломжгүй.</p></div>
+      {list.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : list.isError ? <ErrorBlock onRetry={() => list.refetch()} /> : !list.data?.length ? <EmptyState title="Банкны гүйлгээ алга" detail="Kapitron банкны .xlsx хуулгыг уншуулж эхлээрэй." icon={Landmark} /> : <div className="overflow-x-auto"><table className="w-full min-w-[1060px] text-left" data-testid="table-bank-transactions"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Гүйлгээний огноо</th><th className="px-5 py-3">Төрөл</th><th className="px-5 py-3">Данс</th><th className="px-5 py-3">Гүйлгээний утга</th><th className="px-5 py-3 text-right">Дүн</th><th className="px-5 py-3">Төлөв</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{list.data.map((row) => {
+        const transferred = Boolean(row.transferredAt || row.cashTransactionId);
+        const income = row.type === 'income';
+        return <tr key={row.id} className="transition-colors hover:bg-secondary/35" data-testid={`row-bank-transaction-${row.id}`}><td className="whitespace-nowrap px-5 py-4 font-mono text-xs">{bankDateTimeLabel(row.transactionAt)}</td><td className="px-5 py-4"><span className={cn('inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold', income ? 'bg-primary/10 text-primary' : 'bg-orange-100 text-orange-800')}>{income ? 'Орлого' : 'Зарлага'}</span></td><td className="max-w-52 px-5 py-4 text-sm">{row.account || '—'}</td><td className="max-w-96 px-5 py-4 text-sm font-medium">{row.description || '—'}</td><td className={cn('whitespace-nowrap px-5 py-4 text-right font-mono text-sm font-bold', income ? 'text-primary' : 'text-orange-800')}>{income ? '+' : '−'}{money(row.amount)}</td><td className="px-5 py-4"><span className={cn('inline-flex rounded-full border px-2 py-1 text-[10px] font-bold', transferred ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-100 text-slate-700')}>{transferred ? 'Касс руу шилжсэн' : 'Шилжүүлээгүй'}</span></td><td className="px-5 py-4"><div className="flex justify-end gap-1">{canManage && !transferred && <><Button size="sm" variant="outline" disabled={transfer.isPending} onClick={() => transferToCash(row)} aria-label={`${row.description || 'Банкны гүйлгээг'} касс руу шилжүүлэх`} data-testid={`button-transfer-bank-transaction-${row.id}`}>{transfer.isPending ? 'Шилжүүлж байна...' : 'Касс руу шилжүүлэх'}</Button><Button size="icon" variant="ghost" disabled={deletion.isPending} onClick={() => deleteRow(row)} aria-label={`${row.description || 'Банкны гүйлгээг'} устгах`} data-testid={`button-delete-bank-transaction-${row.id}`}><Trash2 className="size-4" /></Button></>}</div></td></tr>;
+      })}</tbody></table></div>}
+    </section>
+  </div>;
+}
+
 type FixedAssetForm = { name: string; unitPrice: string; quantity: string; date: string; purchased: boolean };
 
 function FixedAssets() {
@@ -1457,14 +1545,14 @@ function Router() {
   const role = session.data?.authenticated && (session.data.role === 'hr' || session.data.role === 'admin' || session.data.role === 'accountant' || session.data.role === 'warehouse' || session.data.role === 'viewer') ? session.data.role : null;
   useEffect(() => {
     if (role === 'hr' && !['/employees', '/attendance', '/hour-balance'].includes(location)) navigate('/employees', { replace: true });
-    if (role === 'accountant' && !['/employees', '/hour-balance', '/payroll'].includes(location)) navigate('/hour-balance', { replace: true });
+    if (role === 'accountant' && !['/employees', '/hour-balance', '/payroll', '/bank-transactions'].includes(location)) navigate('/hour-balance', { replace: true });
     if (role === 'warehouse' && !['/inventory', '/fixed-assets'].includes(location)) navigate('/inventory', { replace: true });
-    if (role === 'viewer' && !['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/inventory', '/fixed-assets'].includes(location)) navigate('/employees', { replace: true });
+    if (role === 'viewer' && !['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/inventory', '/fixed-assets'].includes(location)) navigate('/employees', { replace: true });
   }, [location, navigate, role]);
   if (session.isLoading) return <div className="grid min-h-[100dvh] place-items-center"><LoadingBlock className="size-12" /></div>;
   if (!role) return <HrLogin />;
   const signOut = () => logout.mutate(undefined, { onSuccess: () => { queryClient.clear(); navigate('/'); } });
-  return <ErrorBoundary resetKey={location}><AppShell role={role} onLogout={signOut}>{role === 'admin' ? <Switch><Route path="/" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route path="/deletion-requests" component={DeletionRequests} /><Route path="/users" component={UserSettings} /><Route component={NotFound} /></Switch> : role === 'hr' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route component={Employees} /></Switch> : role === 'accountant' ? <Switch><Route path="/employees" component={Employees} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route component={HourBalance} /></Switch> : role === 'viewer' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route component={Employees} /></Switch> : <Switch><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route component={Inventory} /></Switch>}</AppShell></ErrorBoundary>;
+  return <ErrorBoundary resetKey={location}><AppShell role={role} onLogout={signOut}>{role === 'admin' ? <Switch><Route path="/" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/bank-transactions" component={BankTransactions} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route path="/deletion-requests" component={DeletionRequests} /><Route path="/users" component={UserSettings} /><Route component={NotFound} /></Switch> : role === 'hr' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route component={Employees} /></Switch> : role === 'accountant' ? <Switch><Route path="/employees" component={Employees} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/bank-transactions" component={BankTransactions} /><Route component={HourBalance} /></Switch> : role === 'viewer' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/bank-transactions" component={BankTransactions} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route component={Employees} /></Switch> : <Switch><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route component={Inventory} /></Switch>}</AppShell></ErrorBoundary>;
 }
 
 function App() {

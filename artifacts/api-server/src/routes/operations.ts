@@ -156,7 +156,7 @@ router.use(async (req, res, next) => {
     next();
     return;
   }
-  const viewerReadPrefixes = ["/employees", "/attendance", "/hour-balance", "/payroll", "/payroll-advance", "/cash", "/inventory", "/fixed-assets"];
+  const viewerReadPrefixes = ["/employees", "/attendance", "/hour-balance", "/payroll", "/payroll-advance", "/cash", "/bank-transactions", "/inventory", "/fixed-assets"];
   if (role === "viewer" && req.method === "GET" && viewerReadPrefixes.some((prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`))) {
     next();
     return;
@@ -174,8 +174,8 @@ router.use(async (req, res, next) => {
   }
   const allowedPrefixes = role === "hr"
     ? ["/employees", "/attendance", "/hour-balance"]
-    : role === "accountant"
-      ? ["/hour-balance", "/payroll"]
+      : role === "accountant"
+        ? ["/hour-balance", "/payroll", "/bank-transactions"]
       : role === "warehouse"
         ? ["/inventory", "/fixed-assets"]
         : [];
@@ -197,6 +197,7 @@ const deletionTargetPatterns = [
   /^\/payroll-advance\/approval\?month=\d{4}-\d{2}$/,
   /^\/payroll-adjustments\/\d{4}-\d{2}\/\d+\/transactions\/[12]$/,
   /^\/cash\/transactions\/\d+$/,
+  /^\/bank-transactions\/\d+$/,
   /^\/fixed-assets\/\d+$/,
   /^\/inventory\/issues\/\d+$/,
   /^\/inventory\/purchases\/\d+$/,
@@ -204,7 +205,7 @@ const deletionTargetPatterns = [
 ];
 const roleCanRequestDeletion = (role: StaffRole, targetPath: string) => role === "admin"
   || (role === "hr" && (targetPath.startsWith("/employees/") || targetPath.startsWith("/attendance")))
-  || (role === "accountant" && (targetPath.startsWith("/payroll-advance/") || targetPath.startsWith("/payroll-adjustments/")))
+  || (role === "accountant" && (targetPath.startsWith("/payroll-advance/") || targetPath.startsWith("/payroll-adjustments/") || targetPath.startsWith("/bank-transactions/")))
   || (role === "warehouse" && (targetPath.startsWith("/inventory/") || targetPath.startsWith("/fixed-assets/")));
 const deletionRequestResponse = (request: typeof deletionRequestsTable.$inferSelect) => ({
   ...request,

@@ -900,6 +900,77 @@ export const CloseCashDayResponse = zod.object({
 
 
 /**
+ * @summary List imported bank transactions
+ */
+export const ListBankTransactionsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "transactionAt": zod.coerce.date(),
+  "type": zod.enum(['income', 'expense']),
+  "amount": zod.number(),
+  "account": zod.string(),
+  "counterparty": zod.string(),
+  "description": zod.string(),
+  "executedAt": zod.coerce.date().nullable(),
+  "balance": zod.number().nullable(),
+  "transferredAt": zod.coerce.date().nullable(),
+  "cashTransactionId": zod.number().int().nullable(),
+  "createdAt": zod.coerce.date()
+})
+export const ListBankTransactionsResponse = zod.array(ListBankTransactionsResponseItem)
+
+
+/**
+ * @summary Import a Kapitron XLSX statement
+ */
+export const importKapitronBankTransactionsResponseImportedMin = 0;
+
+export const importKapitronBankTransactionsResponseSkippedDuplicateMin = 0;
+
+export const importKapitronBankTransactionsResponseSkippedZeroMin = 0;
+
+
+
+export const ImportKapitronBankTransactionsResponse = zod.object({
+  "imported": zod.number().int().min(importKapitronBankTransactionsResponseImportedMin),
+  "skippedDuplicate": zod.number().int().min(importKapitronBankTransactionsResponseSkippedDuplicateMin),
+  "skippedZero": zod.number().int().min(importKapitronBankTransactionsResponseSkippedZeroMin)
+})
+
+
+/**
+ * @summary Transfer a bank transaction to cash
+ */
+export const TransferBankTransactionToCashParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const TransferBankTransactionToCashResponse = zod.object({
+  "id": zod.number().int(),
+  "transactionAt": zod.coerce.date(),
+  "type": zod.enum(['income', 'expense']),
+  "amount": zod.number(),
+  "account": zod.string(),
+  "counterparty": zod.string(),
+  "description": zod.string(),
+  "executedAt": zod.coerce.date().nullable(),
+  "balance": zod.number().nullable(),
+  "transferredAt": zod.coerce.date().nullable(),
+  "cashTransactionId": zod.number().int().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete an untransferred bank transaction
+ */
+export const DeleteBankTransactionParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteBankTransactionResponse = zod.void()
+
+
+/**
  * @summary List inventory purchases
  */
 export const ListInventoryPurchasesResponseItem = zod.object({
