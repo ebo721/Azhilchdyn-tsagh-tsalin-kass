@@ -631,7 +631,7 @@ function CashLegacy() {
 const cashKindMeta = {
   manual: { label: 'Гараар бүртгэсэн', className: 'border-slate-200 bg-slate-100 text-slate-700' },
   payroll: { label: 'Цалин', className: 'border-blue-200 bg-blue-50 text-blue-700' },
-  payroll_advance: { label: 'Урьдчилгаа', className: 'border-violet-200 bg-violet-50 text-violet-700' },
+  payroll_advance: { label: 'Цалин', className: 'border-blue-200 bg-blue-50 text-blue-700' },
   inventory_purchase: { label: 'Бараа материал', className: 'border-amber-200 bg-amber-50 text-amber-800' },
 } as const;
 
