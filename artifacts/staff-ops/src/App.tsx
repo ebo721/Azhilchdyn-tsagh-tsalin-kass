@@ -300,7 +300,7 @@ function Dashboard() {
   const data = query.data;
   return (
     <div className="page-enter">
-      <PageHeading eyebrow="Өглөөний товчоо / 09:42" title="Өдрийн зураглал" detail="Таны бизнесийн өнөөдрийн гол хөдөлгөөн эндээс эхэлнэ." action={<Link href="/attendance" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground transition-transform hover:-translate-y-0.5" data-testid="link-dashboard-attendance"><Clock3 className="size-4" />Ирц бүртгэх</Link>} />
+      <div className="mb-7 flex justify-end"><Link href="/attendance" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground transition-transform hover:-translate-y-0.5" data-testid="link-dashboard-attendance"><Clock3 className="size-4" />Ирц бүртгэх</Link></div>
       {query.isLoading ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
