@@ -170,7 +170,7 @@ function useQueueDeletion() {
   return { request, isAdmin: session.data?.role === 'admin', isPending: mutation.isPending || directPending, isError: mutation.isError || directError };
 }
 
-const money = (value = 0) => `${new Intl.NumberFormat('mn-MN').format(value)} ₮`;
+const money = (value = 0) => `${new Intl.NumberFormat('mn-MN', { maximumFractionDigits: 0 }).format(value)} ₮`;
 const dateLabel = (value: string) => {
   const calendarDate = /^\d{4}-(\d{2})-(\d{2})$/.exec(value);
   if (calendarDate) {
