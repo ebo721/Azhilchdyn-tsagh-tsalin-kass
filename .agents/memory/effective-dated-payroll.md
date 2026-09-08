@@ -15,6 +15,8 @@ When an approved payroll-advance line is changed from paid back to unpaid, refre
 
 Salary-history correction may change its effective date, base salary, and social-insurance salary, but must be rejected if it would affect a month with paid payroll. Changing the initial row's date must update the employee's joined date in the same transaction. Deletion must preserve that baseline. Editing or deleting the latest row must update the employee's current salary fields in the same transaction.
 
+Each month's signed payroll balance carries forward into the next month's take-home pay: underpayment increases it, overpayment decreases it, and any excess balance continues across later months until fully offset.
+
 **Why:** The user explicitly chose workday-based proration and confirmed that the inactive date is inclusive. Historical payroll must remain based on the salary that applied at the time rather than the employee's latest salary.
 
 **How to apply:** Preserve effective-dated salary history whenever salary inputs change. When replacing a salary from an effective date, remove that employee's history on or after the date before inserting the replacement. For payroll changes, resolve rates by date, exclude leave dates, include inactive employees whose employment overlaps the requested month, and reject retroactive salary changes or history deletion that would affect an already-paid month.

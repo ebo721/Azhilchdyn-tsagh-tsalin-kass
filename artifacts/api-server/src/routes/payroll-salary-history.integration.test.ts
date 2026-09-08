@@ -8,6 +8,7 @@ import {
   db,
   employeesTable,
   employeeSalaryHistoryTable,
+  payrollAdjustmentsTable,
   usersTable,
 } from "@workspace/db";
 import app from "../app.ts";
@@ -256,5 +257,63 @@ describe("effective-dated payroll salary", () => {
       line.socialInsuranceSalary,
       Math.round((1_000_000 + 1_000_000 / weekdays.length) * 100) / 100,
     );
+  });
+
+  it("carries underpayment and overpayment into the next month's payable salary", async () => {
+    const januaryResponse = await fetch(`${baseUrl}/api/payroll?month=2099-01`, {
+      headers: { cookie: adminCookie },
+    });
+    assert.equal(januaryResponse.status, 200);
+    const januaryPayroll = await januaryResponse.json() as {
+      lines: Array<{ employeeId: number; payable: number }>;
+    };
+    const januaryLine = januaryPayroll.lines.find((item) => item.employeeId === insuredEmployeeId);
+    assert.ok(januaryLine);
+
+    const [adjustment] = await db.insert(payrollAdjustmentsTable).values({
+      employeeId: insuredEmployeeId,
+      month: "2099-01",
+      paidAmount: januaryLine.payable,
+      paymentDate: "2099-01-31",
+      secondPaidAmount: 0,
+      manualDeduction: 0,
+      taxRelief: 0,
+    }).returning({ id: payrollAdjustmentsTable.id });
+
+    const getFebruaryLine = async () => {
+      const response = await fetch(`${baseUrl}/api/payroll?month=2099-02`, {
+        headers: { cookie: adminCookie },
+      });
+      assert.equal(response.status, 200);
+      const payroll = await response.json() as {
+        lines: Array<{
+          employeeId: number;
+          carryoverAmount: number;
+          payable: number;
+          remainingAmount: number;
+          overpaidAmount: number;
+        }>;
+      };
+      const line = payroll.lines.find((item) => item.employeeId === insuredEmployeeId);
+      assert.ok(line);
+      return line;
+    };
+
+    const balanced = await getFebruaryLine();
+    assert.equal(balanced.carryoverAmount, 0);
+
+    await db.update(payrollAdjustmentsTable)
+      .set({ paidAmount: januaryLine.payable - 100_000 })
+      .where(eq(payrollAdjustmentsTable.id, adjustment.id));
+    const underpaid = await getFebruaryLine();
+    assert.equal(underpaid.carryoverAmount, 100_000);
+    assert.equal(underpaid.payable, balanced.payable + 100_000);
+
+    await db.update(payrollAdjustmentsTable)
+      .set({ paidAmount: januaryLine.payable + 150_000 })
+      .where(eq(payrollAdjustmentsTable.id, adjustment.id));
+    const overpaid = await getFebruaryLine();
+    assert.equal(overpaid.carryoverAmount, -150_000);
+    assert.equal(overpaid.payable, balanced.payable - 150_000);
   });
 });

@@ -289,19 +289,39 @@ function salaryAt(employee: typeof employeesTable.$inferSelect, history: SalaryH
     };
 }
 
-async function getPayrollSummary(month: string) {
-  const [allEmployees, salaryHistory, records, adjustments, advanceApprovals] = await Promise.all([
-    db.select().from(employeesTable),
-    db.select().from(employeeSalaryHistoryTable),
-    db.select().from(attendanceTable),
-    db.select().from(payrollAdjustmentsTable).where(eq(payrollAdjustmentsTable.month, month)),
-    db.select().from(payrollAdvanceApprovalsTable).where(eq(payrollAdvanceApprovalsTable.month, month)),
-  ]);
+type PayrollCalculationData = {
+  allEmployees: Array<typeof employeesTable.$inferSelect>;
+  salaryHistory: Array<typeof employeeSalaryHistoryTable.$inferSelect>;
+  records: Array<typeof attendanceTable.$inferSelect>;
+  allAdjustments: Array<typeof payrollAdjustmentsTable.$inferSelect>;
+  allAdvanceApprovals: Array<typeof payrollAdvanceApprovalsTable.$inferSelect>;
+};
+
+async function getPayrollSummary(month: string, existingData?: PayrollCalculationData) {
+  const data = existingData ?? await (async () => {
+    const [allEmployees, salaryHistory, records, allAdjustments, allAdvanceApprovals] = await Promise.all([
+      db.select().from(employeesTable),
+      db.select().from(employeeSalaryHistoryTable),
+      db.select().from(attendanceTable),
+      db.select().from(payrollAdjustmentsTable),
+      db.select().from(payrollAdvanceApprovalsTable),
+    ]);
+    return { allEmployees, salaryHistory, records, allAdjustments, allAdvanceApprovals };
+  })();
+  const { allEmployees, salaryHistory, records } = data;
+  const adjustments = data.allAdjustments.filter((row) => row.month === month);
+  const advanceApprovals = data.allAdvanceApprovals.filter((row) => row.month === month);
   const monthStart = `${month}-01`;
   const monthEnd = `${month}-${String(daysInMonth(month)).padStart(2, "0")}`;
   const employees = allEmployees.filter((employee) =>
     employee.joinedAt <= monthEnd && (!employee.inactiveAt || employee.inactiveAt >= monthStart)
   );
+  const previousMonthValue = previousMonth(month);
+  const previousMonthEnd = `${previousMonthValue}-${String(daysInMonth(previousMonthValue)).padStart(2, "0")}`;
+  const previousPayroll = allEmployees.some((employee) => employee.joinedAt <= previousMonthEnd)
+    ? await getPayrollSummary(previousMonthValue, data)
+    : null;
+  const previousLineMap = new Map(previousPayroll?.lines.map((line) => [line.employeeId, line]) ?? []);
   const weekdays = monthWeekdays(month);
   const monthRecords = records.filter((record) => String(record.date).startsWith(month));
   const adjustmentMap = new Map(adjustments.map((adjustment) => [adjustment.employeeId, adjustment]));
@@ -371,8 +391,12 @@ async function getPayrollSummary(month: string) {
     const secondPaidAmount = money(Number(adjustment?.secondPaidAmount ?? 0));
     const paidAmount = money(firstPaidAmount + secondPaidAmount);
     const deductions = money(socialInsurance + incomeTax + advanceAmount + manualDeduction);
-    const payable = money(Math.max(0, gross - deductions));
-    const remainingAmount = money(Math.max(0, payable - paidAmount));
+    const carryoverAmount = money(previousLineMap.get(employee.id)?.balanceAmount ?? 0);
+    const payableBeforePayment = money(gross - deductions + carryoverAmount);
+    const payable = money(Math.max(0, payableBeforePayment));
+    const balanceAmount = money(payableBeforePayment - paidAmount);
+    const remainingAmount = money(Math.max(0, balanceAmount));
+    const overpaidAmount = money(Math.max(0, -balanceAmount));
     return {
       employeeId: employee.id,
       employeeName: employee.name,
@@ -390,12 +414,15 @@ async function getPayrollSummary(month: string) {
       advanceAmount,
       manualDeduction,
       deductions,
+      carryoverAmount,
       payable,
       paidAmount,
       paymentDate: adjustment?.paymentDate ?? null,
       secondPaidAmount,
       secondPaymentDate: adjustment?.secondPaymentDate ?? null,
       remainingAmount,
+      overpaidAmount,
+      balanceAmount,
       net: payable,
     };
   });

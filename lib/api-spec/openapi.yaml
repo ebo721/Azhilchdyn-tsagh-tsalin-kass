@@ -1268,7 +1268,7 @@ components:
         leaveDays: { type: integer }
     PayrollLine:
       type: object
-      required: [employeeId, employeeName, role, employeeType, daysWorked, hours, gross, socialInsuranceSalary, socialInsurance, taxableIncome, calculatedIncomeTax, taxRelief, incomeTax, advanceAmount, manualDeduction, deductions, payable, paidAmount, paymentDate, secondPaidAmount, secondPaymentDate, remainingAmount, net]
+      required: [employeeId, employeeName, role, employeeType, daysWorked, hours, gross, socialInsuranceSalary, socialInsurance, taxableIncome, calculatedIncomeTax, taxRelief, incomeTax, advanceAmount, manualDeduction, deductions, carryoverAmount, payable, paidAmount, paymentDate, secondPaidAmount, secondPaymentDate, remainingAmount, overpaidAmount, balanceAmount, net]
       properties:
         employeeId: { type: integer }
         employeeName: { type: string }
@@ -1286,12 +1286,15 @@ components:
         advanceAmount: { type: number }
         manualDeduction: { type: number }
         deductions: { type: number }
+        carryoverAmount: { type: number }
         payable: { type: number }
         paidAmount: { type: number }
         paymentDate: { type: ["string", "null"] }
         secondPaidAmount: { type: number }
         secondPaymentDate: { type: ["string", "null"] }
         remainingAmount: { type: number }
+        overpaidAmount: { type: number }
+        balanceAmount: { type: number }
         net: { type: number }
     PayrollAdjustment:
       type: object

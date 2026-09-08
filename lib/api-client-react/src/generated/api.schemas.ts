@@ -365,6 +365,7 @@ export interface PayrollLine {
   advanceAmount: number;
   manualDeduction: number;
   deductions: number;
+  carryoverAmount: number;
   payable: number;
   paidAmount: number;
   /** @nullable */
@@ -373,6 +374,8 @@ export interface PayrollLine {
   /** @nullable */
   secondPaymentDate: string | null;
   remainingAmount: number;
+  overpaidAmount: number;
+  balanceAmount: number;
   net: number;
 }
 

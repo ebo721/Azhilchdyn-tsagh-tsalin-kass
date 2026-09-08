@@ -548,12 +548,15 @@ export const GetPayrollResponse = zod.object({
   "advanceAmount": zod.number(),
   "manualDeduction": zod.number(),
   "deductions": zod.number(),
+  "carryoverAmount": zod.number(),
   "payable": zod.number(),
   "paidAmount": zod.number(),
   "paymentDate": zod.string().nullable(),
   "secondPaidAmount": zod.number(),
   "secondPaymentDate": zod.string().nullable(),
   "remainingAmount": zod.number(),
+  "overpaidAmount": zod.number(),
+  "balanceAmount": zod.number(),
   "net": zod.number()
 }))
 })
