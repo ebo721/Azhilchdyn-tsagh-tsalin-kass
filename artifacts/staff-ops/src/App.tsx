@@ -244,7 +244,7 @@ function PageHeading({ eyebrow, title, detail, action }: { eyebrow?: string; tit
 function Modal({ title, detail, onClose, children, wide = false, fullScreen = false }: { title: string; detail: string; onClose: () => void; children: ReactNode; wide?: boolean; fullScreen?: boolean }) {
   return (
     <div className={cn('fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/35 backdrop-blur-[2px] sm:p-4', fullScreen ? 'p-0' : 'p-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]')} role="dialog" aria-modal="true" data-testid="modal">
-      <div className={cn('w-full overflow-y-auto border border-border bg-card p-5 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl sm:p-7', fullScreen ? 'h-[100dvh] max-h-none rounded-none pt-[calc(env(safe-area-inset-top)+1.25rem)] sm:h-auto' : 'max-h-[calc(100dvh-1.5rem)] rounded-2xl', wide ? 'sm:max-w-5xl' : 'sm:max-w-xl')}>
+      <div className={cn('w-full overflow-y-auto border border-border bg-card p-5 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl sm:p-7', fullScreen ? 'h-[100dvh] max-h-none rounded-none pt-[calc(env(safe-area-inset-top)+1.25rem)] sm:h-[calc(100dvh-2rem)]' : 'max-h-[calc(100dvh-1.5rem)] rounded-2xl', wide ? 'sm:max-w-5xl' : 'sm:max-w-xl')}>
         <div className="sticky top-0 z-10 -mx-2 mb-6 flex items-start justify-between gap-4 bg-card px-2 pb-3">
           <div><p className="text-lg font-bold tracking-tight">{title}</p><p className="mt-1 text-xs text-muted-foreground">{detail}</p></div>
           <button onClick={onClose} className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Цонх хаах" data-testid="button-close-modal"><X className="size-4" /></button>
