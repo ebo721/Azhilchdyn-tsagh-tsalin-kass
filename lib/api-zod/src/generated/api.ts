@@ -894,3 +894,47 @@ export const ListInventoryItemsResponseItem = zod.object({
 export const ListInventoryItemsResponse = zod.array(ListInventoryItemsResponseItem)
 
 
+/**
+ * @summary List inventory issues
+ */
+export const ListInventoryIssuesResponseItem = zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "itemName": zod.string(),
+  "unit": zod.string(),
+  "date": zod.string(),
+  "quantity": zod.number(),
+  "purpose": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListInventoryIssuesResponse = zod.array(ListInventoryIssuesResponseItem)
+
+
+/**
+ * @summary Issue inventory stock
+ */
+export const createInventoryIssueBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const createInventoryIssueBodyQuantityExclusiveMin = 0;
+
+
+
+
+export const CreateInventoryIssueBody = zod.object({
+  "inventoryItemId": zod.number().int(),
+  "date": zod.string().regex(createInventoryIssueBodyDateRegExp),
+  "quantity": zod.number().gt(createInventoryIssueBodyQuantityExclusiveMin),
+  "purpose": zod.string().min(1)
+})
+
+export const CreateInventoryIssueResponse = zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "itemName": zod.string(),
+  "unit": zod.string(),
+  "date": zod.string(),
+  "quantity": zod.number(),
+  "purpose": zod.string(),
+  "createdAt": zod.string()
+})
+
+

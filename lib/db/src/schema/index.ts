@@ -131,6 +131,15 @@ export const inventoryPurchaseItemsTable = pgTable("inventory_purchase_items", {
   totalAmount: numeric("total_amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
 });
 
+export const inventoryIssuesTable = pgTable("inventory_issues", {
+  id: serial("id").primaryKey(),
+  inventoryItemId: integer("inventory_item_id").notNull().references(() => inventoryItemsTable.id, { onDelete: "restrict" }),
+  date: date("date", { mode: "string" }).notNull(),
+  quantity: numeric("quantity", { precision: 14, scale: 3, mode: "number" }).notNull(),
+  purpose: text("purpose").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const insertEmployeeSchema = createInsertSchema(employeesTable).omit({
   id: true,
   joinedAt: true,
@@ -156,3 +165,4 @@ export type CashClosure = typeof cashClosuresTable.$inferSelect;
 export type InventoryPurchase = typeof inventoryPurchasesTable.$inferSelect;
 export type InventoryPurchaseItem = typeof inventoryPurchaseItemsTable.$inferSelect;
 export type InventoryItem = typeof inventoryItemsTable.$inferSelect;
+export type InventoryIssue = typeof inventoryIssuesTable.$inferSelect;

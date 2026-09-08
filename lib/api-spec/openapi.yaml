@@ -647,6 +647,37 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/InventoryItem"
+  /inventory/issues:
+    get:
+      operationId: listInventoryIssues
+      tags: [inventory]
+      summary: List inventory issues
+      responses:
+        "200":
+          description: Inventory issues
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryIssue"
+    post:
+      operationId: createInventoryIssue
+      tags: [inventory]
+      summary: Issue inventory stock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryIssueInput"
+      responses:
+        "201":
+          description: Created inventory issue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryIssue"
 components:
   parameters:
     Id:
@@ -1041,4 +1072,26 @@ components:
         unit: { type: string }
         quantity: { type: number }
         createdAt: { type: string }
+    InventoryIssue:
+      type: object
+      required: [id, inventoryItemId, itemName, unit, date, quantity, purpose, createdAt]
+      properties:
+        id: { type: integer }
+        inventoryItemId: { type: integer }
+        itemName: { type: string }
+        unit: { type: string }
+        date: { type: string }
+        quantity: { type: number }
+        purpose: { type: string }
+        createdAt: { type: string }
+    InventoryIssueInput:
+      type: object
+      required: [inventoryItemId, date, quantity, purpose]
+      properties:
+        inventoryItemId: { type: integer }
+        date:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$'
+        quantity: { type: number, exclusiveMinimum: 0 }
+        purpose: { type: string, minLength: 1 }
 

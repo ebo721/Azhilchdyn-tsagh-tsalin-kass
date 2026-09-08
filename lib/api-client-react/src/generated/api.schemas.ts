@@ -507,6 +507,27 @@ export interface InventoryItem {
   createdAt: string;
 }
 
+export interface InventoryIssue {
+  id: number;
+  inventoryItemId: number;
+  itemName: string;
+  unit: string;
+  date: string;
+  quantity: number;
+  purpose: string;
+  createdAt: string;
+}
+
+export interface InventoryIssueInput {
+  inventoryItemId: number;
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
+  date: string;
+  /** @exclusiveMinimum 0 */
+  quantity: number;
+  /** @minLength 1 */
+  purpose: string;
+}
+
 export type ListAttendanceParams = {
 date?: string;
 /**

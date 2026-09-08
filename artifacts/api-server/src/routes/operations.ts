@@ -37,6 +37,9 @@ import {
   UpdateInventoryPurchaseParams,
   UpdateInventoryPurchaseResponse,
   DeleteInventoryPurchaseParams,
+  CreateInventoryIssueBody,
+  CreateInventoryIssueResponse,
+  ListInventoryIssuesResponse,
   ListEmployeesResponse,
   UpsertPayrollAdjustmentBody,
   UpdatePayrollAdvancePaymentBody,
@@ -47,7 +50,7 @@ import {
   UpdateEmployeeBody,
   UpdateEmployeeParams,
 } from "@workspace/api-zod";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import {
   attendanceTable,
   cashTransactionsTable,
@@ -60,6 +63,7 @@ import {
   inventoryPurchasesTable,
   inventoryPurchaseItemsTable,
   inventoryItemsTable,
+  inventoryIssuesTable,
   shiftTemplatesTable,
 } from "@workspace/db";
 import { getStaffRole } from "../lib/hr-session";
@@ -1254,6 +1258,87 @@ router.get("/inventory/items", async (_req, res, next) => {
       quantity: Number(item.quantity),
       createdAt: item.createdAt.toISOString(),
     }))));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/inventory/issues", async (_req, res, next) => {
+  try {
+    const rows = await db
+      .select({
+        id: inventoryIssuesTable.id,
+        inventoryItemId: inventoryIssuesTable.inventoryItemId,
+        itemName: inventoryItemsTable.name,
+        unit: inventoryItemsTable.unit,
+        date: inventoryIssuesTable.date,
+        quantity: inventoryIssuesTable.quantity,
+        purpose: inventoryIssuesTable.purpose,
+        createdAt: inventoryIssuesTable.createdAt,
+      })
+      .from(inventoryIssuesTable)
+      .innerJoin(inventoryItemsTable, eq(inventoryIssuesTable.inventoryItemId, inventoryItemsTable.id))
+      .orderBy(desc(inventoryIssuesTable.date), desc(inventoryIssuesTable.id));
+    res.json(ListInventoryIssuesResponse.parse(rows.map((row) => ({
+      ...row,
+      quantity: Number(row.quantity),
+      createdAt: row.createdAt.toISOString(),
+    }))));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/inventory/issues", async (req, res, next) => {
+  try {
+    const input = CreateInventoryIssueBody.parse(req.body);
+    if (!isValidCalendarDate(input.date)) {
+      res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
+      return;
+    }
+    const purpose = input.purpose.trim();
+    if (!purpose) {
+      res.status(400).json({ error: "Зориулалт хоосон байж болохгүй" });
+      return;
+    }
+    const result = await db.transaction(async (tx) => {
+      const [item] = await tx.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, input.inventoryItemId));
+      if (!item) return { status: "not-found" as const };
+      const [updated] = await tx
+        .update(inventoryItemsTable)
+        .set({ quantity: sql`${inventoryItemsTable.quantity} - ${input.quantity}` })
+        .where(and(
+          eq(inventoryItemsTable.id, input.inventoryItemId),
+          gte(inventoryItemsTable.quantity, input.quantity),
+        ))
+        .returning();
+      if (!updated) return { status: "insufficient" as const };
+      const [issue] = await tx.insert(inventoryIssuesTable).values({
+        inventoryItemId: input.inventoryItemId,
+        date: input.date,
+        quantity: input.quantity,
+        purpose,
+      }).returning();
+      return { status: "created" as const, item, issue };
+    });
+    if (result.status === "not-found") {
+      res.status(404).json({ error: "Бараа материал олдсонгүй" });
+      return;
+    }
+    if (result.status === "insufficient") {
+      res.status(409).json({ error: "Барааны үлдэгдэл хүрэлцэхгүй байна" });
+      return;
+    }
+    res.status(201).json(CreateInventoryIssueResponse.parse({
+      id: result.issue.id,
+      inventoryItemId: result.issue.inventoryItemId,
+      itemName: result.item.name,
+      unit: result.item.unit,
+      date: result.issue.date,
+      quantity: Number(result.issue.quantity),
+      purpose: result.issue.purpose,
+      createdAt: result.issue.createdAt.toISOString(),
+    }));
   } catch (error) {
     next(error);
   }
