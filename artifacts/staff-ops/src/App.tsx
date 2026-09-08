@@ -210,12 +210,11 @@ function AppShell({ children, role, onLogout }: { children: ReactNode; role: 'ad
         <div className="flex items-center justify-between px-2">
           <Link href="/" className="flex items-center gap-3" data-testid="link-brand">
             <span className="grid size-10 place-items-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground"><BriefcaseBusiness className="size-5" /></span>
-            <span><span className="block text-sm font-bold tracking-tight">АЖЛЫН ӨДӨР</span><span className="block font-mono text-[9px] uppercase tracking-[.18em] text-sidebar-foreground/55">ops desk · 01</span></span>
+            <span className="text-sm font-bold tracking-tight">АЖЛЫН ӨДӨР</span>
           </Link>
           <button className="grid size-8 place-items-center rounded-lg hover:bg-sidebar-accent lg:hidden" onClick={() => setMobileOpen(false)} data-testid="button-close-navigation"><X className="size-4" /></button>
         </div>
-        <div className="mt-10 px-3 font-mono text-[9px] font-bold uppercase tracking-[.2em] text-sidebar-foreground/40">Ажлын самбар</div>
-        <nav className="mt-3 space-y-1" data-testid="navigation-main">
+        <nav className="mt-10 space-y-1" data-testid="navigation-main">
           {visibleNav.map(({ href, label, icon: Icon }) => (
             <Link key={href} href={href} onClick={() => setMobileOpen(false)} className={cn('group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-colors', location === href ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground')} data-testid={`link-nav-${label}`}>
               <Icon className="size-[17px]" /><span>{label}</span>{location === href && <ChevronRight className="ml-auto size-4 opacity-60" />}
