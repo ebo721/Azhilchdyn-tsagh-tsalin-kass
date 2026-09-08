@@ -7,13 +7,17 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import {
   DeleteBankTransactionParams,
+  CreateBankAccountBody,
+  CreateBankAccountResponse,
   ImportKapitronBankTransactionsResponse,
+  ImportKapitronBankTransactionsQueryParams,
   LinkBankTransactionToCashBody,
   LinkBankTransactionToCashParams,
   LinkBankTransactionToCashResponse,
   ListBankTransactionCashSuggestionsParams,
   ListBankTransactionCashSuggestionsResponse,
   ListBankTransactionsResponse,
+  ListBankAccountsResponse,
   ListUnclearTransactionsResponse,
   MarkTransactionUnclearParams,
   TransferBankTransactionToCashBody,
@@ -21,7 +25,7 @@ import {
   TransferBankTransactionToCashResponse,
 } from "@workspace/api-zod";
 import { and, desc, eq, gte, isNotNull, isNull, lte } from "drizzle-orm";
-import { bankTransactionsTable, cashClosuresTable, cashTransactionsTable, db, deletionRequestsTable } from "@workspace/db";
+import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, db, deletionRequestsTable } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session";
 
 const router: IRouter = Router();
@@ -159,7 +163,30 @@ const response = (row: typeof bankTransactionsTable.$inferSelect) => ({
   amount: Number(row.amount), account: row.account, counterparty: row.counterparty, description: row.description,
   executedAt: row.executedAt?.toISOString() ?? null, balance: row.balance === null ? null : Number(row.balance),
   transferredAt: row.transferredAt?.toISOString() ?? null, cashTransactionId: row.cashTransactionId,
+  bankAccountId: row.bankAccountId, bankName: row.bankName, bankAccountNumber: row.bankAccountNumber,
   createdAt: row.createdAt.toISOString(),
+});
+
+router.get("/bank-accounts", async (_req, res, next) => {
+  try {
+    const rows = await db.select().from(bankAccountsTable).orderBy(bankAccountsTable.bankName, bankAccountsTable.accountNumber);
+    res.json(ListBankAccountsResponse.parse(rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }))));
+  } catch (error) { next(error); }
+});
+
+router.post("/bank-accounts", async (req, res, next) => {
+  try {
+    const input = CreateBankAccountBody.parse(req.body);
+    const [created] = await db.insert(bankAccountsTable).values({
+      bankName: input.bankName.trim(),
+      accountNumber: input.accountNumber.trim(),
+    }).onConflictDoNothing().returning();
+    if (!created) {
+      res.status(409).json({ error: "Энэ банкны данс аль хэдийн бүртгэгдсэн байна" });
+      return;
+    }
+    res.status(201).json(CreateBankAccountResponse.parse({ ...created, createdAt: created.createdAt.toISOString() }));
+  } catch (error) { next(error); }
 });
 
 router.get("/bank-transactions", async (_req, res, next) => {
@@ -173,6 +200,12 @@ router.get("/bank-transactions", async (_req, res, next) => {
 
 router.post("/bank-transactions/import", raw({ type: "application/octet-stream", limit: maxUploadBytes }), async (req, res, next) => {
   try {
+    const { bankAccountId } = ImportKapitronBankTransactionsQueryParams.parse(req.query);
+    const [selectedAccount] = await db.select().from(bankAccountsTable).where(eq(bankAccountsTable.id, bankAccountId));
+    if (!selectedAccount) {
+      res.status(404).json({ error: "Сонгосон банкны данс олдсонгүй" });
+      return;
+    }
     if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
       res.status(400).json({ error: "Kapitron XLSX файл шаардлагатай" });
       return;
@@ -194,17 +227,45 @@ router.post("/bank-transactions/import", raw({ type: "application/octet-stream",
       const account = row["Харьцсан данс / Нэр"];
       const description = row["Гүйлгээний утга"];
       if (amount === 200 && description.toLocaleUpperCase("mn-MN").includes("ШИМТГЭЛ")) return [];
-      const fingerprint = createHash("sha256").update(JSON.stringify([
+      const legacyFingerprint = createHash("sha256").update(JSON.stringify([
         transactionAt.toISOString(),
         amount,
         account,
         description,
       ])).digest("hex");
-      return [{ transactionAt, type, amount, account, counterparty: account, balance: row["Үлдэгдэл"] ? parseAmount(row["Үлдэгдэл"]) : null, description, executedAt: transactionAt, fingerprint }];
+      const fingerprint = createHash("sha256").update(JSON.stringify([
+        bankAccountId,
+        transactionAt.toISOString(),
+        amount,
+        account,
+        description,
+      ])).digest("hex");
+      return [{ transactionAt, type, amount, account, counterparty: account, balance: row["Үлдэгдэл"] ? parseAmount(row["Үлдэгдэл"]) : null, description, executedAt: transactionAt, fingerprint, legacyFingerprint, bankAccountId, bankName: selectedAccount.bankName, bankAccountNumber: selectedAccount.accountNumber }];
     });
-    const inserted = await db.transaction(async (tx) => values.length
-      ? await tx.insert(bankTransactionsTable).values(values).onConflictDoNothing().returning({ id: bankTransactionsTable.id })
-      : []);
+    const legacyRows = await db.select({ id: bankTransactionsTable.id, fingerprint: bankTransactionsTable.fingerprint })
+      .from(bankTransactionsTable)
+      .where(isNull(bankTransactionsTable.bankAccountId));
+    const legacyByFingerprint = new Map(legacyRows.map((row) => [row.fingerprint, row.id]));
+    const inserted = await db.transaction(async (tx) => {
+      const pending = [];
+      for (const { legacyFingerprint, ...value } of values) {
+        const legacyId = legacyByFingerprint.get(legacyFingerprint);
+        if (legacyId) {
+          await tx.update(bankTransactionsTable).set({
+            bankAccountId,
+            bankName: selectedAccount.bankName,
+            bankAccountNumber: selectedAccount.accountNumber,
+            fingerprint: value.fingerprint,
+          }).where(eq(bankTransactionsTable.id, legacyId));
+          legacyByFingerprint.delete(legacyFingerprint);
+        } else {
+          pending.push(value);
+        }
+      }
+      return pending.length
+        ? await tx.insert(bankTransactionsTable).values(pending).onConflictDoNothing().returning({ id: bankTransactionsTable.id })
+        : [];
+    });
     res.status(201).json(ImportKapitronBankTransactionsResponse.parse({
       imported: inserted.length,
       skippedDuplicate: values.length - inserted.length,

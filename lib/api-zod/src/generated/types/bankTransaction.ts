@@ -23,5 +23,11 @@ export interface BankTransaction {
   transferredAt: Date | null;
   /** @nullable */
   cashTransactionId: number | null;
+  /** @nullable */
+  bankAccountId: number | null;
+  /** @nullable */
+  bankName: string | null;
+  /** @nullable */
+  bankAccountNumber: string | null;
   createdAt: Date;
 }

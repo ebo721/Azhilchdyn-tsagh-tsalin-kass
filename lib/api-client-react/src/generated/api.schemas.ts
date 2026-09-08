@@ -504,6 +504,26 @@ export interface CashTransaction {
   transactionKind: CashTransactionTransactionKind;
 }
 
+export interface BankAccount {
+  id: number;
+  bankName: string;
+  accountNumber: string;
+  createdAt: string;
+}
+
+export interface BankAccountInput {
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  bankName: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  accountNumber: string;
+}
+
 export type UnclearTransactionSource = typeof UnclearTransactionSource[keyof typeof UnclearTransactionSource];
 
 
@@ -648,6 +668,12 @@ export interface BankTransaction {
   transferredAt: string | null;
   /** @nullable */
   cashTransactionId: number | null;
+  /** @nullable */
+  bankAccountId: number | null;
+  /** @nullable */
+  bankName: string | null;
+  /** @nullable */
+  bankAccountNumber: string | null;
   createdAt: string;
 }
 
@@ -898,5 +924,12 @@ export type GetHourBalanceParams = {
  * @pattern ^\d{4}-(0[1-9]|1[0-2])$
  */
 month?: string;
+};
+
+export type ImportKapitronBankTransactionsParams = {
+/**
+ * @minimum 1
+ */
+bankAccountId: number;
 };
 

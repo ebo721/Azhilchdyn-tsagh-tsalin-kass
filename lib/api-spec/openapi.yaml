@@ -706,11 +706,44 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/BankTransaction" }
+  /bank-accounts:
+    get:
+      operationId: listBankAccounts
+      tags: [bank-transactions]
+      summary: List configured bank accounts
+      responses:
+        "200":
+          description: Bank accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BankAccount" }
+    post:
+      operationId: createBankAccount
+      tags: [bank-transactions]
+      summary: Configure a bank account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankAccountInput" }
+      responses:
+        "201":
+          description: Bank account created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankAccount" }
   /bank-transactions/import:
     post:
       operationId: importKapitronBankTransactions
       tags: [bank-transactions]
       summary: Import a Kapitron XLSX statement
+      parameters:
+        - name: bankAccountId
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1 }
       requestBody:
         required: true
         content:
@@ -1507,6 +1540,20 @@ components:
         createdAt: { type: string }
         editable: { type: boolean }
         transactionKind: { type: string, enum: [manual, payroll, payroll_advance, inventory_purchase, fixed_asset_purchase, bank_transaction] }
+    BankAccount:
+      type: object
+      required: [id, bankName, accountNumber, createdAt]
+      properties:
+        id: { type: integer }
+        bankName: { type: string }
+        accountNumber: { type: string }
+        createdAt: { type: string, format: date-time }
+    BankAccountInput:
+      type: object
+      required: [bankName, accountNumber]
+      properties:
+        bankName: { type: string, minLength: 1, maxLength: 100 }
+        accountNumber: { type: string, minLength: 1, maxLength: 100 }
     UnclearTransaction:
       type: object
       required: [id, source, type, description, amount, occurredAt, unclearAt]
@@ -1583,7 +1630,7 @@ components:
         todayExpense: { type: number }
     BankTransaction:
       type: object
-      required: [id, transactionAt, type, amount, account, counterparty, description, executedAt, balance, transferredAt, cashTransactionId, createdAt]
+      required: [id, transactionAt, type, amount, account, counterparty, description, executedAt, balance, transferredAt, cashTransactionId, bankAccountId, bankName, bankAccountNumber, createdAt]
       properties:
         id: { type: integer }
         transactionAt: { type: string, format: date-time }
@@ -1596,6 +1643,9 @@ components:
         balance: { type: ["number", "null"] }
         transferredAt: { type: ["string", "null"], format: date-time }
         cashTransactionId: { type: ["integer", "null"] }
+        bankAccountId: { type: ["integer", "null"] }
+        bankName: { type: ["string", "null"] }
+        bankAccountNumber: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
     BankTransactionImportResult:
       type: object

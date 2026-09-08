@@ -24,6 +24,8 @@ import type {
   AttendanceInput,
   AttendanceToggleInput,
   AuthSession,
+  BankAccount,
+  BankAccountInput,
   BankTransaction,
   BankTransactionCashLinkInput,
   BankTransactionCashTransferInput,
@@ -50,6 +52,7 @@ import type {
   GetPayrollParams,
   HealthStatus,
   HourBalanceLine,
+  ImportKapitronBankTransactionsParams,
   InventoryIssue,
   InventoryIssueInput,
   InventoryItem,
@@ -3230,20 +3233,176 @@ export function useListBankTransactions<TData = Awaited<ReturnType<typeof listBa
 
 
 
-export const getImportKapitronBankTransactionsUrl = () => {
+export const getListBankAccountsUrl = () => {
 
 
 
 
-  return `/api/bank-transactions/import`
+  return `/api/bank-accounts`
+}
+
+/**
+ * @summary List configured bank accounts
+ */
+export const listBankAccounts = async ( options?: Parameters<typeof customFetch>[1]): Promise<BankAccount[]> => {
+
+  return customFetch<BankAccount[]>(getListBankAccountsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListBankAccountsQueryKey = () => {
+    return [
+    `/api/bank-accounts`
+    ] as const;
+    }
+
+
+export const getListBankAccountsQueryOptions = <TData = Awaited<ReturnType<typeof listBankAccounts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankAccounts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListBankAccountsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBankAccounts>>> = ({ signal }) => listBankAccounts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBankAccounts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListBankAccountsQueryResult = NonNullable<Awaited<ReturnType<typeof listBankAccounts>>>
+export type ListBankAccountsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List configured bank accounts
+ */
+
+export function useListBankAccounts<TData = Awaited<ReturnType<typeof listBankAccounts>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankAccounts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListBankAccountsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateBankAccountUrl = () => {
+
+
+
+
+  return `/api/bank-accounts`
+}
+
+/**
+ * @summary Configure a bank account
+ */
+export const createBankAccount = async (bankAccountInput: BankAccountInput, options?: Parameters<typeof customFetch>[1]): Promise<BankAccount> => {
+
+  return customFetch<BankAccount>(getCreateBankAccountUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bankAccountInput)
+  }
+);}
+
+
+
+
+
+export const getCreateBankAccountMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBankAccount>>, TError,{data: BodyType<BankAccountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createBankAccount>>, TError,{data: BodyType<BankAccountInput>}, TContext> => {
+
+const mutationKey = ['createBankAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createBankAccount>>, {data: BodyType<BankAccountInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createBankAccount(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateBankAccountMutationResult = NonNullable<Awaited<ReturnType<typeof createBankAccount>>>
+    export type CreateBankAccountMutationBody = BodyType<BankAccountInput>
+    export type CreateBankAccountMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Configure a bank account
+ */
+export const useCreateBankAccount = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBankAccount>>, TError,{data: BodyType<BankAccountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createBankAccount>>,
+        TError,
+        {data: BodyType<BankAccountInput>},
+        TContext
+      > => {
+      return useMutation(getCreateBankAccountMutationOptions(options));
+    }
+
+export const getImportKapitronBankTransactionsUrl = (params: ImportKapitronBankTransactionsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/bank-transactions/import?${stringifiedParams}` : `/api/bank-transactions/import`
 }
 
 /**
  * @summary Import a Kapitron XLSX statement
  */
-export const importKapitronBankTransactions = async (importKapitronBankTransactionsBody: Blob, options?: Parameters<typeof customFetch>[1]): Promise<BankTransactionImportResult> => {
+export const importKapitronBankTransactions = async (importKapitronBankTransactionsBody: Blob,
+    params: ImportKapitronBankTransactionsParams, options?: Parameters<typeof customFetch>[1]): Promise<BankTransactionImportResult> => {
 
-  return customFetch<BankTransactionImportResult>(getImportKapitronBankTransactionsUrl(),
+  return customFetch<BankTransactionImportResult>(getImportKapitronBankTransactionsUrl(params),
   {
     ...options,
     method: 'POST',
@@ -3257,8 +3416,8 @@ export const importKapitronBankTransactions = async (importKapitronBankTransacti
 
 
 export const getImportKapitronBankTransactionsMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importKapitronBankTransactions>>, TError,{data: BodyType<Blob>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof importKapitronBankTransactions>>, TError,{data: BodyType<Blob>}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importKapitronBankTransactions>>, TError,{data: BodyType<Blob>;params: ImportKapitronBankTransactionsParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importKapitronBankTransactions>>, TError,{data: BodyType<Blob>;params: ImportKapitronBankTransactionsParams}, TContext> => {
 
 const mutationKey = ['importKapitronBankTransactions'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -3270,10 +3429,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importKapitronBankTransactions>>, {data: BodyType<Blob>}> = (props) => {
-          const {data} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importKapitronBankTransactions>>, {data: BodyType<Blob>;params: ImportKapitronBankTransactionsParams}> = (props) => {
+          const {data,params} = props ?? {};
 
-          return  importKapitronBankTransactions(data,requestOptions)
+          return  importKapitronBankTransactions(data,params,requestOptions)
         }
 
 
@@ -3291,11 +3450,11 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
  * @summary Import a Kapitron XLSX statement
  */
 export const useImportKapitronBankTransactions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importKapitronBankTransactions>>, TError,{data: BodyType<Blob>}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importKapitronBankTransactions>>, TError,{data: BodyType<Blob>;params: ImportKapitronBankTransactionsParams}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof importKapitronBankTransactions>>,
         TError,
-        {data: BodyType<Blob>},
+        {data: BodyType<Blob>;params: ImportKapitronBankTransactionsParams},
         TContext
       > => {
       return useMutation(getImportKapitronBankTransactionsMutationOptions(options));

@@ -920,14 +920,58 @@ export const ListBankTransactionsResponseItem = zod.object({
   "balance": zod.number().nullable(),
   "transferredAt": zod.coerce.date().nullable(),
   "cashTransactionId": zod.number().int().nullable(),
+  "bankAccountId": zod.number().int().nullable(),
+  "bankName": zod.string().nullable(),
+  "bankAccountNumber": zod.string().nullable(),
   "createdAt": zod.coerce.date()
 })
 export const ListBankTransactionsResponse = zod.array(ListBankTransactionsResponseItem)
 
 
 /**
+ * @summary List configured bank accounts
+ */
+export const ListBankAccountsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "bankName": zod.string(),
+  "accountNumber": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const ListBankAccountsResponse = zod.array(ListBankAccountsResponseItem)
+
+
+/**
+ * @summary Configure a bank account
+ */
+export const createBankAccountBodyBankNameMax = 100;
+
+export const createBankAccountBodyAccountNumberMax = 100;
+
+
+
+export const CreateBankAccountBody = zod.object({
+  "bankName": zod.string().min(1).max(createBankAccountBodyBankNameMax),
+  "accountNumber": zod.string().min(1).max(createBankAccountBodyAccountNumberMax)
+})
+
+export const CreateBankAccountResponse = zod.object({
+  "id": zod.number().int(),
+  "bankName": zod.string(),
+  "accountNumber": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Import a Kapitron XLSX statement
  */
+
+
+
+export const ImportKapitronBankTransactionsQueryParams = zod.object({
+  "bankAccountId": zod.coerce.number().int().min(1)
+})
+
 export const importKapitronBankTransactionsResponseImportedMin = 0;
 
 export const importKapitronBankTransactionsResponseSkippedDuplicateMin = 0;
@@ -970,6 +1014,9 @@ export const TransferBankTransactionToCashResponse = zod.object({
   "balance": zod.number().nullable(),
   "transferredAt": zod.coerce.date().nullable(),
   "cashTransactionId": zod.number().int().nullable(),
+  "bankAccountId": zod.number().int().nullable(),
+  "bankName": zod.string().nullable(),
+  "bankAccountNumber": zod.string().nullable(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1024,6 +1071,9 @@ export const LinkBankTransactionToCashResponse = zod.object({
   "balance": zod.number().nullable(),
   "transferredAt": zod.coerce.date().nullable(),
   "cashTransactionId": zod.number().int().nullable(),
+  "bankAccountId": zod.number().int().nullable(),
+  "bankName": zod.string().nullable(),
+  "bankAccountNumber": zod.string().nullable(),
   "createdAt": zod.coerce.date()
 })
 

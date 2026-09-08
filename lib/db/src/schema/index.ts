@@ -134,6 +134,15 @@ export const cashClosuresTable = pgTable("cash_closures", {
   closedAt: timestamp("closed_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const bankAccountsTable = pgTable("bank_accounts", {
+  id: serial("id").primaryKey(),
+  bankName: text("bank_name").notNull(),
+  accountNumber: text("account_number").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("bank_accounts_bank_number_idx").on(table.bankName, table.accountNumber),
+]);
+
 export const bankTransactionsTable = pgTable("bank_transactions", {
   id: serial("id").primaryKey(),
   transactionAt: timestamp("transaction_at", { withTimezone: true, precision: 0 }).notNull(),
@@ -145,6 +154,9 @@ export const bankTransactionsTable = pgTable("bank_transactions", {
   description: text("description").notNull().default(""),
   executedAt: timestamp("executed_at", { withTimezone: true, precision: 0 }),
   fingerprint: text("fingerprint").notNull(),
+  bankAccountId: integer("bank_account_id").references(() => bankAccountsTable.id, { onDelete: "restrict" }),
+  bankName: text("bank_name"),
+  bankAccountNumber: text("bank_account_number"),
   transferredAt: timestamp("transferred_at", { withTimezone: true, precision: 0 }),
   cashTransactionId: integer("cash_transaction_id").references(() => cashTransactionsTable.id, { onDelete: "restrict" }),
   unclearAt: timestamp("unclear_at", { withTimezone: true }),
