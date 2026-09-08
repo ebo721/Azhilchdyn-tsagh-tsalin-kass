@@ -1871,7 +1871,7 @@ router.delete("/inventory/issues/:id", async (req, res, next) => {
 router.post("/inventory/purchases", async (req, res, next) => {
   try {
     const input = CreateInventoryPurchaseBody.parse(req.body);
-    const supplierName = input.supplierName.trim();
+    const supplierName = input.supplierName.normalize("NFKC").trim().replace(/\s+/g, " ");
     if (!supplierName) {
       res.status(400).json({ error: "Харилцагчийн нэр хоосон байж болохгүй" });
       return;
@@ -1982,7 +1982,7 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
   try {
     const { id } = UpdateInventoryPurchaseParams.parse(req.params);
     const input = UpdateInventoryPurchaseBody.parse(req.body);
-    const supplierName = input.supplierName.trim();
+    const supplierName = input.supplierName.normalize("NFKC").trim().replace(/\s+/g, " ");
     if (!supplierName) {
       res.status(400).json({ error: "Харилцагчийн нэр хоосон байж болохгүй" });
       return;
