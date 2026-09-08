@@ -54,6 +54,11 @@ import {
   UpdateFixedAssetResponse,
   DeleteFixedAssetParams,
   ListFixedAssetsResponse,
+  CreateDeletionRequestBody,
+  CreateDeletionRequestResponse,
+  ListDeletionRequestsResponse,
+  ApproveDeletionRequestParams,
+  ApproveDeletionRequestResponse,
   ListEmployeesResponse,
   UpsertPayrollAdjustmentBody,
   UpdatePayrollAdvancePaymentBody,
@@ -79,9 +84,10 @@ import {
   inventoryItemsTable,
   inventoryIssuesTable,
   fixedAssetsTable,
+  deletionRequestsTable,
   shiftTemplatesTable,
 } from "@workspace/db";
-import { getStaffRole } from "../lib/hr-session";
+import { getStaffRole, type StaffRole } from "../lib/hr-session";
 import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment";
 import { planShiftPlanCopy } from "../lib/shift-plan-copy";
 
@@ -99,6 +105,25 @@ router.use((req, res, next) => {
   const role = getStaffRole(req);
   if (!role) {
     res.status(401).json({ error: "Нэвтрэх шаардлагатай" });
+    return;
+  }
+  if (req.method === "POST" && req.path === "/deletion-requests") {
+    next();
+    return;
+  }
+  if (req.method === "DELETE") {
+    const requestId = Number(req.header("x-deletion-request-id"));
+    if (!Number.isInteger(requestId)) {
+      res.status(403).json({ error: "Устгах үйлдэлд админы баталсан хүсэлт шаардлагатай" });
+      return;
+    }
+    void db.select().from(deletionRequestsTable).where(eq(deletionRequestsTable.id, requestId)).then(([request]) => {
+      if (!request || request.status !== "executing" || request.targetPath !== req.url) {
+        res.status(403).json({ error: "Устгах хүсэлт хүчинтэй биш байна" });
+        return;
+      }
+      next();
+    }).catch(next);
     return;
   }
   if (role === "admin") {
@@ -124,6 +149,26 @@ router.use((req, res, next) => {
 const today = () => new Date().toISOString().slice(0, 10);
 const currentMonth = () => today().slice(0, 7);
 const money = (value: number) => Math.round(value * 100) / 100;
+const deletionTargetPatterns = [
+  /^\/employees\/\d+$/,
+  /^\/attendance\/shifts\/\d+$/,
+  /^\/attendance\?employeeId=\d+&date=\d{4}-\d{2}-\d{2}$/,
+  /^\/payroll-advance\/approval\?month=\d{4}-\d{2}$/,
+  /^\/cash\/transactions\/\d+$/,
+  /^\/fixed-assets\/\d+$/,
+  /^\/inventory\/issues\/\d+$/,
+  /^\/inventory\/purchases\/\d+$/,
+];
+const roleCanRequestDeletion = (role: StaffRole, targetPath: string) => role === "admin"
+  || (role === "hr" && (targetPath.startsWith("/employees/") || targetPath.startsWith("/attendance")))
+  || (role === "accountant" && targetPath.startsWith("/payroll-advance/"))
+  || (role === "warehouse" && (targetPath.startsWith("/inventory/") || targetPath.startsWith("/fixed-assets/")));
+const deletionRequestResponse = (request: typeof deletionRequestsTable.$inferSelect) => ({
+  ...request,
+  requestedAt: request.requestedAt.toISOString(),
+  approvedAt: request.approvedAt?.toISOString() ?? null,
+  completedAt: request.completedAt?.toISOString() ?? null,
+});
 const monthlyIncomeTaxRelief = (socialInsuranceSalary: number) => {
   if (socialInsuranceSalary <= 500_000) return 20_000;
   if (socialInsuranceSalary <= 1_000_000) return 18_000;
@@ -1230,6 +1275,96 @@ router.post("/cash/closures", async (req, res, next) => {
       date: saved.date,
       closedAt: saved.closedAt.toISOString(),
     }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/deletion-requests", async (_req, res, next) => {
+  try {
+    const requests = await db.select().from(deletionRequestsTable).orderBy(desc(deletionRequestsTable.requestedAt));
+    res.json(ListDeletionRequestsResponse.parse(requests.map(deletionRequestResponse)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/deletion-requests", async (req, res, next) => {
+  try {
+    const input = CreateDeletionRequestBody.parse(req.body);
+    const role = getStaffRole(req);
+    const targetPath = input.targetPath.trim();
+    const label = input.label.trim();
+    if (!role || !deletionTargetPatterns.some((pattern) => pattern.test(targetPath)) || !roleCanRequestDeletion(role, targetPath)) {
+      res.status(400).json({ error: "Устгах хүсэлтийн төрөл буруу байна" });
+      return;
+    }
+    if (!label) {
+      res.status(400).json({ error: "Устгах хүсэлтийн тайлбар шаардлагатай" });
+      return;
+    }
+    const [pending] = await db.select().from(deletionRequestsTable).where(and(
+      eq(deletionRequestsTable.targetPath, targetPath),
+      eq(deletionRequestsTable.status, "pending"),
+    ));
+    if (pending) {
+      res.status(200).json(CreateDeletionRequestResponse.parse(deletionRequestResponse(pending)));
+      return;
+    }
+    const [created] = await db.insert(deletionRequestsTable).values({
+      targetPath,
+      label,
+      requesterRole: role,
+    }).returning();
+    res.status(201).json(CreateDeletionRequestResponse.parse(deletionRequestResponse(created)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/deletion-requests/:id/approve", async (req, res, next) => {
+  try {
+    const { id } = ApproveDeletionRequestParams.parse(req.params);
+    if (getStaffRole(req) !== "admin") {
+      res.status(403).json({ error: "Зөвхөн ерөнхий админ устгах хүсэлтийг батална" });
+      return;
+    }
+    const [request] = await db.select().from(deletionRequestsTable).where(eq(deletionRequestsTable.id, id));
+    if (!request) {
+      res.status(404).json({ error: "Устгах хүсэлт олдсонгүй" });
+      return;
+    }
+    if (request.status !== "pending") {
+      res.status(409).json({ error: "Энэ хүсэлт аль хэдийн шийдвэрлэгдсэн байна" });
+      return;
+    }
+    const [executing] = await db.update(deletionRequestsTable).set({
+      status: "executing",
+      approvedAt: new Date(),
+      error: null,
+    }).where(eq(deletionRequestsTable.id, id)).returning();
+    const port = process.env["PORT"] ?? "8080";
+    const execution = await fetch(`http://127.0.0.1:${port}/api${request.targetPath}`, {
+      method: "DELETE",
+      headers: {
+        cookie: req.headers.cookie ?? "",
+        "x-deletion-request-id": String(id),
+      },
+    });
+    if (!execution.ok) {
+      const errorBody = await execution.text();
+      const [failed] = await db.update(deletionRequestsTable).set({
+        status: "failed",
+        error: errorBody || `HTTP ${execution.status}`,
+      }).where(eq(deletionRequestsTable.id, id)).returning();
+      res.status(execution.status).json({ error: "Устгах үйлдэл амжилтгүй", request: deletionRequestResponse(failed) });
+      return;
+    }
+    const [completed] = await db.update(deletionRequestsTable).set({
+      status: "completed",
+      completedAt: new Date(),
+    }).where(eq(deletionRequestsTable.id, id)).returning();
+    res.json(ApproveDeletionRequestResponse.parse(deletionRequestResponse(completed ?? executing)));
   } catch (error) {
     next(error);
   }

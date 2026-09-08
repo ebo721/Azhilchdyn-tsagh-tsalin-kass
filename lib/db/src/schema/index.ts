@@ -150,6 +150,18 @@ export const fixedAssetsTable = pgTable("fixed_assets", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const deletionRequestsTable = pgTable("deletion_requests", {
+  id: serial("id").primaryKey(),
+  targetPath: text("target_path").notNull(),
+  label: text("label").notNull(),
+  requesterRole: text("requester_role").notNull(),
+  status: text("status").notNull().default("pending"),
+  requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  error: text("error"),
+});
+
 export const insertEmployeeSchema = createInsertSchema(employeesTable).omit({
   id: true,
   joinedAt: true,
@@ -177,3 +189,4 @@ export type InventoryPurchaseItem = typeof inventoryPurchaseItemsTable.$inferSel
 export type InventoryItem = typeof inventoryItemsTable.$inferSelect;
 export type InventoryIssue = typeof inventoryIssuesTable.$inferSelect;
 export type FixedAsset = typeof fixedAssetsTable.$inferSelect;
+export type DeletionRequest = typeof deletionRequestsTable.$inferSelect;

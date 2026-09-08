@@ -30,6 +30,7 @@ import {
   Receipt,
   RefreshCw,
   Search,
+  ShieldCheck,
   Timer,
   Trash2,
   UserRound,
@@ -56,6 +57,7 @@ import {
   getListInventoryPurchasesQueryKey,
   getListInventoryIssuesQueryKey,
   getListFixedAssetsQueryKey,
+  getListDeletionRequestsQueryKey,
   useCopyPreviousShiftPlans,
   useCreateCashTransaction,
   useUpdateCashTransaction,
@@ -90,6 +92,9 @@ import {
   useCreateFixedAsset,
   useUpdateFixedAsset,
   useDeleteFixedAsset,
+  useCreateDeletionRequest,
+  useListDeletionRequests,
+  useApproveDeletionRequest,
   useListShiftPlans,
   useListShifts,
   useLoginHrManager,
@@ -115,6 +120,20 @@ import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter
 import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient();
+
+function useQueueDeletion() {
+  const mutation = useCreateDeletionRequest();
+  const qc = useQueryClient();
+  const request = (targetPath: string, label: string) => {
+    mutation.mutate({ data: { targetPath, label } }, {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListDeletionRequestsQueryKey() });
+        window.alert('Устгах хүсэлт админы зөвшөөрөл хүлээж байна.');
+      },
+    });
+  };
+  return { request, isPending: mutation.isPending, isError: mutation.isError };
+}
 
 const money = (value = 0) => `${new Intl.NumberFormat('mn-MN').format(value)} ₮`;
 const dateLabel = (value: string) => {
@@ -153,6 +172,7 @@ const nav = [
   { href: '/cash', label: 'Касс', icon: WalletCards },
   { href: '/inventory', label: 'Бараа материал', icon: PackageOpen },
   { href: '/fixed-assets', label: 'Эд хөрөнгө', icon: BriefcaseBusiness },
+  { href: '/deletion-requests', label: 'Устгах хүсэлт', icon: ShieldCheck },
 ];
 
 function LoadingBlock({ className = '' }: { className?: string }) {
@@ -341,13 +361,13 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
 function Employees() {
   const query = useListEmployees();
   const session = useGetAuthSession();
-  const remove = useDeleteEmployee();
+  const deletion = useQueueDeletion();
   const qc = useQueryClient();
   const [modal, setModal] = useState<{ open: boolean; employee?: Employee }>({ open: false });
   const [search, setSearch] = useState('');
   const employees = useMemo(() => (query.data ?? []).filter((e) => `${e.name} ${e.role} ${e.phone}`.toLowerCase().includes(search.toLowerCase())), [query.data, search]);
-  const del = (employee: Employee) => { if (window.confirm(`${employee.name}-г устгах уу?`)) remove.mutate({ id: employee.id }, { onSuccess: () => { qc.invalidateQueries({ queryKey: getListEmployeesQueryKey() }); qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() }); }, onError: () => window.alert('Ирц бүртгэгдсэн эсвэл цалин олгосон ажилтанг устгах боломжгүй.') }); };
-  return <div className="page-enter"><div className="mb-6 flex justify-end"><Button onClick={() => setModal({ open: true })} data-testid="button-add-employee"><Plus className="size-4" />Ажилтан нэмэх</Button></div><section className="overflow-hidden rounded-2xl border border-border bg-card"><div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm font-bold">Бүх ажилтан <span className="ml-1 font-mono text-xs text-muted-foreground">{query.data?.length ?? 0}</span></p><div className="relative w-full sm:w-64"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" placeholder="Нэрээр хайх" data-testid="input-search-employees" /></div></div>{query.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : employees.length === 0 ? <EmptyState title="Ажилтан олдсонгүй" detail={search ? 'Хайлтын үгээ өөрчлөөд үзнэ үү.' : 'Эхний ажилтнаа бүртгэж эхлээрэй.'} icon={UsersRound} /> : <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3 font-bold">Ажилтан</th><th className="px-5 py-3 font-bold">Утас</th><th className="px-5 py-3 font-bold">Ажилтны төрөл</th><th className="px-5 py-3 font-bold">Цалин</th><th className="px-5 py-3 font-bold">НДШ-ийн цалин</th><th className="px-5 py-3 font-bold">Төлөв</th><th className="px-5 py-3 text-right font-bold">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{employees.map((employee) => <tr className="group transition-colors hover:bg-secondary/35" key={employee.id} data-testid={`row-employee-${employee.id}`}><td className="px-5 py-4"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent/30 text-xs font-bold text-foreground">{employee.name.slice(0, 1)}</span><div><p className="text-sm font-semibold">{employee.name}</p><p className="text-xs text-muted-foreground">{employee.role}</p></div></div></td><td className="px-5 py-4 text-sm text-muted-foreground">{employee.phone || '—'}</td><td className="px-5 py-4 text-sm">{employee.employeeType === EmployeeEmployeeType.office ? 'Оффис' : 'Ээлжийн'}</td><td className="px-5 py-4"><p className="font-mono text-sm">{money(employee.baseSalary)}</p><p className="text-[10px] text-muted-foreground">{employee.employeeType === EmployeeEmployeeType.office ? 'сарын' : 'өдрийн'}</p></td><td className="px-5 py-4 font-mono text-sm">{money(employee.socialInsuranceSalary)}</td><td className="px-5 py-4"><StatusPill value={employee.status} /></td><td className="px-5 py-4"><div className="flex justify-end gap-1"><button className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={() => setModal({ open: true, employee })} aria-label={`${employee.name} засах`} data-testid={`button-edit-employee-${employee.id}`}><Pencil className="size-4" /></button>{session.data?.role === 'admin' && <button className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => del(employee)} aria-label={`${employee.name} устгах`} data-testid={`button-delete-employee-${employee.id}`}><Trash2 className="size-4" /></button>}</div></td></tr>)}</tbody></table></div>}</section>{modal.open && <EmployeeModal employee={modal.employee} onClose={() => setModal({ open: false })} />}</div>;
+  const del = (employee: Employee) => { if (window.confirm(`${employee.name}-г устгах хүсэлт гаргах уу?`)) deletion.request(`/employees/${employee.id}`, `${employee.name} ажилтны бүртгэл`); };
+  return <div className="page-enter"><div className="mb-6 flex justify-end"><Button onClick={() => setModal({ open: true })} data-testid="button-add-employee"><Plus className="size-4" />Ажилтан нэмэх</Button></div><section className="overflow-hidden rounded-2xl border border-border bg-card"><div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm font-bold">Бүх ажилтан <span className="ml-1 font-mono text-xs text-muted-foreground">{query.data?.length ?? 0}</span></p><div className="relative w-full sm:w-64"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" placeholder="Нэрээр хайх" data-testid="input-search-employees" /></div></div>{query.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : employees.length === 0 ? <EmptyState title="Ажилтан олдсонгүй" detail={search ? 'Хайлтын үгээ өөрчлөөд үзнэ үү.' : 'Эхний ажилтнаа бүртгэж эхлээрэй.'} icon={UsersRound} /> : <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3 font-bold">Ажилтан</th><th className="px-5 py-3 font-bold">Утас</th><th className="px-5 py-3 font-bold">Ажилтны төрөл</th><th className="px-5 py-3 font-bold">Цалин</th><th className="px-5 py-3 font-bold">НДШ-ийн цалин</th><th className="px-5 py-3 font-bold">Төлөв</th><th className="px-5 py-3 text-right font-bold">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{employees.map((employee) => <tr className="group transition-colors hover:bg-secondary/35" key={employee.id} data-testid={`row-employee-${employee.id}`}><td className="px-5 py-4"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent/30 text-xs font-bold text-foreground">{employee.name.slice(0, 1)}</span><div><p className="text-sm font-semibold">{employee.name}</p><p className="text-xs text-muted-foreground">{employee.role}</p></div></div></td><td className="px-5 py-4 text-sm text-muted-foreground">{employee.phone || '—'}</td><td className="px-5 py-4 text-sm">{employee.employeeType === EmployeeEmployeeType.office ? 'Оффис' : 'Ээлжийн'}</td><td className="px-5 py-4"><p className="font-mono text-sm">{money(employee.baseSalary)}</p><p className="text-[10px] text-muted-foreground">{employee.employeeType === EmployeeEmployeeType.office ? 'сарын' : 'өдрийн'}</p></td><td className="px-5 py-4 font-mono text-sm">{money(employee.socialInsuranceSalary)}</td><td className="px-5 py-4"><StatusPill value={employee.status} /></td><td className="px-5 py-4"><div className="flex justify-end gap-1"><button className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={() => setModal({ open: true, employee })} aria-label={`${employee.name} засах`} data-testid={`button-edit-employee-${employee.id}`}><Pencil className="size-4" /></button><button className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => del(employee)} aria-label={`${employee.name} устгах хүсэлт`} data-testid={`button-delete-employee-${employee.id}`}><Trash2 className="size-4" /></button></div></td></tr>)}</tbody></table></div>}</section>{modal.open && <EmployeeModal employee={modal.employee} onClose={() => setModal({ open: false })} />}</div>;
 }
 
 type ShiftForm = { name: string; startTime: string; endTime: string };
@@ -356,7 +376,7 @@ function ShiftSettingsModal({ onClose }: { onClose: () => void }) {
   const shifts = useListShifts();
   const create = useCreateShift();
   const update = useUpdateShift();
-  const remove = useDeleteShift();
+  const deletion = useQueueDeletion();
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Shift | null>(null);
   const form = useForm<ShiftForm>({ defaultValues: { name: '', startTime: '09:00', endTime: '18:00' } });
@@ -371,8 +391,8 @@ function ShiftSettingsModal({ onClose }: { onClose: () => void }) {
     form.reset({ name: shift.name, startTime: shift.startTime, endTime: shift.endTime });
   };
   const del = (shift: Shift) => {
-    if (!window.confirm(`${shift.name} ээлжийг устгах уу?`)) return;
-    remove.mutate({ id: shift.id }, { onSuccess: () => qc.invalidateQueries({ queryKey: getListShiftsQueryKey() }) });
+    if (!window.confirm(`${shift.name} ээлжийг устгах хүсэлт гаргах уу?`)) return;
+    deletion.request(`/attendance/shifts/${shift.id}`, `${shift.name} ээлж`);
   };
   return <Modal title="Ээлжийн тохиргоо" detail="Ээлжийн нэр болон өдөр бүрийн эхлэх, тарах цагийг удирдана." onClose={onClose}>
     <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-4">
@@ -386,7 +406,7 @@ function ShiftSettingsModal({ onClose }: { onClose: () => void }) {
     <div className="mt-6 border-t border-border pt-5">
       <p className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Бүртгэлтэй ээлжүүд</p>
       {shifts.isLoading ? <LoadingBlock className="h-20" /> : !shifts.data?.length ? <div className="rounded-xl bg-secondary/50 p-4 text-center text-xs text-muted-foreground">Ээлж бүртгээгүй байна.</div> : <div className="space-y-2">{shifts.data.map((shift) => <div key={shift.id} className="flex items-center gap-3 rounded-xl border border-border p-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{shift.name}</p><p className="font-mono text-xs text-muted-foreground">{shift.startTime} — {shift.endTime}</p></div><button type="button" onClick={() => edit(shift)} className="grid size-8 place-items-center rounded-lg hover:bg-secondary" aria-label={`${shift.name} засах`}><Pencil className="size-4" /></button><button type="button" onClick={() => del(shift)} className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label={`${shift.name} устгах`}><Trash2 className="size-4" /></button></div>)}</div>}
-      {remove.isError && <p className="mt-2 text-xs text-destructive">Төлөвлөгөөнд ашигласан ээлжийг устгах боломжгүй.</p>}
+      {deletion.isError && <p className="mt-2 text-xs text-destructive">Устгах хүсэлт үүсгэхэд алдаа гарлаа.</p>}
     </div>
   </Modal>;
 }
@@ -400,7 +420,8 @@ function AttendancePage() {
   const shifts = useListShifts();
   const plans = useListShiftPlans({ month });
   const upsert = useUpsertAttendance();
-  const clearAttendance = useDeleteAttendance();
+  const deletion = useQueueDeletion();
+  const clearAttendance = deletion;
   const upsertPlan = useUpsertShiftPlan();
   const copyPreviousPlans = useCopyPreviousShiftPlans();
   const qc = useQueryClient();
@@ -417,7 +438,10 @@ function AttendancePage() {
       qc.invalidateQueries({ queryKey: getGetHourBalanceQueryKey({ month: date.slice(0, 7) }) });
     };
     if (!value) {
-      clearAttendance.mutate({ params: { employeeId, date } }, { onSuccess: refreshAttendance });
+      const employeeName = activeEmployees.find((employee) => employee.id === employeeId)?.name ?? `#${employeeId}`;
+      if (window.confirm(`${employeeName} ажилтны ${dateLabel(date)}-ны ирцийг устгах хүсэлт гаргах уу?`)) {
+        deletion.request(`/attendance?employeeId=${employeeId}&date=${date}`, `${employeeName} · ${dateLabel(date)}-ны ирц`);
+      }
       return;
     }
     const isLeave = value === 'leave';
@@ -550,7 +574,8 @@ function Payroll() {
   const session = useGetAuthSession();
   const qc = useQueryClient();
   const approveAdvance = useApprovePayrollAdvance();
-  const revertAdvanceApproval = useRevertPayrollAdvanceApproval();
+  const deletion = useQueueDeletion();
+  const revertAdvanceApproval = deletion;
   const updateAdvancePayment = useUpdatePayrollAdvancePayment();
   const pullLatestAttendance = async () => {
     await query.refetch();
@@ -563,13 +588,8 @@ function Payroll() {
     });
   };
   const revertApproval = () => {
-    if (!window.confirm(`${month} сарын урьдчилгаа цалингийн батлалтыг буцаах уу?`)) return;
-    revertAdvanceApproval.mutate({ params: { month } }, {
-      onSuccess: () => {
-        qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey({ month }) });
-        qc.invalidateQueries({ queryKey: getGetPayrollQueryKey({ month }) });
-      },
-    });
+    if (!window.confirm(`${month} сарын урьдчилгаа цалингийн батлалтыг устгах хүсэлт гаргах уу?`)) return;
+    deletion.request(`/payroll-advance/approval?month=${month}`, `${month} сарын урьдчилгаа цалингийн батлалт`);
   };
   const setAdvancePaid = (employeeId: number, paid: boolean, existingAmount: number, existingDate?: string | null) => {
     const paymentDate = paid ? (advanceDates[employeeId] || existingDate || today()) : null;
@@ -590,7 +610,7 @@ function Payroll() {
     {showAdvance && <section className="mb-6 overflow-hidden rounded-2xl border border-accent/60 bg-card shadow-sm" data-testid="section-payroll-advance">
       <div className="flex flex-col justify-between gap-4 border-b border-border bg-accent/10 px-5 py-4 sm:flex-row sm:items-center">
         <h2 className="text-lg font-bold">{month.replace('-', ' оны ')} сарын урьдчилгаа цалин</h2>
-        {advanceQuery.data?.approved ? <div className="flex flex-wrap items-center gap-2"><div className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground" data-testid="status-advance-approved"><Check className="mr-2 inline size-4" />Батлагдсан · {advanceQuery.data.approvedAt ? dateLabel(advanceQuery.data.approvedAt) : ''}</div>{session.data?.role === 'admin' && <Button variant="outline" onClick={revertApproval} disabled={revertAdvanceApproval.isPending} data-testid="button-revert-payroll-advance">{revertAdvanceApproval.isPending ? 'Буцааж байна...' : 'Батлалт буцаах'}</Button>}</div> : <Button onClick={approve} disabled={approveAdvance.isPending || advanceQuery.isLoading} data-testid="button-approve-payroll-advance"><Check className="size-4" />{approveAdvance.isPending ? 'Баталж байна...' : 'Урьдчилгаа батлах'}</Button>}
+        {advanceQuery.data?.approved ? <div className="flex flex-wrap items-center gap-2"><div className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground" data-testid="status-advance-approved"><Check className="mr-2 inline size-4" />Батлагдсан · {advanceQuery.data.approvedAt ? dateLabel(advanceQuery.data.approvedAt) : ''}</div><Button variant="outline" onClick={revertApproval} disabled={revertAdvanceApproval.isPending} data-testid="button-revert-payroll-advance">{revertAdvanceApproval.isPending ? 'Хүсэлт илгээж байна...' : 'Батлалт устгах хүсэлт'}</Button></div> : <Button onClick={approve} disabled={approveAdvance.isPending || advanceQuery.isLoading} data-testid="button-approve-payroll-advance"><Check className="size-4" />{approveAdvance.isPending ? 'Баталж байна...' : 'Урьдчилгаа батлах'}</Button>}
       </div>
       {advanceQuery.isLoading ? <div className="p-5"><LoadingBlock className="h-36" /></div> : advanceQuery.isError ? <div className="p-5"><ErrorBlock onRetry={() => advanceQuery.refetch()} /></div> : <div className="overflow-x-auto">
         <table className="w-full min-w-[1280px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Ажилтан</th><th className="px-5 py-3 text-right">Үндсэн цалин</th><th className="px-5 py-3 text-right">Ажилласан хоног</th><th className="px-5 py-3 text-right">Өдрийн цалин</th><th className="px-5 py-3 text-right">Нийт олгох цалин</th><th className="px-5 py-3 text-right">Олгох урьдчилгаа</th><th className="px-5 py-3 text-center">Гүйлгээний огноо</th><th className="px-5 py-3 text-center">Төлөв</th></tr></thead>
@@ -598,7 +618,7 @@ function Payroll() {
           <tfoot className="border-t-2 border-border bg-secondary/35"><tr><td colSpan={5} className="px-5 py-4 text-right text-sm font-bold">Нийт олгох урьдчилгаа</td><td className="px-5 py-4 text-right font-mono text-base font-bold text-primary" data-testid="value-total-payroll-advance">{money(advanceQuery.data?.totalAmount)}</td><td colSpan={2} /></tr></tfoot>
         </table>
       </div>}
-      {revertAdvanceApproval.isError && <p className="border-t border-border bg-destructive/5 px-5 py-3 text-xs font-medium text-destructive">Олгосон урьдчилгаа байвал эхлээд тухайн мөрийг “Олгоогүй” болгоно уу.</p>}
+      {revertAdvanceApproval.isError && <p className="border-t border-border bg-destructive/5 px-5 py-3 text-xs font-medium text-destructive">Устгах хүсэлт үүсгэхэд алдаа гарлаа.</p>}
     </section>}
     {query.isLoading ? <div className="space-y-3 rounded-2xl border border-border bg-card p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : <>
       <section className="overflow-hidden rounded-2xl border border-border bg-card">
@@ -651,7 +671,8 @@ function Cash() {
   const closures = useListCashClosures();
   const create = useCreateCashTransaction();
   const update = useUpdateCashTransaction();
-  const remove = useDeleteCashTransaction();
+  const deletion = useQueueDeletion();
+  const remove = deletion;
   const qc = useQueryClient();
   const [editing, setEditing] = useState<CashTransaction | null>(null);
   const [open, setOpen] = useState(false);
@@ -679,8 +700,8 @@ function Cash() {
     else create.mutate({ data }, options);
   };
   const deleteRow = (row: CashTransaction) => {
-    if (!window.confirm(`${row.description} гүйлгээг устгах уу?`)) return;
-    remove.mutate({ id: row.id }, { onSuccess: refresh });
+    if (!window.confirm(`${row.description} гүйлгээг устгах хүсэлт гаргах уу?`)) return;
+    deletion.request(`/cash/transactions/${row.id}`, `${row.description} кассын гүйлгээ`);
   };
   return <div className="page-enter">
     <div className="mb-7 flex flex-wrap items-center justify-end gap-2"><CashDayCloseControls /><Button onClick={startCreate} data-testid="button-add-cash"><Plus className="size-4" />Гүйлгээ оруулах</Button></div>
@@ -692,7 +713,7 @@ function Cash() {
         return <div className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-secondary/35" key={row.id} data-testid={`row-cash-${row.id}`}>
           <span className={cn('grid size-9 shrink-0 place-items-center rounded-xl', row.type === CashTransactionType.income ? 'bg-primary/10 text-primary' : 'bg-orange-100 text-orange-800')}>{row.type === CashTransactionType.income ? <ArrowDownLeft className="size-4" /> : <ArrowUpRight className="size-4" />}</span>
           <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold">{row.description}</p><span className={cn('rounded-full border px-2 py-0.5 text-[10px] font-bold', kind.className)}>{kind.label}</span></div><p className="mt-0.5 text-xs text-muted-foreground">{row.category} · {dateLabel(row.date)}{closed ? ' · Өндөрлөсөн' : ''}</p></div>
-          {row.editable && <div className="flex gap-1"><Button size="icon" variant="ghost" disabled={closed} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Засах'} onClick={() => startEdit(row)} data-testid={`button-edit-cash-${row.id}`}><Pencil className="size-4" /></Button><Button size="icon" variant="ghost" disabled={closed || remove.isPending} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Устгах'} onClick={() => deleteRow(row)} data-testid={`button-delete-cash-${row.id}`}><Trash2 className="size-4" /></Button></div>}
+          {row.editable && <div className="flex gap-1"><Button size="icon" variant="ghost" disabled={closed} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Засах'} onClick={() => startEdit(row)} data-testid={`button-edit-cash-${row.id}`}><Pencil className="size-4" /></Button><Button size="icon" variant="ghost" disabled={closed || deletion.isPending} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Устгах хүсэлт'} onClick={() => deleteRow(row)} data-testid={`button-delete-cash-${row.id}`}><Trash2 className="size-4" /></Button></div>}
           <p className={cn('font-mono text-sm font-bold', row.type === CashTransactionType.income ? 'text-primary' : 'text-orange-800')}>{row.type === CashTransactionType.income ? '+' : '−'}{money(row.amount)}</p>
         </div>;
       })}</div>}
@@ -715,7 +736,7 @@ function FixedAssets() {
   const list = useListFixedAssets();
   const create = useCreateFixedAsset();
   const update = useUpdateFixedAsset();
-  const remove = useDeleteFixedAsset();
+  const deletion = useQueueDeletion();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<FixedAsset | null>(null);
@@ -763,14 +784,14 @@ function FixedAssets() {
     });
   };
   const deleteAsset = (asset: FixedAsset) => {
-    if (!window.confirm(`"${asset.name}" хөрөнгийг устгах уу?${asset.purchased ? ' Холбоотой кассын зарлага мөн устна.' : ''}`)) return;
-    remove.mutate({ id: asset.id }, { onSuccess: refresh });
+    if (!window.confirm(`"${asset.name}" хөрөнгийг устгах хүсэлт гаргах уу?${asset.purchased ? ' Батлагдвал холбоотой кассын зарлага мөн устна.' : ''}`)) return;
+    deletion.request(`/fixed-assets/${asset.id}`, `${asset.name} эд хөрөнгө`);
   };
   return <div className="page-enter">
     <div className="mb-7 flex justify-end"><Button onClick={startCreate} data-testid="button-add-fixed-asset"><Plus className="size-4" />Шинээр нэмэх</Button></div>
     <section className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="border-b border-border px-5 py-4"><h2 className="text-base font-bold">Тоног төхөөрөмж, хөрөнгийн жагсаалт</h2></div>
-      {list.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : list.isError ? <ErrorBlock onRetry={() => list.refetch()} /> : !list.data?.length ? <EmptyState title="Эд хөрөнгө бүртгэгдээгүй" detail="Тоног төхөөрөмж эсвэл хөрөнгөө шинээр нэмнэ үү." icon={BriefcaseBusiness} /> : <div className="overflow-x-auto"><table className="w-full min-w-[780px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Огноо</th><th className="px-5 py-3">Нэр</th><th className="px-5 py-3 text-right">Үнэ</th><th className="px-5 py-3 text-right">Тоо ширхэг</th><th className="px-5 py-3 text-right">Нийт дүн</th><th className="px-5 py-3">Төлөв</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{list.data.map((asset: FixedAsset) => <tr key={asset.id} data-testid={`row-fixed-asset-${asset.id}`}><td className="px-5 py-4 text-sm font-semibold">{dateLabel(asset.date)}</td><td className="px-5 py-4 text-sm font-semibold">{asset.name}</td><td className="px-5 py-4 text-right font-mono text-sm">{money(asset.unitPrice)}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold">{asset.quantity}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold">{money(asset.totalAmount)}</td><td className="px-5 py-4"><span className={cn('rounded-full border px-2 py-1 text-[10px] font-bold', asset.purchased ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-100 text-slate-700')}>{asset.purchased ? 'Худалдан авсан' : 'Бүртгэсэн'}</span></td><td className="px-5 py-4"><div className="flex justify-end gap-1"><Button size="icon" variant="ghost" onClick={() => startEdit(asset)} data-testid={`button-edit-fixed-asset-${asset.id}`}><Pencil className="size-4" /></Button><Button size="icon" variant="ghost" disabled={remove.isPending} onClick={() => deleteAsset(asset)} data-testid={`button-delete-fixed-asset-${asset.id}`}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>}
+      {list.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : list.isError ? <ErrorBlock onRetry={() => list.refetch()} /> : !list.data?.length ? <EmptyState title="Эд хөрөнгө бүртгэгдээгүй" detail="Тоног төхөөрөмж эсвэл хөрөнгөө шинээр нэмнэ үү." icon={BriefcaseBusiness} /> : <div className="overflow-x-auto"><table className="w-full min-w-[780px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Огноо</th><th className="px-5 py-3">Нэр</th><th className="px-5 py-3 text-right">Үнэ</th><th className="px-5 py-3 text-right">Тоо ширхэг</th><th className="px-5 py-3 text-right">Нийт дүн</th><th className="px-5 py-3">Төлөв</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{list.data.map((asset: FixedAsset) => <tr key={asset.id} data-testid={`row-fixed-asset-${asset.id}`}><td className="px-5 py-4 text-sm font-semibold">{dateLabel(asset.date)}</td><td className="px-5 py-4 text-sm font-semibold">{asset.name}</td><td className="px-5 py-4 text-right font-mono text-sm">{money(asset.unitPrice)}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold">{asset.quantity}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold">{money(asset.totalAmount)}</td><td className="px-5 py-4"><span className={cn('rounded-full border px-2 py-1 text-[10px] font-bold', asset.purchased ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-100 text-slate-700')}>{asset.purchased ? 'Худалдан авсан' : 'Бүртгэсэн'}</span></td><td className="px-5 py-4"><div className="flex justify-end gap-1"><Button size="icon" variant="ghost" onClick={() => startEdit(asset)} data-testid={`button-edit-fixed-asset-${asset.id}`}><Pencil className="size-4" /></Button><Button size="icon" variant="ghost" disabled={deletion.isPending} onClick={() => deleteAsset(asset)} data-testid={`button-delete-fixed-asset-${asset.id}`}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>}
     </section>
     {open && <Modal title={editing ? 'Эд хөрөнгө засах' : 'Эд хөрөнгө шинээр нэмэх'} detail="Тоног төхөөрөмж, хөрөнгийн мэдээллийг бүртгэнэ." onClose={() => setOpen(false)}>
       <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-5" data-testid="form-fixed-asset">
@@ -798,10 +819,11 @@ function Inventory() {
   const issues = useListInventoryIssues();
   const create = useCreateInventoryPurchase();
   const update = useUpdateInventoryPurchase();
-  const remove = useDeleteInventoryPurchase();
+  const deletion = useQueueDeletion();
+  const remove = deletion;
+  const removeIssue = deletion;
   const createIssue = useCreateInventoryIssue();
   const updateIssue = useUpdateInventoryIssue();
-  const removeIssue = useDeleteInventoryIssue();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<InventoryPurchase | null>(null);
@@ -886,15 +908,8 @@ function Inventory() {
       .map((item) => ({ ...item, purchaseId: purchase.id, date: purchase.date }))) ?? []
     : [];
   const deletePurchase = (purchase: InventoryPurchase) => {
-    if (!window.confirm(`${dateLabel(purchase.date)}-ны ${money(purchase.totalAmount)} дүнтэй худалдан авалтыг устгах уу?`)) return;
-    remove.mutate({ id: purchase.id }, {
-      onSuccess: () => {
-        qc.invalidateQueries({ queryKey: getListInventoryPurchasesQueryKey() });
-        qc.invalidateQueries({ queryKey: getListCashTransactionsQueryKey() });
-        qc.invalidateQueries({ queryKey: getGetCashSummaryQueryKey() });
-        catalog.refetch();
-      },
-    });
+    if (!window.confirm(`${dateLabel(purchase.date)}-ны ${money(purchase.totalAmount)} дүнтэй худалдан авалтыг устгах хүсэлт гаргах уу?`)) return;
+    deletion.request(`/inventory/purchases/${purchase.id}`, `${dateLabel(purchase.date)}-ны ${money(purchase.totalAmount)} барааны худалдан авалт`);
   };
   const openIssueForm = () => {
     setEditingIssue(null);
@@ -930,13 +945,8 @@ function Inventory() {
     else createIssue.mutate({ data }, options);
   };
   const deleteIssue = (issue: InventoryIssue) => {
-    if (!window.confirm(`${issue.itemName} барааны ${issue.quantity} ${issue.unit} зарлагыг устгах уу?`)) return;
-    removeIssue.mutate({ id: issue.id }, {
-      onSuccess: () => {
-        qc.invalidateQueries({ queryKey: getListInventoryIssuesQueryKey() });
-        catalog.refetch();
-      },
-    });
+    if (!window.confirm(`${issue.itemName} барааны ${issue.quantity} ${issue.unit} зарлагыг устгах хүсэлт гаргах уу?`)) return;
+    deletion.request(`/inventory/issues/${issue.id}`, `${issue.itemName} · ${issue.quantity} ${issue.unit} зарлага`);
   };
   return <div className="page-enter">
     <div className="mb-6 flex flex-wrap items-center justify-between gap-3"><div className="inline-flex rounded-xl bg-secondary p-1"><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'stock' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('stock')} data-testid="tab-inventory-stock">Үлдэгдэл</button><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'purchases' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('purchases')} data-testid="tab-inventory-purchases">Худалдан авалт</button><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'issues' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('issues')} data-testid="tab-inventory-issues">Зарлага</button></div>{inventoryTab === 'purchases' ? <Button onClick={openForm} data-testid="button-add-inventory-purchase"><Plus className="size-4" />Худалдан авалт бүртгэх</Button> : inventoryTab === 'issues' ? <Button onClick={openIssueForm} data-testid="button-add-inventory-issue"><Plus className="size-4" />Зарлага гаргах</Button> : null}</div>
@@ -1004,6 +1014,35 @@ function Inventory() {
   </div>;
 }
 
+function DeletionRequests() {
+  const list = useListDeletionRequests();
+  const approve = useApproveDeletionRequest();
+  const qc = useQueryClient();
+  const approveRequest = (id: number, label: string) => {
+    if (!window.confirm(`"${label}" устгах хүсэлтийг баталж, одоо устгах уу?`)) return;
+    approve.mutate({ id }, {
+      onSuccess: () => {
+        qc.invalidateQueries();
+        window.alert('Устгах үйлдэл амжилттай хийгдлээ.');
+      },
+      onError: () => {
+        qc.invalidateQueries({ queryKey: getListDeletionRequestsQueryKey() });
+        window.alert('Устгах боломжгүй байна. Тухайн бүртгэлийн нөхцөлийг шалгана уу.');
+      },
+    });
+  };
+  const statusMeta: Record<string, { label: string; className: string }> = {
+    pending: { label: 'Хүлээгдэж байна', className: 'border-amber-200 bg-amber-50 text-amber-800' },
+    executing: { label: 'Гүйцэтгэж байна', className: 'border-sky-200 bg-sky-50 text-sky-800' },
+    completed: { label: 'Устгасан', className: 'border-emerald-200 bg-emerald-50 text-emerald-800' },
+    failed: { label: 'Амжилтгүй', className: 'border-red-200 bg-red-50 text-red-800' },
+  };
+  return <div className="page-enter"><section className="overflow-hidden rounded-2xl border border-border bg-card">
+    <div className="flex items-center justify-between border-b border-border px-5 py-4"><div><h2 className="text-base font-bold">Устгах хүсэлтүүд</h2><p className="mt-1 text-xs text-muted-foreground">Баталсны дараа л тухайн бүртгэл бодитоор устна.</p></div><span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">{list.data?.filter((item) => item.status === 'pending').length ?? 0} хүлээгдэж байна</span></div>
+    {list.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-16" /><LoadingBlock className="h-16" /></div> : list.isError ? <ErrorBlock onRetry={() => list.refetch()} /> : !list.data?.length ? <EmptyState title="Устгах хүсэлт алга" detail="Устгах үйлдэл хийсэн үед хүсэлт энд харагдана." icon={ShieldCheck} /> : <div className="divide-y divide-border">{list.data.map((request) => { const meta = statusMeta[request.status] ?? statusMeta.pending; return <div key={request.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center" data-testid={`row-deletion-request-${request.id}`}><div className="min-w-0 flex-1"><p className="text-sm font-semibold">{request.label}</p><p className="mt-1 text-xs text-muted-foreground">{request.requesterRole} эрхээс · {dateLabel(request.requestedAt)}</p>{request.error && <p className="mt-1 text-xs text-destructive">Устгах нөхцөл хангагдсангүй.</p>}</div><span className={cn('w-fit rounded-full border px-2.5 py-1 text-[10px] font-bold', meta.className)}>{meta.label}</span>{request.status === 'pending' && <Button onClick={() => approveRequest(request.id, request.label)} disabled={approve.isPending} data-testid={`button-approve-deletion-${request.id}`}><Check className="size-4" />Баталж устгах</Button>}</div>; })}</div>}
+  </section></div>;
+}
+
 function HrLogin() {
   const login = useLoginHrManager();
   const qc = useQueryClient();
@@ -1026,7 +1065,7 @@ function Router() {
   if (session.isLoading) return <div className="grid min-h-[100dvh] place-items-center"><LoadingBlock className="size-12" /></div>;
   if (!role) return <HrLogin />;
   const signOut = () => logout.mutate(undefined, { onSuccess: () => { queryClient.clear(); navigate('/'); } });
-  return <ErrorBoundary resetKey={location}><AppShell role={role} onLogout={signOut}>{role === 'admin' ? <Switch><Route path="/" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route component={NotFound} /></Switch> : role === 'hr' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route component={Employees} /></Switch> : role === 'accountant' ? <Switch><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route component={HourBalance} /></Switch> : <Switch><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route component={Inventory} /></Switch>}</AppShell></ErrorBoundary>;
+  return <ErrorBoundary resetKey={location}><AppShell role={role} onLogout={signOut}>{role === 'admin' ? <Switch><Route path="/" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route path="/deletion-requests" component={DeletionRequests} /><Route component={NotFound} /></Switch> : role === 'hr' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route component={Employees} /></Switch> : role === 'accountant' ? <Switch><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route component={HourBalance} /></Switch> : <Switch><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route component={Inventory} /></Switch>}</AppShell></ErrorBoundary>;
 }
 
 function App() {

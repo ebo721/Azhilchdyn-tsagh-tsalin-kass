@@ -31,6 +31,8 @@ import type {
   CashTransactionInput,
   Dashboard,
   DeleteAttendanceParams,
+  DeletionRequest,
+  DeletionRequestInput,
   Employee,
   EmployeeInput,
   EmployeeUpdate,
@@ -3639,5 +3641,224 @@ export const useDeleteFixedAsset = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteFixedAssetMutationOptions(options));
+    }
+
+export const getListDeletionRequestsUrl = () => {
+
+
+
+
+  return `/api/deletion-requests`
+}
+
+/**
+ * @summary List deletion approval requests
+ */
+export const listDeletionRequests = async ( options?: Parameters<typeof customFetch>[1]): Promise<DeletionRequest[]> => {
+
+  return customFetch<DeletionRequest[]>(getListDeletionRequestsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDeletionRequestsQueryKey = () => {
+    return [
+    `/api/deletion-requests`
+    ] as const;
+    }
+
+
+export const getListDeletionRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listDeletionRequests>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDeletionRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDeletionRequestsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDeletionRequests>>> = ({ signal }) => listDeletionRequests({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDeletionRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListDeletionRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listDeletionRequests>>>
+export type ListDeletionRequestsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List deletion approval requests
+ */
+
+export function useListDeletionRequests<TData = Awaited<ReturnType<typeof listDeletionRequests>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDeletionRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListDeletionRequestsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateDeletionRequestUrl = () => {
+
+
+
+
+  return `/api/deletion-requests`
+}
+
+/**
+ * @summary Queue an operation for admin deletion approval
+ */
+export const createDeletionRequest = async (deletionRequestInput: DeletionRequestInput, options?: Parameters<typeof customFetch>[1]): Promise<DeletionRequest> => {
+
+  return customFetch<DeletionRequest>(getCreateDeletionRequestUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(deletionRequestInput)
+  }
+);}
+
+
+
+
+
+export const getCreateDeletionRequestMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDeletionRequest>>, TError,{data: BodyType<DeletionRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createDeletionRequest>>, TError,{data: BodyType<DeletionRequestInput>}, TContext> => {
+
+const mutationKey = ['createDeletionRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createDeletionRequest>>, {data: BodyType<DeletionRequestInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createDeletionRequest(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateDeletionRequestMutationResult = NonNullable<Awaited<ReturnType<typeof createDeletionRequest>>>
+    export type CreateDeletionRequestMutationBody = BodyType<DeletionRequestInput>
+    export type CreateDeletionRequestMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Queue an operation for admin deletion approval
+ */
+export const useCreateDeletionRequest = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDeletionRequest>>, TError,{data: BodyType<DeletionRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createDeletionRequest>>,
+        TError,
+        {data: BodyType<DeletionRequestInput>},
+        TContext
+      > => {
+      return useMutation(getCreateDeletionRequestMutationOptions(options));
+    }
+
+export const getApproveDeletionRequestUrl = (id: number,) => {
+
+
+
+
+  return `/api/deletion-requests/${id}/approve`
+}
+
+/**
+ * @summary Approve and execute a queued deletion
+ */
+export const approveDeletionRequest = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<DeletionRequest> => {
+
+  return customFetch<DeletionRequest>(getApproveDeletionRequestUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getApproveDeletionRequestMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveDeletionRequest>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof approveDeletionRequest>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['approveDeletionRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof approveDeletionRequest>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  approveDeletionRequest(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApproveDeletionRequestMutationResult = NonNullable<Awaited<ReturnType<typeof approveDeletionRequest>>>
+
+    export type ApproveDeletionRequestMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Approve and execute a queued deletion
+ */
+export const useApproveDeletionRequest = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveDeletionRequest>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof approveDeletionRequest>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getApproveDeletionRequestMutationOptions(options));
     }
 

@@ -569,6 +569,48 @@ export interface FixedAssetInput {
   purchased: boolean;
 }
 
+export type DeletionRequestRequesterRole = typeof DeletionRequestRequesterRole[keyof typeof DeletionRequestRequesterRole];
+
+
+export const DeletionRequestRequesterRole = {
+  admin: 'admin',
+  hr: 'hr',
+  accountant: 'accountant',
+  warehouse: 'warehouse',
+} as const;
+
+export type DeletionRequestStatus = typeof DeletionRequestStatus[keyof typeof DeletionRequestStatus];
+
+
+export const DeletionRequestStatus = {
+  pending: 'pending',
+  executing: 'executing',
+  completed: 'completed',
+  failed: 'failed',
+} as const;
+
+export interface DeletionRequest {
+  id: number;
+  targetPath: string;
+  label: string;
+  requesterRole: DeletionRequestRequesterRole;
+  status: DeletionRequestStatus;
+  requestedAt: string;
+  /** @nullable */
+  approvedAt?: string | null;
+  /** @nullable */
+  completedAt?: string | null;
+  /** @nullable */
+  error?: string | null;
+}
+
+export interface DeletionRequestInput {
+  /** @minLength 1 */
+  targetPath: string;
+  /** @minLength 1 */
+  label: string;
+}
+
 export type ListAttendanceParams = {
 date?: string;
 /**

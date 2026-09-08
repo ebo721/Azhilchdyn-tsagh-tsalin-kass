@@ -1097,3 +1097,65 @@ export const DeleteFixedAssetParams = zod.object({
 export const DeleteFixedAssetResponse = zod.void()
 
 
+/**
+ * @summary List deletion approval requests
+ */
+export const ListDeletionRequestsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "targetPath": zod.string(),
+  "label": zod.string(),
+  "requesterRole": zod.enum(['admin', 'hr', 'accountant', 'warehouse']),
+  "status": zod.enum(['pending', 'executing', 'completed', 'failed']),
+  "requestedAt": zod.string(),
+  "approvedAt": zod.string().nullish(),
+  "completedAt": zod.string().nullish(),
+  "error": zod.string().nullish()
+})
+export const ListDeletionRequestsResponse = zod.array(ListDeletionRequestsResponseItem)
+
+
+/**
+ * @summary Queue an operation for admin deletion approval
+ */
+
+
+
+
+export const CreateDeletionRequestBody = zod.object({
+  "targetPath": zod.string().min(1),
+  "label": zod.string().min(1)
+})
+
+export const CreateDeletionRequestResponse = zod.object({
+  "id": zod.number().int(),
+  "targetPath": zod.string(),
+  "label": zod.string(),
+  "requesterRole": zod.enum(['admin', 'hr', 'accountant', 'warehouse']),
+  "status": zod.enum(['pending', 'executing', 'completed', 'failed']),
+  "requestedAt": zod.string(),
+  "approvedAt": zod.string().nullish(),
+  "completedAt": zod.string().nullish(),
+  "error": zod.string().nullish()
+})
+
+
+/**
+ * @summary Approve and execute a queued deletion
+ */
+export const ApproveDeletionRequestParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const ApproveDeletionRequestResponse = zod.object({
+  "id": zod.number().int(),
+  "targetPath": zod.string(),
+  "label": zod.string(),
+  "requesterRole": zod.enum(['admin', 'hr', 'accountant', 'warehouse']),
+  "status": zod.enum(['pending', 'executing', 'completed', 'failed']),
+  "requestedAt": zod.string(),
+  "approvedAt": zod.string().nullish(),
+  "completedAt": zod.string().nullish(),
+  "error": zod.string().nullish()
+})
+
+
