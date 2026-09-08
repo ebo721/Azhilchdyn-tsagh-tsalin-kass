@@ -144,7 +144,9 @@ router.use((req, res, next) => {
     ? ["/employees", "/attendance", "/hour-balance"]
     : role === "accountant"
       ? ["/hour-balance", "/payroll"]
-      : ["/inventory", "/fixed-assets"];
+      : role === "warehouse"
+        ? ["/inventory", "/fixed-assets"]
+        : [];
   if (allowedPrefixes.some((prefix) => req.path.startsWith(prefix))) {
     next();
     return;
