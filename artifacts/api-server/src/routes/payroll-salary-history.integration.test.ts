@@ -192,7 +192,7 @@ describe("effective-dated payroll salary", () => {
     assert.equal(line.incomeTax, 0);
   });
 
-  it("replaces later salary history when a new salary is effective from an earlier date", async () => {
+  it("appends a new salary while preserving the initial salary history", async () => {
     const response = await fetch(`${baseUrl}/api/employees/${employeeId}`, {
       method: "PATCH",
       headers: {
@@ -201,20 +201,25 @@ describe("effective-dated payroll salary", () => {
       },
       body: JSON.stringify({
         baseSalary: 3_300_000,
-        salaryEffectiveDate: "2099-01-08",
+        salaryEffectiveDate: "2099-01-24",
       }),
     });
     assert.equal(response.status, 200);
 
     const history = await db.select()
       .from(employeeSalaryHistoryTable)
-      .where(eq(employeeSalaryHistoryTable.employeeId, employeeId));
+      .where(eq(employeeSalaryHistoryTable.employeeId, employeeId))
+      .orderBy(employeeSalaryHistoryTable.effectiveFrom);
     assert.deepEqual(
       history.map((row) => ({
         effectiveFrom: row.effectiveFrom,
         baseSalary: Number(row.baseSalary),
       })),
-      [{ effectiveFrom: "2099-01-08", baseSalary: 3_300_000 }],
+      [
+        { effectiveFrom: "2099-01-08", baseSalary: 1_100_000 },
+        { effectiveFrom: "2099-01-18", baseSalary: 2_200_000 },
+        { effectiveFrom: "2099-01-24", baseSalary: 3_300_000 },
+      ],
     );
 
     const payrollResponse = await fetch(`${baseUrl}/api/payroll?month=2099-01`, {
@@ -233,12 +238,11 @@ describe("effective-dated payroll salary", () => {
       const weekday = new Date(Date.UTC(2099, 0, day)).getUTCDay();
       return { date, isWeekday: weekday >= 1 && weekday <= 5 };
     }).filter((item) => item.isWeekday);
-    const paidDays = allWeekdays.filter((item) =>
-      item.date >= "2099-01-08"
-      && item.date <= "2099-01-23"
-      && item.date !== "2099-01-20"
-    ).length;
-    assert.equal(line.gross, Math.round((paidDays * 3_300_000 / allWeekdays.length) * 100) / 100);
+    const expectedGross = allWeekdays.reduce((total, item) => {
+      if (item.date < "2099-01-08" || item.date > "2099-01-23" || item.date === "2099-01-20") return total;
+      return total + (item.date < "2099-01-18" ? 1_100_000 : 2_200_000) / allWeekdays.length;
+    }, 0);
+    assert.equal(line.gross, Math.round(expectedGross * 100) / 100);
   });
 
   it("adds daily salary when an office employee works beyond the required weekdays", async () => {

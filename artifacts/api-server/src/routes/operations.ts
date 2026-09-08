@@ -649,17 +649,15 @@ router.patch("/employees/:id", async (req, res, next) => {
       return;
     }
     if (salaryChanged && salaryEffectiveDate) {
-      const paidPayroll = await db.select({
-        month: payrollAdjustmentsTable.month,
-        paidAmount: payrollAdjustmentsTable.paidAmount,
-        secondPaidAmount: payrollAdjustmentsTable.secondPaidAmount,
-      }).from(payrollAdjustmentsTable).where(eq(payrollAdjustmentsTable.employeeId, id));
-      const affectedPaidMonth = paidPayroll.find((row) =>
-        row.month >= salaryEffectiveDate.slice(0, 7)
-        && (Number(row.paidAmount) > 0 || Number(row.secondPaidAmount) > 0)
-      );
-      if (affectedPaidMonth) {
-        res.status(409).json({ error: `${affectedPaidMonth.month} сарын олгосон цалинг өөрчлөх огноо сонгож болохгүй` });
+      const [latestSalary] = await db.select({ effectiveFrom: employeeSalaryHistoryTable.effectiveFrom })
+        .from(employeeSalaryHistoryTable)
+        .where(eq(employeeSalaryHistoryTable.employeeId, id))
+        .orderBy(desc(employeeSalaryHistoryTable.effectiveFrom))
+        .limit(1);
+      if (latestSalary && salaryEffectiveDate <= String(latestSalary.effectiveFrom)) {
+        res.status(409).json({
+          error: `Шинэ цалингийн огноо ${String(latestSalary.effectiveFrom)}-с хойш байх ёстой. Өмнөх цалинг залруулах бол цалингийн түүхийн мөрийг засна уу`,
+        });
         return;
       }
     }
@@ -675,10 +673,6 @@ router.patch("/employees/:id", async (req, res, next) => {
         .where(eq(employeesTable.id, id))
         .returning();
       if (salaryChanged && salaryEffectiveDate) {
-        await tx.delete(employeeSalaryHistoryTable).where(and(
-          eq(employeeSalaryHistoryTable.employeeId, id),
-          gte(employeeSalaryHistoryTable.effectiveFrom, salaryEffectiveDate),
-        ));
         await tx.insert(employeeSalaryHistoryTable).values({
           employeeId: id,
           effectiveFrom: salaryEffectiveDate,

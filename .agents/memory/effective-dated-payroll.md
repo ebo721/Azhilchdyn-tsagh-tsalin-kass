@@ -7,7 +7,7 @@ Monthly office salary is prorated across the month's Monday–Friday workdays. T
 
 When an office employee's present/late attendance exceeds their required weekdays for the month, add one daily share of salary and social-insurance salary for each excess day, using the rate effective on the extra attendance date.
 
-A newly entered salary effective from an earlier date supersedes and removes later salary-history entries; otherwise stale future rows can override the user's latest correction.
+A newly entered salary must have an effective date later than the latest salary-history row and is appended without removing prior rows. Historical corrections use the dedicated salary-history row editor.
 
 Payroll deductions are based on the effective social-insurance salary: employee social insurance is 11.5%; taxable income is social-insurance salary minus that contribution; calculated personal income tax is 10% of taxable income; final income tax is calculated tax minus the applicable relief, floored at zero.
 
@@ -31,4 +31,4 @@ An office employee must have at least one attendance record in a month before ba
 
 **Why:** The user explicitly chose workday-based proration and confirmed that the inactive date is inclusive. Historical payroll must use the corrected effective salary while preserving the immutable record of money already paid.
 
-**How to apply:** Preserve effective-dated salary history whenever salary inputs change. When replacing a salary from an effective date, remove that employee's history on or after the date before inserting the replacement. For payroll changes, resolve rates by date, exclude leave dates, and include inactive employees whose employment overlaps the requested month. Allow history corrections to recalculate paid months without mutating paid amounts; keep deletion protection for history that affects paid payroll.
+**How to apply:** Create the first salary-history row from the employee's initial salary and joined date. Append later salary changes with their own effective dates and never remove earlier rows during normal employee edits. Use the row editor for corrections. For payroll changes, resolve rates by date, exclude leave dates, and include inactive employees whose employment overlaps the requested month. Allow history corrections to recalculate paid months without mutating paid amounts; keep deletion protection for history that affects paid payroll.
