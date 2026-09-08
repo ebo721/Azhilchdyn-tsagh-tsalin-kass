@@ -808,6 +808,7 @@ function FixedAssets() {
 }
 
 const inventoryUnits = ['ширхэг', 'кг', 'грамм', 'литр', 'мл', 'метр', 'багц', 'хайрцаг'] as const;
+const inventoryIssuePurposes = ['Түлш', 'УБ гал тогоо', 'Бусад'] as const;
 type InventoryForm = {
   documentName: string;
   hasReceipt: boolean;
@@ -987,7 +988,7 @@ function Inventory() {
       <Form {...issueForm}><form onSubmit={issueForm.handleSubmit(submitIssue)} className="space-y-5">
         <label className="block space-y-2 text-xs font-semibold">Бараа материал<select className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...issueForm.register('inventoryItemId', { required: true })} data-testid="select-inventory-issue-item"><option value="">Сонгох</option>{catalog.data?.map((item) => <option value={item.id} key={item.id} disabled={item.quantity <= 0}>{item.name} · {item.quantity} {item.unit}</option>)}</select></label>
         <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-xs font-semibold">Огноо<input type="date" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...issueForm.register('date', { required: true })} data-testid="input-inventory-issue-date" /></label><label className="space-y-2 text-xs font-semibold">Тоо хэмжээ<input type="number" min="0.001" step="0.001" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...issueForm.register('quantity', { required: true, min: 0.001 })} data-testid="input-inventory-issue-quantity" /></label></div>
-        <label className="block space-y-2 text-xs font-semibold">Зориулалт<textarea className="mt-1 min-h-24 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary" {...issueForm.register('purpose', { required: true })} placeholder="Юунд зарцуулсныг бичнэ үү" data-testid="input-inventory-issue-purpose" /></label>
+        <label className="block space-y-2 text-xs font-semibold">Зориулалт<select className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...issueForm.register('purpose', { required: true })} data-testid="select-inventory-issue-purpose"><option value="">Сонгох</option>{editingIssue?.purpose && !inventoryIssuePurposes.includes(editingIssue.purpose as typeof inventoryIssuePurposes[number]) && <option value={editingIssue.purpose}>{editingIssue.purpose}</option>}{inventoryIssuePurposes.map((purpose) => <option value={purpose} key={purpose}>{purpose}</option>)}</select></label>
         {(createIssue.isError || updateIssue.isError) && <p className="text-xs font-semibold text-destructive">Үлдэгдэл хүрэлцэхгүй эсвэл мэдээлэл буруу байна.</p>}
         <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setIssueOpen(false)}>Болих</Button><Button type="submit" disabled={createIssue.isPending || updateIssue.isPending} data-testid="button-save-inventory-issue">{createIssue.isPending || updateIssue.isPending ? 'Хадгалж байна...' : editingIssue ? 'Засварыг хадгалах' : 'Зарлага хадгалах'}</Button></div>
       </form></Form>
