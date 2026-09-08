@@ -702,7 +702,7 @@ components:
         leaveDays: { type: integer }
     PayrollLine:
       type: object
-      required: [employeeId, employeeName, role, employeeType, daysWorked, hours, gross, socialInsuranceSalary, socialInsurance, taxableIncome, calculatedIncomeTax, taxRelief, incomeTax, advanceAmount, manualDeduction, deductions, payable, paidAmount, paymentDate, remainingAmount, net]
+      required: [employeeId, employeeName, role, employeeType, daysWorked, hours, gross, socialInsuranceSalary, socialInsurance, taxableIncome, calculatedIncomeTax, taxRelief, incomeTax, advanceAmount, manualDeduction, deductions, payable, paidAmount, paymentDate, secondPaidAmount, secondPaymentDate, remainingAmount, net]
       properties:
         employeeId: { type: integer }
         employeeName: { type: string }
@@ -723,11 +723,13 @@ components:
         payable: { type: number }
         paidAmount: { type: number }
         paymentDate: { type: ["string", "null"] }
+        secondPaidAmount: { type: number }
+        secondPaymentDate: { type: ["string", "null"] }
         remainingAmount: { type: number }
         net: { type: number }
     PayrollAdjustment:
       type: object
-      required: [employeeId, month, taxRelief, manualDeduction, paidAmount]
+      required: [employeeId, month, taxRelief, manualDeduction, paidAmount, secondPaidAmount]
       properties:
         employeeId: { type: integer }
         month: { type: string }
@@ -735,15 +737,19 @@ components:
         manualDeduction: { type: number }
         paidAmount: { type: number }
         paymentDate: { type: ["string", "null"] }
+        secondPaidAmount: { type: number }
+        secondPaymentDate: { type: ["string", "null"] }
     PayrollAdjustmentInput:
       type: object
-      required: [employeeId, month, manualDeduction, paidAmount]
+      required: [employeeId, month, manualDeduction, paidAmount, secondPaidAmount]
       properties:
         employeeId: { type: integer }
         month: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
         manualDeduction: { type: number, minimum: 0 }
         paidAmount: { type: number, minimum: 0 }
         paymentDate: { type: ["string", "null"] }
+        secondPaidAmount: { type: number, minimum: 0 }
+        secondPaymentDate: { type: ["string", "null"] }
     PayrollSummary:
       type: object
       required: [month, totalGross, totalSocialInsurance, totalIncomeTax, totalDeductions, totalNet, lines]

@@ -162,7 +162,9 @@ async function getPayrollSummary(month: string) {
     const incomeTax = payrollTaxExempt ? 0 : money(Math.max(0, calculatedIncomeTax - taxRelief));
     const advanceAmount = money(paidAdvanceMap.get(employee.id) ?? 0);
     const manualDeduction = money(Number(adjustment?.manualDeduction ?? 0));
-    const paidAmount = money(Number(adjustment?.paidAmount ?? 0));
+    const firstPaidAmount = money(Number(adjustment?.paidAmount ?? 0));
+    const secondPaidAmount = money(Number(adjustment?.secondPaidAmount ?? 0));
+    const paidAmount = money(firstPaidAmount + secondPaidAmount);
     const deductions = money(socialInsurance + incomeTax + advanceAmount + manualDeduction);
     const payable = money(Math.max(0, gross - deductions));
     const remainingAmount = money(Math.max(0, payable - paidAmount));
@@ -186,6 +188,8 @@ async function getPayrollSummary(month: string) {
       payable,
       paidAmount,
       paymentDate: adjustment?.paymentDate ?? null,
+      secondPaidAmount,
+      secondPaymentDate: adjustment?.secondPaymentDate ?? null,
       remainingAmount,
       net: payable,
     };
@@ -763,6 +767,10 @@ router.put("/payroll-adjustments", async (req, res, next) => {
       res.status(400).json({ error: "Цалин олгосон огноог зөв оруулна уу" });
       return;
     }
+    if (input.secondPaidAmount > 0 && (!input.secondPaymentDate || !isValidCalendarDate(input.secondPaymentDate))) {
+      res.status(400).json({ error: "Хоёр дахь цалин олгосон огноог зөв оруулна уу" });
+      return;
+    }
     const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, input.employeeId));
     if (!employee) {
       res.status(404).json({ error: "Ажилтан олдсонгүй" });
@@ -780,6 +788,8 @@ router.put("/payroll-adjustments", async (req, res, next) => {
             manualDeduction: input.manualDeduction,
             paidAmount: input.paidAmount,
             paymentDate: input.paidAmount > 0 ? input.paymentDate : null,
+            secondPaidAmount: input.secondPaidAmount,
+            secondPaymentDate: input.secondPaidAmount > 0 ? input.secondPaymentDate : null,
             updatedAt: new Date(),
           },
         })
@@ -809,6 +819,31 @@ router.put("/payroll-adjustments", async (req, res, next) => {
         ));
       }
 
+      const secondSourceKey = `${sourceKey}:2`;
+      if (input.secondPaidAmount > 0 && input.secondPaymentDate) {
+        await tx.insert(cashTransactionsTable).values({
+          type: "expense",
+          category: "Цалин",
+          description: `${employee.name} · ${input.month} сарын цалин · 2-р олголт`,
+          amount: input.secondPaidAmount,
+          date: input.secondPaymentDate,
+          sourceType,
+          sourceKey: secondSourceKey,
+        }).onConflictDoUpdate({
+          target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
+          set: {
+            amount: input.secondPaidAmount,
+            date: input.secondPaymentDate,
+            description: `${employee.name} · ${input.month} сарын цалин · 2-р олголт`,
+          },
+        });
+      } else {
+        await tx.delete(cashTransactionsTable).where(and(
+          eq(cashTransactionsTable.sourceType, sourceType),
+          eq(cashTransactionsTable.sourceKey, secondSourceKey),
+        ));
+      }
+
       return savedAdjustment;
     });
     res.json({
@@ -818,6 +853,8 @@ router.put("/payroll-adjustments", async (req, res, next) => {
       manualDeduction: Number(adjustment.manualDeduction),
       paidAmount: Number(adjustment.paidAmount),
       paymentDate: adjustment.paymentDate,
+      secondPaidAmount: Number(adjustment.secondPaidAmount),
+      secondPaymentDate: adjustment.secondPaymentDate,
     });
   } catch (error) {
     next(error);

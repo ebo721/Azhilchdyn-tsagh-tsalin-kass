@@ -445,6 +445,8 @@ type PayrollAdjustmentForm = {
   manualDeduction: string;
   paidAmount: string;
   paymentDate: string;
+  secondPaidAmount: string;
+  secondPaymentDate: string;
 };
 
 function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; month: string; onClose: () => void }) {
@@ -455,6 +457,8 @@ function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; m
       manualDeduction: String(line.manualDeduction),
       paidAmount: String(line.paidAmount),
       paymentDate: line.paymentDate ?? today(),
+      secondPaidAmount: String(line.secondPaidAmount),
+      secondPaymentDate: line.secondPaymentDate ?? today(),
     },
   });
   const submit = (values: PayrollAdjustmentForm) => {
@@ -465,6 +469,8 @@ function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; m
         manualDeduction: Number(values.manualDeduction),
         paidAmount: Number(values.paidAmount),
         paymentDate: Number(values.paidAmount) > 0 ? values.paymentDate : null,
+        secondPaidAmount: Number(values.secondPaidAmount),
+        secondPaymentDate: Number(values.secondPaidAmount) > 0 ? values.secondPaymentDate : null,
       },
     }, {
       onSuccess: () => {
@@ -481,8 +487,10 @@ function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; m
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2 text-xs font-semibold"><span>ХХОАТ хөнгөлөлт</span><div className="mt-1 flex h-10 w-full items-center rounded-lg border border-input bg-secondary/40 px-3 font-mono text-sm">{money(line.taxRelief)}</div><p className="text-[11px] font-normal text-muted-foreground">НДШ тооцох цалингийн шатлалаар автоматаар тооцно.</p></div>
         <label className="space-y-2 text-xs font-semibold">Гараар оруулах суутгал<input type="number" min="0" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('manualDeduction', { required: true, min: 0 })} data-testid="input-payroll-manual-deduction" /></label>
-        <label className="space-y-2 text-xs font-semibold">Гүйлгээ хийсэн дүн<input type="number" min="0" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('paidAmount', { required: true, min: 0 })} data-testid="input-payroll-paid-amount" /></label>
-        <label className="space-y-2 text-xs font-semibold">Гүйлгээ хийсэн огноо<input type="date" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('paymentDate')} data-testid="input-payroll-payment-date" /></label>
+        <label className="space-y-2 text-xs font-semibold">1-р гүйлгээний дүн<input type="number" min="0" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('paidAmount', { required: true, min: 0 })} data-testid="input-payroll-paid-amount" /></label>
+        <label className="space-y-2 text-xs font-semibold">1-р гүйлгээний огноо<input type="date" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('paymentDate')} data-testid="input-payroll-payment-date" /></label>
+        <label className="space-y-2 text-xs font-semibold">2-р гүйлгээний дүн<input type="number" min="0" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('secondPaidAmount', { required: true, min: 0 })} data-testid="input-payroll-second-paid-amount" /></label>
+        <label className="space-y-2 text-xs font-semibold">2-р гүйлгээний огноо<input type="date" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('secondPaymentDate')} data-testid="input-payroll-second-payment-date" /></label>
       </div>
       <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={onClose}>Болих</Button><Button type="submit" disabled={save.isPending} data-testid="button-save-payroll-adjustment">{save.isPending ? 'Хадгалж байна...' : 'Тохируулга хадгалах'}</Button></div>
     </form></Form>

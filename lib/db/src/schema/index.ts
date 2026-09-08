@@ -67,6 +67,8 @@ export const payrollAdjustmentsTable = pgTable("payroll_adjustments", {
   manualDeduction: numeric("manual_deduction", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
   paidAmount: numeric("paid_amount", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
   paymentDate: date("payment_date", { mode: "string" }),
+  secondPaidAmount: numeric("second_paid_amount", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
+  secondPaymentDate: date("second_payment_date", { mode: "string" }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
   uniqueIndex("payroll_adjustments_employee_month_idx").on(table.employeeId, table.month),

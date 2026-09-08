@@ -28,6 +28,9 @@ export interface PayrollLine {
   paidAmount: number;
   /** @nullable */
   paymentDate: string | null;
+  secondPaidAmount: number;
+  /** @nullable */
+  secondPaymentDate: string | null;
   remainingAmount: number;
   net: number;
 }

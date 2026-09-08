@@ -14,4 +14,7 @@ export interface PayrollAdjustment {
   paidAmount: number;
   /** @nullable */
   paymentDate?: string | null;
+  secondPaidAmount: number;
+  /** @nullable */
+  secondPaymentDate?: string | null;
 }

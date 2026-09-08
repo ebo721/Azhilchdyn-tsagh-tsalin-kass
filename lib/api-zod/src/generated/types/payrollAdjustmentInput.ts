@@ -16,4 +16,8 @@ export interface PayrollAdjustmentInput {
   paidAmount: number;
   /** @nullable */
   paymentDate?: string | null;
+  /** @minimum 0 */
+  secondPaidAmount: number;
+  /** @nullable */
+  secondPaymentDate?: string | null;
 }

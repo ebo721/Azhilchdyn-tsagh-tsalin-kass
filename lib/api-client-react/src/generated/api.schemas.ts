@@ -295,6 +295,9 @@ export interface PayrollLine {
   paidAmount: number;
   /** @nullable */
   paymentDate: string | null;
+  secondPaidAmount: number;
+  /** @nullable */
+  secondPaymentDate: string | null;
   remainingAmount: number;
   net: number;
 }
@@ -307,6 +310,9 @@ export interface PayrollAdjustment {
   paidAmount: number;
   /** @nullable */
   paymentDate?: string | null;
+  secondPaidAmount: number;
+  /** @nullable */
+  secondPaymentDate?: string | null;
 }
 
 export interface PayrollAdjustmentInput {
@@ -319,6 +325,10 @@ export interface PayrollAdjustmentInput {
   paidAmount: number;
   /** @nullable */
   paymentDate?: string | null;
+  /** @minimum 0 */
+  secondPaidAmount: number;
+  /** @nullable */
+  secondPaymentDate?: string | null;
 }
 
 export interface PayrollSummary {

@@ -434,6 +434,8 @@ export const GetPayrollResponse = zod.object({
   "payable": zod.number(),
   "paidAmount": zod.number(),
   "paymentDate": zod.string().nullable(),
+  "secondPaidAmount": zod.number(),
+  "secondPaymentDate": zod.string().nullable(),
   "remainingAmount": zod.number(),
   "net": zod.number()
 }))
@@ -448,6 +450,8 @@ export const upsertPayrollAdjustmentBodyManualDeductionMin = 0;
 
 export const upsertPayrollAdjustmentBodyPaidAmountMin = 0;
 
+export const upsertPayrollAdjustmentBodySecondPaidAmountMin = 0;
+
 
 
 export const UpsertPayrollAdjustmentBody = zod.object({
@@ -455,7 +459,9 @@ export const UpsertPayrollAdjustmentBody = zod.object({
   "month": zod.string().regex(upsertPayrollAdjustmentBodyMonthRegExp),
   "manualDeduction": zod.number().min(upsertPayrollAdjustmentBodyManualDeductionMin),
   "paidAmount": zod.number().min(upsertPayrollAdjustmentBodyPaidAmountMin),
-  "paymentDate": zod.string().nullish()
+  "paymentDate": zod.string().nullish(),
+  "secondPaidAmount": zod.number().min(upsertPayrollAdjustmentBodySecondPaidAmountMin),
+  "secondPaymentDate": zod.string().nullish()
 })
 
 export const UpsertPayrollAdjustmentResponse = zod.object({
@@ -464,7 +470,9 @@ export const UpsertPayrollAdjustmentResponse = zod.object({
   "taxRelief": zod.number(),
   "manualDeduction": zod.number(),
   "paidAmount": zod.number(),
-  "paymentDate": zod.string().nullish()
+  "paymentDate": zod.string().nullish(),
+  "secondPaidAmount": zod.number(),
+  "secondPaymentDate": zod.string().nullish()
 })
 
 
