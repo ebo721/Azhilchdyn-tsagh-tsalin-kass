@@ -90,6 +90,24 @@ describe("effective-dated payroll salary", () => {
       socialInsuranceSalary: 1_000_000,
       payrollTaxExempt: false,
     });
+    await db.insert(attendanceTable).values([
+      {
+        employeeId: insuredEmployeeId,
+        date: "2099-01-01",
+        clockIn: "",
+        clockOut: "",
+        hours: 0,
+        status: "absent",
+      },
+      {
+        employeeId: insuredEmployeeId,
+        date: "2099-02-02",
+        clockIn: "",
+        clockOut: "",
+        hours: 0,
+        status: "absent",
+      },
+    ]);
     server = app.listen(0);
     const address = server.address() as AddressInfo;
     baseUrl = `http://127.0.0.1:${address.port}`;
@@ -152,6 +170,26 @@ describe("effective-dated payroll salary", () => {
     assert.equal(line.calculatedIncomeTax, 88_500);
     assert.equal(line.taxRelief, 18_000);
     assert.equal(line.incomeTax, 70_500);
+  });
+
+  it("does not calculate salary or payroll taxes when the month has no attendance", async () => {
+    const response = await fetch(`${baseUrl}/api/payroll?month=2099-03`, {
+      headers: { cookie: adminCookie },
+    });
+    assert.equal(response.status, 200);
+    const payroll = await response.json() as {
+      lines: Array<{
+        employeeId: number;
+        gross: number;
+        socialInsurance: number;
+        incomeTax: number;
+      }>;
+    };
+    const line = payroll.lines.find((item) => item.employeeId === insuredEmployeeId);
+    assert.ok(line);
+    assert.equal(line.gross, 0);
+    assert.equal(line.socialInsurance, 0);
+    assert.equal(line.incomeTax, 0);
   });
 
   it("replaces later salary history when a new salary is effective from an earlier date", async () => {

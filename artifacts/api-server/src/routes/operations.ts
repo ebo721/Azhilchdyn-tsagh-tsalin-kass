@@ -343,9 +343,11 @@ async function getPayrollSummary(month: string, existingData?: PayrollCalculatio
     const eligibleWeekdays = weekdays.filter((date) =>
       date >= employee.joinedAt && (!employee.inactiveAt || date <= employee.inactiveAt)
     );
-    const paidWeekdays = eligibleWeekdays.filter((date) =>
-      !employeeRecords.some((record) => String(record.date) === date && record.status === "leave")
-    );
+    const paidWeekdays = employeeRecords.length === 0
+      ? []
+      : eligibleWeekdays.filter((date) =>
+          !employeeRecords.some((record) => String(record.date) === date && record.status === "leave")
+        );
     const workedRecords = employeeRecords
       .filter((record) =>
         ["present", "late"].includes(record.status)
