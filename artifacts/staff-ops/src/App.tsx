@@ -605,7 +605,6 @@ function CashLegacy() {
 }
 
 function Cash() {
-  const summary = useGetCashSummary();
   const list = useListCashTransactions();
   const closures = useListCashClosures();
   const create = useCreateCashTransaction();
@@ -643,8 +642,7 @@ function Cash() {
   };
   return <div className="page-enter">
     <div className="mb-7 flex flex-wrap items-center justify-end gap-2"><CashDayCloseControls /><Button onClick={startCreate} data-testid="button-add-cash"><Plus className="size-4" />Гүйлгээ оруулах</Button></div>
-    {summary.isLoading ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><LoadingBlock className="h-32" /><LoadingBlock className="h-32" /><LoadingBlock className="h-32" /><LoadingBlock className="h-32" /></div> : summary.isError ? <ErrorBlock onRetry={() => summary.refetch()} /> : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><StatCard label="Кассын үлдэгдэл" value={money(summary.data?.balance)} meta="Бүх хугацааны цэвэр дүн" icon={WalletCards} tone="gold" /><StatCard label="Нийт орлого" value={money(summary.data?.income)} meta="Бүх орсон мөнгө" icon={ArrowDownLeft} /><StatCard label="Нийт зарлага" value={money(summary.data?.expense)} meta="Бүх гарсан мөнгө" icon={ArrowUpRight} tone="orange" /><StatCard label="Өнөөдрийн цэвэр" value={money((summary.data?.todayIncome ?? 0) - (summary.data?.todayExpense ?? 0))} meta={`Орлого ${money(summary.data?.todayIncome)}`} icon={CalendarDays} tone="blue" /></div>}
-    <section className="mt-6 overflow-hidden rounded-2xl border border-border bg-card">
+    <section className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="border-b border-border px-5 py-4"><h2 className="text-base font-bold">Сүүлийн гүйлгээ</h2></div>
       {list.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : list.isError ? <ErrorBlock onRetry={() => list.refetch()} /> : !list.data?.length ? <EmptyState title="Гүйлгээний түүх хоосон" detail="Эхний орлого эсвэл зарлагаа оруулаарай." icon={WalletCards} /> : <div className="divide-y divide-border">{list.data.map((row) => {
         const closed = closedDates.has(row.date);
