@@ -324,7 +324,6 @@
 
 @layer utilities {
   [data-role='accountant'] [data-testid='button-add-employee'],
-  [data-role='accountant'] [data-testid^='button-edit-employee-'],
   [data-role='accountant'] [data-testid^='button-delete-employee-'] {
     display: none;
   }

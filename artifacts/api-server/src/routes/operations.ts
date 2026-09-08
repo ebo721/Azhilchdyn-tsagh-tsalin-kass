@@ -144,7 +144,10 @@ router.use(async (req, res, next) => {
     next();
     return;
   }
-  if (role === "accountant" && req.method === "GET" && req.path === "/employees") {
+  if (role === "accountant" && (
+    (req.method === "GET" && req.path === "/employees")
+    || (req.method === "PATCH" && req.path.startsWith("/employees/"))
+  )) {
     next();
     return;
   }
