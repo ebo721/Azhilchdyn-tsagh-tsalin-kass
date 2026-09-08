@@ -323,6 +323,11 @@
 }
 
 @layer utilities {
+  [data-role='accountant'] [data-testid='button-add-employee'],
+  [data-role='accountant'] [data-testid^='button-edit-employee-'],
+  [data-role='accountant'] [data-testid^='button-delete-employee-'] {
+    display: none;
+  }
   .text-balance { text-wrap: balance; }
   .app-grid {
     background-image: linear-gradient(hsl(var(--foreground) / .035) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground) / .035) 1px, transparent 1px);

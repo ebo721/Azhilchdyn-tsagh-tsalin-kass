@@ -296,13 +296,13 @@ function AppShell({ children, role, onLogout }: { children: ReactNode; role: 'ad
   const visibleNav = role === 'hr'
     ? nav.filter((item) => ['/employees', '/attendance', '/hour-balance'].includes(item.href))
     : role === 'accountant'
-      ? nav.filter((item) => ['/hour-balance', '/payroll'].includes(item.href))
+      ? nav.filter((item) => ['/employees', '/hour-balance', '/payroll'].includes(item.href))
       : role === 'warehouse'
         ? nav.filter((item) => ['/inventory', '/fixed-assets'].includes(item.href))
         : nav;
   const active = visibleNav.find((item) => item.href === location)?.label ?? 'Статистик';
   return (
-    <div className="min-h-[100dvh] bg-background app-grid">
+    <div className="min-h-[100dvh] bg-background app-grid" data-role={role}>
       {role !== 'viewer' && <aside className={cn('fixed inset-y-0 left-0 z-40 flex w-[248px] flex-col bg-sidebar px-4 py-5 text-sidebar-foreground transition-transform duration-200 lg:translate-x-0', mobileOpen ? 'translate-x-0' : '-translate-x-full')} data-testid="navigation-sidebar">
         <div className="flex items-center justify-between px-2">
           <Link href="/" className="flex items-center gap-3" data-testid="link-brand">
@@ -1211,14 +1211,14 @@ function Router() {
   const role = session.data?.authenticated && (session.data.role === 'hr' || session.data.role === 'admin' || session.data.role === 'accountant' || session.data.role === 'warehouse' || session.data.role === 'viewer') ? session.data.role : null;
   useEffect(() => {
     if (role === 'hr' && !['/employees', '/attendance', '/hour-balance'].includes(location)) navigate('/employees', { replace: true });
-    if (role === 'accountant' && !['/hour-balance', '/payroll'].includes(location)) navigate('/hour-balance', { replace: true });
+    if (role === 'accountant' && !['/employees', '/hour-balance', '/payroll'].includes(location)) navigate('/hour-balance', { replace: true });
     if (role === 'warehouse' && !['/inventory', '/fixed-assets'].includes(location)) navigate('/inventory', { replace: true });
     if (role === 'viewer' && location !== '/') navigate('/', { replace: true });
   }, [location, navigate, role]);
   if (session.isLoading) return <div className="grid min-h-[100dvh] place-items-center"><LoadingBlock className="size-12" /></div>;
   if (!role) return <HrLogin />;
   const signOut = () => logout.mutate(undefined, { onSuccess: () => { queryClient.clear(); navigate('/'); } });
-  return <ErrorBoundary resetKey={location}><AppShell role={role} onLogout={signOut}>{role === 'admin' ? <Switch><Route path="/" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route path="/deletion-requests" component={DeletionRequests} /><Route path="/users" component={UserSettings} /><Route component={NotFound} /></Switch> : role === 'hr' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route component={Employees} /></Switch> : role === 'accountant' ? <Switch><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route component={HourBalance} /></Switch> : role === 'viewer' ? <Switch><Route path="/" component={Dashboard} /><Route component={Dashboard} /></Switch> : <Switch><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route component={Inventory} /></Switch>}</AppShell></ErrorBoundary>;
+  return <ErrorBoundary resetKey={location}><AppShell role={role} onLogout={signOut}>{role === 'admin' ? <Switch><Route path="/" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route path="/deletion-requests" component={DeletionRequests} /><Route path="/users" component={UserSettings} /><Route component={NotFound} /></Switch> : role === 'hr' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route component={Employees} /></Switch> : role === 'accountant' ? <Switch><Route path="/employees" component={Employees} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route component={HourBalance} /></Switch> : role === 'viewer' ? <Switch><Route path="/" component={Dashboard} /><Route component={Dashboard} /></Switch> : <Switch><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route component={Inventory} /></Switch>}</AppShell></ErrorBoundary>;
 }
 
 function App() {

@@ -144,6 +144,10 @@ router.use(async (req, res, next) => {
     next();
     return;
   }
+  if (role === "accountant" && req.method === "GET" && req.path === "/employees") {
+    next();
+    return;
+  }
   if (req.method === "DELETE" && req.path.startsWith("/employees/")) {
     res.status(403).json({ error: "Ажилтан устгах зөвшөөрлийг зөвхөн ерөнхий админ өгнө" });
     return;
