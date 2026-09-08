@@ -6,13 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface InventoryPurchaseItem {
+export interface InventoryItem {
   id: number;
-  inventoryItemId: number;
   name: string;
   category: string;
   unit: string;
   quantity: number;
-  unitPrice: number;
-  totalAmount: number;
+  createdAt: string;
 }

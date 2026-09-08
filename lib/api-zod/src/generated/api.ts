@@ -763,9 +763,12 @@ export const ListInventoryPurchasesResponseItem = zod.object({
   "date": zod.string(),
   "totalAmount": zod.number(),
   "createdAt": zod.string(),
+  "editable": zod.boolean(),
   "items": zod.array(zod.object({
   "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
   "name": zod.string(),
+  "category": zod.string(),
   "unit": zod.string(),
   "quantity": zod.number(),
   "unitPrice": zod.number(),
@@ -780,6 +783,7 @@ export const ListInventoryPurchasesResponse = zod.array(ListInventoryPurchasesRe
  */
 export const createInventoryPurchaseBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
 
+
 export const createInventoryPurchaseBodyItemsItemQuantityExclusiveMin = 0;
 
 export const createInventoryPurchaseBodyItemsItemUnitPriceMin = 0;
@@ -790,7 +794,9 @@ export const createInventoryPurchaseBodyItemsItemUnitPriceMin = 0;
 export const CreateInventoryPurchaseBody = zod.object({
   "date": zod.string().regex(createInventoryPurchaseBodyDateRegExp),
   "items": zod.array(zod.object({
+  "inventoryItemId": zod.number().int().optional(),
   "name": zod.string().min(1),
+  "category": zod.string().min(1),
   "unit": zod.enum(['ширхэг', 'кг', 'грамм', 'литр', 'мл', 'метр', 'багц', 'хайрцаг']),
   "quantity": zod.number().gt(createInventoryPurchaseBodyItemsItemQuantityExclusiveMin),
   "unitPrice": zod.number().min(createInventoryPurchaseBodyItemsItemUnitPriceMin)
@@ -802,14 +808,79 @@ export const CreateInventoryPurchaseResponse = zod.object({
   "date": zod.string(),
   "totalAmount": zod.number(),
   "createdAt": zod.string(),
+  "editable": zod.boolean(),
   "items": zod.array(zod.object({
   "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
   "name": zod.string(),
+  "category": zod.string(),
   "unit": zod.string(),
   "quantity": zod.number(),
   "unitPrice": zod.number(),
   "totalAmount": zod.number()
 }))
 })
+
+
+/**
+ * @summary Update inventory purchase, stock and cash transaction
+ */
+export const UpdateInventoryPurchaseParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const updateInventoryPurchaseBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+export const updateInventoryPurchaseBodyItemsItemQuantityExclusiveMin = 0;
+
+export const updateInventoryPurchaseBodyItemsItemUnitPriceMin = 0;
+
+
+
+
+export const UpdateInventoryPurchaseBody = zod.object({
+  "date": zod.string().regex(updateInventoryPurchaseBodyDateRegExp),
+  "items": zod.array(zod.object({
+  "inventoryItemId": zod.number().int().optional(),
+  "name": zod.string().min(1),
+  "category": zod.string().min(1),
+  "unit": zod.enum(['ширхэг', 'кг', 'грамм', 'литр', 'мл', 'метр', 'багц', 'хайрцаг']),
+  "quantity": zod.number().gt(updateInventoryPurchaseBodyItemsItemQuantityExclusiveMin),
+  "unitPrice": zod.number().min(updateInventoryPurchaseBodyItemsItemUnitPriceMin)
+})).min(1)
+})
+
+export const UpdateInventoryPurchaseResponse = zod.object({
+  "id": zod.number().int(),
+  "date": zod.string(),
+  "totalAmount": zod.number(),
+  "createdAt": zod.string(),
+  "editable": zod.boolean(),
+  "items": zod.array(zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "totalAmount": zod.number()
+}))
+})
+
+
+/**
+ * @summary List inventory catalog and stock
+ */
+export const ListInventoryItemsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "createdAt": zod.string()
+})
+export const ListInventoryItemsResponse = zod.array(ListInventoryItemsResponseItem)
 
 

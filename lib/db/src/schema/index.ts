@@ -109,10 +109,22 @@ export const inventoryPurchasesTable = pgTable("inventory_purchases", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const inventoryItemsTable = pgTable("inventory_items", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  normalizedName: text("normalized_name").notNull().unique(),
+  category: text("category").notNull(),
+  unit: text("unit").notNull(),
+  quantity: numeric("quantity", { precision: 14, scale: 3, mode: "number" }).notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const inventoryPurchaseItemsTable = pgTable("inventory_purchase_items", {
   id: serial("id").primaryKey(),
   purchaseId: integer("purchase_id").notNull().references(() => inventoryPurchasesTable.id, { onDelete: "cascade" }),
+  inventoryItemId: integer("inventory_item_id").references(() => inventoryItemsTable.id, { onDelete: "restrict" }),
   name: text("name").notNull(),
+  category: text("category").notNull().default("Бусад"),
   unit: text("unit").notNull(),
   quantity: numeric("quantity", { precision: 12, scale: 3, mode: "number" }).notNull(),
   unitPrice: numeric("unit_price", { precision: 14, scale: 2, mode: "number" }).notNull(),
@@ -143,3 +155,4 @@ export type CashTransaction = typeof cashTransactionsTable.$inferSelect;
 export type CashClosure = typeof cashClosuresTable.$inferSelect;
 export type InventoryPurchase = typeof inventoryPurchasesTable.$inferSelect;
 export type InventoryPurchaseItem = typeof inventoryPurchaseItemsTable.$inferSelect;
+export type InventoryItem = typeof inventoryItemsTable.$inferSelect;

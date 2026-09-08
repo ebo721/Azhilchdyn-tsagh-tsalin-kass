@@ -8,8 +8,11 @@
 import type { InventoryPurchaseItemInputUnit } from './inventoryPurchaseItemInputUnit';
 
 export interface InventoryPurchaseItemInput {
+  inventoryItemId?: number;
   /** @minLength 1 */
   name: string;
+  /** @minLength 1 */
+  category: string;
   unit: InventoryPurchaseItemInputUnit;
   /** @exclusiveMinimum 0 */
   quantity: number;

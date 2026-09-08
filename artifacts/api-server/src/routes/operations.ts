@@ -32,6 +32,10 @@ import {
   CreateInventoryPurchaseBody,
   CreateInventoryPurchaseResponse,
   ListInventoryPurchasesResponse,
+  ListInventoryItemsResponse,
+  UpdateInventoryPurchaseBody,
+  UpdateInventoryPurchaseParams,
+  UpdateInventoryPurchaseResponse,
   ListEmployeesResponse,
   UpsertPayrollAdjustmentBody,
   UpdatePayrollAdvancePaymentBody,
@@ -42,7 +46,7 @@ import {
   UpdateEmployeeBody,
   UpdateEmployeeParams,
 } from "@workspace/api-zod";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import {
   attendanceTable,
   cashTransactionsTable,
@@ -54,6 +58,7 @@ import {
   payrollAdvanceApprovalsTable,
   inventoryPurchasesTable,
   inventoryPurchaseItemsTable,
+  inventoryItemsTable,
   shiftTemplatesTable,
 } from "@workspace/db";
 import { getStaffRole } from "../lib/hr-session";
@@ -1207,25 +1212,46 @@ router.post("/cash/closures", async (req, res, next) => {
 
 router.get("/inventory/purchases", async (_req, res, next) => {
   try {
-    const [purchases, items] = await Promise.all([
+    const [purchases, items, closures] = await Promise.all([
       db.select().from(inventoryPurchasesTable).orderBy(desc(inventoryPurchasesTable.date), desc(inventoryPurchasesTable.id)),
       db.select().from(inventoryPurchaseItemsTable).orderBy(inventoryPurchaseItemsTable.id),
+      db.select({ date: cashClosuresTable.date }).from(cashClosuresTable),
     ]);
+    const closedDates = new Set(closures.map((closure) => closure.date));
     res.json(ListInventoryPurchasesResponse.parse(purchases.map((purchase) => ({
       id: purchase.id,
       date: purchase.date,
       totalAmount: Number(purchase.totalAmount),
       createdAt: purchase.createdAt.toISOString(),
+      editable: !closedDates.has(purchase.date),
       items: items
         .filter((item) => item.purchaseId === purchase.id)
         .map((item) => ({
           id: item.id,
+          inventoryItemId: item.inventoryItemId,
           name: item.name,
+          category: item.category,
           unit: item.unit,
           quantity: Number(item.quantity),
           unitPrice: Number(item.unitPrice),
           totalAmount: Number(item.totalAmount),
         })),
+    }))));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/inventory/items", async (_req, res, next) => {
+  try {
+    const items = await db.select().from(inventoryItemsTable).orderBy(inventoryItemsTable.category, inventoryItemsTable.name);
+    res.json(ListInventoryItemsResponse.parse(items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      unit: item.unit,
+      quantity: Number(item.quantity),
+      createdAt: item.createdAt.toISOString(),
     }))));
   } catch (error) {
     next(error);
@@ -1239,13 +1265,18 @@ router.post("/inventory/purchases", async (req, res, next) => {
       res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
       return;
     }
+    if (await isCashDateClosed(input.date)) {
+      res.status(409).json({ error: "Өндөрлөсөн өдөр худалдан авалт бүртгэх боломжгүй" });
+      return;
+    }
     const normalizedItems = input.items.map((item) => ({
       ...item,
       name: item.name.trim(),
+      category: item.category.trim(),
       totalAmount: money(item.quantity * item.unitPrice),
     }));
-    if (normalizedItems.some((item) => !item.name)) {
-      res.status(400).json({ error: "Барааны нэр хоосон байж болохгүй" });
+    if (normalizedItems.some((item) => !item.name || !item.category)) {
+      res.status(400).json({ error: "Барааны нэр болон ангилал хоосон байж болохгүй" });
       return;
     }
     const totalAmount = money(normalizedItems.reduce((total, item) => total + item.totalAmount, 0));
@@ -1254,17 +1285,45 @@ router.post("/inventory/purchases", async (req, res, next) => {
         .insert(inventoryPurchasesTable)
         .values({ date: input.date, totalAmount })
         .returning();
-      const savedItems = await tx
-        .insert(inventoryPurchaseItemsTable)
-        .values(normalizedItems.map((item) => ({
+      const purchaseLines = [];
+      for (const item of normalizedItems) {
+        const normalizedName = item.name.toLocaleLowerCase("mn-MN");
+        let [catalogItem] = item.inventoryItemId
+          ? await tx.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, item.inventoryItemId))
+          : await tx.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.normalizedName, normalizedName));
+        if (!catalogItem) {
+          [catalogItem] = await tx.insert(inventoryItemsTable).values({
+            name: item.name,
+            normalizedName,
+            category: item.category,
+            unit: item.unit,
+            quantity: 0,
+          }).returning();
+        }
+        await tx.update(inventoryItemsTable)
+          .set({ quantity: sql`${inventoryItemsTable.quantity} + ${item.quantity}` })
+          .where(eq(inventoryItemsTable.id, catalogItem.id));
+        purchaseLines.push({
           purchaseId: purchase.id,
-          name: item.name,
-          unit: item.unit,
+          inventoryItemId: catalogItem.id,
+          name: catalogItem.name,
+          category: catalogItem.category,
+          unit: catalogItem.unit,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           totalAmount: item.totalAmount,
-        })))
-        .returning();
+        });
+      }
+      const savedItems = await tx.insert(inventoryPurchaseItemsTable).values(purchaseLines).returning();
+      await tx.insert(cashTransactionsTable).values({
+        type: "expense",
+        category: "Бараа материал",
+        description: `Бараа материалын худалдан авалт #${purchase.id}`,
+        amount: totalAmount,
+        date: input.date,
+        sourceType: "inventory_purchase",
+        sourceKey: `purchase:${purchase.id}`,
+      });
       return { purchase, savedItems };
     });
     res.status(201).json(CreateInventoryPurchaseResponse.parse({
@@ -1272,9 +1331,117 @@ router.post("/inventory/purchases", async (req, res, next) => {
       date: result.purchase.date,
       totalAmount: Number(result.purchase.totalAmount),
       createdAt: result.purchase.createdAt.toISOString(),
+      editable: true,
       items: result.savedItems.map((item) => ({
         id: item.id,
+        inventoryItemId: item.inventoryItemId,
         name: item.name,
+        category: item.category,
+        unit: item.unit,
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice),
+        totalAmount: Number(item.totalAmount),
+      })),
+    }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/inventory/purchases/:id", async (req, res, next) => {
+  try {
+    const { id } = UpdateInventoryPurchaseParams.parse(req.params);
+    const input = UpdateInventoryPurchaseBody.parse(req.body);
+    const [existing] = await db.select().from(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, id));
+    if (!existing) {
+      res.status(404).json({ error: "Худалдан авалт олдсонгүй" });
+      return;
+    }
+    if (!isValidCalendarDate(input.date)) {
+      res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
+      return;
+    }
+    if (await isCashDateClosed(existing.date) || await isCashDateClosed(input.date)) {
+      res.status(409).json({ error: "Өндөрлөсөн өдрийн худалдан авалтыг засах боломжгүй" });
+      return;
+    }
+    const normalizedItems = input.items.map((item) => ({
+      ...item,
+      name: item.name.trim(),
+      category: item.category.trim(),
+      totalAmount: money(item.quantity * item.unitPrice),
+    }));
+    if (normalizedItems.some((item) => !item.name || !item.category)) {
+      res.status(400).json({ error: "Барааны нэр болон ангилал хоосон байж болохгүй" });
+      return;
+    }
+    const totalAmount = money(normalizedItems.reduce((total, item) => total + item.totalAmount, 0));
+    const result = await db.transaction(async (tx) => {
+      const oldLines = await tx.select().from(inventoryPurchaseItemsTable).where(eq(inventoryPurchaseItemsTable.purchaseId, id));
+      for (const oldLine of oldLines) {
+        if (oldLine.inventoryItemId) {
+          await tx.update(inventoryItemsTable)
+            .set({ quantity: sql`${inventoryItemsTable.quantity} - ${oldLine.quantity}` })
+            .where(eq(inventoryItemsTable.id, oldLine.inventoryItemId));
+        }
+      }
+      await tx.delete(inventoryPurchaseItemsTable).where(eq(inventoryPurchaseItemsTable.purchaseId, id));
+      const purchaseLines = [];
+      for (const item of normalizedItems) {
+        const normalizedName = item.name.toLocaleLowerCase("mn-MN");
+        let [catalogItem] = item.inventoryItemId
+          ? await tx.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, item.inventoryItemId))
+          : await tx.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.normalizedName, normalizedName));
+        if (!catalogItem) {
+          [catalogItem] = await tx.insert(inventoryItemsTable).values({
+            name: item.name,
+            normalizedName,
+            category: item.category,
+            unit: item.unit,
+            quantity: 0,
+          }).returning();
+        }
+        await tx.update(inventoryItemsTable)
+          .set({ quantity: sql`${inventoryItemsTable.quantity} + ${item.quantity}` })
+          .where(eq(inventoryItemsTable.id, catalogItem.id));
+        purchaseLines.push({
+          purchaseId: id,
+          inventoryItemId: catalogItem.id,
+          name: catalogItem.name,
+          category: catalogItem.category,
+          unit: catalogItem.unit,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalAmount: item.totalAmount,
+        });
+      }
+      const savedItems = await tx.insert(inventoryPurchaseItemsTable).values(purchaseLines).returning();
+      const [purchase] = await tx.update(inventoryPurchasesTable).set({ date: input.date, totalAmount }).where(eq(inventoryPurchasesTable.id, id)).returning();
+      await tx.insert(cashTransactionsTable).values({
+        type: "expense",
+        category: "Бараа материал",
+        description: `Бараа материалын худалдан авалт #${id}`,
+        amount: totalAmount,
+        date: input.date,
+        sourceType: "inventory_purchase",
+        sourceKey: `purchase:${id}`,
+      }).onConflictDoUpdate({
+        target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
+        set: { amount: totalAmount, date: input.date },
+      });
+      return { purchase, savedItems };
+    });
+    res.json(UpdateInventoryPurchaseResponse.parse({
+      id: result.purchase.id,
+      date: result.purchase.date,
+      totalAmount: Number(result.purchase.totalAmount),
+      createdAt: result.purchase.createdAt.toISOString(),
+      editable: true,
+      items: result.savedItems.map((item) => ({
+        id: item.id,
+        inventoryItemId: item.inventoryItemId,
+        name: item.name,
+        category: item.category,
         unit: item.unit,
         quantity: Number(item.quantity),
         unitPrice: Number(item.unitPrice),

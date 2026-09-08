@@ -12,5 +12,6 @@ export interface InventoryPurchase {
   date: string;
   totalAmount: number;
   createdAt: string;
+  editable: boolean;
   items: InventoryPurchaseItem[];
 }

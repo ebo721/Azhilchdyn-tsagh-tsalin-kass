@@ -604,6 +604,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryPurchase"
+  /inventory/purchases/{id}:
+    put:
+      operationId: updateInventoryPurchase
+      tags: [inventory]
+      summary: Update inventory purchase, stock and cash transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryPurchaseInput"
+      responses:
+        "200":
+          description: Updated inventory purchase
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryPurchase"
+  /inventory/items:
+    get:
+      operationId: listInventoryItems
+      tags: [inventory]
+      summary: List inventory catalog and stock
+      responses:
+        "200":
+          description: Inventory catalog
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryItem"
 components:
   parameters:
     Id:
@@ -941,31 +975,36 @@ components:
         todayExpense: { type: number }
     InventoryPurchaseItem:
       type: object
-      required: [id, name, unit, quantity, unitPrice, totalAmount]
+      required: [id, inventoryItemId, name, category, unit, quantity, unitPrice, totalAmount]
       properties:
         id: { type: integer }
+        inventoryItemId: { type: integer }
         name: { type: string }
+        category: { type: string }
         unit: { type: string }
         quantity: { type: number }
         unitPrice: { type: number }
         totalAmount: { type: number }
     InventoryPurchase:
       type: object
-      required: [id, date, totalAmount, createdAt, items]
+      required: [id, date, totalAmount, createdAt, editable, items]
       properties:
         id: { type: integer }
         date: { type: string }
         totalAmount: { type: number }
         createdAt: { type: string }
+        editable: { type: boolean }
         items:
           type: array
           items:
             $ref: "#/components/schemas/InventoryPurchaseItem"
     InventoryPurchaseItemInput:
       type: object
-      required: [name, unit, quantity, unitPrice]
+      required: [name, category, unit, quantity, unitPrice]
       properties:
+        inventoryItemId: { type: integer }
         name: { type: string, minLength: 1 }
+        category: { type: string, minLength: 1 }
         unit:
           type: string
           enum: [ширхэг, кг, грамм, литр, мл, метр, багц, хайрцаг]
@@ -983,4 +1022,14 @@ components:
           minItems: 1
           items:
             $ref: "#/components/schemas/InventoryPurchaseItemInput"
+    InventoryItem:
+      type: object
+      required: [id, name, category, unit, quantity, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        category: { type: string }
+        unit: { type: string }
+        quantity: { type: number }
+        createdAt: { type: string }
 

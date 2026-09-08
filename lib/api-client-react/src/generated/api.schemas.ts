@@ -446,7 +446,9 @@ export interface CashSummary {
 
 export interface InventoryPurchaseItem {
   id: number;
+  inventoryItemId: number;
   name: string;
+  category: string;
   unit: string;
   quantity: number;
   unitPrice: number;
@@ -458,6 +460,7 @@ export interface InventoryPurchase {
   date: string;
   totalAmount: number;
   createdAt: string;
+  editable: boolean;
   items: InventoryPurchaseItem[];
 }
 
@@ -476,8 +479,11 @@ export const InventoryPurchaseItemInputUnit = {
 } as const;
 
 export interface InventoryPurchaseItemInput {
+  inventoryItemId?: number;
   /** @minLength 1 */
   name: string;
+  /** @minLength 1 */
+  category: string;
   unit: InventoryPurchaseItemInputUnit;
   /** @exclusiveMinimum 0 */
   quantity: number;
@@ -490,6 +496,15 @@ export interface InventoryPurchaseInput {
   date: string;
   /** @minItems 1 */
   items: InventoryPurchaseItemInput[];
+}
+
+export interface InventoryItem {
+  id: number;
+  name: string;
+  category: string;
+  unit: string;
+  quantity: number;
+  createdAt: string;
 }
 
 export type ListAttendanceParams = {
