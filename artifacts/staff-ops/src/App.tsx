@@ -222,10 +222,6 @@ function AppShell({ children, role, onLogout }: { children: ReactNode; role: 'ad
             </Link>
           ))}
         </nav>
-        <div className="mt-auto rounded-2xl border border-sidebar-border bg-sidebar-accent/40 p-4">
-          <div className="mb-3 flex items-center gap-2 text-sidebar-primary"><span className="size-2 rounded-full bg-sidebar-primary" /><span className="font-mono text-[10px] font-bold uppercase tracking-wider">Өнөөдрийн хэмнэл</span></div>
-          <p className="text-xs leading-relaxed text-sidebar-foreground/65">Хамгийн чухал тоонууд нэг дэлгэцэнд. Өдөртөө итгэлтэй шийдвэр гаргаарай.</p>
-        </div>
       </aside>
       {mobileOpen && <button className="fixed inset-0 z-30 bg-foreground/25 lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Цэс хаах" data-testid="button-navigation-overlay" />}
       <main className="min-h-[100dvh] lg:pl-[248px]">
