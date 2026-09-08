@@ -63,6 +63,7 @@ import {
   CancelDeletionRequestParams,
   CancelDeletionRequestResponse,
   ListEmployeesResponse,
+  DeletePayrollAdjustmentTransactionParams,
   UpsertPayrollAdjustmentBody,
   UpdatePayrollAdvancePaymentBody,
   UpsertAttendanceBody,
@@ -169,6 +170,7 @@ const deletionTargetPatterns = [
   /^\/attendance\/shifts\/\d+$/,
   /^\/attendance\?employeeId=\d+&date=\d{4}-\d{2}-\d{2}$/,
   /^\/payroll-advance\/approval\?month=\d{4}-\d{2}$/,
+  /^\/payroll-adjustments\/\d{4}-\d{2}\/\d+\/transactions\/[12]$/,
   /^\/cash\/transactions\/\d+$/,
   /^\/fixed-assets\/\d+$/,
   /^\/inventory\/issues\/\d+$/,
@@ -176,7 +178,7 @@ const deletionTargetPatterns = [
 ];
 const roleCanRequestDeletion = (role: StaffRole, targetPath: string) => role === "admin"
   || (role === "hr" && (targetPath.startsWith("/employees/") || targetPath.startsWith("/attendance")))
-  || (role === "accountant" && targetPath.startsWith("/payroll-advance/"))
+  || (role === "accountant" && (targetPath.startsWith("/payroll-advance/") || targetPath.startsWith("/payroll-adjustments/")))
   || (role === "warehouse" && (targetPath.startsWith("/inventory/") || targetPath.startsWith("/fixed-assets/")));
 const deletionRequestResponse = (request: typeof deletionRequestsTable.$inferSelect) => ({
   ...request,
@@ -995,6 +997,51 @@ router.put("/payroll-adjustments", async (req, res, next) => {
       secondPaidAmount: Number(adjustment.secondPaidAmount),
       secondPaymentDate: adjustment.secondPaymentDate,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/payroll-adjustments/:month/:employeeId/transactions/:sequence", async (req, res, next) => {
+  try {
+    const { month, employeeId, sequence } = DeletePayrollAdjustmentTransactionParams.parse(req.params);
+    const [adjustment] = await db
+      .select()
+      .from(payrollAdjustmentsTable)
+      .where(and(
+        eq(payrollAdjustmentsTable.employeeId, employeeId),
+        eq(payrollAdjustmentsTable.month, month),
+      ));
+    if (!adjustment) {
+      res.status(404).json({ error: "Цалингийн тохируулга олдсонгүй" });
+      return;
+    }
+
+    const paymentDate = sequence === 1 ? adjustment.paymentDate : adjustment.secondPaymentDate;
+    const paidAmount = Number(sequence === 1 ? adjustment.paidAmount : adjustment.secondPaidAmount);
+    if (paidAmount <= 0) {
+      res.status(404).json({ error: `${sequence}-р гүйлгээ олдсонгүй` });
+      return;
+    }
+    if (paymentDate && await isCashDateClosed(paymentDate)) {
+      res.status(409).json({ error: `${paymentDate} өдрийн касс өндөрлөсөн тул цалингийн гүйлгээг устгах боломжгүй` });
+      return;
+    }
+
+    const sourceKey = sequence === 1 ? `${month}:${employeeId}` : `${month}:${employeeId}:2`;
+    await db.transaction(async (tx) => {
+      await tx
+        .update(payrollAdjustmentsTable)
+        .set(sequence === 1
+          ? { paidAmount: 0, paymentDate: null, updatedAt: new Date() }
+          : { secondPaidAmount: 0, secondPaymentDate: null, updatedAt: new Date() })
+        .where(eq(payrollAdjustmentsTable.id, adjustment.id));
+      await tx.delete(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "payroll"),
+        eq(cashTransactionsTable.sourceKey, sourceKey),
+      ));
+    });
+    res.status(204).send();
   } catch (error) {
     next(error);
   }

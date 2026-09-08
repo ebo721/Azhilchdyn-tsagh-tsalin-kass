@@ -524,6 +524,21 @@ export const UpsertPayrollAdjustmentResponse = zod.object({
 
 
 /**
+ * @summary Delete one payroll payment transaction
+ */
+export const deletePayrollAdjustmentTransactionPathMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+
+
+export const DeletePayrollAdjustmentTransactionParams = zod.object({
+  "month": zod.coerce.string().regex(deletePayrollAdjustmentTransactionPathMonthRegExp),
+  "employeeId": zod.coerce.number().int(),
+  "sequence": zod.union([zod.literal(1),zod.literal(2)])
+})
+
+export const DeletePayrollAdjustmentTransactionResponse = zod.void()
+
+
+/**
  * @summary Get the monthly payroll advance list and approval status
  */
 export const getPayrollAdvanceQueryMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
