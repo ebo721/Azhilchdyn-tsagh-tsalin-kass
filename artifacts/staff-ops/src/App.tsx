@@ -364,14 +364,16 @@ function AppShell({ children, role, onLogout }: { children: ReactNode; role: 'ad
 function Dashboard() {
   const query = useGetDashboard();
   const data = query.data;
+  const [previousYear, previousMonthNumber] = shiftMonth(currentMonth(), -1).split('-');
+  const previousMonthLabel = `${previousYear} оны ${Number(previousMonthNumber)}-р сарын`;
   return (
     <div className="page-enter">
       {query.isLoading ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /><LoadingBlock className="h-36" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard label="Өмнөх сарын борлуулалт" value={money(data?.previousMonthSalesIncome)} meta="Борлуулалтын нийт орлого" icon={TrendingUp} tone="gold" />
-            <StatCard label="Өмнөх сарын цалин" value={money(data?.previousMonthPayrollExpense)} meta="Бодитоор олгосон нийт зардал" icon={Banknote} tone="blue" />
-            <StatCard label="Өмнөх сарын материал" value={money(data?.previousMonthInventoryExpense)} meta="Худалдан авсан нийт зардал" icon={PackageOpen} tone="teal" />
+            <StatCard label={`${previousMonthLabel} борлуулалт`} value={money(data?.previousMonthSalesIncome)} meta="Борлуулалтын нийт орлого" icon={TrendingUp} tone="gold" />
+            <StatCard label={`${previousMonthLabel} цалин`} value={money(data?.previousMonthPayrollExpense)} meta="Бодитоор олгосон нийт зардал" icon={Banknote} tone="blue" />
+            <StatCard label={`${previousMonthLabel} материал`} value={money(data?.previousMonthInventoryExpense)} meta="Худалдан авсан нийт зардал" icon={PackageOpen} tone="teal" />
             <StatCard label="Нийт ажилтан" value={`${data?.employeeCount ?? 0}`} meta="Бүртгэлтэй ажилтан" icon={UsersRound} tone="orange" />
           </div>
           <div className="mt-6">
