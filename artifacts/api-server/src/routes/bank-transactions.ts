@@ -141,6 +141,7 @@ router.post("/bank-transactions/import", raw({ type: "application/octet-stream",
       const amount = income || expense;
       const account = row["Харьцсан данс / Нэр"];
       const description = row["Гүйлгээний утга"];
+      if (amount === 200 && description.toLocaleUpperCase("mn-MN").includes("ШИМТГЭЛ")) return [];
       const fingerprint = createHash("sha256").update(JSON.stringify([
         transactionAt.toISOString(),
         amount,
