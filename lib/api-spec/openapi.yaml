@@ -1196,9 +1196,11 @@ components:
         totalAmount: { type: number }
     InventoryPurchase:
       type: object
-      required: [id, date, totalAmount, createdAt, editable, items]
+      required: [id, documentName, hasReceipt, date, totalAmount, createdAt, editable, items]
       properties:
         id: { type: integer }
+        documentName: { type: string }
+        hasReceipt: { type: boolean }
         date: { type: string }
         totalAmount: { type: number }
         createdAt: { type: string }
@@ -1221,8 +1223,10 @@ components:
         unitPrice: { type: number, minimum: 0 }
     InventoryPurchaseInput:
       type: object
-      required: [date, items]
+      required: [documentName, hasReceipt, date, items]
       properties:
+        documentName: { type: string, minLength: 1 }
+        hasReceipt: { type: boolean }
         date:
           type: string
           pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$'

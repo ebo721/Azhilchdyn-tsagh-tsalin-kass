@@ -8,6 +8,9 @@
 import type { InventoryPurchaseItemInput } from './inventoryPurchaseItemInput';
 
 export interface InventoryPurchaseInput {
+  /** @minLength 1 */
+  documentName: string;
+  hasReceipt: boolean;
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
   date: string;
   /** @minItems 1 */

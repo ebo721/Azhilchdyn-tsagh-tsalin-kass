@@ -1581,6 +1581,8 @@ router.get("/inventory/purchases", async (_req, res, next) => {
     const closedDates = new Set(closures.map((closure) => closure.date));
     res.json(ListInventoryPurchasesResponse.parse(purchases.map((purchase) => ({
       id: purchase.id,
+      documentName: purchase.documentName,
+      hasReceipt: purchase.hasReceipt,
       date: purchase.date,
       totalAmount: Number(purchase.totalAmount),
       createdAt: purchase.createdAt.toISOString(),
@@ -1813,6 +1815,11 @@ router.delete("/inventory/issues/:id", async (req, res, next) => {
 router.post("/inventory/purchases", async (req, res, next) => {
   try {
     const input = CreateInventoryPurchaseBody.parse(req.body);
+    const documentName = input.documentName.trim();
+    if (!documentName) {
+      res.status(400).json({ error: "Баримтын нэр хоосон байж болохгүй" });
+      return;
+    }
     if (!isValidCalendarDate(input.date)) {
       res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
       return;
@@ -1835,7 +1842,7 @@ router.post("/inventory/purchases", async (req, res, next) => {
     const result = await db.transaction(async (tx) => {
       const [purchase] = await tx
         .insert(inventoryPurchasesTable)
-        .values({ date: input.date, totalAmount })
+        .values({ documentName, hasReceipt: input.hasReceipt, date: input.date, totalAmount })
         .returning();
       const purchaseLines = [];
       for (const item of normalizedItems) {
@@ -1870,7 +1877,7 @@ router.post("/inventory/purchases", async (req, res, next) => {
       await tx.insert(cashTransactionsTable).values({
         type: "expense",
         category: "Бараа материал",
-        description: `Бараа материалын худалдан авалт #${purchase.id}`,
+        description: documentName,
         amount: totalAmount,
         date: input.date,
         sourceType: "inventory_purchase",
@@ -1880,6 +1887,8 @@ router.post("/inventory/purchases", async (req, res, next) => {
     });
     res.status(201).json(CreateInventoryPurchaseResponse.parse({
       id: result.purchase.id,
+      documentName: result.purchase.documentName,
+      hasReceipt: result.purchase.hasReceipt,
       date: result.purchase.date,
       totalAmount: Number(result.purchase.totalAmount),
       createdAt: result.purchase.createdAt.toISOString(),
@@ -1904,6 +1913,11 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
   try {
     const { id } = UpdateInventoryPurchaseParams.parse(req.params);
     const input = UpdateInventoryPurchaseBody.parse(req.body);
+    const documentName = input.documentName.trim();
+    if (!documentName) {
+      res.status(400).json({ error: "Баримтын нэр хоосон байж болохгүй" });
+      return;
+    }
     const [existing] = await db.select().from(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, id));
     if (!existing) {
       res.status(404).json({ error: "Худалдан авалт олдсонгүй" });
@@ -1968,23 +1982,30 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
         });
       }
       const savedItems = await tx.insert(inventoryPurchaseItemsTable).values(purchaseLines).returning();
-      const [purchase] = await tx.update(inventoryPurchasesTable).set({ date: input.date, totalAmount }).where(eq(inventoryPurchasesTable.id, id)).returning();
+      const [purchase] = await tx.update(inventoryPurchasesTable).set({
+        documentName,
+        hasReceipt: input.hasReceipt,
+        date: input.date,
+        totalAmount,
+      }).where(eq(inventoryPurchasesTable.id, id)).returning();
       await tx.insert(cashTransactionsTable).values({
         type: "expense",
         category: "Бараа материал",
-        description: `Бараа материалын худалдан авалт #${id}`,
+        description: documentName,
         amount: totalAmount,
         date: input.date,
         sourceType: "inventory_purchase",
         sourceKey: `purchase:${id}`,
       }).onConflictDoUpdate({
         target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
-        set: { amount: totalAmount, date: input.date },
+        set: { description: documentName, amount: totalAmount, date: input.date },
       });
       return { purchase, savedItems };
     });
     res.json(UpdateInventoryPurchaseResponse.parse({
       id: result.purchase.id,
+      documentName: result.purchase.documentName,
+      hasReceipt: result.purchase.hasReceipt,
       date: result.purchase.date,
       totalAmount: Number(result.purchase.totalAmount),
       createdAt: result.purchase.createdAt.toISOString(),

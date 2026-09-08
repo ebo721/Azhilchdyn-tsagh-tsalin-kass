@@ -809,6 +809,8 @@ function FixedAssets() {
 
 const inventoryUnits = ['ширхэг', 'кг', 'грамм', 'литр', 'мл', 'метр', 'багц', 'хайрцаг'] as const;
 type InventoryForm = {
+  documentName: string;
+  hasReceipt: boolean;
   date: string;
   items: Array<{ inventoryItemId?: number; name: string; category: string; unit: typeof inventoryUnits[number]; quantity: string; unitPrice: string }>;
 };
@@ -828,6 +830,7 @@ function Inventory() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<InventoryPurchase | null>(null);
+  const [selectedPurchase, setSelectedPurchase] = useState<InventoryPurchase | null>(null);
   const [stockSearch, setStockSearch] = useState('');
   const [inventoryTab, setInventoryTab] = useState<'stock' | 'purchases' | 'issues'>('stock');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
@@ -835,7 +838,7 @@ function Inventory() {
   const [issueOpen, setIssueOpen] = useState(false);
   const [editingIssue, setEditingIssue] = useState<InventoryIssue | null>(null);
   const form = useForm<InventoryForm>({
-    defaultValues: { date: today(), items: [{ name: '', category: '', unit: 'ширхэг', quantity: '1', unitPrice: '' }] },
+    defaultValues: { documentName: '', hasReceipt: false, date: today(), items: [{ name: '', category: '', unit: 'ширхэг', quantity: '1', unitPrice: '' }] },
   });
   const rows = useFieldArray({ control: form.control, name: 'items' });
   const issueForm = useForm<{ inventoryItemId: string; date: string; quantity: string; purpose: string }>({
@@ -846,12 +849,14 @@ function Inventory() {
   const grandTotal = watchedItems.reduce((total, item) => total + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), 0);
   const openForm = () => {
     setEditing(null);
-    form.reset({ date: today(), items: [{ name: '', category: '', unit: 'ширхэг', quantity: '1', unitPrice: '' }] });
+    form.reset({ documentName: '', hasReceipt: false, date: today(), items: [{ name: '', category: '', unit: 'ширхэг', quantity: '1', unitPrice: '' }] });
     setOpen(true);
   };
   const editPurchase = (purchase: InventoryPurchase) => {
     setEditing(purchase);
     form.reset({
+      documentName: purchase.documentName,
+      hasReceipt: purchase.hasReceipt,
       date: purchase.date,
       items: purchase.items.map((item) => ({
         inventoryItemId: item.inventoryItemId,
@@ -866,6 +871,8 @@ function Inventory() {
   };
   const submit = (values: InventoryForm) => {
     const data = {
+      documentName: values.documentName,
+      hasReceipt: values.hasReceipt,
       date: values.date,
       items: values.items.map((item) => ({
         inventoryItemId: item.inventoryItemId,
@@ -909,8 +916,8 @@ function Inventory() {
       .map((item) => ({ ...item, purchaseId: purchase.id, date: purchase.date }))) ?? []
     : [];
   const deletePurchase = (purchase: InventoryPurchase) => {
-    if (!window.confirm(`${dateLabel(purchase.date)}-ны ${money(purchase.totalAmount)} дүнтэй худалдан авалтыг устгах хүсэлт гаргах уу?`)) return;
-    deletion.request(`/inventory/purchases/${purchase.id}`, `${dateLabel(purchase.date)}-ны ${money(purchase.totalAmount)} барааны худалдан авалт`);
+    if (!window.confirm(`"${purchase.documentName}" баримтыг устгах хүсэлт гаргах уу?`)) return;
+    deletion.request(`/inventory/purchases/${purchase.id}`, `${purchase.documentName} · ${money(purchase.totalAmount)}`);
   };
   const openIssueForm = () => {
     setEditingIssue(null);
@@ -957,11 +964,11 @@ function Inventory() {
     </section>}
     {inventoryTab === 'purchases' && <section className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-5 py-4"><h2 className="text-base font-bold">Худалдан авалтын жагсаалт</h2><span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{query.data?.length ?? 0} бүртгэл</span></div>
-      {query.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-20" /><LoadingBlock className="h-20" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : !query.data?.length ? <EmptyState title="Худалдан авалт бүртгэгдээгүй" detail="Бараа материалын эхний худалдан авалтаа бүртгэнэ үү." icon={PackageOpen} /> : <div className="divide-y divide-border">{query.data.map((purchase) => <div className="p-5" key={purchase.id} data-testid={`inventory-purchase-${purchase.id}`}>
-        <div className="mb-4 flex items-center justify-between gap-4"><div><p className="text-sm font-bold">{dateLabel(purchase.date)}</p><p className="mt-1 text-xs text-muted-foreground">{purchase.items.length} төрлийн бараа</p></div><div className="flex items-center gap-2">{purchase.editable && <><Button size="icon" variant="ghost" onClick={() => editPurchase(purchase)} data-testid={`button-edit-inventory-${purchase.id}`}><Pencil className="size-4" /></Button><Button size="icon" variant="ghost" disabled={remove.isPending} onClick={() => deletePurchase(purchase)} data-testid={`button-delete-inventory-${purchase.id}`}><Trash2 className="size-4" /></Button></>}<p className="font-mono text-base font-bold text-primary">{money(purchase.totalAmount)}</p></div></div>
-        <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-3 py-2">Бараа материал</th><th className="px-3 py-2">Ангилал</th><th className="px-3 py-2">Нэгж</th><th className="px-3 py-2 text-right">Тоо</th><th className="px-3 py-2 text-right">Үнэ</th><th className="px-3 py-2 text-right">Нийт</th></tr></thead><tbody className="divide-y divide-border">{purchase.items.map((item) => <tr key={item.id}><td className="px-3 py-3 text-sm font-semibold">{item.name}</td><td className="px-3 py-3 text-sm text-muted-foreground">{item.category}</td><td className="px-3 py-3 text-sm text-muted-foreground">{item.unit}</td><td className="px-3 py-3 text-right font-mono text-sm">{item.quantity}</td><td className="px-3 py-3 text-right font-mono text-sm">{money(item.unitPrice)}</td><td className="px-3 py-3 text-right font-mono text-sm font-bold">{money(item.totalAmount)}</td></tr>)}</tbody></table></div>
-      </div>)}</div>}
+      {query.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-14" /><LoadingBlock className="h-14" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : !query.data?.length ? <EmptyState title="Худалдан авалт бүртгэгдээгүй" detail="Бараа материалын эхний худалдан авалтаа бүртгэнэ үү." icon={PackageOpen} /> : <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Баримтын нэр</th><th className="px-5 py-3">Огноо</th><th className="px-5 py-3">Баримт</th><th className="px-5 py-3 text-right">Үнийн дүн</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{query.data.map((purchase) => <tr key={purchase.id} data-testid={`inventory-purchase-${purchase.id}`}><td className="px-5 py-4"><p className="text-sm font-semibold">{purchase.documentName}</p><p className="mt-1 text-xs text-muted-foreground">{purchase.items.length} төрлийн бараа</p></td><td className="px-5 py-4 text-sm">{dateLabel(purchase.date)}</td><td className="px-5 py-4"><span className={cn('rounded-full border px-2.5 py-1 text-[10px] font-bold', purchase.hasReceipt ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-100 text-slate-700')}>{purchase.hasReceipt ? 'Баримттай' : 'Баримтгүй'}</span></td><td className="px-5 py-4 text-right font-mono text-sm font-bold text-primary">{money(purchase.totalAmount)}</td><td className="px-5 py-4"><div className="flex justify-end gap-1"><Button variant="outline" size="sm" onClick={() => setSelectedPurchase(purchase)} data-testid={`button-view-inventory-${purchase.id}`}>Дэлгэрэнгүй<ChevronRight className="size-4" /></Button>{purchase.editable && <><Button size="icon" variant="ghost" onClick={() => editPurchase(purchase)} data-testid={`button-edit-inventory-${purchase.id}`}><Pencil className="size-4" /></Button><Button size="icon" variant="ghost" disabled={remove.isPending} onClick={() => deletePurchase(purchase)} data-testid={`button-delete-inventory-${purchase.id}`}><Trash2 className="size-4" /></Button></>}</div></td></tr>)}</tbody></table></div>}
     </section>}
+    {selectedPurchase && <Modal title={selectedPurchase.documentName} detail={`${dateLabel(selectedPurchase.date)} · ${selectedPurchase.hasReceipt ? 'Баримттай' : 'Баримтгүй'} · ${money(selectedPurchase.totalAmount)}`} onClose={() => setSelectedPurchase(null)}>
+      <div className="max-h-[62vh] overflow-y-auto"><div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-3 py-2">Барааны нэр</th><th className="px-3 py-2">Ангилал</th><th className="px-3 py-2">Нэгж</th><th className="px-3 py-2 text-right">Тоо</th><th className="px-3 py-2 text-right">Нэгж үнэ</th><th className="px-3 py-2 text-right">Нийт дүн</th></tr></thead><tbody className="divide-y divide-border">{selectedPurchase.items.map((item) => <tr key={item.id}><td className="px-3 py-3 text-sm font-semibold">{item.name}</td><td className="px-3 py-3 text-sm text-muted-foreground">{item.category}</td><td className="px-3 py-3 text-sm text-muted-foreground">{item.unit}</td><td className="px-3 py-3 text-right font-mono text-sm">{item.quantity}</td><td className="px-3 py-3 text-right font-mono text-sm">{money(item.unitPrice)}</td><td className="px-3 py-3 text-right font-mono text-sm font-bold">{money(item.totalAmount)}</td></tr>)}</tbody></table></div></div>
+    </Modal>}
     {inventoryTab === 'issues' && <section className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-5 py-4"><h2 className="text-base font-bold">Зарлагын жагсаалт</h2><span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{issues.data?.length ?? 0} бүртгэл</span></div>
       {issues.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : issues.isError ? <ErrorBlock onRetry={() => issues.refetch()} /> : !issues.data?.length ? <EmptyState title="Зарлага бүртгэгдээгүй" detail="Бараа материалын зарлагыг энд бүртгэнэ." icon={PackageOpen} /> : <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Огноо</th><th className="px-5 py-3">Бараа материал</th><th className="px-5 py-3 text-right">Тоо хэмжээ</th><th className="px-5 py-3">Нэгж</th><th className="px-5 py-3">Зориулалт</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{issues.data.map((issue) => <tr key={issue.id} data-testid={`row-inventory-issue-${issue.id}`}><td className="px-5 py-3 text-sm font-semibold">{dateLabel(issue.date)}</td><td className="px-5 py-3 text-sm font-semibold">{issue.itemName}</td><td className="px-5 py-3 text-right font-mono text-sm font-bold">{issue.quantity}</td><td className="px-5 py-3 text-sm text-muted-foreground">{issue.unit}</td><td className="px-5 py-3 text-sm">{issue.purpose}</td><td className="px-5 py-3"><div className="flex justify-end gap-1"><Button size="icon" variant="ghost" onClick={() => editIssue(issue)} data-testid={`button-edit-inventory-issue-${issue.id}`}><Pencil className="size-4" /></Button><Button size="icon" variant="ghost" disabled={removeIssue.isPending} onClick={() => deleteIssue(issue)} data-testid={`button-delete-inventory-issue-${issue.id}`}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>}
@@ -987,7 +994,8 @@ function Inventory() {
     </Modal>}
     {open && <Modal title={editing ? 'Худалдан авалт засах' : 'Бараа материалын худалдан авалт'} detail="Сангаас хайж сонгох эсвэл шинэ бараа бүртгэнэ." onClose={() => setOpen(false)}>
       <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-5">
-        <label className="block space-y-2 text-xs font-semibold">Худалдан авалтын огноо<input type="date" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('date', { required: true })} data-testid="input-inventory-purchase-date" /></label>
+        <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-xs font-semibold">Баримтын нэр<input className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('documentName', { required: true })} placeholder="Жишээ: Номин 2026-09-08" data-testid="input-inventory-document-name" /></label><label className="space-y-2 text-xs font-semibold">Худалдан авалтын огноо<input type="date" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('date', { required: true })} data-testid="input-inventory-purchase-date" /></label></div>
+        <label className="flex items-center gap-3 rounded-xl border border-border bg-secondary/35 px-4 py-3 text-sm font-semibold"><input type="checkbox" className="size-4 accent-primary" {...form.register('hasReceipt')} data-testid="checkbox-inventory-has-receipt" /><span>Баримттай</span></label>
         <datalist id="inventory-catalog-options">{catalog.data?.map((item) => <option value={item.name} key={item.id}>{item.category} · {item.unit}</option>)}</datalist>
         <div className="max-h-[52vh] space-y-3 overflow-y-auto pr-1">{rows.fields.map((field, index) => {
           const item = watchedItems[index];

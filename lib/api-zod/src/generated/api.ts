@@ -763,6 +763,8 @@ export const CloseCashDayResponse = zod.object({
  */
 export const ListInventoryPurchasesResponseItem = zod.object({
   "id": zod.number().int(),
+  "documentName": zod.string(),
+  "hasReceipt": zod.boolean(),
   "date": zod.string(),
   "totalAmount": zod.number(),
   "createdAt": zod.string(),
@@ -784,6 +786,7 @@ export const ListInventoryPurchasesResponse = zod.array(ListInventoryPurchasesRe
 /**
  * @summary Register a bulk inventory purchase
  */
+
 export const createInventoryPurchaseBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
 
 
@@ -795,6 +798,8 @@ export const createInventoryPurchaseBodyItemsItemUnitPriceMin = 0;
 
 
 export const CreateInventoryPurchaseBody = zod.object({
+  "documentName": zod.string().min(1),
+  "hasReceipt": zod.boolean(),
   "date": zod.string().regex(createInventoryPurchaseBodyDateRegExp),
   "items": zod.array(zod.object({
   "inventoryItemId": zod.number().int().optional(),
@@ -808,6 +813,8 @@ export const CreateInventoryPurchaseBody = zod.object({
 
 export const CreateInventoryPurchaseResponse = zod.object({
   "id": zod.number().int(),
+  "documentName": zod.string(),
+  "hasReceipt": zod.boolean(),
   "date": zod.string(),
   "totalAmount": zod.number(),
   "createdAt": zod.string(),
@@ -832,6 +839,7 @@ export const UpdateInventoryPurchaseParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+
 export const updateInventoryPurchaseBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
 
 
@@ -843,6 +851,8 @@ export const updateInventoryPurchaseBodyItemsItemUnitPriceMin = 0;
 
 
 export const UpdateInventoryPurchaseBody = zod.object({
+  "documentName": zod.string().min(1),
+  "hasReceipt": zod.boolean(),
   "date": zod.string().regex(updateInventoryPurchaseBodyDateRegExp),
   "items": zod.array(zod.object({
   "inventoryItemId": zod.number().int().optional(),
@@ -856,6 +866,8 @@ export const UpdateInventoryPurchaseBody = zod.object({
 
 export const UpdateInventoryPurchaseResponse = zod.object({
   "id": zod.number().int(),
+  "documentName": zod.string(),
+  "hasReceipt": zod.boolean(),
   "date": zod.string(),
   "totalAmount": zod.number(),
   "createdAt": zod.string(),

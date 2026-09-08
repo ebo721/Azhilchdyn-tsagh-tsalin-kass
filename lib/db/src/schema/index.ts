@@ -104,6 +104,8 @@ export const cashClosuresTable = pgTable("cash_closures", {
 
 export const inventoryPurchasesTable = pgTable("inventory_purchases", {
   id: serial("id").primaryKey(),
+  documentName: text("document_name").notNull().default("Худалдан авалтын баримт"),
+  hasReceipt: boolean("has_receipt").notNull().default(false),
   date: date("date", { mode: "string" }).notNull(),
   totalAmount: numeric("total_amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
