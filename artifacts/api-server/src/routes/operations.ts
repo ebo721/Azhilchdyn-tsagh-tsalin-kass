@@ -3,6 +3,7 @@ import {
   CreateAttendanceBody,
   CreateShiftBody,
   CreateCashTransactionBody,
+  CloseCashDayBody,
   CreateEmployeeBody,
   DeleteAttendanceQueryParams,
   CopyPreviousShiftPlansBody,
@@ -23,6 +24,8 @@ import {
   ListShiftsResponse,
   RevertPayrollAdvanceApprovalQueryParams,
   ListCashTransactionsResponse,
+  ListCashClosuresResponse,
+  CloseCashDayResponse,
   ListEmployeesResponse,
   UpsertPayrollAdjustmentBody,
   UpdatePayrollAdvancePaymentBody,
@@ -37,6 +40,7 @@ import { and, desc, eq } from "drizzle-orm";
 import {
   attendanceTable,
   cashTransactionsTable,
+  cashClosuresTable,
   db,
   employeesTable,
   employeeShiftPlansTable,
@@ -49,6 +53,14 @@ import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment";
 import { planShiftPlanCopy } from "../lib/shift-plan-copy";
 
 const router: IRouter = Router();
+
+async function isCashDateClosed(date: string) {
+  const [closure] = await db
+    .select({ id: cashClosuresTable.id })
+    .from(cashClosuresTable)
+    .where(eq(cashClosuresTable.date, date));
+  return Boolean(closure);
+}
 
 router.use((req, res, next) => {
   const role = getStaffRole(req);
@@ -777,6 +789,25 @@ router.put("/payroll-adjustments", async (req, res, next) => {
       res.status(404).json({ error: "Ажилтан олдсонгүй" });
       return;
     }
+    const [existingAdjustment] = await db
+      .select()
+      .from(payrollAdjustmentsTable)
+      .where(and(
+        eq(payrollAdjustmentsTable.employeeId, input.employeeId),
+        eq(payrollAdjustmentsTable.month, input.month),
+      ));
+    const protectedDates = new Set([
+      Number(existingAdjustment?.paidAmount ?? 0) > 0 ? existingAdjustment?.paymentDate : null,
+      Number(existingAdjustment?.secondPaidAmount ?? 0) > 0 ? existingAdjustment?.secondPaymentDate : null,
+      input.paidAmount > 0 ? input.paymentDate : null,
+      input.secondPaidAmount > 0 ? input.secondPaymentDate : null,
+    ].filter((date): date is string => typeof date === "string"));
+    for (const date of protectedDates) {
+      if (await isCashDateClosed(date)) {
+        res.status(409).json({ error: `${date} өдрийн касс өндөрлөсөн тул цалингийн гүйлгээг засах боломжгүй` });
+        return;
+      }
+    }
     const sourceType = "payroll";
     const sourceKey = `${input.month}:${input.employeeId}`;
     const adjustment = await db.transaction(async (tx) => {
@@ -945,6 +976,18 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
       if (!sourceLines.some((line) => Number(line.employeeId) === input.employeeId)) {
         return "line_not_found" as const;
       }
+      const previousLine = sourceLines.find((line) => Number(line.employeeId) === input.employeeId);
+      const protectedDates = new Set([
+        previousLine?.paid === true && typeof previousLine.paymentDate === "string" ? previousLine.paymentDate : null,
+        input.paid ? input.paymentDate : null,
+      ].filter((date): date is string => typeof date === "string"));
+      for (const date of protectedDates) {
+        const [closure] = await tx
+          .select({ id: cashClosuresTable.id })
+          .from(cashClosuresTable)
+          .where(eq(cashClosuresTable.date, date));
+        if (closure) return "cash_closed" as const;
+      }
       const { lines, totalAmount, cashTransaction } = planPayrollAdvancePayment(sourceLines, input);
 
       await tx
@@ -983,6 +1026,10 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
     }
     if (paymentResult === "line_not_found") {
       res.status(404).json({ error: "Урьдчилгаа цалингийн мөр олдсонгүй" });
+      return;
+    }
+    if (paymentResult === "cash_closed") {
+      res.status(409).json({ error: "Касс өндөрлөсөн өдрийн урьдчилгааны гүйлгээг засах боломжгүй" });
       return;
     }
     res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(input.month)));
@@ -1032,6 +1079,10 @@ router.get("/cash/transactions", async (_req, res, next) => {
 router.post("/cash/transactions", async (req, res, next) => {
   try {
     const input = CreateCashTransactionBody.parse(req.body);
+    if (await isCashDateClosed(input.date)) {
+      res.status(409).json({ error: `${input.date} өдрийн касс өндөрлөсөн тул гүйлгээ нэмэх боломжгүй` });
+      return;
+    }
     const [transaction] = await db.insert(cashTransactionsTable).values(input).returning();
     res.status(201).json({
       ...transaction,
@@ -1039,6 +1090,49 @@ router.post("/cash/transactions", async (req, res, next) => {
       date: String(transaction.date),
       createdAt: String(transaction.createdAt),
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/cash/closures", async (_req, res, next) => {
+  try {
+    const rows = await db.select().from(cashClosuresTable).orderBy(desc(cashClosuresTable.date));
+    res.json(ListCashClosuresResponse.parse(rows.map((row) => ({
+      id: row.id,
+      date: row.date,
+      closedAt: row.closedAt.toISOString(),
+    }))));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/cash/closures", async (req, res, next) => {
+  try {
+    const { date } = CloseCashDayBody.parse(req.body);
+    if (!isValidCalendarDate(date)) {
+      res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
+      return;
+    }
+    if (date > today()) {
+      res.status(400).json({ error: "Ирээдүйн өдрийн кассыг өндөрлөх боломжгүй" });
+      return;
+    }
+    const [created] = await db
+      .insert(cashClosuresTable)
+      .values({ date })
+      .onConflictDoNothing()
+      .returning();
+    const saved = created ?? (await db
+      .select()
+      .from(cashClosuresTable)
+      .where(eq(cashClosuresTable.date, date)))[0];
+    res.status(201).json(CloseCashDayResponse.parse({
+      id: saved.id,
+      date: saved.date,
+      closedAt: saved.closedAt.toISOString(),
+    }));
   } catch (error) {
     next(error);
   }

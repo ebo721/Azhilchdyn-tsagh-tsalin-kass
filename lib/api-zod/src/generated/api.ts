@@ -567,7 +567,7 @@ export const RevertPayrollAdvanceApprovalResponse = zod.object({
 
 
 /**
- * @summary Mark an approved employee payroll advance as paid or unpaid
+ * @summary Update an approved employee payroll advance amount and paid status
  */
 export const updatePayrollAdvancePaymentBodyMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
 export const updatePayrollAdvancePaymentBodyAdvanceAmountMin = 0;
@@ -679,6 +679,34 @@ export const CreateCashTransactionResponse = zod.object({
   "amount": zod.number(),
   "date": zod.string(),
   "createdAt": zod.string()
+})
+
+
+/**
+ * @summary List closed cash dates
+ */
+export const ListCashClosuresResponseItem = zod.object({
+  "id": zod.number().int(),
+  "date": zod.string(),
+  "closedAt": zod.string()
+})
+export const ListCashClosuresResponse = zod.array(ListCashClosuresResponseItem)
+
+
+/**
+ * @summary Close a cash day
+ */
+export const closeCashDayBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+export const CloseCashDayBody = zod.object({
+  "date": zod.string().regex(closeCashDayBodyDateRegExp)
+})
+
+export const CloseCashDayResponse = zod.object({
+  "id": zod.number().int(),
+  "date": zod.string(),
+  "closedAt": zod.string()
 })
 
 

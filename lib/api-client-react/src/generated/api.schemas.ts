@@ -424,6 +424,17 @@ export interface CashTransactionInput {
   date: string;
 }
 
+export interface CashClosure {
+  id: number;
+  date: string;
+  closedAt: string;
+}
+
+export interface CashClosureInput {
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
+  date: string;
+}
+
 export interface CashSummary {
   balance: number;
   income: number;

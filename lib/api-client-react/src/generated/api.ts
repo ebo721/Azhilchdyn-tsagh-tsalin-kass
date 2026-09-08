@@ -24,6 +24,8 @@ import type {
   AttendanceInput,
   AttendanceToggleInput,
   AuthSession,
+  CashClosure,
+  CashClosureInput,
   CashSummary,
   CashTransaction,
   CashTransactionInput,
@@ -1947,7 +1949,7 @@ export const getUpdatePayrollAdvancePaymentUrl = () => {
 }
 
 /**
- * @summary Mark an approved employee payroll advance as paid or unpaid
+ * @summary Update an approved employee payroll advance amount and paid status
  */
 export const updatePayrollAdvancePayment = async (payrollAdvancePaymentInput: PayrollAdvancePaymentInput, options?: Parameters<typeof customFetch>[1]): Promise<PayrollAdvanceSummary> => {
 
@@ -1996,7 +1998,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type UpdatePayrollAdvancePaymentMutationError = ErrorType<unknown>
 
     /**
- * @summary Mark an approved employee payroll advance as paid or unpaid
+ * @summary Update an approved employee payroll advance amount and paid status
  */
 export const useUpdatePayrollAdvancePayment = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePayrollAdvancePayment>>, TError,{data: BodyType<PayrollAdvancePaymentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -2316,5 +2318,153 @@ export const useCreateCashTransaction = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateCashTransactionMutationOptions(options));
+    }
+
+export const getListCashClosuresUrl = () => {
+
+
+
+
+  return `/api/cash/closures`
+}
+
+/**
+ * @summary List closed cash dates
+ */
+export const listCashClosures = async ( options?: Parameters<typeof customFetch>[1]): Promise<CashClosure[]> => {
+
+  return customFetch<CashClosure[]>(getListCashClosuresUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCashClosuresQueryKey = () => {
+    return [
+    `/api/cash/closures`
+    ] as const;
+    }
+
+
+export const getListCashClosuresQueryOptions = <TData = Awaited<ReturnType<typeof listCashClosures>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCashClosures>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCashClosuresQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCashClosures>>> = ({ signal }) => listCashClosures({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCashClosures>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCashClosuresQueryResult = NonNullable<Awaited<ReturnType<typeof listCashClosures>>>
+export type ListCashClosuresQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List closed cash dates
+ */
+
+export function useListCashClosures<TData = Awaited<ReturnType<typeof listCashClosures>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCashClosures>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCashClosuresQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCloseCashDayUrl = () => {
+
+
+
+
+  return `/api/cash/closures`
+}
+
+/**
+ * @summary Close a cash day
+ */
+export const closeCashDay = async (cashClosureInput: CashClosureInput, options?: Parameters<typeof customFetch>[1]): Promise<CashClosure> => {
+
+  return customFetch<CashClosure>(getCloseCashDayUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(cashClosureInput)
+  }
+);}
+
+
+
+
+
+export const getCloseCashDayMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof closeCashDay>>, TError,{data: BodyType<CashClosureInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof closeCashDay>>, TError,{data: BodyType<CashClosureInput>}, TContext> => {
+
+const mutationKey = ['closeCashDay'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof closeCashDay>>, {data: BodyType<CashClosureInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  closeCashDay(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CloseCashDayMutationResult = NonNullable<Awaited<ReturnType<typeof closeCashDay>>>
+    export type CloseCashDayMutationBody = BodyType<CashClosureInput>
+    export type CloseCashDayMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Close a cash day
+ */
+export const useCloseCashDay = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof closeCashDay>>, TError,{data: BodyType<CashClosureInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof closeCashDay>>,
+        TError,
+        {data: BodyType<CashClosureInput>},
+        TContext
+      > => {
+      return useMutation(getCloseCashDayMutationOptions(options));
     }
 

@@ -15,6 +15,8 @@ export * from './attendanceToggleInput';
 export * from './attendanceToggleInputStatus';
 export * from './authSession';
 export * from './authSessionRole';
+export * from './cashClosure';
+export * from './cashClosureInput';
 export * from './cashSummary';
 export * from './cashTransaction';
 export * from './cashTransactionInput';

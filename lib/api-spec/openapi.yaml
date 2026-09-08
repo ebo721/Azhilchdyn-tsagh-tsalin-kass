@@ -513,6 +513,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CashTransaction"
+  /cash/closures:
+    get:
+      operationId: listCashClosures
+      tags: [cash]
+      summary: List closed cash dates
+      responses:
+        "200":
+          description: Closed cash dates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CashClosure"
+    post:
+      operationId: closeCashDay
+      tags: [cash]
+      summary: Close a cash day
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashClosureInput"
+      responses:
+        "201":
+          description: Closed cash day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashClosure"
 components:
   parameters:
     Id:
@@ -824,6 +855,20 @@ components:
         description: { type: string, minLength: 1 }
         amount: { type: number, minimum: 0 }
         date: { type: string }
+    CashClosure:
+      type: object
+      required: [id, date, closedAt]
+      properties:
+        id: { type: integer }
+        date: { type: string }
+        closedAt: { type: string }
+    CashClosureInput:
+      type: object
+      required: [date]
+      properties:
+        date:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$'
     CashSummary:
       type: object
       required: [balance, income, expense, todayIncome, todayExpense]

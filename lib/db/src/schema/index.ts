@@ -96,6 +96,12 @@ export const cashTransactionsTable = pgTable("cash_transactions", {
   uniqueIndex("cash_transactions_source_idx").on(table.sourceType, table.sourceKey),
 ]);
 
+export const cashClosuresTable = pgTable("cash_closures", {
+  id: serial("id").primaryKey(),
+  date: date("date", { mode: "string" }).notNull().unique(),
+  closedAt: timestamp("closed_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const insertEmployeeSchema = createInsertSchema(employeesTable).omit({
   id: true,
   joinedAt: true,
@@ -117,3 +123,4 @@ export type Attendance = typeof attendanceTable.$inferSelect;
 export type PayrollAdjustment = typeof payrollAdjustmentsTable.$inferSelect;
 export type PayrollAdvanceApproval = typeof payrollAdvanceApprovalsTable.$inferSelect;
 export type CashTransaction = typeof cashTransactionsTable.$inferSelect;
+export type CashClosure = typeof cashClosuresTable.$inferSelect;
