@@ -517,7 +517,7 @@ router.get("/dashboard", async (_req, res, next) => {
     ]);
     const previousMonthValue = previousMonth(currentMonth());
     const previousMonthSalesIncome = transactions
-      .filter((transaction) => transaction.date.startsWith(previousMonthValue) && transaction.type === "income")
+      .filter((transaction) => transaction.incomeMonth === previousMonthValue && transaction.type === "income")
       .reduce((total, transaction) => total + Number(transaction.amount), 0);
     const previousMonthPayrollExpense = transactions
       .filter((transaction) => transaction.type === "expense"
@@ -1601,11 +1601,18 @@ router.get("/cash/transactions", async (_req, res, next) => {
 router.post("/cash/transactions", async (req, res, next) => {
   try {
     const input = CreateCashTransactionBody.parse(req.body);
+    if (input.type === "income" && input.incomeMonth === null) {
+      res.status(400).json({ error: "Орлогын хамаарах сар шаардлагатай" });
+      return;
+    }
     if (await isCashDateClosed(input.date)) {
       res.status(409).json({ error: `${input.date} өдрийн касс өндөрлөсөн тул гүйлгээ нэмэх боломжгүй` });
       return;
     }
-    const [transaction] = await db.insert(cashTransactionsTable).values(input).returning();
+    const [transaction] = await db.insert(cashTransactionsTable).values({
+      ...input,
+      incomeMonth: input.type === "income" ? input.incomeMonth : null,
+    }).returning();
     res.status(201).json({
       ...transaction,
       amount: Number(transaction.amount),
@@ -1625,6 +1632,10 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
   try {
     const { id } = UpdateCashTransactionParams.parse(req.params);
     const input = UpdateCashTransactionBody.parse(req.body);
+    if (input.type === "income" && input.incomeMonth === null) {
+      res.status(400).json({ error: "Орлогын хамаарах сар шаардлагатай" });
+      return;
+    }
     const [existing] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, id));
     if (!existing) {
       res.status(404).json({ error: "Кассын гүйлгээ олдсонгүй" });
@@ -1640,7 +1651,7 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
     }
     const [transaction] = await db
       .update(cashTransactionsTable)
-      .set(input)
+      .set({ ...input, incomeMonth: input.type === "income" ? input.incomeMonth : null })
       .where(eq(cashTransactionsTable.id, id))
       .returning();
     res.json({

@@ -286,13 +286,14 @@ router.post("/bank-transactions/import", raw({ type: "application/octet-stream",
 router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) => {
   try {
     const { id } = TransferBankTransactionToCashParams.parse(req.params);
-    const { category } = TransferBankTransactionToCashBody.parse(req.body);
+    const { category, incomeMonth } = TransferBankTransactionToCashBody.parse(req.body);
     const result = await db.transaction(async (tx) => {
       const [bank] = await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id));
       if (!bank) return null;
       if (bank.cashTransactionId !== null || bank.transferredAt !== null) {
         return bank;
       }
+      if (bank.type === "income" && incomeMonth === null) return "income_month_required" as const;
       const date = bank.transactionAt.toISOString().slice(0, 10);
       const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, date));
       if (closed) return "closed" as const;
@@ -303,6 +304,7 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
         description: bank.description,
         amount: bank.amount,
         date,
+        incomeMonth: bank.type === "income" ? incomeMonth : null,
         sourceType: "bank_transaction",
         sourceKey: String(id),
         bankTransactionId: id,
@@ -322,6 +324,10 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
     }
     if (result === "closed") {
       res.status(409).json({ error: "Өндөрлөсөн өдрийн касс руу шилжүүлэх боломжгүй" });
+      return;
+    }
+    if (result === "income_month_required") {
+      res.status(400).json({ error: "Орлогын хамаарах сар шаардлагатай" });
       return;
     }
     res.json(TransferBankTransactionToCashResponse.parse(response(result)));

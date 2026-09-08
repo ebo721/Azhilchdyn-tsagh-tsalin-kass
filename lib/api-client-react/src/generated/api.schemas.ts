@@ -495,6 +495,11 @@ export interface CashTransaction {
   description: string;
   amount: number;
   date: string;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-(0[1-9]|1[0-2])$
+     */
+  incomeMonth: string | null;
   /** @nullable */
   bankTransactionId: number | null;
   /** @nullable */
@@ -562,6 +567,11 @@ export interface BankTransactionCashTransferInput {
      * @maxLength 200
      */
   category: string;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-(0[1-9]|1[0-2])$
+     */
+  incomeMonth: string | null;
 }
 
 export interface BankTransactionCashLinkInput {
@@ -623,6 +633,11 @@ export interface CashTransactionInput {
   /** @minimum 0 */
   amount: number;
   date: string;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-(0[1-9]|1[0-2])$
+     */
+  incomeMonth: string | null;
 }
 
 export interface CashClosure {

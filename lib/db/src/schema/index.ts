@@ -115,6 +115,7 @@ export const cashTransactionsTable = pgTable("cash_transactions", {
   description: text("description").notNull(),
   amount: numeric("amount", { precision: 12, scale: 2, mode: "number" }).notNull(),
   date: date("date").notNull(),
+  incomeMonth: text("income_month"),
   sourceType: text("source_type"),
   sourceKey: text("source_key"),
   // This intentionally has no FK because bankTransactionsTable is declared below.

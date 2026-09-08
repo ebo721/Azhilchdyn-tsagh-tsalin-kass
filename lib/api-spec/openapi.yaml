@@ -1527,7 +1527,7 @@ components:
         paymentDate: { type: ["string", "null"] }
     CashTransaction:
       type: object
-      required: [id, type, category, description, amount, date, bankTransactionId, bankVerifiedAt, createdAt, editable, transactionKind]
+      required: [id, type, category, description, amount, date, incomeMonth, bankTransactionId, bankVerifiedAt, createdAt, editable, transactionKind]
       properties:
         id: { type: integer }
         type: { type: string, enum: [income, expense] }
@@ -1535,6 +1535,7 @@ components:
         description: { type: string }
         amount: { type: number }
         date: { type: string }
+        incomeMonth: { type: ["string", "null"], pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
         bankTransactionId: { type: ["integer", "null"] }
         bankVerifiedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string }
@@ -1572,9 +1573,10 @@ components:
       items: { $ref: "#/components/schemas/UnclearTransaction" }
     BankTransactionCashTransferInput:
       type: object
-      required: [category]
+      required: [category, incomeMonth]
       properties:
         category: { type: string, minLength: 1, maxLength: 200 }
+        incomeMonth: { type: ["string", "null"], pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
     BankTransactionCashLinkInput:
       type: object
       required: [cashTransactionId]
@@ -1598,13 +1600,14 @@ components:
         score: { type: number }
     CashTransactionInput:
       type: object
-      required: [type, category, description, amount, date]
+      required: [type, category, description, amount, date, incomeMonth]
       properties:
         type: { type: string, enum: [income, expense] }
         category: { type: string, minLength: 1 }
         description: { type: string, minLength: 1 }
         amount: { type: number, minimum: 0 }
         date: { type: string }
+        incomeMonth: { type: ["string", "null"], pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
     CashClosure:
       type: object
       required: [id, date, closedAt]

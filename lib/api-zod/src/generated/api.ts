@@ -783,6 +783,9 @@ export const GetCashSummaryResponse = zod.object({
 /**
  * @summary List cash transactions
  */
+export const listCashTransactionsResponseIncomeMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+
+
 export const ListCashTransactionsResponseItem = zod.object({
   "id": zod.number().int(),
   "type": zod.enum(['income', 'expense']),
@@ -790,6 +793,7 @@ export const ListCashTransactionsResponseItem = zod.object({
   "description": zod.string(),
   "amount": zod.number(),
   "date": zod.string(),
+  "incomeMonth": zod.string().regex(listCashTransactionsResponseIncomeMonthRegExp).nullable(),
   "bankTransactionId": zod.number().int().nullable(),
   "bankVerifiedAt": zod.coerce.date().nullable(),
   "createdAt": zod.string(),
@@ -806,6 +810,7 @@ export const ListCashTransactionsResponse = zod.array(ListCashTransactionsRespon
 
 export const createCashTransactionBodyAmountMin = 0;
 
+export const createCashTransactionBodyIncomeMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
 
 
 export const CreateCashTransactionBody = zod.object({
@@ -813,8 +818,12 @@ export const CreateCashTransactionBody = zod.object({
   "category": zod.string().min(1),
   "description": zod.string().min(1),
   "amount": zod.number().min(createCashTransactionBodyAmountMin),
-  "date": zod.string()
+  "date": zod.string(),
+  "incomeMonth": zod.string().regex(createCashTransactionBodyIncomeMonthRegExp).nullable()
 })
+
+export const createCashTransactionResponseIncomeMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+
 
 export const CreateCashTransactionResponse = zod.object({
   "id": zod.number().int(),
@@ -823,6 +832,7 @@ export const CreateCashTransactionResponse = zod.object({
   "description": zod.string(),
   "amount": zod.number(),
   "date": zod.string(),
+  "incomeMonth": zod.string().regex(createCashTransactionResponseIncomeMonthRegExp).nullable(),
   "bankTransactionId": zod.number().int().nullable(),
   "bankVerifiedAt": zod.coerce.date().nullable(),
   "createdAt": zod.string(),
@@ -842,6 +852,7 @@ export const UpdateCashTransactionParams = zod.object({
 
 export const updateCashTransactionBodyAmountMin = 0;
 
+export const updateCashTransactionBodyIncomeMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
 
 
 export const UpdateCashTransactionBody = zod.object({
@@ -849,8 +860,12 @@ export const UpdateCashTransactionBody = zod.object({
   "category": zod.string().min(1),
   "description": zod.string().min(1),
   "amount": zod.number().min(updateCashTransactionBodyAmountMin),
-  "date": zod.string()
+  "date": zod.string(),
+  "incomeMonth": zod.string().regex(updateCashTransactionBodyIncomeMonthRegExp).nullable()
 })
+
+export const updateCashTransactionResponseIncomeMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+
 
 export const UpdateCashTransactionResponse = zod.object({
   "id": zod.number().int(),
@@ -859,6 +874,7 @@ export const UpdateCashTransactionResponse = zod.object({
   "description": zod.string(),
   "amount": zod.number(),
   "date": zod.string(),
+  "incomeMonth": zod.string().regex(updateCashTransactionResponseIncomeMonthRegExp).nullable(),
   "bankTransactionId": zod.number().int().nullable(),
   "bankVerifiedAt": zod.coerce.date().nullable(),
   "createdAt": zod.string(),
@@ -996,10 +1012,12 @@ export const TransferBankTransactionToCashParams = zod.object({
 
 export const transferBankTransactionToCashBodyCategoryMax = 200;
 
+export const transferBankTransactionToCashBodyIncomeMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
 
 
 export const TransferBankTransactionToCashBody = zod.object({
-  "category": zod.string().min(1).max(transferBankTransactionToCashBodyCategoryMax)
+  "category": zod.string().min(1).max(transferBankTransactionToCashBodyCategoryMax),
+  "incomeMonth": zod.string().regex(transferBankTransactionToCashBodyIncomeMonthRegExp).nullable()
 })
 
 export const TransferBankTransactionToCashResponse = zod.object({

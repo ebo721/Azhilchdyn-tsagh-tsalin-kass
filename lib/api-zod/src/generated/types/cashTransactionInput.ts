@@ -16,4 +16,9 @@ export interface CashTransactionInput {
   /** @minimum 0 */
   amount: number;
   date: string;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-(0[1-9]|1[0-2])$
+     */
+  incomeMonth: string | null;
 }
