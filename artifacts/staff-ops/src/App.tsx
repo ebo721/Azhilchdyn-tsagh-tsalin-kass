@@ -1,4 +1,5 @@
 import { type ChangeEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -306,8 +307,13 @@ function PageHeading({ eyebrow, title, detail, action }: { eyebrow?: string; tit
 }
 
 function Modal({ title, detail, onClose, children, wide = false, fullScreen = false }: { title: string; detail: string; onClose: () => void; children: ReactNode; wide?: boolean; fullScreen?: boolean }) {
-  return (
-    <div className={cn('fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/35 backdrop-blur-[2px] sm:p-4', fullScreen ? 'p-0' : 'p-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]')} role="dialog" aria-modal="true" data-testid="modal">
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, []);
+  return createPortal(
+    <div className={cn('fixed inset-0 z-50 flex justify-center overflow-y-auto bg-foreground/35 backdrop-blur-[2px] sm:p-4', fullScreen ? 'items-start p-0' : 'items-center p-3')} role="dialog" aria-modal="true" data-testid="modal">
       <div className={cn('w-full overflow-y-auto border border-border bg-card p-5 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl sm:p-7', fullScreen ? 'h-[100dvh] max-h-none rounded-none pt-[calc(env(safe-area-inset-top)+1.25rem)] sm:max-h-[calc(100dvh-2rem)] sm:pt-7' : 'max-h-[calc(100dvh-1.5rem)] rounded-2xl', wide ? 'sm:max-w-5xl' : 'sm:max-w-xl')}>
         <div className="sticky top-0 z-10 -mx-2 mb-6 flex items-start justify-between gap-4 bg-card px-2 pb-3">
           <div><p className="text-lg font-bold tracking-tight">{title}</p><p className="mt-1 text-xs text-muted-foreground">{detail}</p></div>
@@ -315,7 +321,8 @@ function Modal({ title, detail, onClose, children, wide = false, fullScreen = fa
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
