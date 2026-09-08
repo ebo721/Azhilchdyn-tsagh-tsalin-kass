@@ -871,6 +871,16 @@ export const UpdateInventoryPurchaseResponse = zod.object({
 
 
 /**
+ * @summary Delete inventory purchase, reverse stock and remove cash transaction
+ */
+export const DeleteInventoryPurchaseParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteInventoryPurchaseResponse = zod.void()
+
+
+/**
  * @summary List inventory catalog and stock
  */
 export const ListInventoryItemsResponseItem = zod.object({

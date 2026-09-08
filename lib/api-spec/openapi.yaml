@@ -624,6 +624,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryPurchase"
+    delete:
+      operationId: deleteInventoryPurchase
+      tags: [inventory]
+      summary: Delete inventory purchase, reverse stock and remove cash transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Deleted inventory purchase
   /inventory/items:
     get:
       operationId: listInventoryItems

@@ -78,6 +78,7 @@ import {
   useCreateInventoryPurchase,
   useListInventoryItems,
   useUpdateInventoryPurchase,
+  useDeleteInventoryPurchase,
   useListShiftPlans,
   useListShifts,
   useLoginHrManager,
@@ -693,6 +694,7 @@ function Inventory() {
   const catalog = useListInventoryItems();
   const create = useCreateInventoryPurchase();
   const update = useUpdateInventoryPurchase();
+  const remove = useDeleteInventoryPurchase();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<InventoryPurchase | null>(null);
@@ -749,6 +751,17 @@ function Inventory() {
     else create.mutate({ data }, options);
   };
   const filteredCatalog = catalog.data?.filter((item) => `${item.name} ${item.category}`.toLocaleLowerCase('mn-MN').includes(stockSearch.toLocaleLowerCase('mn-MN'))) ?? [];
+  const deletePurchase = (purchase: InventoryPurchase) => {
+    if (!window.confirm(`${dateLabel(purchase.date)}-ны ${money(purchase.totalAmount)} дүнтэй худалдан авалтыг устгах уу?`)) return;
+    remove.mutate({ id: purchase.id }, {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListInventoryPurchasesQueryKey() });
+        qc.invalidateQueries({ queryKey: getListCashTransactionsQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetCashSummaryQueryKey() });
+        catalog.refetch();
+      },
+    });
+  };
   return <div className="page-enter">
     <div className="mb-6 flex justify-end"><Button onClick={openForm} data-testid="button-add-inventory-purchase"><Plus className="size-4" />Худалдан авалт бүртгэх</Button></div>
     <section className="mb-6 overflow-hidden rounded-2xl border border-border bg-card">
@@ -758,7 +771,7 @@ function Inventory() {
     <section className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-5 py-4"><h2 className="text-base font-bold">Худалдан авалтын жагсаалт</h2><span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{query.data?.length ?? 0} бүртгэл</span></div>
       {query.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-20" /><LoadingBlock className="h-20" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : !query.data?.length ? <EmptyState title="Худалдан авалт бүртгэгдээгүй" detail="Бараа материалын эхний худалдан авалтаа бүртгэнэ үү." icon={PackageOpen} /> : <div className="divide-y divide-border">{query.data.map((purchase) => <div className="p-5" key={purchase.id} data-testid={`inventory-purchase-${purchase.id}`}>
-        <div className="mb-4 flex items-center justify-between gap-4"><div><p className="text-sm font-bold">{dateLabel(purchase.date)}</p><p className="mt-1 text-xs text-muted-foreground">{purchase.items.length} төрлийн бараа</p></div><div className="flex items-center gap-2">{purchase.editable && <Button size="icon" variant="ghost" onClick={() => editPurchase(purchase)} data-testid={`button-edit-inventory-${purchase.id}`}><Pencil className="size-4" /></Button>}<p className="font-mono text-base font-bold text-primary">{money(purchase.totalAmount)}</p></div></div>
+        <div className="mb-4 flex items-center justify-between gap-4"><div><p className="text-sm font-bold">{dateLabel(purchase.date)}</p><p className="mt-1 text-xs text-muted-foreground">{purchase.items.length} төрлийн бараа</p></div><div className="flex items-center gap-2">{purchase.editable && <><Button size="icon" variant="ghost" onClick={() => editPurchase(purchase)} data-testid={`button-edit-inventory-${purchase.id}`}><Pencil className="size-4" /></Button><Button size="icon" variant="ghost" disabled={remove.isPending} onClick={() => deletePurchase(purchase)} data-testid={`button-delete-inventory-${purchase.id}`}><Trash2 className="size-4" /></Button></>}<p className="font-mono text-base font-bold text-primary">{money(purchase.totalAmount)}</p></div></div>
         <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-3 py-2">Бараа материал</th><th className="px-3 py-2">Ангилал</th><th className="px-3 py-2">Нэгж</th><th className="px-3 py-2 text-right">Тоо</th><th className="px-3 py-2 text-right">Үнэ</th><th className="px-3 py-2 text-right">Нийт</th></tr></thead><tbody className="divide-y divide-border">{purchase.items.map((item) => <tr key={item.id}><td className="px-3 py-3 text-sm font-semibold">{item.name}</td><td className="px-3 py-3 text-sm text-muted-foreground">{item.category}</td><td className="px-3 py-3 text-sm text-muted-foreground">{item.unit}</td><td className="px-3 py-3 text-right font-mono text-sm">{item.quantity}</td><td className="px-3 py-3 text-right font-mono text-sm">{money(item.unitPrice)}</td><td className="px-3 py-3 text-right font-mono text-sm font-bold">{money(item.totalAmount)}</td></tr>)}</tbody></table></div>
       </div>)}</div>}
     </section>

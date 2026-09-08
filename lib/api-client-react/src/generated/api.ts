@@ -2834,6 +2834,77 @@ export const useUpdateInventoryPurchase = <TError = ErrorType<unknown>,
       return useMutation(getUpdateInventoryPurchaseMutationOptions(options));
     }
 
+export const getDeleteInventoryPurchaseUrl = (id: number,) => {
+
+
+
+
+  return `/api/inventory/purchases/${id}`
+}
+
+/**
+ * @summary Delete inventory purchase, reverse stock and remove cash transaction
+ */
+export const deleteInventoryPurchase = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteInventoryPurchaseUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteInventoryPurchaseMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteInventoryPurchase>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteInventoryPurchase>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteInventoryPurchase'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteInventoryPurchase>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteInventoryPurchase(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteInventoryPurchaseMutationResult = NonNullable<Awaited<ReturnType<typeof deleteInventoryPurchase>>>
+
+    export type DeleteInventoryPurchaseMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete inventory purchase, reverse stock and remove cash transaction
+ */
+export const useDeleteInventoryPurchase = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteInventoryPurchase>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteInventoryPurchase>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteInventoryPurchaseMutationOptions(options));
+    }
+
 export const getListInventoryItemsUrl = () => {
 
 

@@ -36,6 +36,7 @@ import {
   UpdateInventoryPurchaseBody,
   UpdateInventoryPurchaseParams,
   UpdateInventoryPurchaseResponse,
+  DeleteInventoryPurchaseParams,
   ListEmployeesResponse,
   UpsertPayrollAdjustmentBody,
   UpdatePayrollAdvancePaymentBody,
@@ -1448,6 +1449,39 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
         totalAmount: Number(item.totalAmount),
       })),
     }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/inventory/purchases/:id", async (req, res, next) => {
+  try {
+    const { id } = DeleteInventoryPurchaseParams.parse(req.params);
+    const [existing] = await db.select().from(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, id));
+    if (!existing) {
+      res.status(404).json({ error: "Худалдан авалт олдсонгүй" });
+      return;
+    }
+    if (await isCashDateClosed(existing.date)) {
+      res.status(409).json({ error: "Өндөрлөсөн өдрийн худалдан авалтыг устгах боломжгүй" });
+      return;
+    }
+    await db.transaction(async (tx) => {
+      const lines = await tx.select().from(inventoryPurchaseItemsTable).where(eq(inventoryPurchaseItemsTable.purchaseId, id));
+      for (const line of lines) {
+        if (line.inventoryItemId) {
+          await tx.update(inventoryItemsTable)
+            .set({ quantity: sql`${inventoryItemsTable.quantity} - ${line.quantity}` })
+            .where(eq(inventoryItemsTable.id, line.inventoryItemId));
+        }
+      }
+      await tx.delete(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, id));
+      await tx.delete(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "inventory_purchase"),
+        eq(cashTransactionsTable.sourceKey, `purchase:${id}`),
+      ));
+    });
+    res.status(204).send();
   } catch (error) {
     next(error);
   }
