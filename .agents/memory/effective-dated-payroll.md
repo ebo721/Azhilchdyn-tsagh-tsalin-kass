@@ -13,6 +13,8 @@ Payroll deductions are based on the effective social-insurance salary: employee 
 
 When an approved payroll-advance line is changed from paid back to unpaid, refresh that employee's salary and first-half worked days, recalculate the advance, and remove its cash expense in the same transaction.
 
+Salary-history deletion must preserve the employee's initial baseline row and must be rejected if it would affect a month with paid payroll. When the latest history row is deleted, restore the employee's current salary fields from the preceding row in the same transaction.
+
 **Why:** The user explicitly chose workday-based proration and confirmed that the inactive date is inclusive. Historical payroll must remain based on the salary that applied at the time rather than the employee's latest salary.
 
-**How to apply:** Preserve effective-dated salary history whenever salary inputs change. When replacing a salary from an effective date, remove that employee's history on or after the date before inserting the replacement. For payroll changes, resolve rates by date, exclude leave dates, include inactive employees whose employment overlaps the requested month, and reject retroactive salary changes that would affect an already-paid month.
+**How to apply:** Preserve effective-dated salary history whenever salary inputs change. When replacing a salary from an effective date, remove that employee's history on or after the date before inserting the replacement. For payroll changes, resolve rates by date, exclude leave dates, include inactive employees whose employment overlaps the requested month, and reject retroactive salary changes or history deletion that would affect an already-paid month.

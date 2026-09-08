@@ -55,6 +55,7 @@ import {
   getListCashTransactionsQueryKey,
   getListCashClosuresQueryKey,
   getListEmployeesQueryKey,
+  getListEmployeeSalaryHistoryQueryKey,
   getListInventoryPurchasesQueryKey,
   getListInventorySuppliersQueryKey,
   getListInventoryIssuesQueryKey,
@@ -81,6 +82,7 @@ import {
   useListCashTransactions,
   useListCashClosures,
   useListEmployees,
+  useListEmployeeSalaryHistory,
   useListInventoryPurchases,
   useListInventorySuppliers,
   useUpdateInventorySupplier,
@@ -368,6 +370,12 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
   const create = useCreateEmployee();
   const update = useUpdateEmployee();
   const qc = useQueryClient();
+  const session = useGetAuthSession();
+  const salaryHistoryEmployeeId = employee?.id ?? 0;
+  const salaryHistory = useListEmployeeSalaryHistory(salaryHistoryEmployeeId, {
+    query: { enabled: isEdit, queryKey: getListEmployeeSalaryHistoryQueryKey(salaryHistoryEmployeeId) },
+  });
+  const salaryHistoryDeletion = useQueueDeletion();
   const form = useForm<EmployeeForm>({ defaultValues: { name: employee?.name ?? '', role: employee?.role ?? '', phone: employee?.phone ?? '', employeeType: employee?.employeeType ?? 'office', baseSalary: String(employee?.baseSalary ?? ''), socialInsuranceSalary: String(employee?.socialInsuranceSalary ?? ''), payrollTaxExempt: employee?.payrollTaxExempt ?? false, monthlyExpectedWorkDays: String(employee?.monthlyExpectedWorkDays ?? 0), joinedAt: employee?.joinedAt ?? today(), status: employee?.status ?? 'active', inactiveAt: employee?.inactiveAt ?? '', salaryEffectiveDate: '' } });
   const submit = (values: EmployeeForm) => {
     const data = { name: values.name, role: values.role, phone: values.phone, employeeType: values.employeeType, baseSalary: Number(values.baseSalary), socialInsuranceSalary: values.payrollTaxExempt ? 0 : Number(values.socialInsuranceSalary), payrollTaxExempt: values.payrollTaxExempt, monthlyExpectedWorkDays: values.employeeType === 'shift' ? Number(values.monthlyExpectedWorkDays) : 0, joinedAt: values.joinedAt, ...(isEdit ? { status: values.status, inactiveAt: values.status === 'inactive' ? values.inactiveAt : null, ...(values.salaryEffectiveDate ? { salaryEffectiveDate: values.salaryEffectiveDate } : {}) } : {}) };
@@ -375,6 +383,17 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
     if (isEdit && employee) update.mutate({ id: employee.id, data }, { onSuccess: done }); else create.mutate({ data }, { onSuccess: done });
   };
   const pending = create.isPending || update.isPending;
+  const deleteSalaryHistory = (historyId: number, effectiveFrom: string) => {
+    if (!employee || !window.confirm(`${effectiveFrom}-с хүчинтэй цалингийн мөрийг устгах уу?`)) return;
+    void salaryHistoryDeletion.request(
+      `/employees/${employee.id}/salary-history/${historyId}`,
+      `${employee.name} ажилтны ${effectiveFrom}-с хүчинтэй цалингийн түүх`,
+    ).then(() => {
+      qc.invalidateQueries({ queryKey: getListEmployeeSalaryHistoryQueryKey(employee.id) });
+      qc.invalidateQueries({ queryKey: getListEmployeesQueryKey() });
+      qc.invalidateQueries({ queryKey: getGetPayrollQueryKey() });
+    });
+  };
   const employeeType = form.watch('employeeType');
   const baseSalary = form.watch('baseSalary');
   const socialInsuranceSalary = form.watch('socialInsuranceSalary');
@@ -402,6 +421,10 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
         {isEdit && status === 'inactive' && <label className="space-y-2 text-xs font-semibold">Идэвхгүй болсон огноо<input type="date" min={form.getValues('joinedAt')} className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('inactiveAt', { required: status === 'inactive' })} data-testid="input-employee-inactive-at" /><span className="text-[11px] font-normal text-muted-foreground">Энэ өдрийг цалин бодох сүүлийн өдөрт оруулна.</span></label>}
         {salaryChanged && <label className="space-y-2 rounded-xl border border-primary/30 bg-primary/5 p-4 text-xs font-semibold sm:col-span-2">Цалин өөрчлөгдөж буй огноо<input type="date" min={form.getValues('joinedAt')} className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('salaryEffectiveDate', { required: salaryChanged ? 'Цалин өөрчлөгдөж буй огноог сонгоно уу' : false })} data-testid="input-employee-salary-effective-date" />{form.formState.errors.salaryEffectiveDate ? <span className="text-[11px] text-destructive">{form.formState.errors.salaryEffectiveDate.message}</span> : <span className="text-[11px] font-normal text-muted-foreground">Шинэ цалинг энэ өдрөөс эхлэн тооцно. Өмнөх өдрүүд хуучин цалингаар бодогдоно.</span>}</label>}
       </div>
+      {isEdit && <section className="overflow-hidden rounded-xl border border-border">
+        <div className="flex items-center justify-between border-b border-border bg-secondary/35 px-4 py-3"><div><h3 className="text-sm font-bold">Цалингийн түүх</h3><p className="text-[11px] text-muted-foreground">Шинэ огнооноос эхлэн тухайн мөрийн цалинг ашиглана.</p></div><span className="font-mono text-xs text-muted-foreground">{salaryHistory.data?.length ?? 0} мөр</span></div>
+        {salaryHistory.isLoading ? <div className="p-4"><LoadingBlock className="h-20" /></div> : salaryHistory.isError ? <div className="p-4"><ErrorBlock onRetry={() => salaryHistory.refetch()} /></div> : !salaryHistory.data?.length ? <p className="p-4 text-sm text-muted-foreground">Цалингийн түүх олдсонгүй.</p> : <div className="max-h-64 overflow-auto"><table className="w-full min-w-[680px] text-left"><thead className="bg-secondary/20 text-[10px] uppercase text-muted-foreground"><tr><th className="px-4 py-2">Хүчинтэй огноо</th><th className="px-4 py-2">Төрөл</th><th className="px-4 py-2 text-right">Үндсэн цалин</th><th className="px-4 py-2 text-right">НДШ цалин</th><th className="px-4 py-2 text-center">Татвар</th><th className="px-4 py-2 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{salaryHistory.data.map((row, index) => <tr key={row.id} data-testid={`row-salary-history-${row.id}`}><td className="px-4 py-3 font-mono text-xs">{row.effectiveFrom}</td><td className="px-4 py-3 text-xs">{row.employeeType === 'office' ? 'Оффис' : 'Ээлжийн'}</td><td className="px-4 py-3 text-right font-mono text-xs">{money(row.baseSalary)}</td><td className="px-4 py-3 text-right font-mono text-xs">{money(row.socialInsuranceSalary)}</td><td className="px-4 py-3 text-center text-xs">{row.payrollTaxExempt ? 'Чөлөөлсөн' : 'Тооцно'}</td><td className="px-4 py-3 text-right">{session.data?.role !== 'viewer' && <Button type="button" size="icon" variant="outline" disabled={index === salaryHistory.data.length - 1 || salaryHistoryDeletion.isPending} title={index === salaryHistory.data.length - 1 ? 'Анхны цалингийн мөрийг устгах боломжгүй' : 'Буруу цалингийн мөр устгах'} onClick={() => deleteSalaryHistory(row.id, row.effectiveFrom)} data-testid={`button-delete-salary-history-${row.id}`}><Trash2 className="size-3.5" /></Button>}</td></tr>)}</tbody></table></div>}
+      </section>}
       {(create.isError || update.isError) && <p className="text-xs font-semibold text-destructive">Мэдээллийг хадгалж чадсангүй. Огноонууд болон цалин өөрчлөгдөх огноог шалгана уу.</p>}
       <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={onClose} data-testid="button-cancel-employee">Болих</Button><Button type="submit" disabled={pending} data-testid="button-save-employee">{pending ? 'Хадгалж байна...' : isEdit ? 'Өөрчлөлт хадгалах' : 'Ажилтан нэмэх'}</Button></div>
     </form></Form>

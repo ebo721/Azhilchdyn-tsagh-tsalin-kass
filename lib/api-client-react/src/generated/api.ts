@@ -35,6 +35,7 @@ import type {
   DeletionRequestInput,
   Employee,
   EmployeeInput,
+  EmployeeSalaryHistory,
   EmployeeUpdate,
   FixedAsset,
   FixedAssetInput,
@@ -964,6 +965,156 @@ export const useDeleteEmployee = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteEmployeeMutationOptions(options));
+    }
+
+export const getListEmployeeSalaryHistoryUrl = (id: number,) => {
+
+
+
+
+  return `/api/employees/${id}/salary-history`
+}
+
+/**
+ * @summary List an employee's salary history
+ */
+export const listEmployeeSalaryHistory = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<EmployeeSalaryHistory[]> => {
+
+  return customFetch<EmployeeSalaryHistory[]>(getListEmployeeSalaryHistoryUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListEmployeeSalaryHistoryQueryKey = (id: number,) => {
+    return [
+    `/api/employees/${id}/salary-history`
+    ] as const;
+    }
+
+
+export const getListEmployeeSalaryHistoryQueryOptions = <TData = Awaited<ReturnType<typeof listEmployeeSalaryHistory>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEmployeeSalaryHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListEmployeeSalaryHistoryQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listEmployeeSalaryHistory>>> = ({ signal }) => listEmployeeSalaryHistory(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listEmployeeSalaryHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListEmployeeSalaryHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof listEmployeeSalaryHistory>>>
+export type ListEmployeeSalaryHistoryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List an employee's salary history
+ */
+
+export function useListEmployeeSalaryHistory<TData = Awaited<ReturnType<typeof listEmployeeSalaryHistory>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEmployeeSalaryHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListEmployeeSalaryHistoryQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDeleteEmployeeSalaryHistoryUrl = (id: number,
+    historyId: number,) => {
+
+
+
+
+  return `/api/employees/${id}/salary-history/${historyId}`
+}
+
+/**
+ * @summary Delete an incorrect salary history entry
+ */
+export const deleteEmployeeSalaryHistory = async (id: number,
+    historyId: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteEmployeeSalaryHistoryUrl(id,historyId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteEmployeeSalaryHistoryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEmployeeSalaryHistory>>, TError,{id: number;historyId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteEmployeeSalaryHistory>>, TError,{id: number;historyId: number}, TContext> => {
+
+const mutationKey = ['deleteEmployeeSalaryHistory'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteEmployeeSalaryHistory>>, {id: number;historyId: number}> = (props) => {
+          const {id,historyId} = props ?? {};
+
+          return  deleteEmployeeSalaryHistory(id,historyId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteEmployeeSalaryHistoryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteEmployeeSalaryHistory>>>
+
+    export type DeleteEmployeeSalaryHistoryMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete an incorrect salary history entry
+ */
+export const useDeleteEmployeeSalaryHistory = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEmployeeSalaryHistory>>, TError,{id: number;historyId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteEmployeeSalaryHistory>>,
+        TError,
+        {id: number;historyId: number},
+        TContext
+      > => {
+      return useMutation(getDeleteEmployeeSalaryHistoryMutationOptions(options));
     }
 
 export const getListAttendanceUrl = (params?: ListAttendanceParams,) => {

@@ -226,6 +226,37 @@ export const DeleteEmployeeResponse = zod.void()
 
 
 /**
+ * @summary List an employee's salary history
+ */
+export const ListEmployeeSalaryHistoryParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const ListEmployeeSalaryHistoryResponseItem = zod.object({
+  "id": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "effectiveFrom": zod.string(),
+  "employeeType": zod.enum(['shift', 'office']),
+  "baseSalary": zod.number(),
+  "socialInsuranceSalary": zod.number(),
+  "payrollTaxExempt": zod.boolean(),
+  "createdAt": zod.string()
+})
+export const ListEmployeeSalaryHistoryResponse = zod.array(ListEmployeeSalaryHistoryResponseItem)
+
+
+/**
+ * @summary Delete an incorrect salary history entry
+ */
+export const DeleteEmployeeSalaryHistoryParams = zod.object({
+  "id": zod.coerce.number().int(),
+  "historyId": zod.coerce.number().int()
+})
+
+export const DeleteEmployeeSalaryHistoryResponse = zod.void()
+
+
+/**
  * @summary List attendance records
  */
 export const listAttendanceQueryMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');

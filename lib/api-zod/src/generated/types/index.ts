@@ -33,6 +33,8 @@ export * from './employee';
 export * from './employeeEmployeeType';
 export * from './employeeInput';
 export * from './employeeInputEmployeeType';
+export * from './employeeSalaryHistory';
+export * from './employeeSalaryHistoryEmployeeType';
 export * from './employeeStatus';
 export * from './employeeUpdate';
 export * from './employeeUpdateEmployeeType';

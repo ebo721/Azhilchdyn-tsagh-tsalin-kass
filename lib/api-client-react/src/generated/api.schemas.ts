@@ -122,6 +122,25 @@ export interface Employee {
   inactiveAt: string | null;
 }
 
+export type EmployeeSalaryHistoryEmployeeType = typeof EmployeeSalaryHistoryEmployeeType[keyof typeof EmployeeSalaryHistoryEmployeeType];
+
+
+export const EmployeeSalaryHistoryEmployeeType = {
+  shift: 'shift',
+  office: 'office',
+} as const;
+
+export interface EmployeeSalaryHistory {
+  id: number;
+  employeeId: number;
+  effectiveFrom: string;
+  employeeType: EmployeeSalaryHistoryEmployeeType;
+  baseSalary: number;
+  socialInsuranceSalary: number;
+  payrollTaxExempt: boolean;
+  createdAt: string;
+}
+
 export type EmployeeInputEmployeeType = typeof EmployeeInputEmployeeType[keyof typeof EmployeeInputEmployeeType];
 
 

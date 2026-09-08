@@ -72,6 +72,9 @@ import {
   CancelDeletionRequestParams,
   CancelDeletionRequestResponse,
   ListEmployeesResponse,
+  ListEmployeeSalaryHistoryParams,
+  ListEmployeeSalaryHistoryResponse,
+  DeleteEmployeeSalaryHistoryParams,
   DeletePayrollAdjustmentTransactionParams,
   UpsertPayrollAdjustmentBody,
   UpdatePayrollAdvancePaymentBody,
@@ -185,6 +188,7 @@ const currentMonth = () => today().slice(0, 7);
 const money = (value: number) => Math.round(value * 100) / 100;
 const deletionTargetPatterns = [
   /^\/employees\/\d+$/,
+  /^\/employees\/\d+\/salary-history\/\d+$/,
   /^\/attendance\/shifts\/\d+$/,
   /^\/attendance\?employeeId=\d+&date=\d{4}-\d{2}-\d{2}$/,
   /^\/payroll-advance\/approval\?month=\d{4}-\d{2}$/,
@@ -659,6 +663,79 @@ router.patch("/employees/:id", async (req, res, next) => {
       socialInsuranceSalary: Number(employee.socialInsuranceSalary),
       joinedAt: String(employee.joinedAt),
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/employees/:id/salary-history", async (req, res, next) => {
+  try {
+    const { id } = ListEmployeeSalaryHistoryParams.parse(req.params);
+    const [employee] = await db.select({ id: employeesTable.id }).from(employeesTable).where(eq(employeesTable.id, id));
+    if (!employee) {
+      res.status(404).json({ error: "Ажилтан олдсонгүй" });
+      return;
+    }
+    const rows = await db.select().from(employeeSalaryHistoryTable)
+      .where(eq(employeeSalaryHistoryTable.employeeId, id))
+      .orderBy(desc(employeeSalaryHistoryTable.effectiveFrom));
+    res.json(ListEmployeeSalaryHistoryResponse.parse(rows.map((row) => ({
+      ...row,
+      baseSalary: Number(row.baseSalary),
+      socialInsuranceSalary: Number(row.socialInsuranceSalary),
+      effectiveFrom: String(row.effectiveFrom),
+      createdAt: row.createdAt.toISOString(),
+    }))));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/employees/:id/salary-history/:historyId", async (req, res, next) => {
+  try {
+    const { id, historyId } = DeleteEmployeeSalaryHistoryParams.parse(req.params);
+    const history = await db.select().from(employeeSalaryHistoryTable)
+      .where(eq(employeeSalaryHistoryTable.employeeId, id))
+      .orderBy(employeeSalaryHistoryTable.effectiveFrom);
+    const index = history.findIndex((row) => row.id === historyId);
+    if (index < 0) {
+      res.status(404).json({ error: "Цалингийн түүх олдсонгүй" });
+      return;
+    }
+    if (history.length === 1 || index === 0) {
+      res.status(409).json({ error: "Ажилд орсон үеийн анхны цалингийн мөрийг устгах боломжгүй" });
+      return;
+    }
+    const target = history[index];
+    const next = history[index + 1];
+    const affectedPaidPayroll = await db.select({
+      month: payrollAdjustmentsTable.month,
+      paidAmount: payrollAdjustmentsTable.paidAmount,
+      secondPaidAmount: payrollAdjustmentsTable.secondPaidAmount,
+    }).from(payrollAdjustmentsTable).where(eq(payrollAdjustmentsTable.employeeId, id));
+    const affectedPaidMonth = affectedPaidPayroll.find((row) =>
+      row.month >= String(target.effectiveFrom).slice(0, 7)
+      && (!next || row.month <= String(next.effectiveFrom).slice(0, 7))
+      && (Number(row.paidAmount) > 0 || Number(row.secondPaidAmount) > 0)
+    );
+    if (affectedPaidMonth) {
+      res.status(409).json({ error: `${affectedPaidMonth.month} сарын олгосон цалинд нөлөөлөх тул энэ мөрийг устгах боломжгүй` });
+      return;
+    }
+    await db.transaction(async (tx) => {
+      await tx.delete(employeeSalaryHistoryTable).where(eq(employeeSalaryHistoryTable.id, historyId));
+      if (index === history.length - 1) {
+        const previous = history[index - 1];
+        await tx.update(employeesTable).set({
+          employeeType: previous.employeeType,
+          salaryType: previous.employeeType === "shift" ? "hourly" : "monthly",
+          baseSalary: previous.baseSalary,
+          socialInsuranceSalary: previous.socialInsuranceSalary,
+          payrollTaxExempt: previous.payrollTaxExempt,
+        }).where(eq(employeesTable.id, id));
+      }
+    });
+    res.status(204).send();
   } catch (error) {
     next(error);
   }

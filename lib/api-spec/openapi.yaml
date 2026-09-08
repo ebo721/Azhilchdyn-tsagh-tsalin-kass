@@ -184,6 +184,36 @@ paths:
       responses:
         "204":
           description: Employee deleted
+  /employees/{id}/salary-history:
+    get:
+      operationId: listEmployeeSalaryHistory
+      tags: [employees]
+      summary: List an employee's salary history
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Salary history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EmployeeSalaryHistory"
+  /employees/{id}/salary-history/{historyId}:
+    delete:
+      operationId: deleteEmployeeSalaryHistory
+      tags: [employees]
+      summary: Delete an incorrect salary history entry
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - in: path
+          name: historyId
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Salary history entry deleted
   /attendance:
     get:
       operationId: listAttendance
@@ -1068,6 +1098,18 @@ components:
         status: { type: string, enum: [active, inactive] }
         joinedAt: { type: string }
         inactiveAt: { type: [string, "null"] }
+    EmployeeSalaryHistory:
+      type: object
+      required: [id, employeeId, effectiveFrom, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, createdAt]
+      properties:
+        id: { type: integer }
+        employeeId: { type: integer }
+        effectiveFrom: { type: string }
+        employeeType: { type: string, enum: [shift, office] }
+        baseSalary: { type: number }
+        socialInsuranceSalary: { type: number }
+        payrollTaxExempt: { type: boolean }
+        createdAt: { type: string }
     EmployeeInput:
       type: object
       required: [name, role, phone, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, monthlyExpectedWorkDays, joinedAt]
