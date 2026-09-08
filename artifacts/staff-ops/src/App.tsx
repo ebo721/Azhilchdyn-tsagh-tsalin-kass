@@ -761,11 +761,15 @@ function Cash() {
   const [open, setOpen] = useState(false);
   const [filterMonth, setFilterMonth] = useState(currentMonth());
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
+  const [filterKind, setFilterKind] = useState<'all' | 'payroll' | 'inventory_purchase' | 'fixed_asset_purchase' | 'manual'>('all');
   const form = useForm<CashForm>({ defaultValues: { type: 'income', category: '', description: '', amount: '', date: today() } });
   const closedDates = new Set(closures.data?.map((closure) => closure.date) ?? []);
   const filteredTransactions = (list.data ?? []).filter((row) =>
     row.date.startsWith(filterMonth)
     && (filterType === 'all' || row.type === filterType)
+    && (filterKind === 'all'
+      || (filterKind === 'payroll' && (row.transactionKind === 'payroll' || row.transactionKind === 'payroll_advance'))
+      || row.transactionKind === filterKind)
   );
   const filteredIncome = filteredTransactions
     .filter((row) => row.type === CashTransactionType.income)
@@ -806,6 +810,7 @@ function Cash() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1"><span className="block text-xs font-semibold">Сар</span><div className="flex items-center overflow-hidden rounded-lg border border-input bg-background"><button type="button" onClick={() => setFilterMonth((value) => shiftMonth(value, -1))} className="grid size-10 place-items-center border-r border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Өмнөх сар" data-testid="button-cash-filter-previous-month"><ChevronRight className="size-4 rotate-180" /></button><label className="relative flex h-10 min-w-32 cursor-pointer items-center justify-center px-3 text-sm font-medium"><span>{mongolianMonthLabel(filterMonth)}</span><input type="month" value={filterMonth} onChange={(event) => setFilterMonth(event.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="Кассын сар сонгох" data-testid="input-cash-filter-month" /></label><button type="button" onClick={() => setFilterMonth((value) => shiftMonth(value, 1))} className="grid size-10 place-items-center border-l border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Дараагийн сар" data-testid="button-cash-filter-next-month"><ChevronRight className="size-4" /></button></div></div>
           <label className="space-y-1 text-xs font-semibold">Төрөл<select value={filterType} onChange={(event) => setFilterType(event.target.value as 'all' | 'income' | 'expense')} className="block h-10 min-w-36 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="select-cash-filter-type"><option value="all">Бүгд</option><option value="income">Орлого</option><option value="expense">Зарлага</option></select></label>
+          <label className="space-y-1 text-xs font-semibold">Ангилал<select value={filterKind} onChange={(event) => setFilterKind(event.target.value as typeof filterKind)} className="block h-10 min-w-44 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="select-cash-filter-kind"><option value="all">Бүгд</option><option value="payroll">Цалин</option><option value="inventory_purchase">Бараа материал</option><option value="fixed_asset_purchase">Эд хөрөнгө</option><option value="manual">Гараар бүртгэсэн</option></select></label>
         </div>
       </div>
       {list.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : list.isError ? <ErrorBlock onRetry={() => list.refetch()} /> : !filteredTransactions.length ? <EmptyState title="Шүүлтэд тохирох гүйлгээ алга" detail="Өөр сар эсвэл гүйлгээний төрөл сонгоно уу." icon={WalletCards} /> : <div className="divide-y divide-border">{filteredTransactions.map((row) => {
