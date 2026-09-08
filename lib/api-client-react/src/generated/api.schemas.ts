@@ -504,6 +504,38 @@ export interface CashTransaction {
   transactionKind: CashTransactionTransactionKind;
 }
 
+export type UnclearTransactionSource = typeof UnclearTransactionSource[keyof typeof UnclearTransactionSource];
+
+
+export const UnclearTransactionSource = {
+  bank: 'bank',
+  cash: 'cash',
+} as const;
+
+export type UnclearTransactionType = typeof UnclearTransactionType[keyof typeof UnclearTransactionType];
+
+
+export const UnclearTransactionType = {
+  income: 'income',
+  expense: 'expense',
+} as const;
+
+export interface UnclearTransaction {
+  id: number;
+  source: UnclearTransactionSource;
+  type: UnclearTransactionType;
+  description: string;
+  amount: number;
+  occurredAt: string;
+  /** @nullable */
+  account?: string | null;
+  /** @nullable */
+  category?: string | null;
+  unclearAt: string;
+}
+
+export type UnclearTransactionList = UnclearTransaction[];
+
 export interface BankTransactionCashTransferInput {
   /**
      * @minLength 1

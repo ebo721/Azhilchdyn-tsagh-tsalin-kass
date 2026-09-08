@@ -88,7 +88,7 @@ import {
   UpdateEmployeeBody,
   UpdateEmployeeParams,
 } from "@workspace/api-zod";
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import {
   attendanceTable,
   cashTransactionsTable,
@@ -511,7 +511,7 @@ router.get("/dashboard", async (_req, res, next) => {
   try {
     const [employees, transactions, inventoryPurchases, fixedAssets] = await Promise.all([
       db.select().from(employeesTable),
-      db.select().from(cashTransactionsTable).orderBy(desc(cashTransactionsTable.createdAt)),
+      db.select().from(cashTransactionsTable).where(isNull(cashTransactionsTable.unclearAt)).orderBy(desc(cashTransactionsTable.createdAt)),
       db.select().from(inventoryPurchasesTable),
       db.select().from(fixedAssetsTable),
     ]);
@@ -1558,7 +1558,7 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
 
 router.get("/cash/summary", async (_req, res, next) => {
   try {
-    const transactions = await db.select().from(cashTransactionsTable);
+    const transactions = await db.select().from(cashTransactionsTable).where(isNull(cashTransactionsTable.unclearAt));
     const summary = transactions.reduce(
       (result, transaction) => {
         const amount = Number(transaction.amount);
@@ -1582,7 +1582,7 @@ router.get("/cash/summary", async (_req, res, next) => {
 
 router.get("/cash/transactions", async (_req, res, next) => {
   try {
-    const rows = await db.select().from(cashTransactionsTable).orderBy(desc(cashTransactionsTable.date), desc(cashTransactionsTable.id));
+    const rows = await db.select().from(cashTransactionsTable).where(isNull(cashTransactionsTable.unclearAt)).orderBy(desc(cashTransactionsTable.date), desc(cashTransactionsTable.id));
     res.json(ListCashTransactionsResponse.parse(rows.map((transaction) => ({
       ...transaction,
       amount: Number(transaction.amount),

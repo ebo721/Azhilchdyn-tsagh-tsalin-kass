@@ -783,6 +783,31 @@ paths:
       responses:
         "204":
           description: Deleted
+  /unclear-transactions:
+    get:
+      operationId: listUnclearTransactions
+      tags: [transactions]
+      summary: List transactions hidden as unclear
+      responses:
+        "200":
+          description: Unclear bank and cash transactions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnclearTransactionList" }
+  /unclear-transactions/{source}/{id}:
+    post:
+      operationId: markTransactionUnclear
+      tags: [transactions]
+      summary: Hide a bank or cash transaction as unclear
+      parameters:
+        - name: source
+          in: path
+          required: true
+          schema: { type: string, enum: [bank, cash] }
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Transaction hidden
   /inventory/purchases:
     get:
       operationId: listInventoryPurchases
@@ -1482,6 +1507,22 @@ components:
         createdAt: { type: string }
         editable: { type: boolean }
         transactionKind: { type: string, enum: [manual, payroll, payroll_advance, inventory_purchase, fixed_asset_purchase, bank_transaction] }
+    UnclearTransaction:
+      type: object
+      required: [id, source, type, description, amount, occurredAt, unclearAt]
+      properties:
+        id: { type: integer }
+        source: { type: string, enum: [bank, cash] }
+        type: { type: string, enum: [income, expense] }
+        description: { type: string }
+        amount: { type: number }
+        occurredAt: { type: string }
+        account: { type: ["string", "null"] }
+        category: { type: ["string", "null"] }
+        unclearAt: { type: string, format: date-time }
+    UnclearTransactionList:
+      type: array
+      items: { $ref: "#/components/schemas/UnclearTransaction" }
     BankTransactionCashTransferInput:
       type: object
       required: [category]

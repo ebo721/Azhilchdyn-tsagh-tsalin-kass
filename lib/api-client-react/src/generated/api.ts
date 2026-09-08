@@ -75,6 +75,7 @@ import type {
   ShiftPlanCopyInput,
   ShiftPlanCopyResult,
   ShiftPlanInput,
+  UnclearTransactionList,
   User,
   UserUpdateInput
 } from './api.schemas';
@@ -3590,6 +3591,156 @@ export const useDeleteBankTransaction = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteBankTransactionMutationOptions(options));
+    }
+
+export const getListUnclearTransactionsUrl = () => {
+
+
+
+
+  return `/api/unclear-transactions`
+}
+
+/**
+ * @summary List transactions hidden as unclear
+ */
+export const listUnclearTransactions = async ( options?: Parameters<typeof customFetch>[1]): Promise<UnclearTransactionList> => {
+
+  return customFetch<UnclearTransactionList>(getListUnclearTransactionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListUnclearTransactionsQueryKey = () => {
+    return [
+    `/api/unclear-transactions`
+    ] as const;
+    }
+
+
+export const getListUnclearTransactionsQueryOptions = <TData = Awaited<ReturnType<typeof listUnclearTransactions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUnclearTransactions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListUnclearTransactionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUnclearTransactions>>> = ({ signal }) => listUnclearTransactions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listUnclearTransactions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListUnclearTransactionsQueryResult = NonNullable<Awaited<ReturnType<typeof listUnclearTransactions>>>
+export type ListUnclearTransactionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List transactions hidden as unclear
+ */
+
+export function useListUnclearTransactions<TData = Awaited<ReturnType<typeof listUnclearTransactions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUnclearTransactions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListUnclearTransactionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getMarkTransactionUnclearUrl = (source: 'bank' | 'cash',
+    id: number,) => {
+
+
+
+
+  return `/api/unclear-transactions/${source}/${id}`
+}
+
+/**
+ * @summary Hide a bank or cash transaction as unclear
+ */
+export const markTransactionUnclear = async (source: 'bank' | 'cash',
+    id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getMarkTransactionUnclearUrl(source,id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getMarkTransactionUnclearMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markTransactionUnclear>>, TError,{source: 'bank' | 'cash';id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markTransactionUnclear>>, TError,{source: 'bank' | 'cash';id: number}, TContext> => {
+
+const mutationKey = ['markTransactionUnclear'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markTransactionUnclear>>, {source: 'bank' | 'cash';id: number}> = (props) => {
+          const {source,id} = props ?? {};
+
+          return  markTransactionUnclear(source,id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkTransactionUnclearMutationResult = NonNullable<Awaited<ReturnType<typeof markTransactionUnclear>>>
+
+    export type MarkTransactionUnclearMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Hide a bank or cash transaction as unclear
+ */
+export const useMarkTransactionUnclear = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markTransactionUnclear>>, TError,{source: 'bank' | 'cash';id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markTransactionUnclear>>,
+        TError,
+        {source: 'bank' | 'cash';id: number},
+        TContext
+      > => {
+      return useMutation(getMarkTransactionUnclearMutationOptions(options));
     }
 
 export const getListInventoryPurchasesUrl = () => {

@@ -14,11 +14,13 @@ import {
   ListBankTransactionCashSuggestionsParams,
   ListBankTransactionCashSuggestionsResponse,
   ListBankTransactionsResponse,
+  ListUnclearTransactionsResponse,
+  MarkTransactionUnclearParams,
   TransferBankTransactionToCashBody,
   TransferBankTransactionToCashParams,
   TransferBankTransactionToCashResponse,
 } from "@workspace/api-zod";
-import { and, desc, eq, gte, isNull, lte } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, lte } from "drizzle-orm";
 import { bankTransactionsTable, cashClosuresTable, cashTransactionsTable, db, deletionRequestsTable } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session";
 
@@ -163,7 +165,7 @@ const response = (row: typeof bankTransactionsTable.$inferSelect) => ({
 router.get("/bank-transactions", async (_req, res, next) => {
   try {
     const rows = await db.select().from(bankTransactionsTable)
-      .where(and(isNull(bankTransactionsTable.cashTransactionId), isNull(bankTransactionsTable.transferredAt)))
+      .where(and(isNull(bankTransactionsTable.cashTransactionId), isNull(bankTransactionsTable.transferredAt), isNull(bankTransactionsTable.unclearAt)))
       .orderBy(desc(bankTransactionsTable.transactionAt), desc(bankTransactionsTable.id));
     res.json(ListBankTransactionsResponse.parse(rows.map(response)));
   } catch (error) { next(error); }
@@ -280,6 +282,7 @@ router.get("/bank-transactions/:id/cash-suggestions", async (req, res, next) => 
     const candidates = await db.select().from(cashTransactionsTable).where(and(
       eq(cashTransactionsTable.type, bank.type),
       isNull(cashTransactionsTable.bankTransactionId),
+      isNull(cashTransactionsTable.unclearAt),
       gte(cashTransactionsTable.date, calendarDateOffset(bankDate, -7)),
       lte(cashTransactionsTable.date, calendarDateOffset(bankDate, 7)),
     ));
@@ -375,6 +378,51 @@ router.delete("/bank-transactions/:id", async (req, res, next) => {
       return;
     }
     await db.delete(bankTransactionsTable).where(eq(bankTransactionsTable.id, id));
+    res.status(204).send();
+  } catch (error) { next(error); }
+});
+
+router.get("/unclear-transactions", async (req, res, next) => {
+  try {
+    const session = await getStaffSession(req);
+    if (session?.role !== "admin") {
+      res.status(403).json({ error: "Зөвхөн админ тодорхойгүй гүйлгээг харах эрхтэй" });
+      return;
+    }
+    const [banks, cash] = await Promise.all([
+      db.select().from(bankTransactionsTable).where(isNotNull(bankTransactionsTable.unclearAt)).orderBy(desc(bankTransactionsTable.unclearAt)),
+      db.select().from(cashTransactionsTable).where(isNotNull(cashTransactionsTable.unclearAt)).orderBy(desc(cashTransactionsTable.unclearAt)),
+    ]);
+    const rows = [
+      ...banks.map((row) => ({
+        id: row.id, source: "bank" as const, type: row.type as "income" | "expense",
+        description: row.description, amount: Number(row.amount), occurredAt: row.transactionAt.toISOString(),
+        account: row.account, category: null, unclearAt: row.unclearAt!.toISOString(),
+      })),
+      ...cash.map((row) => ({
+        id: row.id, source: "cash" as const, type: row.type as "income" | "expense",
+        description: row.description, amount: Number(row.amount), occurredAt: String(row.date),
+        account: null, category: row.category, unclearAt: row.unclearAt!.toISOString(),
+      })),
+    ].sort((left, right) => right.unclearAt.localeCompare(left.unclearAt));
+    res.json(ListUnclearTransactionsResponse.parse(rows));
+  } catch (error) { next(error); }
+});
+
+router.post("/unclear-transactions/:source/:id", async (req, res, next) => {
+  try {
+    const session = await getStaffSession(req);
+    if (session?.role !== "admin") {
+      res.status(403).json({ error: "Зөвхөн админ гүйлгээг тодорхойгүй болгох эрхтэй" });
+      return;
+    }
+    const { source, id } = MarkTransactionUnclearParams.parse(req.params);
+    const table = source === "bank" ? bankTransactionsTable : cashTransactionsTable;
+    const [updated] = await db.update(table).set({ unclearAt: new Date() }).where(eq(table.id, id)).returning({ id: table.id });
+    if (!updated) {
+      res.status(404).json({ error: "Гүйлгээ олдсонгүй" });
+      return;
+    }
     res.status(204).send();
   } catch (error) { next(error); }
 });

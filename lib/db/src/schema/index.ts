@@ -121,6 +121,7 @@ export const cashTransactionsTable = pgTable("cash_transactions", {
   // bank_transactions.cash_transaction_id remains the referential link.
   bankTransactionId: integer("bank_transaction_id"),
   bankVerifiedAt: timestamp("bank_verified_at", { withTimezone: true }),
+  unclearAt: timestamp("unclear_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("cash_transactions_source_idx").on(table.sourceType, table.sourceKey),
@@ -146,6 +147,7 @@ export const bankTransactionsTable = pgTable("bank_transactions", {
   fingerprint: text("fingerprint").notNull(),
   transferredAt: timestamp("transferred_at", { withTimezone: true, precision: 0 }),
   cashTransactionId: integer("cash_transaction_id").references(() => cashTransactionsTable.id, { onDelete: "restrict" }),
+  unclearAt: timestamp("unclear_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("bank_transactions_fingerprint_idx").on(table.fingerprint),

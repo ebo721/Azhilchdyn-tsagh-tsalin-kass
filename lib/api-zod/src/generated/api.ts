@@ -1039,6 +1039,34 @@ export const DeleteBankTransactionResponse = zod.void()
 
 
 /**
+ * @summary List transactions hidden as unclear
+ */
+export const ListUnclearTransactionsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "source": zod.enum(['bank', 'cash']),
+  "type": zod.enum(['income', 'expense']),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "occurredAt": zod.string(),
+  "account": zod.string().nullish(),
+  "category": zod.string().nullish(),
+  "unclearAt": zod.coerce.date()
+})
+export const ListUnclearTransactionsResponse = zod.array(ListUnclearTransactionsResponseItem)
+
+
+/**
+ * @summary Hide a bank or cash transaction as unclear
+ */
+export const MarkTransactionUnclearParams = zod.object({
+  "source": zod.enum(['bank', 'cash']),
+  "id": zod.coerce.number().int()
+})
+
+export const MarkTransactionUnclearResponse = zod.void()
+
+
+/**
  * @summary List inventory purchases
  */
 export const ListInventoryPurchasesResponseItem = zod.object({
