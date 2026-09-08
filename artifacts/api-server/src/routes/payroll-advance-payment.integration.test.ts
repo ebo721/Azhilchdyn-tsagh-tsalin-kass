@@ -4,6 +4,7 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { and, eq, inArray } from "drizzle-orm";
 import {
+  attendanceTable,
   cashTransactionsTable,
   db,
   employeesTable,
@@ -127,5 +128,63 @@ describe("concurrent payroll advance payments", () => {
       employeeIds.map((id) => payroll.lines.find((line) => line.employeeId === id)?.advanceAmount),
       amounts,
     );
+  });
+
+  it("refreshes salary and worked days when a paid line is changed back to unpaid", async () => {
+    const employeeId = employeeIds[0];
+    await db.update(employeesTable)
+      .set({ baseSalary: 1_200_000 })
+      .where(eq(employeesTable.id, employeeId));
+    await db.insert(attendanceTable).values({
+      employeeId,
+      date: `${month}-10`,
+      clockIn: "09:00",
+      clockOut: "18:00",
+      hours: 8,
+      status: "present",
+    });
+
+    const response = await fetch(`${baseUrl}/api/payroll-advance/payment`, {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        cookie: adminCookie,
+      },
+      body: JSON.stringify({
+        month,
+        employeeId,
+        advanceAmount: 125_000,
+        paid: false,
+        paymentDate: null,
+      }),
+    });
+    assert.equal(response.status, 200);
+
+    const result = await response.json() as {
+      totalAmount: number;
+      lines: Array<{
+        employeeId: number;
+        baseSalary: number;
+        daysWorked: number;
+        totalSalary: number;
+        advanceAmount: number;
+        paid: boolean;
+        paymentDate: string | null;
+      }>;
+    };
+    const refreshedLine = result.lines.find((line) => line.employeeId === employeeId);
+    assert.ok(refreshedLine);
+    assert.equal(refreshedLine.baseSalary, 1_200_000);
+    assert.equal(refreshedLine.daysWorked, 1);
+    assert.equal(refreshedLine.totalSalary, 1_200_000);
+    assert.equal(refreshedLine.advanceAmount, 600_000);
+    assert.equal(refreshedLine.paid, false);
+    assert.equal(refreshedLine.paymentDate, null);
+
+    const cashRows = await db.select().from(cashTransactionsTable).where(and(
+      eq(cashTransactionsTable.sourceType, "payroll_advance"),
+      eq(cashTransactionsTable.sourceKey, `${month}:${employeeId}`),
+    ));
+    assert.equal(cashRows.length, 0);
   });
 });

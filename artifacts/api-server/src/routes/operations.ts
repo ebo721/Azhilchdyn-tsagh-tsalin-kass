@@ -416,34 +416,39 @@ async function getPayrollAdvanceSummary(month: string) {
   const firstHalfRecords = records.filter((record) =>
     String(record.date).startsWith(month) && Number(String(record.date).slice(8, 10)) <= 15
   );
-  const lines = employees.map((employee) => {
-    const daysWorked = firstHalfRecords.filter((record) =>
-      record.employeeId === employee.id && ["present", "late"].includes(record.status)
-    ).length;
-    const dailySalary = employee.employeeType === "shift" ? money(Number(employee.baseSalary)) : 0;
-    const baseSalary = employee.employeeType === "office" ? money(Number(employee.baseSalary)) : 0;
-    const totalSalary = employee.employeeType === "shift"
-      ? money(daysWorked * dailySalary)
-      : baseSalary;
-    return {
-      employeeId: employee.id,
-      employeeName: employee.name,
-      employeeType: employee.employeeType,
-      baseSalary,
-      daysWorked,
-      dailySalary,
-      totalSalary,
-      advanceAmount: employee.employeeType === "shift" ? totalSalary : money(totalSalary * 0.5),
-      paid: false,
-      paymentDate: null,
-    };
-  });
+  const lines = employees.map((employee) => calculatePayrollAdvanceLine(employee, firstHalfRecords));
   return {
     month,
     approved: false,
     approvalDate: null,
     totalAmount: money(lines.reduce((total, line) => total + line.advanceAmount, 0)),
     lines,
+  };
+}
+
+function calculatePayrollAdvanceLine(
+  employee: typeof employeesTable.$inferSelect,
+  records: Array<typeof attendanceTable.$inferSelect>,
+) {
+  const daysWorked = records.filter((record) =>
+    record.employeeId === employee.id && ["present", "late"].includes(record.status)
+  ).length;
+  const dailySalary = employee.employeeType === "shift" ? money(Number(employee.baseSalary)) : 0;
+  const baseSalary = employee.employeeType === "office" ? money(Number(employee.baseSalary)) : 0;
+  const totalSalary = employee.employeeType === "shift"
+    ? money(daysWorked * dailySalary)
+    : baseSalary;
+  return {
+    employeeId: employee.id,
+    employeeName: employee.name,
+    employeeType: employee.employeeType,
+    baseSalary,
+    daysWorked,
+    dailySalary,
+    totalSalary,
+    advanceAmount: employee.employeeType === "shift" ? totalSalary : money(totalSalary * 0.5),
+    paid: false,
+    paymentDate: null,
   };
 }
 
@@ -1304,7 +1309,24 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
           .where(eq(cashClosuresTable.date, date));
         if (closure) return "cash_closed" as const;
       }
-      const { lines, totalAmount, cashTransaction } = planPayrollAdvancePayment(sourceLines, input);
+      let paymentInput = input;
+      let paymentSourceLines = sourceLines;
+      if (!input.paid) {
+        const attendanceRecords = await tx
+          .select()
+          .from(attendanceTable)
+          .where(eq(attendanceTable.employeeId, input.employeeId));
+        const firstHalfRecords = attendanceRecords.filter((record) =>
+          String(record.date).startsWith(input.month)
+          && Number(String(record.date).slice(8, 10)) <= 15
+        );
+        const refreshedLine = calculatePayrollAdvanceLine(employee, firstHalfRecords);
+        paymentSourceLines = sourceLines.map((line) =>
+          Number(line.employeeId) === input.employeeId ? refreshedLine : line
+        );
+        paymentInput = { ...input, advanceAmount: refreshedLine.advanceAmount };
+      }
+      const { lines, totalAmount, cashTransaction } = planPayrollAdvancePayment(paymentSourceLines, paymentInput);
 
       await tx
         .update(payrollAdvanceApprovalsTable)

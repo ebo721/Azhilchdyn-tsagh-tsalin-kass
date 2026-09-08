@@ -7,6 +7,8 @@ Monthly office salary is prorated across the month's Monday–Friday workdays. T
 
 Payroll deductions are based on the effective social-insurance salary: employee social insurance is 11.5%; taxable income is social-insurance salary minus that contribution; calculated personal income tax is 10% of taxable income; final income tax is calculated tax minus the applicable relief, floored at zero.
 
+When an approved payroll-advance line is changed from paid back to unpaid, refresh that employee's salary and first-half worked days, recalculate the advance, and remove its cash expense in the same transaction.
+
 **Why:** The user explicitly chose workday-based proration and confirmed that the inactive date is inclusive. Historical payroll must remain based on the salary that applied at the time rather than the employee's latest salary.
 
 **How to apply:** Preserve effective-dated salary history whenever salary inputs change. For payroll changes, resolve rates by date, exclude leave dates, include inactive employees whose employment overlaps the requested month, and reject retroactive salary changes that would affect an already-paid month.

@@ -671,6 +671,18 @@ function Payroll() {
     }
     updateAdvancePayment.mutate({ data: { month, employeeId, advanceAmount, paid, paymentDate } }, {
       onSuccess: () => {
+        if (!paid) {
+          setAdvanceAmounts((amounts) => {
+            const next = { ...amounts };
+            delete next[employeeId];
+            return next;
+          });
+          setAdvanceDates((dates) => {
+            const next = { ...dates };
+            delete next[employeeId];
+            return next;
+          });
+        }
         qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey({ month }) });
         qc.invalidateQueries({ queryKey: getGetPayrollQueryKey({ month }) });
       },
