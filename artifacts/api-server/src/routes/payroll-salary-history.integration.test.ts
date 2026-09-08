@@ -201,4 +201,60 @@ describe("effective-dated payroll salary", () => {
     ).length;
     assert.equal(line.gross, Math.round((paidDays * 3_300_000 / allWeekdays.length) * 100) / 100);
   });
+
+  it("adds daily salary when an office employee works beyond the required weekdays", async () => {
+    const weekdays = Array.from({ length: 31 }, (_, index) => {
+      const day = index + 1;
+      const date = `2099-01-${String(day).padStart(2, "0")}`;
+      const weekday = new Date(Date.UTC(2099, 0, day)).getUTCDay();
+      return { date, isWeekday: weekday >= 1 && weekday <= 5 };
+    }).filter((item) => item.isWeekday);
+    const extraDate = Array.from({ length: 31 }, (_, index) => {
+      const day = index + 1;
+      const date = `2099-01-${String(day).padStart(2, "0")}`;
+      const weekday = new Date(Date.UTC(2099, 0, day)).getUTCDay();
+      return { date, isWeekend: weekday === 0 || weekday === 6 };
+    }).find((item) => item.isWeekend)?.date;
+    assert.ok(extraDate);
+
+    await db.insert(attendanceTable).values([
+      ...weekdays.map(({ date }) => ({
+        employeeId: insuredEmployeeId,
+        date,
+        clockIn: "09:00",
+        clockOut: "18:00",
+        hours: 8,
+        status: "present",
+      })),
+      {
+        employeeId: insuredEmployeeId,
+        date: extraDate,
+        clockIn: "09:00",
+        clockOut: "18:00",
+        hours: 8,
+        status: "present",
+      },
+    ]);
+
+    const response = await fetch(`${baseUrl}/api/payroll?month=2099-01`, {
+      headers: { cookie: adminCookie },
+    });
+    assert.equal(response.status, 200);
+    const payroll = await response.json() as {
+      lines: Array<{
+        employeeId: number;
+        daysWorked: number;
+        gross: number;
+        socialInsuranceSalary: number;
+      }>;
+    };
+    const line = payroll.lines.find((item) => item.employeeId === insuredEmployeeId);
+    assert.ok(line);
+    assert.equal(line.daysWorked, weekdays.length + 1);
+    assert.equal(line.gross, Math.round((2_000_000 + 2_000_000 / weekdays.length) * 100) / 100);
+    assert.equal(
+      line.socialInsuranceSalary,
+      Math.round((1_000_000 + 1_000_000 / weekdays.length) * 100) / 100,
+    );
+  });
 });

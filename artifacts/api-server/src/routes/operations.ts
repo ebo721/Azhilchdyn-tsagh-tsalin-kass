@@ -319,8 +319,22 @@ async function getPayrollSummary(month: string) {
     const paidWeekdays = eligibleWeekdays.filter((date) =>
       !employeeRecords.some((record) => String(record.date) === date && record.status === "leave")
     );
+    const workedRecords = employeeRecords
+      .filter((record) =>
+        ["present", "late"].includes(record.status)
+        && String(record.date) >= employee.joinedAt
+        && (!employee.inactiveAt || String(record.date) <= employee.inactiveAt)
+      )
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const excessWorkedDayCount = Math.max(0, workedRecords.length - eligibleWeekdays.length);
+    const excessWorkedRecords = workedRecords
+      .filter((record) => !eligibleWeekdays.includes(String(record.date)))
+      .slice(0, excessWorkedDayCount);
     const officeGross = paidWeekdays.reduce((total, date) => {
       const salary = salaryAt(employee, salaryHistory, date);
+      return total + (salary.employeeType === "office" ? Number(salary.baseSalary) / weekdays.length : 0);
+    }, 0) + excessWorkedRecords.reduce((total, record) => {
+      const salary = salaryAt(employee, salaryHistory, String(record.date));
       return total + (salary.employeeType === "office" ? Number(salary.baseSalary) / weekdays.length : 0);
     }, 0);
     const shiftGross = employeeRecords
@@ -332,6 +346,9 @@ async function getPayrollSummary(month: string) {
     const gross = money(officeGross + shiftGross);
     const socialInsuranceSalary = money(paidWeekdays.reduce((total, date) => {
       const salary = salaryAt(employee, salaryHistory, date);
+      return total + (salary.payrollTaxExempt ? 0 : Number(salary.socialInsuranceSalary) / weekdays.length);
+    }, 0) + excessWorkedRecords.reduce((total, record) => {
+      const salary = salaryAt(employee, salaryHistory, String(record.date));
       return total + (salary.payrollTaxExempt ? 0 : Number(salary.socialInsuranceSalary) / weekdays.length);
     }, 0));
     const payrollTaxExempt = socialInsuranceSalary === 0;

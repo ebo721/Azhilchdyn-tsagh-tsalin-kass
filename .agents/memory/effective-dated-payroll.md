@@ -5,6 +5,8 @@ description: Durable rules for employment dates, salary history, monthly prorati
 
 Monthly office salary is prorated across the month's Monday–Friday workdays. The joined date is the first eligible day, and the inactive date is the final eligible day. Attendance marked as leave is not a paid workday and must be excluded from office salary and social-insurance salary proration. Salary changes apply beginning on their effective date, splitting old and new rates by eligible workdays. Shift attendance uses the rate effective on each attendance date. A salary change must not reach back into a month whose payroll was already paid.
 
+When an office employee's present/late attendance exceeds their required weekdays for the month, add one daily share of salary and social-insurance salary for each excess day, using the rate effective on the extra attendance date.
+
 A newly entered salary effective from an earlier date supersedes and removes later salary-history entries; otherwise stale future rows can override the user's latest correction.
 
 Payroll deductions are based on the effective social-insurance salary: employee social insurance is 11.5%; taxable income is social-insurance salary minus that contribution; calculated personal income tax is 10% of taxable income; final income tax is calculated tax minus the applicable relief, floored at zero.
