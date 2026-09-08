@@ -435,7 +435,7 @@ paths:
     put:
       operationId: updatePayrollAdvancePayment
       tags: [payroll]
-      summary: Mark an approved employee payroll advance as paid or unpaid
+      summary: Update an approved employee payroll advance amount and paid status
       requestBody:
         required: true
         content:

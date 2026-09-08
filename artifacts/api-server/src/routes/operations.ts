@@ -45,6 +45,7 @@ import {
   shiftTemplatesTable,
 } from "@workspace/db";
 import { getStaffRole } from "../lib/hr-session";
+import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment";
 import { planShiftPlanCopy } from "../lib/shift-plan-copy";
 
 const router: IRouter = Router();
@@ -925,74 +926,65 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
       res.status(400).json({ error: "Урьдчилгаа олгосон огноог зөв оруулна уу" });
       return;
     }
-    const [approval] = await db
-      .select()
-      .from(payrollAdvanceApprovalsTable)
-      .where(eq(payrollAdvanceApprovalsTable.month, input.month));
-    if (!approval) {
-      res.status(409).json({ error: "Эхлээд тухайн сарын урьдчилгаа цалинг батална уу" });
-      return;
-    }
-    const sourceLines = Array.isArray(approval.lines)
-      ? approval.lines as Array<Record<string, unknown>>
-      : [];
-    if (!sourceLines.some((line) => Number(line.employeeId) === input.employeeId)) {
-      res.status(404).json({ error: "Урьдчилгаа цалингийн мөр олдсонгүй" });
-      return;
-    }
-    const lines: Array<Record<string, unknown>> = sourceLines.map((line) => (
-          Number(line.employeeId) === input.employeeId
-            ? {
-                ...line,
-                advanceAmount: money(input.advanceAmount),
-                paid: input.paid,
-                paymentDate: input.paid ? input.paymentDate : null,
-              }
-            : {
-                ...line,
-                paid: line.paid === true,
-                paymentDate: typeof line.paymentDate === "string" ? line.paymentDate : null,
-              }
-        ));
-    const selectedLine = lines.find((line) => Number(line.employeeId) === input.employeeId);
     const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, input.employeeId));
-    if (!selectedLine || !employee) {
-      res.status(404).json({ error: "Ажилтан эсвэл урьдчилгаа цалингийн мөр олдсонгүй" });
+    if (!employee) {
+      res.status(404).json({ error: "Ажилтан олдсонгүй" });
       return;
     }
-    const sourceType = "payroll_advance";
-    const sourceKey = `${input.month}:${input.employeeId}`;
-    const totalAmount = money(lines.reduce((total, line) => total + Number(line.advanceAmount), 0));
-    await db.transaction(async (tx) => {
+    const paymentResult = await db.transaction(async (tx) => {
+      const [approval] = await tx
+        .select()
+        .from(payrollAdvanceApprovalsTable)
+        .where(eq(payrollAdvanceApprovalsTable.month, input.month))
+        .for("update");
+      if (!approval) return "approval_not_found" as const;
+
+      const sourceLines = Array.isArray(approval.lines)
+        ? approval.lines as Array<Record<string, unknown>>
+        : [];
+      if (!sourceLines.some((line) => Number(line.employeeId) === input.employeeId)) {
+        return "line_not_found" as const;
+      }
+      const { lines, totalAmount, cashTransaction } = planPayrollAdvancePayment(sourceLines, input);
+
       await tx
         .update(payrollAdvanceApprovalsTable)
         .set({ lines, totalAmount })
         .where(eq(payrollAdvanceApprovalsTable.id, approval.id));
 
-      if (input.paid && input.paymentDate) {
+      if (cashTransaction) {
         await tx.insert(cashTransactionsTable).values({
           type: "expense",
           category: "Урьдчилгаа цалин",
           description: `${employee.name} · ${input.month} сарын урьдчилгаа`,
-          amount: Number(selectedLine.advanceAmount),
-          date: input.paymentDate,
-          sourceType,
-          sourceKey,
+          amount: cashTransaction.amount,
+          date: cashTransaction.date,
+          sourceType: cashTransaction.sourceType,
+          sourceKey: cashTransaction.sourceKey,
         }).onConflictDoUpdate({
           target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
           set: {
-            amount: Number(selectedLine.advanceAmount),
-            date: input.paymentDate,
+            amount: cashTransaction.amount,
+            date: cashTransaction.date,
             description: `${employee.name} · ${input.month} сарын урьдчилгаа`,
           },
         });
       } else {
         await tx.delete(cashTransactionsTable).where(and(
-          eq(cashTransactionsTable.sourceType, sourceType),
-          eq(cashTransactionsTable.sourceKey, sourceKey),
+          eq(cashTransactionsTable.sourceType, "payroll_advance"),
+          eq(cashTransactionsTable.sourceKey, `${input.month}:${input.employeeId}`),
         ));
       }
+      return "updated" as const;
     });
+    if (paymentResult === "approval_not_found") {
+      res.status(409).json({ error: "Эхлээд тухайн сарын урьдчилгаа цалинг батална уу" });
+      return;
+    }
+    if (paymentResult === "line_not_found") {
+      res.status(404).json({ error: "Урьдчилгаа цалингийн мөр олдсонгүй" });
+      return;
+    }
     res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(input.month)));
   } catch (error) {
     next(error);
