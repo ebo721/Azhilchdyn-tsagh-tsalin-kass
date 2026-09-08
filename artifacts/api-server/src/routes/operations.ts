@@ -49,6 +49,10 @@ import {
   DeleteInventoryIssueParams,
   CreateFixedAssetBody,
   CreateFixedAssetResponse,
+  UpdateFixedAssetBody,
+  UpdateFixedAssetParams,
+  UpdateFixedAssetResponse,
+  DeleteFixedAssetParams,
   ListFixedAssetsResponse,
   ListEmployeesResponse,
   UpsertPayrollAdjustmentBody,
@@ -1291,6 +1295,115 @@ router.post("/fixed-assets", async (req, res, next) => {
       totalAmount,
       createdAt: asset.createdAt.toISOString(),
     }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/fixed-assets/:id", async (req, res, next) => {
+  try {
+    const { id } = UpdateFixedAssetParams.parse(req.params);
+    const input = UpdateFixedAssetBody.parse(req.body);
+    if (!isValidCalendarDate(input.date)) {
+      res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
+      return;
+    }
+    const name = input.name.trim();
+    if (!name) {
+      res.status(400).json({ error: "Хөрөнгийн нэр хоосон байж болохгүй" });
+      return;
+    }
+    const [existing] = await db.select().from(fixedAssetsTable).where(eq(fixedAssetsTable.id, id));
+    if (!existing) {
+      res.status(404).json({ error: "Эд хөрөнгө олдсонгүй" });
+      return;
+    }
+    const totalAmount = money(input.unitPrice * input.quantity);
+    const result = await db.transaction(async (tx) => {
+      const affectedDates = new Set<string>();
+      if (existing.purchased) affectedDates.add(existing.date);
+      if (input.purchased) affectedDates.add(input.date);
+      if (affectedDates.size) {
+        const closures = await tx.select({ date: cashClosuresTable.date }).from(cashClosuresTable);
+        if (closures.some(({ date }) => affectedDates.has(date))) return { kind: "cash_closed" as const };
+      }
+
+      const [updated] = await tx.update(fixedAssetsTable).set({
+        name,
+        unitPrice: input.unitPrice,
+        quantity: input.quantity,
+        date: input.date,
+        purchased: input.purchased,
+      }).where(eq(fixedAssetsTable.id, id)).returning();
+      const sourceKey = `fixed-asset:${id}`;
+      if (input.purchased) {
+        await tx.insert(cashTransactionsTable).values({
+          type: "expense",
+          category: "Эд хөрөнгө",
+          description: `${name} (${input.quantity} ширхэг)`,
+          amount: totalAmount,
+          date: input.date,
+          sourceType: "fixed_asset_purchase",
+          sourceKey,
+        }).onConflictDoUpdate({
+          target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
+          set: {
+            description: `${name} (${input.quantity} ширхэг)`,
+            amount: totalAmount,
+            date: input.date,
+          },
+        });
+      } else {
+        await tx.delete(cashTransactionsTable).where(and(
+          eq(cashTransactionsTable.sourceType, "fixed_asset_purchase"),
+          eq(cashTransactionsTable.sourceKey, sourceKey),
+        ));
+      }
+      return { kind: "updated" as const, asset: updated };
+    });
+    if (result.kind === "cash_closed") {
+      res.status(409).json({ error: "Өндөрлөсөн өдрийн худалдан авсан хөрөнгийг засах боломжгүй" });
+      return;
+    }
+    res.json(UpdateFixedAssetResponse.parse({
+      ...result.asset,
+      unitPrice: Number(result.asset.unitPrice),
+      quantity: Number(result.asset.quantity),
+      totalAmount,
+      createdAt: result.asset.createdAt.toISOString(),
+    }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/fixed-assets/:id", async (req, res, next) => {
+  try {
+    const { id } = DeleteFixedAssetParams.parse(req.params);
+    const [existing] = await db.select().from(fixedAssetsTable).where(eq(fixedAssetsTable.id, id));
+    if (!existing) {
+      res.status(404).json({ error: "Эд хөрөнгө олдсонгүй" });
+      return;
+    }
+    const result = await db.transaction(async (tx) => {
+      if (existing.purchased) {
+        const [closure] = await tx.select({ id: cashClosuresTable.id })
+          .from(cashClosuresTable)
+          .where(eq(cashClosuresTable.date, existing.date));
+        if (closure) return "cash_closed" as const;
+      }
+      await tx.delete(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "fixed_asset_purchase"),
+        eq(cashTransactionsTable.sourceKey, `fixed-asset:${id}`),
+      ));
+      await tx.delete(fixedAssetsTable).where(eq(fixedAssetsTable.id, id));
+      return "deleted" as const;
+    });
+    if (result === "cash_closed") {
+      res.status(409).json({ error: "Өндөрлөсөн өдрийн худалдан авсан хөрөнгийг устгах боломжгүй" });
+      return;
+    }
+    res.status(204).send();
   } catch (error) {
     next(error);
   }

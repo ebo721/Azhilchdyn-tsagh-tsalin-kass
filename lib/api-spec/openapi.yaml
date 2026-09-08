@@ -758,6 +758,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FixedAsset"
+  /fixed-assets/{id}:
+    put:
+      operationId: updateFixedAsset
+      tags: [fixed-assets]
+      summary: Update equipment or fixed asset and its linked cash transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FixedAssetInput"
+      responses:
+        "200":
+          description: Updated fixed asset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FixedAsset"
+    delete:
+      operationId: deleteFixedAsset
+      tags: [fixed-assets]
+      summary: Delete equipment or fixed asset and its linked cash transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Deleted fixed asset
 components:
   parameters:
     Id:

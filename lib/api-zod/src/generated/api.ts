@@ -1053,3 +1053,47 @@ export const CreateFixedAssetResponse = zod.object({
 })
 
 
+/**
+ * @summary Update equipment or fixed asset and its linked cash transaction
+ */
+export const UpdateFixedAssetParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+export const updateFixedAssetBodyUnitPriceMin = 0;
+
+
+export const updateFixedAssetBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+export const UpdateFixedAssetBody = zod.object({
+  "name": zod.string().min(1),
+  "unitPrice": zod.number().min(updateFixedAssetBodyUnitPriceMin),
+  "quantity": zod.number().int().min(1),
+  "date": zod.string().regex(updateFixedAssetBodyDateRegExp),
+  "purchased": zod.boolean()
+})
+
+export const UpdateFixedAssetResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "unitPrice": zod.number(),
+  "quantity": zod.number().int(),
+  "totalAmount": zod.number(),
+  "date": zod.string(),
+  "purchased": zod.boolean(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete equipment or fixed asset and its linked cash transaction
+ */
+export const DeleteFixedAssetParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteFixedAssetResponse = zod.void()
+
+

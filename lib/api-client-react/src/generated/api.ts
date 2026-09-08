@@ -3498,3 +3498,146 @@ export const useCreateFixedAsset = <TError = ErrorType<unknown>,
       return useMutation(getCreateFixedAssetMutationOptions(options));
     }
 
+export const getUpdateFixedAssetUrl = (id: number,) => {
+
+
+
+
+  return `/api/fixed-assets/${id}`
+}
+
+/**
+ * @summary Update equipment or fixed asset and its linked cash transaction
+ */
+export const updateFixedAsset = async (id: number,
+    fixedAssetInput: FixedAssetInput, options?: Parameters<typeof customFetch>[1]): Promise<FixedAsset> => {
+
+  return customFetch<FixedAsset>(getUpdateFixedAssetUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(fixedAssetInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateFixedAssetMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFixedAsset>>, TError,{id: number;data: BodyType<FixedAssetInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateFixedAsset>>, TError,{id: number;data: BodyType<FixedAssetInput>}, TContext> => {
+
+const mutationKey = ['updateFixedAsset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateFixedAsset>>, {id: number;data: BodyType<FixedAssetInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateFixedAsset(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateFixedAssetMutationResult = NonNullable<Awaited<ReturnType<typeof updateFixedAsset>>>
+    export type UpdateFixedAssetMutationBody = BodyType<FixedAssetInput>
+    export type UpdateFixedAssetMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update equipment or fixed asset and its linked cash transaction
+ */
+export const useUpdateFixedAsset = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFixedAsset>>, TError,{id: number;data: BodyType<FixedAssetInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateFixedAsset>>,
+        TError,
+        {id: number;data: BodyType<FixedAssetInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateFixedAssetMutationOptions(options));
+    }
+
+export const getDeleteFixedAssetUrl = (id: number,) => {
+
+
+
+
+  return `/api/fixed-assets/${id}`
+}
+
+/**
+ * @summary Delete equipment or fixed asset and its linked cash transaction
+ */
+export const deleteFixedAsset = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteFixedAssetUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteFixedAssetMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteFixedAsset>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteFixedAsset>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteFixedAsset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteFixedAsset>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteFixedAsset(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteFixedAssetMutationResult = NonNullable<Awaited<ReturnType<typeof deleteFixedAsset>>>
+
+    export type DeleteFixedAssetMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete equipment or fixed asset and its linked cash transaction
+ */
+export const useDeleteFixedAsset = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteFixedAsset>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteFixedAsset>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteFixedAssetMutationOptions(options));
+    }
+
