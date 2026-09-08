@@ -876,8 +876,6 @@ function Cash() {
   const create = useCreateCashTransaction();
   const update = useUpdateCashTransaction();
   const deletion = useQueueDeletion();
-  const session = useGetAuthSession();
-  const markUnclear = useMarkTransactionUnclear();
   const remove = deletion;
   const qc = useQueryClient();
   const [editing, setEditing] = useState<CashTransaction | null>(null);
@@ -904,10 +902,6 @@ function Cash() {
     qc.invalidateQueries({ queryKey: getListCashTransactionsQueryKey() });
     qc.invalidateQueries({ queryKey: getGetCashSummaryQueryKey() });
     qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
-  };
-  const hideAsUnclear = (row: CashTransaction) => {
-    if (!window.confirm(`"${row.description}" гүйлгээг тодорхойгүй болгож нуух уу?`)) return;
-    markUnclear.mutate({ source: 'cash', id: row.id }, { onSuccess: refresh });
   };
   const startCreate = () => {
     setEditing(null);
@@ -946,7 +940,7 @@ function Cash() {
         return <div className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-secondary/35" key={row.id} data-testid={`row-cash-${row.id}`}>
           <span className={cn('grid size-9 shrink-0 place-items-center rounded-xl', row.type === CashTransactionType.income ? 'bg-primary/10 text-primary' : 'bg-orange-100 text-orange-800')}>{row.type === CashTransactionType.income ? <ArrowDownLeft className="size-4" /> : <ArrowUpRight className="size-4" />}</span>
           <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold">{row.description}</p><span className={cn('rounded-full border px-2 py-0.5 text-[10px] font-bold', kind.className)}>{kind.label}</span>{(row.bankVerifiedAt || row.bankTransactionId) && <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">Банкны хуулгаар баталгаажсан</span>}</div><p className="mt-0.5 text-xs text-muted-foreground">{row.category} · {dateLabel(row.date)}{closed ? ' · Өндөрлөсөн' : ''}</p></div>
-          <div className="flex gap-1">{session.data?.role === 'admin' && <Button size="icon" variant="ghost" disabled={markUnclear.isPending} title="Тодорхойгүй болгож нуух" onClick={() => hideAsUnclear(row)} data-testid={`button-unclear-cash-${row.id}`}><EyeOff className="size-4" /></Button>}{row.editable && <><Button size="icon" variant="ghost" disabled={closed} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Засах'} onClick={() => startEdit(row)} data-testid={`button-edit-cash-${row.id}`}><Pencil className="size-4" /></Button><Button size="icon" variant="ghost" disabled={closed || deletion.isPending} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Устгах хүсэлт'} onClick={() => deleteRow(row)} data-testid={`button-delete-cash-${row.id}`}><Trash2 className="size-4" /></Button></>}</div>
+          {row.editable && <div className="flex gap-1"><Button size="icon" variant="ghost" disabled={closed} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Засах'} onClick={() => startEdit(row)} data-testid={`button-edit-cash-${row.id}`}><Pencil className="size-4" /></Button><Button size="icon" variant="ghost" disabled={closed || deletion.isPending} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Устгах хүсэлт'} onClick={() => deleteRow(row)} data-testid={`button-delete-cash-${row.id}`}><Trash2 className="size-4" /></Button></div>}
           <p className={cn('font-mono text-sm font-bold', row.type === CashTransactionType.income ? 'text-primary' : 'text-orange-800')}>{row.type === CashTransactionType.income ? '+' : '−'}{money(row.amount)}</p>
         </div>;
       })}</div>}
