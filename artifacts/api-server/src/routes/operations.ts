@@ -1004,7 +1004,10 @@ router.put("/payroll-adjustments", async (req, res, next) => {
 
 router.delete("/payroll-adjustments/:month/:employeeId/transactions/:sequence", async (req, res, next) => {
   try {
-    const { month, employeeId, sequence } = DeletePayrollAdjustmentTransactionParams.parse(req.params);
+    const { month, employeeId, sequence } = DeletePayrollAdjustmentTransactionParams.parse({
+      ...req.params,
+      sequence: Number(req.params.sequence),
+    });
     const [adjustment] = await db
       .select()
       .from(payrollAdjustmentsTable)
