@@ -1,0 +1,15 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "incremental": true,
+    "tsBuildInfoFile": "../.e2e.tsbuildinfo",
+    "rootDir": "..",
+    "types": ["node", "@playwright/test"]
+  },
+  "include": ["./**/*.ts", "../playwright.config.ts"],
+  "references": [
+    {
+      "path": "../../../lib/db"
+    }
+  ]
+}
