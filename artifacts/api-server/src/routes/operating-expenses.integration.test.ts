@@ -50,7 +50,7 @@ describe("operating expenses", () => {
     const pay = await fetch(`${baseUrl}/api/operating-expenses/${expenseId}/payment`, { method: "PUT", headers: { "content-type": "application/json", cookie: adminCookie }, body: JSON.stringify({ date: "2099-03-12", amount: 1300, bankTransactionId: bankId }) });
     assert.equal(pay.status, 200);
     const [cash] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.sourceKey, `expense:${expenseId}`));
-    assert.equal(cash.category, "Үйл ажиллагааны зардал");
+    assert.equal(cash.category, "supplies");
     assert.equal(cash.sourceType, "operating_expense");
     assert.ok(cash.bankVerifiedAt);
     const [linked] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankId));
@@ -81,9 +81,119 @@ describe("operating expenses", () => {
       }
     } finally {
       await db.update(bankTransactionsTable).set({ cashTransactionId: null, transferredAt: null }).where(eq(bankTransactionsTable.id, bank.id));
+      await db.update(operatingExpensesTable).set({ bankTransactionId: null, cashTransactionId: null }).where(inArray(operatingExpensesTable.id, rows.map((r) => r.id)));
       await db.delete(cashTransactionsTable).where(eq(cashTransactionsTable.bankTransactionId, bank.id));
       await db.delete(operatingExpensesTable).where(inArray(operatingExpensesTable.id, rows.map((r) => r.id)));
       await db.delete(bankTransactionsTable).where(eq(bankTransactionsTable.id, bank.id));
+    }
+  });
+
+  it("reconciles historical and future bank expenses while excluding system sources", async () => {
+    const bankIds: number[] = [];
+    const cashIds: number[] = [];
+    try {
+      const createPair = async (sourceType: string | null, suffix: string, category: string) => {
+        const [bank] = await db.insert(bankTransactionsTable).values({
+          transactionAt: new Date(`2099-05-${suffix}T10:00:00Z`),
+          type: "expense",
+          amount: 2000 + Number(suffix),
+          description: `historical ${suffix}`,
+          fingerprint: `operating-history-${process.pid}-${suffix}`,
+        }).returning({ id: bankTransactionsTable.id });
+        const [cash] = await db.insert(cashTransactionsTable).values({
+          type: "expense",
+          category,
+          description: `historical ${suffix}`,
+          amount: 2000 + Number(suffix),
+          date: `2099-05-${suffix}`,
+          sourceType,
+          sourceKey: sourceType ? `${sourceType}:${process.pid}:${suffix}` : null,
+          bankTransactionId: bank.id,
+          bankVerifiedAt: new Date(),
+        }).returning({ id: cashTransactionsTable.id });
+        await db.update(bankTransactionsTable)
+          .set({ cashTransactionId: cash.id, transferredAt: new Date() })
+          .where(eq(bankTransactionsTable.id, bank.id));
+        bankIds.push(bank.id);
+        cashIds.push(cash.id);
+        return { bank, cash };
+      };
+
+      const historical = await createPair("bank_transaction", "10", "Түрээс");
+      const excluded = await Promise.all([
+        createPair("payroll", "11", "Цалин"),
+        createPair("payroll_advance", "12", "Цалингийн урьдчилгаа"),
+        createPair("inventory_purchase", "13", "Бараа материал"),
+        createPair("fixed_asset_purchase", "14", "Эд хөрөнгө"),
+      ]);
+
+      const firstList = await fetch(`${baseUrl}/api/operating-expenses`, { headers: { cookie: adminCookie } });
+      assert.equal(firstList.status, 200);
+      const firstRows = await firstList.json() as Array<{ bankTransactionId: number | null; cashTransactionId: number | null; category: string; paymentDate: string | null }>;
+      const reconciled = firstRows.filter((row) => row.bankTransactionId === historical.bank.id);
+      assert.equal(reconciled.length, 1);
+      assert.equal(reconciled[0].cashTransactionId, historical.cash.id);
+      assert.equal(reconciled[0].category, "Түрээс");
+      assert.equal(reconciled[0].paymentDate, "2099-05-10");
+      for (const pair of excluded) {
+        assert.equal(firstRows.some((row) => row.bankTransactionId === pair.bank.id), false);
+      }
+
+      const secondList = await fetch(`${baseUrl}/api/operating-expenses`, { headers: { cookie: adminCookie } });
+      const secondRows = await secondList.json() as Array<{ bankTransactionId: number | null }>;
+      assert.equal(secondRows.filter((row) => row.bankTransactionId === historical.bank.id).length, 1);
+
+      const [futureBank] = await db.insert(bankTransactionsTable).values({
+        transactionAt: new Date("2099-05-20T10:00:00Z"),
+        type: "expense",
+        amount: 4500,
+        description: "шатахуун",
+        fingerprint: `operating-future-${process.pid}`,
+      }).returning({ id: bankTransactionsTable.id });
+      bankIds.push(futureBank.id);
+      const transfer = await fetch(`${baseUrl}/api/bank-transactions/${futureBank.id}/transfer-to-cash`, {
+        method: "POST",
+        headers: { "content-type": "application/json", cookie: adminCookie },
+        body: JSON.stringify({ category: "Шатахуун", incomeMonth: null }),
+      });
+      assert.equal(transfer.status, 200);
+      const [futureExpense] = await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.bankTransactionId, futureBank.id));
+      assert.ok(futureExpense);
+      assert.equal(futureExpense.category, "Шатахуун");
+      assert.ok(futureExpense.cashTransactionId);
+      cashIds.push(futureExpense.cashTransactionId);
+
+      const [linkBank] = await db.insert(bankTransactionsTable).values({
+        transactionAt: new Date("2099-05-21T10:00:00Z"),
+        type: "expense",
+        amount: 5100,
+        description: "интернет",
+        fingerprint: `operating-link-${process.pid}`,
+      }).returning({ id: bankTransactionsTable.id });
+      bankIds.push(linkBank.id);
+      const [manualCash] = await db.insert(cashTransactionsTable).values({
+        type: "expense",
+        category: "Интернет",
+        description: "интернет",
+        amount: 5100,
+        date: "2099-05-21",
+      }).returning({ id: cashTransactionsTable.id });
+      cashIds.push(manualCash.id);
+      const link = await fetch(`${baseUrl}/api/bank-transactions/${linkBank.id}/link-cash`, {
+        method: "POST",
+        headers: { "content-type": "application/json", cookie: adminCookie },
+        body: JSON.stringify({ cashTransactionId: manualCash.id }),
+      });
+      assert.equal(link.status, 200);
+      const [linkedExpense] = await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.bankTransactionId, linkBank.id));
+      assert.ok(linkedExpense);
+      assert.equal(linkedExpense.cashTransactionId, manualCash.id);
+      assert.equal(linkedExpense.category, "Интернет");
+    } finally {
+      if (bankIds.length) await db.delete(operatingExpensesTable).where(inArray(operatingExpensesTable.bankTransactionId, bankIds));
+      if (bankIds.length) await db.update(bankTransactionsTable).set({ cashTransactionId: null, transferredAt: null }).where(inArray(bankTransactionsTable.id, bankIds));
+      if (cashIds.length) await db.delete(cashTransactionsTable).where(inArray(cashTransactionsTable.id, cashIds));
+      if (bankIds.length) await db.delete(bankTransactionsTable).where(inArray(bankTransactionsTable.id, bankIds));
     }
   });
 });

@@ -1416,6 +1416,8 @@ export const ListOperatingExpensesResponseItem = zod.object({
   "amount": zod.number().min(listOperatingExpensesResponseAmountMin),
   "paymentDate": zod.string().nullable(),
   "paymentAmount": zod.number().nullable(),
+  "bankTransactionId": zod.number().int().nullable(),
+  "cashTransactionId": zod.number().int().nullable(),
   "createdAt": zod.coerce.date()
 })
 export const ListOperatingExpensesResponse = zod.array(ListOperatingExpensesResponseItem)
@@ -1448,6 +1450,8 @@ export const CreateOperatingExpenseResponse = zod.object({
   "amount": zod.number().min(createOperatingExpenseResponseAmountMin),
   "paymentDate": zod.string().nullable(),
   "paymentAmount": zod.number().nullable(),
+  "bankTransactionId": zod.number().int().nullable(),
+  "cashTransactionId": zod.number().int().nullable(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1483,6 +1487,8 @@ export const UpdateOperatingExpenseResponse = zod.object({
   "amount": zod.number().min(updateOperatingExpenseResponseAmountMin),
   "paymentDate": zod.string().nullable(),
   "paymentAmount": zod.number().nullable(),
+  "bankTransactionId": zod.number().int().nullable(),
+  "cashTransactionId": zod.number().int().nullable(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1537,6 +1543,8 @@ export const ConfirmOperatingExpensePaymentResponse = zod.object({
   "amount": zod.number().min(confirmOperatingExpensePaymentResponseAmountMin),
   "paymentDate": zod.string().nullable(),
   "paymentAmount": zod.number().nullable(),
+  "bankTransactionId": zod.number().int().nullable(),
+  "cashTransactionId": zod.number().int().nullable(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1558,6 +1566,8 @@ export const CancelOperatingExpensePaymentResponse = zod.object({
   "amount": zod.number().min(cancelOperatingExpensePaymentResponseAmountMin),
   "paymentDate": zod.string().nullable(),
   "paymentAmount": zod.number().nullable(),
+  "bankTransactionId": zod.number().int().nullable(),
+  "cashTransactionId": zod.number().int().nullable(),
   "createdAt": zod.coerce.date()
 })
 

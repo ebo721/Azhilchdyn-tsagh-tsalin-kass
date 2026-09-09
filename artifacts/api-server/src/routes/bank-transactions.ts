@@ -27,6 +27,7 @@ import {
 import { and, desc, eq, gte, isNotNull, isNull, lte } from "drizzle-orm";
 import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, db, deletionRequestsTable } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session";
+import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync";
 
 const router: IRouter = Router();
 const execFile = promisify(execFileCallback);
@@ -319,6 +320,7 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
         .where(and(eq(bankTransactionsTable.id, id), isNull(bankTransactionsTable.cashTransactionId), isNull(bankTransactionsTable.transferredAt)))
         .returning();
       if (!updated) throw new BankCashLinkConflictError();
+      await syncOperatingExpenseForBankCash(tx, id, cash.id);
       return updated;
     });
     if (result === null) {
@@ -335,7 +337,9 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
     }
     res.json(TransferBankTransactionToCashResponse.parse(response(result)));
   } catch (error) {
-    if (error instanceof BankCashLinkConflictError || (error as { code?: string }).code === "23505") {
+    const databaseCode = (error as { code?: string; cause?: { code?: string } }).code
+      ?? (error as { cause?: { code?: string } }).cause?.code;
+    if (error instanceof BankCashLinkConflictError || databaseCode === "23505") {
       const { id } = TransferBankTransactionToCashParams.parse(req.params);
       const [bank] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id));
       if (bank && (bank.cashTransactionId !== null || bank.transferredAt !== null)) {
@@ -402,6 +406,7 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
         .where(and(eq(bankTransactionsTable.id, id), isNull(bankTransactionsTable.cashTransactionId), isNull(bankTransactionsTable.transferredAt)))
         .returning();
       if (!linkedBank) throw new BankCashLinkConflictError();
+      await syncOperatingExpenseForBankCash(tx, id, cashTransactionId);
       return linkedBank;
     });
     if (result === "missing-bank" || result === "missing-cash") {
@@ -420,7 +425,9 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
     }
     res.json(LinkBankTransactionToCashResponse.parse(response(result)));
   } catch (error) {
-    if (error instanceof BankCashLinkConflictError || (error as { code?: string }).code === "23505") {
+    const databaseCode = (error as { code?: string; cause?: { code?: string } }).code
+      ?? (error as { cause?: { code?: string } }).cause?.code;
+    if (error instanceof BankCashLinkConflictError || databaseCode === "23505") {
       const { id } = LinkBankTransactionToCashParams.parse(req.params);
       const { cashTransactionId } = LinkBankTransactionToCashBody.parse(req.body);
       const [bank] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id));

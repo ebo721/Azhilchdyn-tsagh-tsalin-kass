@@ -132,6 +132,7 @@ import {
 import { getStaffRole, getStaffSession, type StaffRole } from "../lib/hr-session";
 import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment";
 import { planShiftPlanCopy } from "../lib/shift-plan-copy";
+import { reconcileOperatingExpenses } from "../lib/operating-expense-sync";
 
 const router: IRouter = Router();
 
@@ -145,7 +146,8 @@ async function isCashDateClosed(date: string) {
 
 function operatingExpenseResponse(row: typeof operatingExpensesTable.$inferSelect) {
   return { ...row, date: String(row.date), amount: Number(row.amount), paymentDate: row.paymentDate ? String(row.paymentDate) : null,
-    paymentAmount: row.paymentAmount === null ? null : Number(row.paymentAmount), createdAt: String(row.createdAt) };
+    paymentAmount: row.paymentAmount === null ? null : Number(row.paymentAmount), bankTransactionId: row.bankTransactionId,
+    cashTransactionId: row.cashTransactionId, createdAt: String(row.createdAt) };
 }
 
 router.use(async (req, res, next) => {
@@ -217,6 +219,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 const currentMonth = () => today().slice(0, 7);
 const money = (value: number) => Math.round(value * 100) / 100;
 class InventoryBankPaymentConflictError extends Error {}
+class OperatingExpenseBankPaymentConflictError extends Error {}
 const calendarDateOffset = (date: string, offset: number) => {
   const value = new Date(`${date}T00:00:00.000Z`);
   value.setUTCDate(value.getUTCDate() + offset);
@@ -3014,7 +3017,7 @@ router.delete("/inventory/purchases/:id", async (req, res, next) => {
 
 router.get("/operating-expenses", async (_req, res, next) => {
   try {
-    const rows = await db.select().from(operatingExpensesTable).orderBy(desc(operatingExpensesTable.date), desc(operatingExpensesTable.id));
+    const rows = await db.transaction((tx) => reconcileOperatingExpenses(tx));
     res.json(ListOperatingExpensesResponse.parse(rows.map(operatingExpenseResponse)));
   } catch (error) { next(error); }
 });
@@ -3094,13 +3097,26 @@ router.put("/operating-expenses/:id/payment", async (req, res, next) => {
         if (bank.type !== "expense" || bankDate !== input.date || Number(bank.amount) !== Number(input.amount) || bank.cashTransactionId || bank.transferredAt || bank.unclearAt) return "bank_conflict" as const;
       }
       const [cash] = await tx.insert(cashTransactionsTable).values({
-        type: "expense", category: "Үйл ажиллагааны зардал", description: expense.description,
+        type: "expense", category: expense.category, description: expense.description,
         amount: money(input.amount), date: input.date, sourceType: "operating_expense", sourceKey: `expense:${id}`,
         bankTransactionId: input.bankTransactionId ?? null,
         bankVerifiedAt: input.bankTransactionId ? new Date() : null,
       }).returning();
-      if (input.bankTransactionId) await tx.update(bankTransactionsTable).set({ cashTransactionId: cash.id, transferredAt: new Date() }).where(and(eq(bankTransactionsTable.id, input.bankTransactionId), isNull(bankTransactionsTable.cashTransactionId)));
-      await tx.update(operatingExpensesTable).set({ paymentDate: input.date, paymentAmount: money(input.amount) }).where(eq(operatingExpensesTable.id, id));
+      if (input.bankTransactionId) {
+        const [linkedBank] = await tx.update(bankTransactionsTable)
+          .set({ cashTransactionId: cash.id, transferredAt: new Date() })
+          .where(and(
+            eq(bankTransactionsTable.id, input.bankTransactionId),
+            isNull(bankTransactionsTable.cashTransactionId),
+            isNull(bankTransactionsTable.transferredAt),
+          ))
+          .returning({ id: bankTransactionsTable.id });
+        if (!linkedBank) throw new OperatingExpenseBankPaymentConflictError();
+      }
+      await tx.update(operatingExpensesTable).set({
+        paymentDate: input.date, paymentAmount: money(input.amount),
+        bankTransactionId: input.bankTransactionId ?? null, cashTransactionId: cash.id,
+      }).where(eq(operatingExpensesTable.id, id));
       return "ok" as const;
     });
     if (result === "missing") { res.status(404).json({ error: "Зардал олдсонгүй" }); return; }
@@ -3111,7 +3127,10 @@ router.put("/operating-expenses/:id/payment", async (req, res, next) => {
     res.json(ConfirmOperatingExpensePaymentResponse.parse(operatingExpenseResponse(row)));
   } catch (error) {
     const code = (error as { code?: string; cause?: { code?: string } }).code ?? (error as { cause?: { code?: string } }).cause?.code;
-    if (code === "23505") { res.status(409).json({ error: "Банкны гүйлгээ аль хэдийн холбогдсон байна" }); return; }
+    if (error instanceof OperatingExpenseBankPaymentConflictError || code === "23505") {
+      res.status(409).json({ error: "Банкны гүйлгээ аль хэдийн холбогдсон байна" });
+      return;
+    }
     next(error);
   }
 });
@@ -3125,9 +3144,13 @@ router.delete("/operating-expenses/:id/payment", async (req, res, next) => {
       const [expenseClosure] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, expense.date));
       if (expenseClosure) return "closed" as const;
       if (expense.paymentDate && await isCashDateClosed(expense.paymentDate)) return "closed" as const;
-      const [cash] = await tx.select().from(cashTransactionsTable).where(and(eq(cashTransactionsTable.sourceType, "operating_expense"), eq(cashTransactionsTable.sourceKey, `expense:${id}`))).for("update");
-      if (cash?.bankTransactionId) await tx.update(bankTransactionsTable).set({ cashTransactionId: null, transferredAt: null }).where(eq(bankTransactionsTable.id, cash.bankTransactionId));
-      await tx.delete(cashTransactionsTable).where(eq(cashTransactionsTable.id, cash?.id ?? -1));
+      const [cash] = await tx.select().from(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.id, expense.cashTransactionId ?? -1),
+      )).for("update");
+      const [legacyCash] = cash ? [cash] : await tx.select().from(cashTransactionsTable).where(and(eq(cashTransactionsTable.sourceType, "operating_expense"), eq(cashTransactionsTable.sourceKey, `expense:${id}`))).for("update");
+      if (legacyCash?.bankTransactionId) await tx.update(bankTransactionsTable).set({ cashTransactionId: null, transferredAt: null }).where(eq(bankTransactionsTable.id, legacyCash.bankTransactionId));
+      await tx.update(operatingExpensesTable).set({ bankTransactionId: null, cashTransactionId: null }).where(eq(operatingExpensesTable.id, id));
+      await tx.delete(cashTransactionsTable).where(eq(cashTransactionsTable.id, legacyCash?.id ?? -1));
       await tx.update(operatingExpensesTable).set({ paymentDate: null, paymentAmount: null }).where(eq(operatingExpensesTable.id, id));
       return "ok" as const;
     });
@@ -3144,10 +3167,14 @@ router.delete("/operating-expenses/:id", async (req, res, next) => {
     const deleted = await db.transaction(async (tx) => {
       const [expense] = await tx.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.id, id)).for("update");
       if (!expense) return "missing" as const;
+      const [expenseClosure] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, expense.date));
+      if (expenseClosure) return "closed" as const;
       if (expense.paymentDate && await isCashDateClosed(expense.paymentDate)) return "closed" as const;
-      const [cash] = await tx.select().from(cashTransactionsTable).where(and(eq(cashTransactionsTable.sourceType, "operating_expense"), eq(cashTransactionsTable.sourceKey, `expense:${id}`))).for("update");
-      if (cash?.bankTransactionId) await tx.update(bankTransactionsTable).set({ cashTransactionId: null, transferredAt: null }).where(eq(bankTransactionsTable.id, cash.bankTransactionId));
-      await tx.delete(cashTransactionsTable).where(eq(cashTransactionsTable.id, cash?.id ?? -1));
+      const [cash] = await tx.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, expense.cashTransactionId ?? -1)).for("update");
+      const [legacyCash] = cash ? [cash] : await tx.select().from(cashTransactionsTable).where(and(eq(cashTransactionsTable.sourceType, "operating_expense"), eq(cashTransactionsTable.sourceKey, `expense:${id}`))).for("update");
+      if (legacyCash?.bankTransactionId) await tx.update(bankTransactionsTable).set({ cashTransactionId: null, transferredAt: null }).where(eq(bankTransactionsTable.id, legacyCash.bankTransactionId));
+      await tx.update(operatingExpensesTable).set({ bankTransactionId: null, cashTransactionId: null }).where(eq(operatingExpensesTable.id, id));
+      await tx.delete(cashTransactionsTable).where(eq(cashTransactionsTable.id, legacyCash?.id ?? -1));
       await tx.delete(operatingExpensesTable).where(eq(operatingExpensesTable.id, id));
       return "ok" as const;
     });

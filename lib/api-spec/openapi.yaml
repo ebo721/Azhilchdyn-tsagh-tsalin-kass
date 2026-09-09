@@ -1919,7 +1919,7 @@ components:
         purpose: { type: string, minLength: 1 }
     OperatingExpense:
       type: object
-      required: [id, description, category, date, amount, paymentDate, paymentAmount, createdAt]
+      required: [id, description, category, date, amount, paymentDate, paymentAmount, bankTransactionId, cashTransactionId, createdAt]
       properties:
         id: { type: integer }
         description: { type: string }
@@ -1928,6 +1928,8 @@ components:
         amount: { type: number, minimum: 0 }
         paymentDate: { type: ["string", "null"] }
         paymentAmount: { type: ["number", "null"] }
+        bankTransactionId: { type: ["integer", "null"] }
+        cashTransactionId: { type: ["integer", "null"] }
         createdAt: { type: string, format: date-time }
     OperatingExpenseInput:
       type: object

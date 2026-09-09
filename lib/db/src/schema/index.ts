@@ -234,8 +234,13 @@ export const operatingExpensesTable = pgTable("operating_expenses", {
   amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
   paymentDate: date("payment_date", { mode: "string" }),
   paymentAmount: numeric("payment_amount", { precision: 14, scale: 2, mode: "number" }),
+  bankTransactionId: integer("bank_transaction_id").references(() => bankTransactionsTable.id, { onDelete: "restrict" }),
+  cashTransactionId: integer("cash_transaction_id").references(() => cashTransactionsTable.id, { onDelete: "restrict" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("operating_expenses_bank_transaction_idx").on(table.bankTransactionId),
+  uniqueIndex("operating_expenses_cash_transaction_idx").on(table.cashTransactionId),
+]);
 
 export const deletionRequestsTable = pgTable("deletion_requests", {
   id: serial("id").primaryKey(),

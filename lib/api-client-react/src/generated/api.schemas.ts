@@ -856,6 +856,10 @@ export interface OperatingExpense {
   paymentDate: string | null;
   /** @nullable */
   paymentAmount: number | null;
+  /** @nullable */
+  bankTransactionId: number | null;
+  /** @nullable */
+  cashTransactionId: number | null;
   createdAt: string;
 }
 
