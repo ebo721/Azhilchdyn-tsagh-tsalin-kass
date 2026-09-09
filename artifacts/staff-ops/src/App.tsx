@@ -350,7 +350,7 @@ function AppShell({ children, role, onLogout }: { children: ReactNode; role: 'ad
       : role === 'warehouse'
         ? nav.filter((item) => ['/inventory', '/fixed-assets'].includes(item.href))
         : role === 'viewer'
-          ? nav.filter((item) => ['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/inventory', '/fixed-assets'].includes(item.href))
+          ? nav.filter((item) => ['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/inventory', '/fixed-assets'].includes(item.href))
           : nav;
   const active = visibleNav.find((item) => item.href === location)?.label ?? 'Статистик';
   return (
@@ -1794,6 +1794,8 @@ function OperatingExpensePaymentModal({ expense, onClose }: { expense: Operating
 
 function OperatingExpenses() {
   const query = useListOperatingExpenses();
+  const session = useGetAuthSession();
+  const isViewer = session.data?.authenticated && session.data.role === 'viewer';
   const qc = useQueryClient();
   const deletion = useQueueDeletion();
   const cancelPayment = useCancelOperatingExpensePayment();
@@ -1818,13 +1820,13 @@ function OperatingExpenses() {
 
   return (
     <div className="page-enter space-y-6">
-      <PageHeading title="Үйл ажиллагааны зардал" detail="Байгууллагын тогтмол болон бусад үйл ажиллагааны зардлын бүртгэл." action={<Button onClick={() => setEditing('new')} data-testid="button-add-expense"><Plus className="mr-2 size-4" />Зардал нэмэх</Button>} />
+      <PageHeading title="Үйл ажиллагааны зардал" detail="Байгууллагын тогтмол болон бусад үйл ажиллагааны зардлын бүртгэл." action={!isViewer && <Button onClick={() => setEditing('new')} data-testid="button-add-expense"><Plus className="mr-2 size-4" />Зардал нэмэх</Button>} />
       {!query.isLoading && !query.isError && query.data?.length ? <div className="flex justify-end"><label className="space-y-1 text-xs font-semibold">Дэд ангилал<select value={filterCategory} onChange={(event) => setFilterCategory(event.target.value)} className="block h-10 min-w-52 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="select-operating-expense-category"><option value="all">Бүх дэд ангилал</option>{expenseCategories.map((category) => <option key={category} value={category}>{category}</option>)}</select></label></div> : null}
       {query.isLoading ? <div className="space-y-4"><LoadingBlock className="h-16" /><LoadingBlock className="h-16" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : query.data?.length ? (
         <div className="overflow-hidden rounded-2xl border border-border bg-card">
           <table className="w-full text-left text-sm" data-testid="table-expenses">
             <thead className="border-b border-border bg-secondary/50 text-xs text-muted-foreground">
-              <tr><th className="px-5 py-3 font-semibold">Огноо</th><th className="px-5 py-3 font-semibold">Утга</th><th className="px-5 py-3 font-semibold">Ангилал</th><th className="px-5 py-3 text-right font-semibold">Дүн</th><th className="px-5 py-3 text-center font-semibold">Төлөв</th><th className="px-5 py-3 text-right font-semibold">Үйлдэл</th></tr>
+              <tr><th className="px-5 py-3 font-semibold">Огноо</th><th className="px-5 py-3 font-semibold">Утга</th><th className="px-5 py-3 font-semibold">Ангилал</th><th className="px-5 py-3 text-right font-semibold">Дүн</th><th className="px-5 py-3 text-center font-semibold">Төлөв</th>{!isViewer && <th className="px-5 py-3 text-right font-semibold">Үйлдэл</th>}</tr>
             </thead>
             <tbody className="divide-y divide-border">
               {filteredExpenses.map((ex) => (
@@ -1840,7 +1842,7 @@ function OperatingExpenses() {
                       <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-bold text-destructive" data-testid={`status-unpaid-expense-${ex.id}`}>Төлөгдөөгүй</span>
                     )}
                   </td>
-                  <td className="px-5 py-3 text-right">
+                  {!isViewer && <td className="px-5 py-3 text-right">
                     <div className="flex justify-end gap-2">
                       {!ex.paymentDate ? (
                         <>
@@ -1852,10 +1854,10 @@ function OperatingExpenses() {
                         <Button variant="outline" size="sm" onClick={() => onCancelPayment(ex)} disabled={cancelPayment.isPending} className="text-destructive hover:text-destructive" data-testid={`button-cancel-payment-expense-${ex.id}`}>Цуцлах</Button>
                       )}
                     </div>
-                  </td>
+                  </td>}
                 </tr>
               ))}
-              {!filteredExpenses.length && <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-muted-foreground">Сонгосон дэд ангилалд зардал алга.</td></tr>}
+              {!filteredExpenses.length && <tr><td colSpan={isViewer ? 5 : 6} className="px-5 py-10 text-center text-sm text-muted-foreground">Сонгосон дэд ангилалд зардал алга.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -1884,12 +1886,12 @@ function Router() {
     if (role === 'hr' && !['/employees', '/attendance', '/hour-balance'].includes(location)) navigate('/employees', { replace: true });
     if (role === 'accountant' && !['/employees', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses'].includes(location)) navigate('/hour-balance', { replace: true });
     if (role === 'warehouse' && !['/inventory', '/fixed-assets'].includes(location)) navigate('/inventory', { replace: true });
-    if (role === 'viewer' && !['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/inventory', '/fixed-assets'].includes(location)) navigate('/employees', { replace: true });
+    if (role === 'viewer' && !['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/inventory', '/fixed-assets'].includes(location)) navigate('/employees', { replace: true });
   }, [location, navigate, role]);
   if (session.isLoading) return <div className="grid min-h-[100dvh] place-items-center"><LoadingBlock className="size-12" /></div>;
   if (!role) return <HrLogin />;
   const signOut = () => logout.mutate(undefined, { onSuccess: () => { queryClient.clear(); navigate('/'); } });
-  return <ErrorBoundary resetKey={location}><AppShell role={role} onLogout={signOut}>{role === 'admin' ? <Switch><Route path="/" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/bank-transactions" component={BankTransactions} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route path="/operating-expenses" component={OperatingExpenses} /><Route path="/deletion-requests" component={DeletionRequests} /><Route path="/users" component={UserSettings} /><Route component={NotFound} /></Switch> : role === 'hr' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route component={Employees} /></Switch> : role === 'accountant' ? <Switch><Route path="/employees" component={Employees} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/bank-transactions" component={BankTransactions} /><Route path="/operating-expenses" component={OperatingExpenses} /><Route component={HourBalance} /></Switch> : role === 'viewer' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/bank-transactions" component={BankTransactions} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route component={Employees} /></Switch> : <Switch><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route component={Inventory} /></Switch>}</AppShell></ErrorBoundary>;
+  return <ErrorBoundary resetKey={location}><AppShell role={role} onLogout={signOut}>{role === 'admin' ? <Switch><Route path="/" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/bank-transactions" component={BankTransactions} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route path="/operating-expenses" component={OperatingExpenses} /><Route path="/deletion-requests" component={DeletionRequests} /><Route path="/users" component={UserSettings} /><Route component={NotFound} /></Switch> : role === 'hr' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route component={Employees} /></Switch> : role === 'accountant' ? <Switch><Route path="/employees" component={Employees} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/bank-transactions" component={BankTransactions} /><Route path="/operating-expenses" component={OperatingExpenses} /><Route component={HourBalance} /></Switch> : role === 'viewer' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/bank-transactions" component={BankTransactions} /><Route path="/operating-expenses" component={OperatingExpenses} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route component={Employees} /></Switch> : <Switch><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route component={Inventory} /></Switch>}</AppShell></ErrorBoundary>;
 }
 
 function App() {

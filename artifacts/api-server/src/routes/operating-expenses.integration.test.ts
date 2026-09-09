@@ -65,7 +65,7 @@ describe("operating expenses", () => {
     void cleanup;
   });
 
-  it("allows one concurrent bank claim and denies viewers", async () => {
+  it("allows one concurrent bank claim and gives viewers read-only access", async () => {
     const rows = await db.insert(operatingExpensesTable).values([
       { description: "concurrent a", category: "x", date: "2099-04-10", amount: 500 },
       { description: "concurrent b", category: "x", date: "2099-04-10", amount: 500 },
@@ -77,7 +77,13 @@ describe("operating expenses", () => {
       const viewer = await db.select().from(usersTable).where(eq(usersTable.role, "viewer")).limit(1);
       if (viewer[0]) {
         const response = await fetch(`${baseUrl}/api/operating-expenses`, { headers: { cookie: `${hrCookie.name}=${createStaffSession(viewer[0])}` } });
-        assert.equal(response.status, 403);
+        assert.equal(response.status, 200);
+        const deniedMutation = await fetch(`${baseUrl}/api/operating-expenses`, {
+          method: "POST",
+          headers: { "content-type": "application/json", cookie: `${hrCookie.name}=${createStaffSession(viewer[0])}` },
+          body: JSON.stringify({ description: "viewer must not create", category: "x", date: "2099-04-10", amount: 500 }),
+        });
+        assert.equal(deniedMutation.status, 403);
       }
     } finally {
       await db.update(bankTransactionsTable).set({ cashTransactionId: null, transferredAt: null }).where(eq(bankTransactionsTable.id, bank.id));
