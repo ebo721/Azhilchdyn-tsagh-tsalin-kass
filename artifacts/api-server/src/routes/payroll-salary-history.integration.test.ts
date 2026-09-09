@@ -119,6 +119,59 @@ describe("effective-dated payroll salary", () => {
     server.close();
   });
 
+  it("corrects the initial salary row when joined date and salary are edited together", async () => {
+    const [employee] = await db.insert(employeesTable).values({
+      name: `Initial employment correction ${process.pid}`,
+      role: "Test",
+      phone: "",
+      employeeType: "office",
+      salaryType: "monthly",
+      baseSalary: 2_500_000,
+      socialInsuranceSalary: 0,
+      payrollTaxExempt: true,
+      monthlyExpectedWorkDays: 0,
+      status: "active",
+      joinedAt: "2099-09-09",
+    }).returning({ id: employeesTable.id });
+    await db.insert(employeeSalaryHistoryTable).values({
+      employeeId: employee.id,
+      effectiveFrom: "2099-09-09",
+      employeeType: "office",
+      baseSalary: 2_500_000,
+      socialInsuranceSalary: 0,
+      payrollTaxExempt: true,
+    });
+    try {
+      const response = await fetch(`${baseUrl}/api/employees/${employee.id}`, {
+        method: "PATCH",
+        headers: { cookie: adminCookie, "content-type": "application/json" },
+        body: JSON.stringify({
+          name: `Initial employment correction ${process.pid}`,
+          role: "Test",
+          phone: "",
+          employeeType: "office",
+          baseSalary: 2_700_000,
+          socialInsuranceSalary: 0,
+          payrollTaxExempt: true,
+          monthlyExpectedWorkDays: 0,
+          status: "active",
+          joinedAt: "2099-08-15",
+          inactiveAt: null,
+        }),
+      });
+      assert.equal(response.status, 200);
+      const [updated] = await db.select().from(employeesTable).where(eq(employeesTable.id, employee.id));
+      assert.equal(updated.joinedAt, "2099-08-15");
+      assert.equal(Number(updated.baseSalary), 2_700_000);
+      const history = await db.select().from(employeeSalaryHistoryTable).where(eq(employeeSalaryHistoryTable.employeeId, employee.id));
+      assert.equal(history.length, 1);
+      assert.equal(history[0].effectiveFrom, "2099-08-15");
+      assert.equal(Number(history[0].baseSalary), 2_700_000);
+    } finally {
+      await db.delete(employeesTable).where(eq(employeesTable.id, employee.id));
+    }
+  });
+
   it("prorates old and new monthly salaries and excludes leave days", async () => {
     const response = await fetch(`${baseUrl}/api/payroll?month=2099-01`, {
       headers: { cookie: adminCookie },

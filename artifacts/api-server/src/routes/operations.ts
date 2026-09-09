@@ -685,6 +685,12 @@ router.patch("/employees/:id", async (req, res, next) => {
       return;
     }
     const effectiveJoinedAt = joinedAt ?? current.joinedAt;
+    const salaryHistory = await db.select().from(employeeSalaryHistoryTable)
+      .where(eq(employeeSalaryHistoryTable.employeeId, id))
+      .orderBy(employeeSalaryHistoryTable.effectiveFrom);
+    const baselineSalary = salaryHistory[0];
+    const nextSalary = salaryHistory[1];
+    const joinedAtChanged = joinedAt !== undefined && joinedAt !== String(current.joinedAt);
     if (input.status === "inactive" && input.inactiveAt && input.inactiveAt < effectiveJoinedAt) {
       res.status(400).json({ error: "Идэвхгүй болсон огноо ажилд орсон огнооноос өмнө байж болохгүй" });
       return;
@@ -693,7 +699,15 @@ router.patch("/employees/:id", async (req, res, next) => {
       || (input.baseSalary !== undefined && Number(input.baseSalary) !== Number(current.baseSalary))
       || (input.socialInsuranceSalary !== undefined && Number(input.socialInsuranceSalary) !== Number(current.socialInsuranceSalary))
       || (input.payrollTaxExempt !== undefined && input.payrollTaxExempt !== current.payrollTaxExempt);
-    if (salaryChanged && (!salaryEffectiveDate || !isValidCalendarDate(salaryEffectiveDate))) {
+    const correctingInitialEmployment = joinedAtChanged
+      && baselineSalary
+      && String(baselineSalary.effectiveFrom) === String(current.joinedAt)
+      && (!salaryEffectiveDate || salaryEffectiveDate === joinedAt);
+    if (joinedAtChanged && nextSalary && joinedAt! >= String(nextSalary.effectiveFrom)) {
+      res.status(409).json({ error: `Ажилд орсон огноо дараагийн цалингийн огноо ${String(nextSalary.effectiveFrom)}-с өмнө байх ёстой` });
+      return;
+    }
+    if (salaryChanged && !correctingInitialEmployment && (!salaryEffectiveDate || !isValidCalendarDate(salaryEffectiveDate))) {
       res.status(400).json({ error: "Цалин өөрчлөгдөх огноог сонгоно уу" });
       return;
     }
@@ -701,7 +715,7 @@ router.patch("/employees/:id", async (req, res, next) => {
       res.status(400).json({ error: "Цалин өөрчлөгдөх огноо ажилд орсон огнооноос өмнө байж болохгүй" });
       return;
     }
-    if (salaryChanged && salaryEffectiveDate) {
+    if (salaryChanged && salaryEffectiveDate && !correctingInitialEmployment) {
       const [latestSalary] = await db.select({ effectiveFrom: employeeSalaryHistoryTable.effectiveFrom })
         .from(employeeSalaryHistoryTable)
         .where(eq(employeeSalaryHistoryTable.employeeId, id))
@@ -725,15 +739,29 @@ router.patch("/employees/:id", async (req, res, next) => {
         })
         .where(eq(employeesTable.id, id))
         .returning();
-      if (salaryChanged && salaryEffectiveDate) {
-        await tx.insert(employeeSalaryHistoryTable).values({
-          employeeId: id,
-          effectiveFrom: salaryEffectiveDate,
-          employeeType: employeeInput.employeeType ?? current.employeeType,
-          baseSalary: employeeInput.baseSalary ?? Number(current.baseSalary),
-          socialInsuranceSalary: employeeInput.socialInsuranceSalary ?? Number(current.socialInsuranceSalary),
-          payrollTaxExempt: employeeInput.payrollTaxExempt ?? current.payrollTaxExempt,
-        });
+      if (salaryChanged && (salaryEffectiveDate || correctingInitialEmployment)) {
+        if (correctingInitialEmployment && baselineSalary) {
+          await tx.update(employeeSalaryHistoryTable).set({
+            effectiveFrom: joinedAt!,
+            employeeType: employeeInput.employeeType ?? current.employeeType,
+            baseSalary: employeeInput.baseSalary ?? Number(current.baseSalary),
+            socialInsuranceSalary: employeeInput.socialInsuranceSalary ?? Number(current.socialInsuranceSalary),
+            payrollTaxExempt: employeeInput.payrollTaxExempt ?? current.payrollTaxExempt,
+          }).where(eq(employeeSalaryHistoryTable.id, baselineSalary.id));
+        } else {
+          await tx.insert(employeeSalaryHistoryTable).values({
+            employeeId: id,
+            effectiveFrom: salaryEffectiveDate!,
+            employeeType: employeeInput.employeeType ?? current.employeeType,
+            baseSalary: employeeInput.baseSalary ?? Number(current.baseSalary),
+            socialInsuranceSalary: employeeInput.socialInsuranceSalary ?? Number(current.socialInsuranceSalary),
+            payrollTaxExempt: employeeInput.payrollTaxExempt ?? current.payrollTaxExempt,
+          });
+        }
+      } else if (joinedAtChanged && baselineSalary) {
+        await tx.update(employeeSalaryHistoryTable)
+          .set({ effectiveFrom: joinedAt! })
+          .where(eq(employeeSalaryHistoryTable.id, baselineSalary.id));
       }
       return updated;
     });
