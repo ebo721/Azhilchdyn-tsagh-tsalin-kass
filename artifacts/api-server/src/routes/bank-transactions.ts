@@ -38,6 +38,9 @@ const requiredHeaders = ["Огноо", "Зарлага", "Орлого", "Exchan
 class BankCashLinkConflictError extends Error {}
 
 router.use(async (req, res, next) => {
+  const isBankRoute = ["/bank-accounts", "/bank-transactions", "/unclear-transactions"]
+    .some((prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`));
+  if (!isBankRoute) return next();
   const session = await getStaffSession(req);
   if (!session) return res.status(401).json({ error: "Нэвтрэх шаардлагатай" });
   if (session.role === "admin" || session.role === "accountant" || (session.role === "viewer" && req.method === "GET")) return next();
