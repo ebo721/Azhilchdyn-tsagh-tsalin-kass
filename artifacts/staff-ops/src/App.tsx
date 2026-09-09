@@ -862,6 +862,7 @@ function Payroll() {
 }
 
 type CashForm = { type: 'income' | 'expense'; category: string; description: string; amount: string; date: string; incomeMonth: string };
+const CASH_EXPENSE_CATEGORIES = ['Цалин', 'Бараа материал', 'Эд хөрөнгө', 'Үйл ажиллагааны зардал'] as const;
 
 function CashDayCloseControls() {
   const [date, setDate] = useState(today());
@@ -905,7 +906,7 @@ function Cash() {
   const [filterCategory, setFilterCategory] = useState('all');
   const form = useForm<CashForm>({ defaultValues: { type: 'income', category: '', description: '', amount: '', date: today() } });
   const closedDates = new Set(closures.data?.map((closure) => closure.date) ?? []);
-  const cashCategories = useMemo(() => [...new Set((list.data ?? []).map((row) => row.category.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'mn')), [list.data]);
+  const cashCategories = CASH_EXPENSE_CATEGORIES;
   const filteredTransactions = (list.data ?? []).filter((row) =>
     (row.type === CashTransactionType.income ? row.incomeMonth === filterMonth : row.date.startsWith(filterMonth))
     && (filterType === 'all' || row.type === filterType)
@@ -929,7 +930,7 @@ function Cash() {
   };
   const startEdit = (row: CashTransaction) => {
     setEditing(row);
-    form.reset({ type: row.type, category: row.category, description: row.description, amount: String(row.amount), date: row.date, incomeMonth: row.incomeMonth ?? row.date.slice(0, 7) });
+    form.reset({ type: row.type, category: row.type === CashTransactionType.expense ? (row.subcategory ?? 'Бусад') : row.category, description: row.description, amount: String(row.amount), date: row.date, incomeMonth: row.incomeMonth ?? row.date.slice(0, 7) });
     setOpen(true);
   };
   const submit = (values: CashForm) => {
@@ -975,7 +976,7 @@ function Cash() {
     {open && <Modal title={editing?.transactionKind === 'bank_transaction' ? 'Орлогын хамаарах сар засах' : editing ? 'Кассын гүйлгээ засах' : 'Кассын гүйлгээ'} detail={editing?.transactionKind === 'bank_transaction' ? 'Банкны автомат мэдээлэл өөрчлөгдөхгүй.' : 'Гүйлгээний төрөл, дүн болон огноог оруулна.'} onClose={() => setOpen(false)}>
       <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-5" data-testid="form-cash">
         {editing?.transactionKind !== 'bank_transaction' && <><div className="grid grid-cols-2 gap-2 rounded-xl bg-secondary p-1"><button type="button" className={cn('rounded-lg py-2.5 text-sm font-bold', form.watch('type') === 'income' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => form.setValue('type', 'income')}>Орлого</button><button type="button" className={cn('rounded-lg py-2.5 text-sm font-bold', form.watch('type') === 'expense' ? 'bg-card text-orange-800 shadow-sm' : 'text-muted-foreground')} onClick={() => form.setValue('type', 'expense')}>Зарлага</button></div>
-        <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-xs font-semibold">Ангилал<input className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('category', { required: true })} /></label><label className="space-y-2 text-xs font-semibold">Дүн<input type="number" min="0" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('amount', { required: true, min: 0 })} /></label></div>
+        <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-xs font-semibold">{form.watch('type') === 'expense' ? 'Үйл ажиллагааны зардлын дэд ангилал' : 'Ангилал'}<input className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('category', { required: true })} placeholder={form.watch('type') === 'expense' ? 'Жишээ: Түрээс' : 'Жишээ: Борлуулалт'} /></label><label className="space-y-2 text-xs font-semibold">Дүн<input type="number" min="0" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('amount', { required: true, min: 0 })} /></label></div>
         <label className="block space-y-2 text-xs font-semibold">Тайлбар<input className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('description', { required: true })} /></label>
         <label className="block space-y-2 text-xs font-semibold">Огноо<input type="date" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('date', { required: true })} /></label></>}
         {form.watch('type') === 'income' && <label className="block space-y-2 text-xs font-semibold">Хамаарах сар<input type="month" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('incomeMonth', { required: true })} data-testid="input-cash-income-month" /></label>}
@@ -1032,7 +1033,10 @@ function BankTransactions() {
   useEffect(() => {
     if (selectedAccountId === null && bankAccounts.data?.length) setSelectedAccountId(bankAccounts.data[0].id);
   }, [bankAccounts.data, selectedAccountId]);
-  const categories = useMemo(() => [...new Set((cashTransactions.data ?? []).map((transaction) => transaction.category.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [cashTransactions.data]);
+  const categories = useMemo(() => [...new Set((cashTransactions.data ?? [])
+    .map((transaction) => transaction.type === CashTransactionType.expense ? transaction.subcategory : transaction.category)
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map((value) => value.trim()))].sort((a, b) => a.localeCompare(b, 'mn')), [cashTransactions.data]);
   const refreshBankTransactions = () => qc.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
   const refreshAfterTransfer = () => {
     refreshBankTransactions();
@@ -1145,7 +1149,7 @@ function BankTransactions() {
         <div className="flex items-center gap-3" aria-label="эсвэл"><div className="h-px flex-1 bg-border" /><span className="text-xs font-semibold text-muted-foreground">эсвэл</span><div className="h-px flex-1 bg-border" /></div>
         <section aria-labelledby="create-cash-title">
           <h3 id="create-cash-title" className="text-sm font-bold">Касст шинээр үүсгэх</h3>
-          <label className="mt-3 block space-y-2 text-xs font-semibold">Ангилал<input value={category} onChange={(event) => setCategory(event.target.value)} list="cash-category-options" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" placeholder="Ангилал сонгох эсвэл шинээр бичих" aria-label="Шинэ кассын гүйлгээний ангилал" data-testid="input-bank-transfer-category" required /></label>
+          <label className="mt-3 block space-y-2 text-xs font-semibold">{selectedBank.type === 'expense' ? 'Үйл ажиллагааны зардлын дэд ангилал' : 'Ангилал'}<input value={category} onChange={(event) => setCategory(event.target.value)} list="cash-category-options" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" placeholder={selectedBank.type === 'expense' ? 'Жишээ: Түрээс' : 'Ангилал сонгох эсвэл шинээр бичих'} aria-label="Шинэ кассын гүйлгээний ангилал" data-testid="input-bank-transfer-category" required /></label>
           {selectedBank.type === 'income' && <label className="mt-3 block space-y-2 text-xs font-semibold">Хамаарах сар<input type="month" value={incomeMonth} onChange={(event) => setIncomeMonth(event.target.value)} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="input-bank-transfer-income-month" required /></label>}
           <datalist id="cash-category-options">{categories.map((existingCategory) => <option key={existingCategory} value={existingCategory} />)}</datalist>
         </section>
@@ -1792,6 +1796,9 @@ function OperatingExpenses() {
   const cancelPayment = useCancelOperatingExpensePayment();
   const [editing, setEditing] = useState<OperatingExpense | 'new' | null>(null);
   const [paying, setPaying] = useState<OperatingExpense | null>(null);
+  const [filterCategory, setFilterCategory] = useState('all');
+  const expenseCategories = useMemo(() => [...new Set((query.data ?? []).map((expense) => expense.category.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'mn')), [query.data]);
+  const filteredExpenses = (query.data ?? []).filter((expense) => filterCategory === 'all' || expense.category === filterCategory);
 
   const remove = (expense: OperatingExpense) => {
     if (window.confirm(`"${expense.description}" зардлыг устгах уу?`)) deletion.request(`/operating-expenses/${expense.id}`, `Зардал: ${expense.description}`);
@@ -1809,6 +1816,7 @@ function OperatingExpenses() {
   return (
     <div className="page-enter space-y-6">
       <PageHeading title="Үйл ажиллагааны зардал" detail="Байгууллагын тогтмол болон бусад үйл ажиллагааны зардлын бүртгэл." action={<Button onClick={() => setEditing('new')} data-testid="button-add-expense"><Plus className="mr-2 size-4" />Зардал нэмэх</Button>} />
+      {!query.isLoading && !query.isError && query.data?.length ? <div className="flex justify-end"><label className="space-y-1 text-xs font-semibold">Дэд ангилал<select value={filterCategory} onChange={(event) => setFilterCategory(event.target.value)} className="block h-10 min-w-52 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="select-operating-expense-category"><option value="all">Бүх дэд ангилал</option>{expenseCategories.map((category) => <option key={category} value={category}>{category}</option>)}</select></label></div> : null}
       {query.isLoading ? <div className="space-y-4"><LoadingBlock className="h-16" /><LoadingBlock className="h-16" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : query.data?.length ? (
         <div className="overflow-hidden rounded-2xl border border-border bg-card">
           <table className="w-full text-left text-sm" data-testid="table-expenses">
@@ -1816,7 +1824,7 @@ function OperatingExpenses() {
               <tr><th className="px-5 py-3 font-semibold">Огноо</th><th className="px-5 py-3 font-semibold">Утга</th><th className="px-5 py-3 font-semibold">Ангилал</th><th className="px-5 py-3 text-right font-semibold">Дүн</th><th className="px-5 py-3 text-center font-semibold">Төлөв</th><th className="px-5 py-3 text-right font-semibold">Үйлдэл</th></tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {query.data.map((ex) => (
+              {filteredExpenses.map((ex) => (
                 <tr key={ex.id} className="transition-colors hover:bg-secondary/20" data-testid={`row-expense-${ex.id}`}>
                   <td className="px-5 py-3 font-mono text-xs">{ex.date}</td>
                   <td className="px-5 py-3 font-medium">{ex.description}</td>
@@ -1844,6 +1852,7 @@ function OperatingExpenses() {
                   </td>
                 </tr>
               ))}
+              {!filteredExpenses.length && <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-muted-foreground">Сонгосон дэд ангилалд зардал алга.</td></tr>}
             </tbody>
           </table>
         </div>

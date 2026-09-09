@@ -1645,11 +1645,12 @@ components:
         paymentDate: { type: ["string", "null"] }
     CashTransaction:
       type: object
-      required: [id, type, category, description, amount, date, incomeMonth, bankTransactionId, bankVerifiedAt, createdAt, editable, transactionKind]
+      required: [id, type, category, subcategory, description, amount, date, incomeMonth, bankTransactionId, bankVerifiedAt, createdAt, editable, transactionKind]
       properties:
         id: { type: integer }
         type: { type: string, enum: [income, expense] }
         category: { type: string }
+        subcategory: { type: ["string", "null"] }
         description: { type: string }
         amount: { type: number }
         date: { type: string }
@@ -1702,11 +1703,12 @@ components:
         cashTransactionId: { type: integer, minimum: 1 }
     CashTransactionSuggestion:
       type: object
-      required: [id, type, category, description, amount, date, bankTransactionId, bankVerifiedAt, createdAt, editable, transactionKind, score]
+      required: [id, type, category, subcategory, description, amount, date, bankTransactionId, bankVerifiedAt, createdAt, editable, transactionKind, score]
       properties:
         id: { type: integer }
         type: { type: string, enum: [income, expense] }
         category: { type: string }
+        subcategory: { type: ["string", "null"] }
         description: { type: string }
         amount: { type: number }
         date: { type: string }

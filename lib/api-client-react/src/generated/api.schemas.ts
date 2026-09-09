@@ -493,6 +493,8 @@ export interface CashTransaction {
   id: number;
   type: CashTransactionType;
   category: string;
+  /** @nullable */
+  subcategory: string | null;
   description: string;
   amount: number;
   date: string;
@@ -605,6 +607,8 @@ export interface CashTransactionSuggestion {
   id: number;
   type: CashTransactionSuggestionType;
   category: string;
+  /** @nullable */
+  subcategory: string | null;
   description: string;
   amount: number;
   date: string;

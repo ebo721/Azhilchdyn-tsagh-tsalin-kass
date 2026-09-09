@@ -12,6 +12,8 @@ export interface CashTransaction {
   id: number;
   type: CashTransactionType;
   category: string;
+  /** @nullable */
+  subcategory: string | null;
   description: string;
   amount: number;
   date: string;

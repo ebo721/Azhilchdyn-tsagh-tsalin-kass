@@ -50,7 +50,7 @@ describe("operating expenses", () => {
     const pay = await fetch(`${baseUrl}/api/operating-expenses/${expenseId}/payment`, { method: "PUT", headers: { "content-type": "application/json", cookie: adminCookie }, body: JSON.stringify({ date: "2099-03-12", amount: 1300, bankTransactionId: bankId }) });
     assert.equal(pay.status, 200);
     const [cash] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.sourceKey, `expense:${expenseId}`));
-    assert.equal(cash.category, "supplies");
+    assert.equal(cash.category, "Үйл ажиллагааны зардал");
     assert.equal(cash.sourceType, "operating_expense");
     assert.ok(cash.bankVerifiedAt);
     const [linked] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankId));
@@ -86,6 +86,43 @@ describe("operating expenses", () => {
       await db.delete(operatingExpensesTable).where(inArray(operatingExpensesTable.id, rows.map((r) => r.id)));
       await db.delete(bankTransactionsTable).where(eq(bankTransactionsTable.id, bank.id));
     }
+  });
+
+  it("stores manual cash expenses under the operating expense category and keeps their subcategory", async () => {
+    const create = await fetch(`${baseUrl}/api/cash/transactions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: adminCookie },
+      body: JSON.stringify({
+        type: "expense",
+        category: "Түрээс",
+        description: "Гар кассын түрээс",
+        amount: 7800,
+        date: "2099-06-10",
+        incomeMonth: null,
+      }),
+    });
+    assert.equal(create.status, 201);
+    const created = await create.json() as { id: number; category: string; subcategory: string | null };
+    assert.equal(created.category, "Үйл ажиллагааны зардал");
+    assert.equal(created.subcategory, "Түрээс");
+
+    const list = await fetch(`${baseUrl}/api/cash/transactions`, { headers: { cookie: adminCookie } });
+    assert.equal(list.status, 200);
+    const listed = (await list.json() as Array<{ id: number; category: string; subcategory: string | null }>)
+      .find((row) => row.id === created.id);
+    assert.equal(listed?.category, "Үйл ажиллагааны зардал");
+    assert.equal(listed?.subcategory, "Түрээс");
+
+    const [expense] = await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.cashTransactionId, created.id));
+    assert.ok(expense);
+    assert.equal(expense.category, "Түрээс");
+
+    const remove = await fetch(`${baseUrl}/api/cash/transactions/${created.id}`, {
+      method: "DELETE",
+      headers: { cookie: adminCookie },
+    });
+    assert.equal(remove.status, 204);
+    assert.equal((await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.cashTransactionId, created.id))).length, 0);
   });
 
   it("reconciles historical and future bank expenses while excluding system sources", async () => {

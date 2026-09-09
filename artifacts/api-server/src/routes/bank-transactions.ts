@@ -118,10 +118,22 @@ function suggestionScore(bank: typeof bankTransactionsTable.$inferSelect, cash: 
 }
 
 function cashSuggestionResponse(row: typeof cashTransactionsTable.$inferSelect, score: number) {
+  const isOperatingExpense = row.type === "expense"
+    && !["payroll", "payroll_advance", "inventory_purchase", "fixed_asset_purchase"].includes(row.sourceType ?? "");
+  const category = row.type === "expense"
+    ? row.sourceType === "payroll" || row.sourceType === "payroll_advance"
+      ? "Цалин"
+      : row.sourceType === "inventory_purchase"
+        ? "Бараа материал"
+        : row.sourceType === "fixed_asset_purchase"
+          ? "Эд хөрөнгө"
+          : "Үйл ажиллагааны зардал"
+    : row.category;
   return {
     id: row.id,
     type: row.type as "income" | "expense",
-    category: row.category,
+    category,
+    subcategory: isOperatingExpense && row.category !== "Үйл ажиллагааны зардал" ? row.category : null,
     description: row.description,
     amount: Number(row.amount),
     date: String(row.date),

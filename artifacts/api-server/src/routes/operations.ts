@@ -107,7 +107,7 @@ import {
   UpdateEmployeeBody,
   UpdateEmployeeParams,
 } from "@workspace/api-zod";
-import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import {
   attendanceTable,
   cashTransactionsTable,
@@ -1635,8 +1635,26 @@ router.get("/cash/summary", async (_req, res, next) => {
 router.get("/cash/transactions", async (_req, res, next) => {
   try {
     const rows = await db.select().from(cashTransactionsTable).where(isNull(cashTransactionsTable.unclearAt)).orderBy(desc(cashTransactionsTable.date), desc(cashTransactionsTable.id));
+    const expenseRows = await db.select({
+      cashTransactionId: operatingExpensesTable.cashTransactionId,
+      category: operatingExpensesTable.category,
+    }).from(operatingExpensesTable).where(isNotNull(operatingExpensesTable.cashTransactionId));
+    const subcategoryByCashId = new Map(expenseRows.map((expense) => [expense.cashTransactionId, expense.category]));
     res.json(ListCashTransactionsResponse.parse(rows.map((transaction) => ({
       ...transaction,
+      category: transaction.type === "expense"
+        ? transaction.sourceType === "payroll" || transaction.sourceType === "payroll_advance"
+          ? "Цалин"
+          : transaction.sourceType === "inventory_purchase"
+            ? "Бараа материал"
+            : transaction.sourceType === "fixed_asset_purchase"
+              ? "Эд хөрөнгө"
+              : "Үйл ажиллагааны зардал"
+        : transaction.category,
+      subcategory: transaction.type === "expense"
+        && !["payroll", "payroll_advance", "inventory_purchase", "fixed_asset_purchase"].includes(transaction.sourceType ?? "")
+        ? subcategoryByCashId.get(transaction.id) ?? (transaction.category !== "Үйл ажиллагааны зардал" ? transaction.category : null)
+        : null,
       amount: Number(transaction.amount),
       date: String(transaction.date),
       bankTransactionId: transaction.bankTransactionId,
@@ -1661,12 +1679,28 @@ router.post("/cash/transactions", async (req, res, next) => {
       res.status(409).json({ error: `${input.date} өдрийн касс өндөрлөсөн тул гүйлгээ нэмэх боломжгүй` });
       return;
     }
-    const [transaction] = await db.insert(cashTransactionsTable).values({
-      ...input,
-      incomeMonth: input.type === "income" ? input.incomeMonth : null,
-    }).returning();
+    const transaction = await db.transaction(async (tx) => {
+      const [cash] = await tx.insert(cashTransactionsTable).values({
+        ...input,
+        category: input.type === "expense" ? "Үйл ажиллагааны зардал" : input.category.trim(),
+        incomeMonth: input.type === "income" ? input.incomeMonth : null,
+      }).returning();
+      if (input.type === "expense") {
+        await tx.insert(operatingExpensesTable).values({
+          description: input.description.trim(),
+          category: input.category.trim(),
+          date: input.date,
+          amount: money(input.amount),
+          paymentDate: input.date,
+          paymentAmount: money(input.amount),
+          cashTransactionId: cash.id,
+        });
+      }
+      return cash;
+    });
     res.status(201).json({
       ...transaction,
+      subcategory: input.type === "expense" ? input.category.trim() : null,
       amount: Number(transaction.amount),
       date: String(transaction.date),
       bankTransactionId: transaction.bankTransactionId,
@@ -1701,13 +1735,32 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
       res.status(409).json({ error: "Өндөрлөсөн өдрийн гүйлгээг засах боломжгүй" });
       return;
     }
-    const [transaction] = await db
-      .update(cashTransactionsTable)
-      .set({ ...input, incomeMonth: input.type === "income" ? input.incomeMonth : null })
-      .where(eq(cashTransactionsTable.id, id))
-      .returning();
+    const transaction = await db.transaction(async (tx) => {
+      const [cash] = await tx.update(cashTransactionsTable)
+        .set({
+          ...input,
+          category: input.type === "expense" ? "Үйл ажиллагааны зардал" : input.category.trim(),
+          incomeMonth: input.type === "income" ? input.incomeMonth : null,
+        })
+        .where(eq(cashTransactionsTable.id, id))
+        .returning();
+      await tx.delete(operatingExpensesTable).where(eq(operatingExpensesTable.cashTransactionId, id));
+      if (input.type === "expense") {
+        await tx.insert(operatingExpensesTable).values({
+          description: input.description.trim(),
+          category: input.category.trim(),
+          date: input.date,
+          amount: money(input.amount),
+          paymentDate: input.date,
+          paymentAmount: money(input.amount),
+          cashTransactionId: id,
+        });
+      }
+      return cash;
+    });
     res.json({
       ...transaction,
+      subcategory: input.type === "expense" ? input.category.trim() : null,
       amount: Number(transaction.amount),
       date: String(transaction.date),
       bankTransactionId: transaction.bankTransactionId,
@@ -1745,6 +1798,7 @@ router.patch("/cash/transactions/:id/income-month", async (req, res, next) => {
       .returning();
     res.json(UpdateBankCashTransactionIncomeMonthResponse.parse({
       ...transaction,
+      subcategory: null,
       amount: Number(transaction.amount),
       date: String(transaction.date),
       bankTransactionId: transaction.bankTransactionId,
@@ -1774,7 +1828,10 @@ router.delete("/cash/transactions/:id", async (req, res, next) => {
       res.status(409).json({ error: "Өндөрлөсөн өдрийн гүйлгээг устгах боломжгүй" });
       return;
     }
-    await db.delete(cashTransactionsTable).where(eq(cashTransactionsTable.id, id));
+    await db.transaction(async (tx) => {
+      await tx.delete(operatingExpensesTable).where(eq(operatingExpensesTable.cashTransactionId, id));
+      await tx.delete(cashTransactionsTable).where(eq(cashTransactionsTable.id, id));
+    });
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -3097,7 +3154,7 @@ router.put("/operating-expenses/:id/payment", async (req, res, next) => {
         if (bank.type !== "expense" || bankDate !== input.date || Number(bank.amount) !== Number(input.amount) || bank.cashTransactionId || bank.transferredAt || bank.unclearAt) return "bank_conflict" as const;
       }
       const [cash] = await tx.insert(cashTransactionsTable).values({
-        type: "expense", category: expense.category, description: expense.description,
+        type: "expense", category: "Үйл ажиллагааны зардал", description: expense.description,
         amount: money(input.amount), date: input.date, sourceType: "operating_expense", sourceKey: `expense:${id}`,
         bankTransactionId: input.bankTransactionId ?? null,
         bankVerifiedAt: input.bankTransactionId ? new Date() : null,
