@@ -970,6 +970,88 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/InventoryPurchaseBankSuggestion"
+  /operating-expenses:
+    get:
+      operationId: listOperatingExpenses
+      tags: [operations]
+      responses:
+        "200":
+          description: Operating expenses
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/OperatingExpense" } }
+    post:
+      operationId: createOperatingExpense
+      tags: [operations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OperatingExpenseInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatingExpense" }
+  /operating-expenses/{id}:
+    put:
+      operationId: updateOperatingExpense
+      tags: [operations]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OperatingExpenseInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatingExpense" }
+    delete:
+      operationId: deleteOperatingExpense
+      tags: [operations]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses: { "204": { description: Deleted } }
+  /operating-expenses/{id}/payment-bank-suggestions:
+    get:
+      operationId: listOperatingExpensePaymentBankSuggestions
+      tags: [operations]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: Suggestions
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/OperatingExpenseBankSuggestion" } }
+  /operating-expenses/{id}/payment:
+    put:
+      operationId: confirmOperatingExpensePayment
+      tags: [operations]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OperatingExpensePaymentInput" }
+      responses:
+        "200":
+          description: Payment confirmed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatingExpense" }
+    delete:
+      operationId: cancelOperatingExpensePayment
+      tags: [operations]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: Payment cancelled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatingExpense" }
   /inventory/suppliers:
     get:
       operationId: listInventorySuppliers
@@ -1576,7 +1658,7 @@ components:
         bankVerifiedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string }
         editable: { type: boolean }
-        transactionKind: { type: string, enum: [manual, payroll, payroll_advance, inventory_purchase, fixed_asset_purchase, bank_transaction] }
+        transactionKind: { type: string, enum: [manual, payroll, payroll_advance, inventory_purchase, fixed_asset_purchase, operating_expense, bank_transaction] }
     BankAccount:
       type: object
       required: [id, bankName, accountNumber, createdAt]
@@ -1632,7 +1714,7 @@ components:
         bankVerifiedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string }
         editable: { type: boolean }
-        transactionKind: { type: string, enum: [manual, payroll, payroll_advance, inventory_purchase, fixed_asset_purchase, bank_transaction] }
+        transactionKind: { type: string, enum: [manual, payroll, payroll_advance, inventory_purchase, fixed_asset_purchase, operating_expense, bank_transaction] }
         score: { type: number }
     CashTransactionInput:
       type: object
@@ -1835,6 +1917,42 @@ components:
           pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$'
         quantity: { type: number, exclusiveMinimum: 0 }
         purpose: { type: string, minLength: 1 }
+    OperatingExpense:
+      type: object
+      required: [id, description, category, date, amount, paymentDate, paymentAmount, createdAt]
+      properties:
+        id: { type: integer }
+        description: { type: string }
+        category: { type: string }
+        date: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' }
+        amount: { type: number, minimum: 0 }
+        paymentDate: { type: ["string", "null"] }
+        paymentAmount: { type: ["number", "null"] }
+        createdAt: { type: string, format: date-time }
+    OperatingExpenseInput:
+      type: object
+      required: [description, category, date, amount]
+      properties:
+        description: { type: string, minLength: 1 }
+        category: { type: string, minLength: 1 }
+        date: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' }
+        amount: { type: number, exclusiveMinimum: 0 }
+    OperatingExpensePaymentInput:
+      type: object
+      required: [date, amount]
+      properties:
+        date: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' }
+        amount: { type: number, exclusiveMinimum: 0 }
+        bankTransactionId: { type: integer, minimum: 1 }
+    OperatingExpenseBankSuggestion:
+      type: object
+      required: [id, transactionAt, amount, description, score]
+      properties:
+        id: { type: integer }
+        transactionAt: { type: string, format: date-time }
+        amount: { type: number }
+        description: { type: string }
+        score: { type: number }
     FixedAsset:
       type: object
       required: [id, name, unitPrice, quantity, totalAmount, date, purchased, createdAt]

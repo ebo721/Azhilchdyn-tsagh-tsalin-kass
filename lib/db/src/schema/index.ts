@@ -226,6 +226,17 @@ export const fixedAssetsTable = pgTable("fixed_assets", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const operatingExpensesTable = pgTable("operating_expenses", {
+  id: serial("id").primaryKey(),
+  description: text("description").notNull(),
+  category: text("category").notNull(),
+  date: date("date", { mode: "string" }).notNull(),
+  amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  paymentDate: date("payment_date", { mode: "string" }),
+  paymentAmount: numeric("payment_amount", { precision: 14, scale: 2, mode: "number" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const deletionRequestsTable = pgTable("deletion_requests", {
   id: serial("id").primaryKey(),
   targetPath: text("target_path").notNull(),
@@ -268,4 +279,5 @@ export type InventoryPurchaseItem = typeof inventoryPurchaseItemsTable.$inferSel
 export type InventoryItem = typeof inventoryItemsTable.$inferSelect;
 export type InventoryIssue = typeof inventoryIssuesTable.$inferSelect;
 export type FixedAsset = typeof fixedAssetsTable.$inferSelect;
+export type OperatingExpense = typeof operatingExpensesTable.$inferSelect;
 export type DeletionRequest = typeof deletionRequestsTable.$inferSelect;

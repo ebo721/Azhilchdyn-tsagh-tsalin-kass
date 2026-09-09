@@ -485,6 +485,7 @@ export const CashTransactionTransactionKind = {
   payroll_advance: 'payroll_advance',
   inventory_purchase: 'inventory_purchase',
   fixed_asset_purchase: 'fixed_asset_purchase',
+  operating_expense: 'operating_expense',
   bank_transaction: 'bank_transaction',
 } as const;
 
@@ -596,6 +597,7 @@ export const CashTransactionSuggestionTransactionKind = {
   payroll_advance: 'payroll_advance',
   inventory_purchase: 'inventory_purchase',
   fixed_asset_purchase: 'fixed_asset_purchase',
+  operating_expense: 'operating_expense',
   bank_transaction: 'bank_transaction',
 } as const;
 
@@ -840,6 +842,49 @@ export interface InventoryIssueInput {
   quantity: number;
   /** @minLength 1 */
   purpose: string;
+}
+
+export interface OperatingExpense {
+  id: number;
+  description: string;
+  category: string;
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
+  date: string;
+  /** @minimum 0 */
+  amount: number;
+  /** @nullable */
+  paymentDate: string | null;
+  /** @nullable */
+  paymentAmount: number | null;
+  createdAt: string;
+}
+
+export interface OperatingExpenseInput {
+  /** @minLength 1 */
+  description: string;
+  /** @minLength 1 */
+  category: string;
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
+  date: string;
+  /** @exclusiveMinimum 0 */
+  amount: number;
+}
+
+export interface OperatingExpensePaymentInput {
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
+  date: string;
+  /** @exclusiveMinimum 0 */
+  amount: number;
+  /** @minimum 1 */
+  bankTransactionId?: number;
+}
+
+export interface OperatingExpenseBankSuggestion {
+  id: number;
+  transactionAt: string;
+  amount: number;
+  description: string;
+  score: number;
 }
 
 export interface FixedAsset {

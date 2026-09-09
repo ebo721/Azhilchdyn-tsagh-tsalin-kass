@@ -798,7 +798,7 @@ export const ListCashTransactionsResponseItem = zod.object({
   "bankVerifiedAt": zod.coerce.date().nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
-  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'bank_transaction'])
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction'])
 })
 export const ListCashTransactionsResponse = zod.array(ListCashTransactionsResponseItem)
 
@@ -837,7 +837,7 @@ export const CreateCashTransactionResponse = zod.object({
   "bankVerifiedAt": zod.coerce.date().nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
-  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'bank_transaction'])
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction'])
 })
 
 
@@ -879,7 +879,7 @@ export const UpdateCashTransactionResponse = zod.object({
   "bankVerifiedAt": zod.coerce.date().nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
-  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'bank_transaction'])
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction'])
 })
 
 
@@ -922,7 +922,7 @@ export const UpdateBankCashTransactionIncomeMonthResponse = zod.object({
   "bankVerifiedAt": zod.coerce.date().nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
-  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'bank_transaction'])
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction'])
 })
 
 
@@ -1090,7 +1090,7 @@ export const ListBankTransactionCashSuggestionsResponseItem = zod.object({
   "bankVerifiedAt": zod.coerce.date().nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
-  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'bank_transaction']),
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction']),
   "score": zod.number()
 })
 export const ListBankTransactionCashSuggestionsResponse = zod.array(ListBankTransactionCashSuggestionsResponseItem)
@@ -1401,6 +1401,165 @@ export const ListInventoryPurchasePaymentBankSuggestionsResponseItem = zod.objec
   "score": zod.number()
 })
 export const ListInventoryPurchasePaymentBankSuggestionsResponse = zod.array(ListInventoryPurchasePaymentBankSuggestionsResponseItem)
+
+
+export const listOperatingExpensesResponseDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const listOperatingExpensesResponseAmountMin = 0;
+
+
+
+export const ListOperatingExpensesResponseItem = zod.object({
+  "id": zod.number().int(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "date": zod.string().regex(listOperatingExpensesResponseDateRegExp),
+  "amount": zod.number().min(listOperatingExpensesResponseAmountMin),
+  "paymentDate": zod.string().nullable(),
+  "paymentAmount": zod.number().nullable(),
+  "createdAt": zod.coerce.date()
+})
+export const ListOperatingExpensesResponse = zod.array(ListOperatingExpensesResponseItem)
+
+
+
+
+export const createOperatingExpenseBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const createOperatingExpenseBodyAmountExclusiveMin = 0;
+
+
+
+export const CreateOperatingExpenseBody = zod.object({
+  "description": zod.string().min(1),
+  "category": zod.string().min(1),
+  "date": zod.string().regex(createOperatingExpenseBodyDateRegExp),
+  "amount": zod.number().gt(createOperatingExpenseBodyAmountExclusiveMin)
+})
+
+export const createOperatingExpenseResponseDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const createOperatingExpenseResponseAmountMin = 0;
+
+
+
+export const CreateOperatingExpenseResponse = zod.object({
+  "id": zod.number().int(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "date": zod.string().regex(createOperatingExpenseResponseDateRegExp),
+  "amount": zod.number().min(createOperatingExpenseResponseAmountMin),
+  "paymentDate": zod.string().nullable(),
+  "paymentAmount": zod.number().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const UpdateOperatingExpenseParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+export const updateOperatingExpenseBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const updateOperatingExpenseBodyAmountExclusiveMin = 0;
+
+
+
+export const UpdateOperatingExpenseBody = zod.object({
+  "description": zod.string().min(1),
+  "category": zod.string().min(1),
+  "date": zod.string().regex(updateOperatingExpenseBodyDateRegExp),
+  "amount": zod.number().gt(updateOperatingExpenseBodyAmountExclusiveMin)
+})
+
+export const updateOperatingExpenseResponseDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const updateOperatingExpenseResponseAmountMin = 0;
+
+
+
+export const UpdateOperatingExpenseResponse = zod.object({
+  "id": zod.number().int(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "date": zod.string().regex(updateOperatingExpenseResponseDateRegExp),
+  "amount": zod.number().min(updateOperatingExpenseResponseAmountMin),
+  "paymentDate": zod.string().nullable(),
+  "paymentAmount": zod.number().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const DeleteOperatingExpenseParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteOperatingExpenseResponse = zod.void()
+
+
+export const ListOperatingExpensePaymentBankSuggestionsParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const ListOperatingExpensePaymentBankSuggestionsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "transactionAt": zod.coerce.date(),
+  "amount": zod.number(),
+  "description": zod.string(),
+  "score": zod.number()
+})
+export const ListOperatingExpensePaymentBankSuggestionsResponse = zod.array(ListOperatingExpensePaymentBankSuggestionsResponseItem)
+
+
+export const ConfirmOperatingExpensePaymentParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const confirmOperatingExpensePaymentBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const confirmOperatingExpensePaymentBodyAmountExclusiveMin = 0;
+
+
+
+
+export const ConfirmOperatingExpensePaymentBody = zod.object({
+  "date": zod.string().regex(confirmOperatingExpensePaymentBodyDateRegExp),
+  "amount": zod.number().gt(confirmOperatingExpensePaymentBodyAmountExclusiveMin),
+  "bankTransactionId": zod.number().int().min(1).optional()
+})
+
+export const confirmOperatingExpensePaymentResponseDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const confirmOperatingExpensePaymentResponseAmountMin = 0;
+
+
+
+export const ConfirmOperatingExpensePaymentResponse = zod.object({
+  "id": zod.number().int(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "date": zod.string().regex(confirmOperatingExpensePaymentResponseDateRegExp),
+  "amount": zod.number().min(confirmOperatingExpensePaymentResponseAmountMin),
+  "paymentDate": zod.string().nullable(),
+  "paymentAmount": zod.number().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const CancelOperatingExpensePaymentParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const cancelOperatingExpensePaymentResponseDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const cancelOperatingExpensePaymentResponseAmountMin = 0;
+
+
+
+export const CancelOperatingExpensePaymentResponse = zod.object({
+  "id": zod.number().int(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "date": zod.string().regex(cancelOperatingExpensePaymentResponseDateRegExp),
+  "amount": zod.number().min(cancelOperatingExpensePaymentResponseAmountMin),
+  "paymentDate": zod.string().nullable(),
+  "paymentAmount": zod.number().nullable(),
+  "createdAt": zod.coerce.date()
+})
 
 
 /**

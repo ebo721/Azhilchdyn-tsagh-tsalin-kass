@@ -15,5 +15,6 @@ export const CashTransactionSuggestionTransactionKind = {
   payroll_advance: 'payroll_advance',
   inventory_purchase: 'inventory_purchase',
   fixed_asset_purchase: 'fixed_asset_purchase',
+  operating_expense: 'operating_expense',
   bank_transaction: 'bank_transaction',
 } as const;
