@@ -64,6 +64,7 @@ export * from './inventoryIssueInput';
 export * from './inventoryItem';
 export * from './inventoryItemUpdate';
 export * from './inventoryPurchase';
+export * from './inventoryPurchaseBankSuggestion';
 export * from './inventoryPurchaseInput';
 export * from './inventoryPurchaseItem';
 export * from './inventoryPurchaseItemInput';

@@ -51,6 +51,8 @@ import {
   ConfirmInventoryPurchasePaymentBody,
   ConfirmInventoryPurchasePaymentParams,
   ConfirmInventoryPurchasePaymentResponse,
+  ListInventoryPurchasePaymentBankSuggestionsParams,
+  ListInventoryPurchasePaymentBankSuggestionsResponse,
   CancelInventoryPurchasePaymentParams,
   CancelInventoryPurchasePaymentResponse,
   CreateInventoryIssueBody,
@@ -91,11 +93,12 @@ import {
   UpdateEmployeeBody,
   UpdateEmployeeParams,
 } from "@workspace/api-zod";
-import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import {
   attendanceTable,
   cashTransactionsTable,
   cashClosuresTable,
+  bankTransactionsTable,
   db,
   employeesTable,
   employeeSalaryHistoryTable,
@@ -192,6 +195,28 @@ router.use(async (req, res, next) => {
 const today = () => new Date().toISOString().slice(0, 10);
 const currentMonth = () => today().slice(0, 7);
 const money = (value: number) => Math.round(value * 100) / 100;
+class InventoryBankPaymentConflictError extends Error {}
+const calendarDateOffset = (date: string, offset: number) => {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + offset);
+  return value;
+};
+const descriptionTokens = (value: string) => new Set(value.toLocaleLowerCase("mn-MN").match(/[\p{L}\p{N}]+/gu) ?? []);
+const inventoryBankSuggestionScore = (
+  purchase: typeof inventoryPurchasesTable.$inferSelect,
+  bank: typeof bankTransactionsTable.$inferSelect,
+) => {
+  const bankDate = bank.transactionAt.toISOString().slice(0, 10);
+  const distance = Math.abs((Date.parse(`${purchase.date}T00:00:00Z`) - Date.parse(`${bankDate}T00:00:00Z`)) / 86_400_000);
+  const bankAmount = Number(bank.amount);
+  const purchaseAmount = Number(purchase.totalAmount);
+  const amountCloseness = Math.max(0, 1 - Math.abs(bankAmount - purchaseAmount) / Math.max(bankAmount, purchaseAmount, 1));
+  const bankTokens = descriptionTokens(`${bank.description} ${bank.counterparty}`);
+  const purchaseTokens = descriptionTokens(purchase.documentName);
+  const overlap = [...bankTokens].filter((token) => purchaseTokens.has(token)).length;
+  const tokenOverlap = overlap / Math.max(new Set([...bankTokens, ...purchaseTokens]).size, 1);
+  return Math.round((0.4 * (1 - distance / 7) + 0.35 * amountCloseness + 0.25 * tokenOverlap) * 10_000) / 100;
+};
 const deletionTargetPatterns = [
   /^\/employees\/\d+$/,
   /^\/employees\/\d+\/salary-history\/\d+$/,
@@ -2713,6 +2738,39 @@ async function inventoryPurchaseResponse(id: number) {
   };
 }
 
+router.get("/inventory/purchases/:id/payment-bank-suggestions", async (req, res, next) => {
+  try {
+    const { id } = ListInventoryPurchasePaymentBankSuggestionsParams.parse(req.params);
+    const [purchase] = await db.select().from(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, id));
+    if (!purchase) {
+      res.status(404).json({ error: "Худалдан авалт олдсонгүй" });
+      return;
+    }
+    const candidates = await db.select().from(bankTransactionsTable).where(and(
+      eq(bankTransactionsTable.type, "expense"),
+      isNull(bankTransactionsTable.cashTransactionId),
+      isNull(bankTransactionsTable.transferredAt),
+      isNull(bankTransactionsTable.unclearAt),
+      gte(bankTransactionsTable.transactionAt, calendarDateOffset(purchase.date, -7)),
+      lte(bankTransactionsTable.transactionAt, calendarDateOffset(purchase.date, 8)),
+    ));
+    const suggestions = candidates
+      .map((bank) => ({ bank, score: inventoryBankSuggestionScore(purchase, bank) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10)
+      .map(({ bank, score }) => ({
+        id: bank.id,
+        transactionAt: bank.transactionAt.toISOString(),
+        amount: Number(bank.amount),
+        description: bank.description,
+        score,
+      }));
+    res.json(ListInventoryPurchasePaymentBankSuggestionsResponse.parse(suggestions));
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.put("/inventory/purchases/:id/payment", async (req, res, next) => {
   try {
     const { id } = ConfirmInventoryPurchasePaymentParams.parse(req.params);
@@ -2730,26 +2788,102 @@ router.put("/inventory/purchases/:id/payment", async (req, res, next) => {
       res.status(409).json({ error: "Өндөрлөсөн өдрийн төлбөрийг өөрчлөх боломжгүй" });
       return;
     }
-    await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
+      const [currentPurchase] = await tx.select().from(inventoryPurchasesTable)
+        .where(eq(inventoryPurchasesTable.id, id))
+        .for("update");
+      if (!currentPurchase) return "purchase_missing" as const;
+      if (currentPurchase.paymentDate !== null) return "already_paid" as const;
+      const [closure] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable)
+        .where(eq(cashClosuresTable.date, input.date));
+      if (closure) return "cash_closed" as const;
+      const [existingCash] = await tx.select().from(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "inventory_purchase"),
+        eq(cashTransactionsTable.sourceKey, `purchase:${id}`),
+      ));
+      const [bank] = input.bankTransactionId == null
+        ? []
+        : await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, input.bankTransactionId));
+      if (input.bankTransactionId != null) {
+        if (!bank) return "bank_missing" as const;
+        const bankDate = bank.transactionAt.toISOString().slice(0, 10);
+        if (bank.type !== "expense" || bank.unclearAt !== null || bankDate !== input.date || money(Number(bank.amount)) !== money(input.amount)) {
+          return "bank_mismatch" as const;
+        }
+        if (existingCash?.bankTransactionId && existingCash.bankTransactionId !== bank.id) return "bank_conflict" as const;
+        if ((bank.cashTransactionId !== null || bank.transferredAt !== null) && bank.cashTransactionId !== existingCash?.id) {
+          return "bank_conflict" as const;
+        }
+      }
       await tx.update(inventoryPurchasesTable)
         .set({ paymentDate: input.date, paymentAmount: money(input.amount) })
         .where(eq(inventoryPurchasesTable.id, id));
-      await tx.insert(cashTransactionsTable).values({
+      const verifiedAt = bank ? new Date() : null;
+      const [cash] = await tx.insert(cashTransactionsTable).values({
         type: "expense",
         category: "Бараа материал",
-        description: existing.documentName,
+        description: currentPurchase.documentName,
         amount: money(input.amount),
         date: input.date,
         sourceType: "inventory_purchase",
         sourceKey: `purchase:${id}`,
+        bankTransactionId: bank?.id ?? null,
+        bankVerifiedAt: verifiedAt,
       }).onConflictDoUpdate({
         target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
-        set: { description: existing.documentName, amount: money(input.amount), date: input.date },
-      });
+        set: {
+          description: currentPurchase.documentName,
+          amount: money(input.amount),
+          date: input.date,
+          ...(bank ? { bankTransactionId: bank.id, bankVerifiedAt: verifiedAt } : {}),
+        },
+      }).returning({ id: cashTransactionsTable.id });
+      if (bank && bank.cashTransactionId !== cash!.id) {
+        const [updatedBank] = await tx.update(bankTransactionsTable)
+          .set({ cashTransactionId: cash!.id, transferredAt: verifiedAt })
+          .where(and(
+            eq(bankTransactionsTable.id, bank.id),
+            isNull(bankTransactionsTable.cashTransactionId),
+            isNull(bankTransactionsTable.transferredAt),
+          ))
+          .returning({ id: bankTransactionsTable.id });
+        if (!updatedBank) throw new InventoryBankPaymentConflictError();
+      }
+      return "paid" as const;
     });
+    if (result === "purchase_missing") {
+      res.status(404).json({ error: "Худалдан авалт олдсонгүй" });
+      return;
+    }
+    if (result === "already_paid") {
+      res.status(409).json({ error: "Энэ худалдан авалтын төлбөр аль хэдийн батлагдсан байна" });
+      return;
+    }
+    if (result === "cash_closed") {
+      res.status(409).json({ error: "Өндөрлөсөн өдрийн төлбөрийг өөрчлөх боломжгүй" });
+      return;
+    }
+    if (result === "bank_missing") {
+      res.status(404).json({ error: "Банкны гүйлгээ олдсонгүй" });
+      return;
+    }
+    if (result === "bank_mismatch") {
+      res.status(409).json({ error: "Сонгосон банкны гүйлгээний төрөл, огноо эсвэл дүн тохирохгүй байна" });
+      return;
+    }
+    if (result === "bank_conflict") {
+      res.status(409).json({ error: "Банкны гүйлгээ өөр кассын бүртгэлтэй аль хэдийн холбогдсон байна" });
+      return;
+    }
     const response = await inventoryPurchaseResponse(id);
     res.json(ConfirmInventoryPurchasePaymentResponse.parse(response));
   } catch (error) {
+    const databaseCode = (error as { code?: string; cause?: { code?: string } }).code
+      ?? (error as { cause?: { code?: string } }).cause?.code;
+    if (error instanceof InventoryBankPaymentConflictError || databaseCode === "23505") {
+      res.status(409).json({ error: "Банкны гүйлгээ өөр кассын бүртгэлтэй аль хэдийн холбогдсон байна" });
+      return;
+    }
     next(error);
   }
 });
@@ -2766,7 +2900,28 @@ router.delete("/inventory/purchases/:id/payment", async (req, res, next) => {
       res.status(409).json({ error: "Өндөрлөсөн өдрийн төлбөрийг цуцлах боломжгүй" });
       return;
     }
-    await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
+      const [currentPurchase] = await tx.select().from(inventoryPurchasesTable)
+        .where(eq(inventoryPurchasesTable.id, id))
+        .for("update");
+      if (!currentPurchase) return "missing" as const;
+      if (currentPurchase.paymentDate) {
+        const [closure] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable)
+          .where(eq(cashClosuresTable.date, currentPurchase.paymentDate));
+        if (closure) return "closed" as const;
+      }
+      const [cash] = await tx.select().from(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "inventory_purchase"),
+        eq(cashTransactionsTable.sourceKey, `purchase:${id}`),
+      ));
+      if (cash?.bankTransactionId) {
+        await tx.update(bankTransactionsTable)
+          .set({ cashTransactionId: null, transferredAt: null })
+          .where(and(
+            eq(bankTransactionsTable.id, cash.bankTransactionId),
+            eq(bankTransactionsTable.cashTransactionId, cash.id),
+          ));
+      }
       await tx.update(inventoryPurchasesTable)
         .set({ paymentDate: null, paymentAmount: null })
         .where(eq(inventoryPurchasesTable.id, id));
@@ -2774,7 +2929,16 @@ router.delete("/inventory/purchases/:id/payment", async (req, res, next) => {
         eq(cashTransactionsTable.sourceType, "inventory_purchase"),
         eq(cashTransactionsTable.sourceKey, `purchase:${id}`),
       ));
+      return "cancelled" as const;
     });
+    if (result === "missing") {
+      res.status(404).json({ error: "Худалдан авалт олдсонгүй" });
+      return;
+    }
+    if (result === "closed") {
+      res.status(409).json({ error: "Өндөрлөсөн өдрийн төлбөрийг цуцлах боломжгүй" });
+      return;
+    }
     const response = await inventoryPurchaseResponse(id);
     res.json(CancelInventoryPurchasePaymentResponse.parse(response));
   } catch (error) {
@@ -2795,6 +2959,18 @@ router.delete("/inventory/purchases/:id", async (req, res, next) => {
       return;
     }
     await db.transaction(async (tx) => {
+      const [cash] = await tx.select().from(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "inventory_purchase"),
+        eq(cashTransactionsTable.sourceKey, `purchase:${id}`),
+      ));
+      if (cash?.bankTransactionId) {
+        await tx.update(bankTransactionsTable)
+          .set({ cashTransactionId: null, transferredAt: null })
+          .where(and(
+            eq(bankTransactionsTable.id, cash.bankTransactionId),
+            eq(bankTransactionsTable.cashTransactionId, cash.id),
+          ));
+      }
       const lines = await tx.select().from(inventoryPurchaseItemsTable).where(eq(inventoryPurchaseItemsTable.purchaseId, id));
       for (const line of lines) {
         if (line.inventoryItemId) {
@@ -2803,11 +2979,11 @@ router.delete("/inventory/purchases/:id", async (req, res, next) => {
             .where(eq(inventoryItemsTable.id, line.inventoryItemId));
         }
       }
-      await tx.delete(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, id));
       await tx.delete(cashTransactionsTable).where(and(
         eq(cashTransactionsTable.sourceType, "inventory_purchase"),
         eq(cashTransactionsTable.sourceKey, `purchase:${id}`),
       ));
+      await tx.delete(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, id));
     });
     res.status(204).send();
   } catch (error) {

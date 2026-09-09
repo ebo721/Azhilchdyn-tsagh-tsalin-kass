@@ -1327,7 +1327,8 @@ export const confirmInventoryPurchasePaymentBodyAmountExclusiveMin = 0;
 
 export const ConfirmInventoryPurchasePaymentBody = zod.object({
   "date": zod.string().regex(confirmInventoryPurchasePaymentBodyDateRegExp),
-  "amount": zod.number().gt(confirmInventoryPurchasePaymentBodyAmountExclusiveMin)
+  "amount": zod.number().gt(confirmInventoryPurchasePaymentBodyAmountExclusiveMin),
+  "bankTransactionId": zod.number().int().nullish()
 })
 
 export const ConfirmInventoryPurchasePaymentResponse = zod.object({
@@ -1383,6 +1384,23 @@ export const CancelInventoryPurchasePaymentResponse = zod.object({
   "totalAmount": zod.number()
 }))
 })
+
+
+/**
+ * @summary Suggest unlinked bank expenses for an inventory purchase payment
+ */
+export const ListInventoryPurchasePaymentBankSuggestionsParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const ListInventoryPurchasePaymentBankSuggestionsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "transactionAt": zod.coerce.date(),
+  "amount": zod.number(),
+  "description": zod.string(),
+  "score": zod.number()
+})
+export const ListInventoryPurchasePaymentBankSuggestionsResponse = zod.array(ListInventoryPurchasePaymentBankSuggestionsResponseItem)
 
 
 /**

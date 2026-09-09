@@ -59,6 +59,7 @@ import type {
   InventoryItem,
   InventoryItemUpdate,
   InventoryPurchase,
+  InventoryPurchaseBankSuggestion,
   InventoryPurchaseInput,
   InventoryPurchasePaymentInput,
   InventorySupplier,
@@ -4408,6 +4409,83 @@ export const useCancelInventoryPurchasePayment = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getCancelInventoryPurchasePaymentMutationOptions(options));
     }
+
+export const getListInventoryPurchasePaymentBankSuggestionsUrl = (id: number,) => {
+
+
+
+
+  return `/api/inventory/purchases/${id}/payment-bank-suggestions`
+}
+
+/**
+ * @summary Suggest unlinked bank expenses for an inventory purchase payment
+ */
+export const listInventoryPurchasePaymentBankSuggestions = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<InventoryPurchaseBankSuggestion[]> => {
+
+  return customFetch<InventoryPurchaseBankSuggestion[]>(getListInventoryPurchasePaymentBankSuggestionsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListInventoryPurchasePaymentBankSuggestionsQueryKey = (id: number,) => {
+    return [
+    `/api/inventory/purchases/${id}/payment-bank-suggestions`
+    ] as const;
+    }
+
+
+export const getListInventoryPurchasePaymentBankSuggestionsQueryOptions = <TData = Awaited<ReturnType<typeof listInventoryPurchasePaymentBankSuggestions>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInventoryPurchasePaymentBankSuggestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListInventoryPurchasePaymentBankSuggestionsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listInventoryPurchasePaymentBankSuggestions>>> = ({ signal }) => listInventoryPurchasePaymentBankSuggestions(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listInventoryPurchasePaymentBankSuggestions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListInventoryPurchasePaymentBankSuggestionsQueryResult = NonNullable<Awaited<ReturnType<typeof listInventoryPurchasePaymentBankSuggestions>>>
+export type ListInventoryPurchasePaymentBankSuggestionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Suggest unlinked bank expenses for an inventory purchase payment
+ */
+
+export function useListInventoryPurchasePaymentBankSuggestions<TData = Awaited<ReturnType<typeof listInventoryPurchasePaymentBankSuggestions>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInventoryPurchasePaymentBankSuggestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListInventoryPurchasePaymentBankSuggestionsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListInventorySuppliersUrl = () => {
 

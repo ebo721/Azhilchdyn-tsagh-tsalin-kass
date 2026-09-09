@@ -64,6 +64,7 @@ import {
   getListEmployeesQueryKey,
   getListEmployeeSalaryHistoryQueryKey,
   getListInventoryPurchasesQueryKey,
+  getListInventoryPurchasePaymentBankSuggestionsQueryKey,
   getListInventorySuppliersQueryKey,
   getListInventoryIssuesQueryKey,
   getListFixedAssetsQueryKey,
@@ -96,6 +97,7 @@ import {
   useListEmployees,
   useListEmployeeSalaryHistory,
   useListInventoryPurchases,
+  useListInventoryPurchasePaymentBankSuggestions,
   useListInventorySuppliers,
   useUpdateInventorySupplier,
   useCreateInventoryPurchase,
@@ -143,6 +145,7 @@ import {
   type EmployeeSalaryHistory,
   type CashTransaction,
   type InventoryPurchase,
+  type InventoryPurchaseBankSuggestion,
   type InventorySupplier,
   type InventoryItem,
   type InventoryIssue,
@@ -1248,6 +1251,7 @@ function Inventory() {
   const [editing, setEditing] = useState<InventoryPurchase | null>(null);
   const [selectedPurchase, setSelectedPurchase] = useState<InventoryPurchase | null>(null);
   const [paymentPurchase, setPaymentPurchase] = useState<InventoryPurchase | null>(null);
+  const [selectedPaymentBank, setSelectedPaymentBank] = useState<InventoryPurchaseBankSuggestion | null>(null);
   const [selectedSupplier, setSelectedSupplier] = useState<InventorySupplier | null>(null);
   const [editingSupplier, setEditingSupplier] = useState<InventorySupplier | null>(null);
   const [stockSearch, setStockSearch] = useState('');
@@ -1267,6 +1271,12 @@ function Inventory() {
   const categoryForm = useForm<{ name: string; category: string }>({ defaultValues: { name: '', category: '' } });
   const supplierForm = useForm<{ name: string }>({ defaultValues: { name: '' } });
   const paymentForm = useForm<{ date: string; amount: string }>({ defaultValues: { date: today(), amount: '' } });
+  const paymentBankSuggestions = useListInventoryPurchasePaymentBankSuggestions(paymentPurchase?.id ?? 0, {
+    query: {
+      queryKey: getListInventoryPurchasePaymentBankSuggestionsQueryKey(paymentPurchase?.id ?? 0),
+      enabled: Boolean(paymentPurchase),
+    },
+  });
   const watchedItems = form.watch('items');
   const grandTotal = watchedItems.reduce((total, item) => total + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), 0);
   const purchasePageCount = Math.max(1, Math.ceil((purchasesQuery.data?.length ?? 0) / inventoryPurchasesPerPage));
@@ -1364,6 +1374,7 @@ function Inventory() {
   };
   const togglePurchasePayment = (purchase: InventoryPurchase, checked: boolean) => {
     if (checked) {
+      setSelectedPaymentBank(null);
       setPaymentPurchase(purchase);
       paymentForm.reset({ date: today(), amount: String(purchase.totalAmount) });
       return;
@@ -1379,14 +1390,25 @@ function Inventory() {
   };
   const submitPurchasePayment = (values: { date: string; amount: string }) => {
     if (!paymentPurchase) return;
-    confirmPurchasePayment.mutate({ id: paymentPurchase.id, data: { date: values.date, amount: Number(values.amount) } }, {
+    confirmPurchasePayment.mutate({ id: paymentPurchase.id, data: {
+      date: values.date,
+      amount: Number(values.amount),
+      bankTransactionId: selectedPaymentBank?.id ?? null,
+    } }, {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getListInventoryPurchasesQueryKey() });
         qc.invalidateQueries({ queryKey: getListCashTransactionsQueryKey() });
         qc.invalidateQueries({ queryKey: getGetCashSummaryQueryKey() });
+        qc.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
         setPaymentPurchase(null);
+        setSelectedPaymentBank(null);
       },
     });
+  };
+  const selectPaymentBank = (suggestion: InventoryPurchaseBankSuggestion) => {
+    setSelectedPaymentBank(suggestion);
+    paymentForm.setValue('date', suggestion.transactionAt.slice(0, 10), { shouldValidate: true });
+    paymentForm.setValue('amount', String(suggestion.amount), { shouldValidate: true });
   };
   const openSupplierEdit = (supplier: InventorySupplier) => {
     setEditingSupplier(supplier);
@@ -1483,8 +1505,21 @@ function Inventory() {
     {selectedSupplier && <Modal title={selectedSupplier.name} detail={`${selectedSupplierPurchases.length} худалдан авалт · ${money(selectedSupplierPurchases.reduce((total, purchase) => total + purchase.totalAmount, 0))}`} onClose={() => setSelectedSupplier(null)} wide>
       {!selectedSupplierPurchases.length ? <EmptyState title="Худалдан авалтын түүх алга" detail="Энэ харилцагчтай холбоотой худалдан авалт олдсонгүй." icon={PackageOpen} /> : <div className="max-h-[62vh] overflow-y-auto"><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-3 py-2">Огноо</th><th className="px-3 py-2">Баримт</th><th className="px-3 py-2 text-right">Барааны төрөл</th><th className="px-3 py-2 text-right">Нийт дүн</th><th className="px-3 py-2 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{selectedSupplierPurchases.map((purchase) => <tr key={purchase.id}><td className="px-3 py-3 text-sm font-semibold">{dateLabel(purchase.date)}</td><td className="px-3 py-3 text-sm">{purchase.hasReceipt ? 'Баримттай' : 'Баримтгүй'}</td><td className="px-3 py-3 text-right font-mono text-sm">{purchase.items.length}</td><td className="px-3 py-3 text-right font-mono text-sm font-bold text-primary">{money(purchase.totalAmount)}</td><td className="px-3 py-3 text-right"><Button size="sm" variant="outline" onClick={() => { setSelectedSupplier(null); setSelectedPurchase(purchase); }}>Худалдан авалт үзэх</Button></td></tr>)}</tbody></table></div></div>}
     </Modal>}
-    {paymentPurchase && <Modal title="Худалдан авалтын төлбөр" detail={`${paymentPurchase.supplierName} · Нийт ${money(paymentPurchase.totalAmount)}`} onClose={() => setPaymentPurchase(null)}>
-      <Form {...paymentForm}><form onSubmit={paymentForm.handleSubmit(submitPurchasePayment)} className="space-y-5" data-testid="form-inventory-payment"><div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-xs font-semibold">Төлсөн огноо<input type="date" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...paymentForm.register('date', { required: true })} data-testid="input-inventory-payment-date" /></label><label className="space-y-2 text-xs font-semibold">Төлсөн дүн<input type="number" min="0.01" step="0.01" className="h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...paymentForm.register('amount', { required: true, min: 0.01 })} data-testid="input-inventory-payment-amount" /></label></div>{confirmPurchasePayment.isError && <p className="text-xs font-semibold text-destructive">Төлбөрийг батлах боломжгүй байна. Огноо өндөрлөсөн эсэхийг шалгана уу.</p>}<div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setPaymentPurchase(null)} data-testid="button-cancel-inventory-payment">Болих</Button><Button type="submit" disabled={confirmPurchasePayment.isPending} data-testid="button-confirm-inventory-payment">{confirmPurchasePayment.isPending ? 'Баталж байна...' : 'Батлах'}</Button></div></form></Form>
+    {paymentPurchase && <Modal title="Худалдан авалтын төлбөр" detail={`${paymentPurchase.supplierName} · Нийт ${money(paymentPurchase.totalAmount)}`} onClose={() => { setPaymentPurchase(null); setSelectedPaymentBank(null); }}>
+      <Form {...paymentForm}><form onSubmit={paymentForm.handleSubmit(submitPurchasePayment)} className="space-y-5" data-testid="form-inventory-payment">
+        <section aria-labelledby="inventory-bank-suggestions-title">
+          <div className="flex items-center justify-between gap-3"><div><h3 id="inventory-bank-suggestions-title" className="text-sm font-bold">Тохирох банкны гүйлгээ</h3><p className="mt-1 text-xs text-muted-foreground">Харилцагч, огноо, дүнгээр эрэмбэлсэн холбогдоогүй зарлагууд.</p></div>{selectedPaymentBank && <Button type="button" size="sm" variant="outline" onClick={() => setSelectedPaymentBank(null)}>Сонголт арилгах</Button>}</div>
+          <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1" data-testid="inventory-payment-bank-suggestions">
+            {paymentBankSuggestions.isLoading ? <><LoadingBlock className="h-20" /><LoadingBlock className="h-20" /></> : paymentBankSuggestions.isError ? <ErrorBlock onRetry={() => paymentBankSuggestions.refetch()} /> : !paymentBankSuggestions.data?.length ? <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">Тохирох банкны гүйлгээ олдсонгүй.</p> : paymentBankSuggestions.data.map((suggestion) => {
+              const selected = selectedPaymentBank?.id === suggestion.id;
+              return <button type="button" key={suggestion.id} onClick={() => selectPaymentBank(suggestion)} className={cn('w-full rounded-xl border p-3 text-left transition-colors', selected ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/40')} data-testid={`button-select-inventory-bank-${suggestion.id}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-semibold">{suggestion.description || 'Банкны гүйлгээ'}</p><p className="mt-1 text-xs text-muted-foreground">{bankDateTimeLabel(suggestion.transactionAt)} · Тохирц {suggestion.score.toFixed(2)}%</p></div><div className="shrink-0 text-right"><p className="font-mono text-sm font-bold text-orange-800">−{money(suggestion.amount)}</p>{selected && <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-primary"><Check className="size-3" />Сонгосон</span>}</div></div></button>;
+            })}
+          </div>
+        </section>
+        <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-xs font-semibold">Төлсөн огноо<input type="date" readOnly={Boolean(selectedPaymentBank)} className={cn('h-10 w-full rounded-lg border border-input px-3 text-sm outline-none focus:border-primary', selectedPaymentBank ? 'bg-muted' : 'bg-background')} {...paymentForm.register('date', { required: true })} data-testid="input-inventory-payment-date" /></label><label className="space-y-2 text-xs font-semibold">Төлсөн дүн<input type="number" min="0.01" step="0.01" readOnly={Boolean(selectedPaymentBank)} className={cn('h-10 w-full rounded-lg border border-input px-3 font-mono text-sm outline-none focus:border-primary', selectedPaymentBank ? 'bg-muted' : 'bg-background')} {...paymentForm.register('amount', { required: true, min: 0.01 })} data-testid="input-inventory-payment-amount" /></label></div>
+        {confirmPurchasePayment.isError && <p className="text-xs font-semibold text-destructive">Төлбөрийг батлах боломжгүй байна. Сонгосон банкны гүйлгээ өөр бүртгэлтэй холбогдсон эсэх болон огноо өндөрлөсөн эсэхийг шалгана уу.</p>}
+        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => { setPaymentPurchase(null); setSelectedPaymentBank(null); }} data-testid="button-cancel-inventory-payment">Болих</Button><Button type="submit" disabled={confirmPurchasePayment.isPending} data-testid="button-confirm-inventory-payment">{confirmPurchasePayment.isPending ? 'Баталж байна...' : selectedPaymentBank ? 'Холбож батлах' : 'Банкгүйгээр батлах'}</Button></div>
+      </form></Form>
     </Modal>}
     {selectedPurchase && <Modal title={selectedPurchase.supplierName} detail={`${dateLabel(selectedPurchase.date)} · ${selectedPurchase.hasReceipt ? 'Баримттай' : 'Баримтгүй'} · ${money(selectedPurchase.totalAmount)}`} onClose={() => setSelectedPurchase(null)}>
       <div className="max-h-[62vh] overflow-y-auto"><div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-3 py-2">Барааны нэр</th><th className="px-3 py-2">Ангилал</th><th className="px-3 py-2">Нэгж</th><th className="px-3 py-2 text-right">Тоо</th><th className="px-3 py-2 text-right">Нэгж үнэ</th><th className="px-3 py-2 text-right">Нийт дүн</th></tr></thead><tbody className="divide-y divide-border">{selectedPurchase.items.map((item) => <tr key={item.id}><td className="px-3 py-3 text-sm font-semibold">{item.name}</td><td className="px-3 py-3 text-sm text-muted-foreground">{item.category}</td><td className="px-3 py-3 text-sm text-muted-foreground">{item.unit}</td><td className="px-3 py-3 text-right font-mono text-sm">{item.quantity}</td><td className="px-3 py-3 text-right font-mono text-sm">{money(item.unitPrice)}</td><td className="px-3 py-3 text-right font-mono text-sm font-bold">{money(item.totalAmount)}</td></tr>)}</tbody></table></div></div>

@@ -2,3 +2,4 @@
 - [Orval DELETE parameter collisions](orval-delete-parameter-collisions.md) — Mixed path and query parameters on DELETE can generate duplicate Zod exports; prefer path-only parameters.
 - [Effective-dated payroll](effective-dated-payroll.md) — Prorate monthly salary by Mon–Fri workdays; employment end dates are inclusive and paid months stay immutable.
 - [Workspace-scoped packages](workspace-scoped-packages.md) — Avoid root installs when the package installer cannot target a pnpm workspace package.
+- [Drizzle unique conflicts](drizzle-unique-conflicts.md) — PostgreSQL unique violations may be wrapped; inspect both error.code and error.cause.code for 23505.

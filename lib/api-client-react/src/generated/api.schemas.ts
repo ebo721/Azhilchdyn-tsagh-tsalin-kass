@@ -773,6 +773,16 @@ export interface InventoryPurchasePaymentInput {
   date: string;
   /** @exclusiveMinimum 0 */
   amount: number;
+  /** @nullable */
+  bankTransactionId?: number | null;
+}
+
+export interface InventoryPurchaseBankSuggestion {
+  id: number;
+  transactionAt: string;
+  amount: number;
+  description: string;
+  score: number;
 }
 
 export interface InventorySupplierUpdate {

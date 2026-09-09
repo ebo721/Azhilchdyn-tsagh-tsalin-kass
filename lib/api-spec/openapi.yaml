@@ -954,6 +954,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryPurchase"
+  /inventory/purchases/{id}/payment-bank-suggestions:
+    get:
+      operationId: listInventoryPurchasePaymentBankSuggestions
+      tags: [inventory]
+      summary: Suggest unlinked bank expenses for an inventory purchase payment
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Ranked bank transaction suggestions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryPurchaseBankSuggestion"
   /inventory/suppliers:
     get:
       operationId: listInventorySuppliers
@@ -1746,6 +1762,16 @@ components:
           type: string
           pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$'
         amount: { type: number, exclusiveMinimum: 0 }
+        bankTransactionId: { type: ["integer", "null"] }
+    InventoryPurchaseBankSuggestion:
+      type: object
+      required: [id, transactionAt, amount, description, score]
+      properties:
+        id: { type: integer }
+        transactionAt: { type: string, format: date-time }
+        amount: { type: number }
+        description: { type: string }
+        score: { type: number }
     InventorySupplierUpdate:
       type: object
       required: [name]
