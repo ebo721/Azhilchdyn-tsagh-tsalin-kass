@@ -1177,6 +1177,7 @@ export const MarkTransactionUnclearResponse = zod.void()
  */
 export const ListInventoryPurchasesResponseItem = zod.object({
   "id": zod.number().int(),
+  "materialType": zod.enum(['food', 'supply']),
   "supplierName": zod.string(),
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
@@ -1215,6 +1216,7 @@ export const createInventoryPurchaseBodyItemsItemUnitPriceMin = 0;
 
 
 export const CreateInventoryPurchaseBody = zod.object({
+  "materialType": zod.enum(['food', 'supply']),
   "supplierName": zod.string().min(1),
   "hasReceipt": zod.boolean(),
   "date": zod.string().regex(createInventoryPurchaseBodyDateRegExp),
@@ -1230,6 +1232,7 @@ export const CreateInventoryPurchaseBody = zod.object({
 
 export const CreateInventoryPurchaseResponse = zod.object({
   "id": zod.number().int(),
+  "materialType": zod.enum(['food', 'supply']),
   "supplierName": zod.string(),
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
@@ -1271,6 +1274,7 @@ export const updateInventoryPurchaseBodyItemsItemUnitPriceMin = 0;
 
 
 export const UpdateInventoryPurchaseBody = zod.object({
+  "materialType": zod.enum(['food', 'supply']),
   "supplierName": zod.string().min(1),
   "hasReceipt": zod.boolean(),
   "date": zod.string().regex(updateInventoryPurchaseBodyDateRegExp),
@@ -1286,6 +1290,7 @@ export const UpdateInventoryPurchaseBody = zod.object({
 
 export const UpdateInventoryPurchaseResponse = zod.object({
   "id": zod.number().int(),
+  "materialType": zod.enum(['food', 'supply']),
   "supplierName": zod.string(),
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
@@ -1338,6 +1343,7 @@ export const ConfirmInventoryPurchasePaymentBody = zod.object({
 
 export const ConfirmInventoryPurchasePaymentResponse = zod.object({
   "id": zod.number().int(),
+  "materialType": zod.enum(['food', 'supply']),
   "supplierName": zod.string(),
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
@@ -1369,6 +1375,7 @@ export const CancelInventoryPurchasePaymentParams = zod.object({
 
 export const CancelInventoryPurchasePaymentResponse = zod.object({
   "id": zod.number().int(),
+  "materialType": zod.enum(['food', 'supply']),
   "supplierName": zod.string(),
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
@@ -1638,6 +1645,7 @@ export const DeleteInventorySupplierResponse = zod.void()
  */
 export const ListInventoryItemsResponseItem = zod.object({
   "id": zod.number().int(),
+  "materialType": zod.enum(['food', 'supply']),
   "name": zod.string(),
   "category": zod.string(),
   "unit": zod.string(),
@@ -1665,6 +1673,7 @@ export const UpdateInventoryItemBody = zod.object({
 
 export const UpdateInventoryItemResponse = zod.object({
   "id": zod.number().int(),
+  "materialType": zod.enum(['food', 'supply']),
   "name": zod.string(),
   "category": zod.string(),
   "unit": zod.string(),

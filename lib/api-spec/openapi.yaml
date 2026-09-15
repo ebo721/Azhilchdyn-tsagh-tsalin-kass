@@ -1796,9 +1796,12 @@ components:
         totalAmount: { type: number }
     InventoryPurchase:
       type: object
-      required: [id, supplierName, hasReceipt, date, totalAmount, paid, createdAt, editable, items]
+      required: [id, materialType, supplierName, hasReceipt, date, totalAmount, paid, createdAt, editable, items]
       properties:
         id: { type: integer }
+        materialType:
+          type: string
+          enum: [food, supply]
         supplierName: { type: string }
         hasReceipt: { type: boolean }
         date: { type: string }
@@ -1826,8 +1829,11 @@ components:
         unitPrice: { type: number, minimum: 0 }
     InventoryPurchaseInput:
       type: object
-      required: [supplierName, hasReceipt, date, items]
+      required: [materialType, supplierName, hasReceipt, date, items]
       properties:
+        materialType:
+          type: string
+          enum: [food, supply]
         supplierName: { type: string, minLength: 1 }
         hasReceipt: { type: boolean }
         date:
@@ -1883,9 +1889,12 @@ components:
             $ref: "#/components/schemas/InventorySupplierItem"
     InventoryItem:
       type: object
-      required: [id, name, category, unit, quantity, createdAt]
+      required: [id, materialType, name, category, unit, quantity, createdAt]
       properties:
         id: { type: integer }
+        materialType:
+          type: string
+          enum: [food, supply]
         name: { type: string }
         category: { type: string }
         unit: { type: string }

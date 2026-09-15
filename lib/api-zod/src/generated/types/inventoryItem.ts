@@ -5,9 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { InventoryItemMaterialType } from './inventoryItemMaterialType';
 
 export interface InventoryItem {
   id: number;
+  materialType: InventoryItemMaterialType;
   name: string;
   category: string;
   unit: string;

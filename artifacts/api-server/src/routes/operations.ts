@@ -150,6 +150,9 @@ function operatingExpenseResponse(row: typeof operatingExpensesTable.$inferSelec
     cashTransactionId: row.cashTransactionId, createdAt: String(row.createdAt) };
 }
 
+const inventoryMaterialLabel = (materialType: string) =>
+  materialType === "food" ? "Хүнсний бараа материал" : "Хангамжийн материал";
+
 router.use(async (req, res, next) => {
   const session = await getStaffSession(req);
   if (!session) {
@@ -206,7 +209,7 @@ router.use(async (req, res, next) => {
       : role === "accountant"
         ? ["/hour-balance", "/payroll", "/cash", "/bank-transactions"]
       : role === "warehouse"
-        ? ["/inventory", "/fixed-assets"]
+        ? ["/inventory", "/fixed-assets", "/operating-expenses"]
         : [];
   if (allowedPrefixes.some((prefix) => req.path.startsWith(prefix))) {
     next();
@@ -1663,18 +1666,22 @@ router.get("/cash/summary", async (_req, res, next) => {
 router.get("/cash/transactions", async (_req, res, next) => {
   try {
     const rows = await db.select().from(cashTransactionsTable).where(isNull(cashTransactionsTable.unclearAt)).orderBy(desc(cashTransactionsTable.date), desc(cashTransactionsTable.id));
-    const expenseRows = await db.select({
-      cashTransactionId: operatingExpensesTable.cashTransactionId,
-      category: operatingExpensesTable.category,
-    }).from(operatingExpensesTable).where(isNotNull(operatingExpensesTable.cashTransactionId));
+    const [expenseRows, inventoryPurchases] = await Promise.all([
+      db.select({
+        cashTransactionId: operatingExpensesTable.cashTransactionId,
+        category: operatingExpensesTable.category,
+      }).from(operatingExpensesTable).where(isNotNull(operatingExpensesTable.cashTransactionId)),
+      db.select({ id: inventoryPurchasesTable.id, materialType: inventoryPurchasesTable.materialType }).from(inventoryPurchasesTable),
+    ]);
     const subcategoryByCashId = new Map(expenseRows.map((expense) => [expense.cashTransactionId, expense.category]));
+    const inventoryCategoryBySourceKey = new Map(inventoryPurchases.map((purchase) => [`purchase:${purchase.id}`, inventoryMaterialLabel(purchase.materialType)]));
     res.json(ListCashTransactionsResponse.parse(rows.map((transaction) => ({
       ...transaction,
       category: transaction.type === "expense"
         ? transaction.sourceType === "payroll" || transaction.sourceType === "payroll_advance"
           ? "Цалин"
           : transaction.sourceType === "inventory_purchase"
-            ? "Бараа материал"
+            ? inventoryCategoryBySourceKey.get(transaction.sourceKey ?? "") ?? "Хангамжийн материал"
             : transaction.sourceType === "fixed_asset_purchase"
               ? "Эд хөрөнгө"
               : "Үйл ажиллагааны зардал"
@@ -2208,6 +2215,7 @@ router.get("/inventory/purchases", async (_req, res, next) => {
     const closedDates = new Set(closures.map((closure) => closure.date));
     res.json(ListInventoryPurchasesResponse.parse(purchases.map((purchase) => ({
       id: purchase.id,
+      materialType: purchase.materialType,
       supplierName: purchase.documentName,
       hasReceipt: purchase.hasReceipt,
       date: purchase.date,
@@ -2364,6 +2372,7 @@ router.get("/inventory/items", async (_req, res, next) => {
     const items = await db.select().from(inventoryItemsTable).orderBy(inventoryItemsTable.category, inventoryItemsTable.name);
     res.json(ListInventoryItemsResponse.parse(items.map((item) => ({
       id: item.id,
+      materialType: item.materialType,
       name: item.name,
       category: item.category,
       unit: item.unit,
@@ -2626,7 +2635,7 @@ router.post("/inventory/purchases", async (req, res, next) => {
       }
       const [purchase] = await tx
         .insert(inventoryPurchasesTable)
-        .values({ documentName: supplier.name, hasReceipt: input.hasReceipt, date: input.date, totalAmount })
+        .values({ materialType: input.materialType, documentName: supplier.name, hasReceipt: input.hasReceipt, date: input.date, totalAmount })
         .returning();
       const purchaseLines = [];
       for (const item of normalizedItems) {
@@ -2636,6 +2645,7 @@ router.post("/inventory/purchases", async (req, res, next) => {
           : await tx.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.normalizedName, normalizedName));
         if (!catalogItem) {
           [catalogItem] = await tx.insert(inventoryItemsTable).values({
+            materialType: input.materialType,
             name: item.name,
             normalizedName,
             category: item.category,
@@ -2644,7 +2654,7 @@ router.post("/inventory/purchases", async (req, res, next) => {
           }).returning();
         }
         await tx.update(inventoryItemsTable)
-          .set({ quantity: sql`${inventoryItemsTable.quantity} + ${item.quantity}` })
+          .set({ materialType: input.materialType, quantity: sql`${inventoryItemsTable.quantity} + ${item.quantity}` })
           .where(eq(inventoryItemsTable.id, catalogItem.id));
         purchaseLines.push({
           purchaseId: purchase.id,
@@ -2662,6 +2672,7 @@ router.post("/inventory/purchases", async (req, res, next) => {
     });
     res.status(201).json(CreateInventoryPurchaseResponse.parse({
       id: result.purchase.id,
+      materialType: result.purchase.materialType,
       supplierName: result.purchase.documentName,
       hasReceipt: result.purchase.hasReceipt,
       date: result.purchase.date,
@@ -2751,6 +2762,7 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
           : await tx.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.normalizedName, normalizedName));
         if (!catalogItem) {
           [catalogItem] = await tx.insert(inventoryItemsTable).values({
+            materialType: input.materialType,
             name: item.name,
             normalizedName,
             category: item.category,
@@ -2759,7 +2771,7 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
           }).returning();
         }
         await tx.update(inventoryItemsTable)
-          .set({ quantity: sql`${inventoryItemsTable.quantity} + ${item.quantity}` })
+          .set({ materialType: input.materialType, quantity: sql`${inventoryItemsTable.quantity} + ${item.quantity}` })
           .where(eq(inventoryItemsTable.id, catalogItem.id));
         purchaseLines.push({
           purchaseId: id,
@@ -2774,6 +2786,7 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
       }
       const savedItems = await tx.insert(inventoryPurchaseItemsTable).values(purchaseLines).returning();
       const [purchase] = await tx.update(inventoryPurchasesTable).set({
+        materialType: input.materialType,
         documentName: supplier.name,
         hasReceipt: input.hasReceipt,
         date: input.date,
@@ -2781,7 +2794,7 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
       }).where(eq(inventoryPurchasesTable.id, id)).returning();
       if (existing.paymentDate) {
         await tx.update(cashTransactionsTable)
-          .set({ description: supplier.name })
+          .set({ category: inventoryMaterialLabel(input.materialType), description: supplier.name })
           .where(and(
             eq(cashTransactionsTable.sourceType, "inventory_purchase"),
             eq(cashTransactionsTable.sourceKey, `purchase:${id}`),
@@ -2791,6 +2804,7 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
     });
     res.json(UpdateInventoryPurchaseResponse.parse({
       id: result.purchase.id,
+      materialType: result.purchase.materialType,
       supplierName: result.purchase.documentName,
       hasReceipt: result.purchase.hasReceipt,
       date: result.purchase.date,
@@ -2825,6 +2839,7 @@ async function inventoryPurchaseResponse(id: number) {
   ]);
   return {
     id: purchase.id,
+    materialType: purchase.materialType,
     supplierName: purchase.documentName,
     hasReceipt: purchase.hasReceipt,
     date: purchase.date,
@@ -2930,7 +2945,7 @@ router.put("/inventory/purchases/:id/payment", async (req, res, next) => {
       const verifiedAt = bank ? new Date() : null;
       const [cash] = await tx.insert(cashTransactionsTable).values({
         type: "expense",
-        category: "Бараа материал",
+        category: inventoryMaterialLabel(currentPurchase.materialType),
         description: currentPurchase.documentName,
         amount: money(input.amount),
         date: input.date,
@@ -2941,6 +2956,7 @@ router.put("/inventory/purchases/:id/payment", async (req, res, next) => {
       }).onConflictDoUpdate({
         target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
         set: {
+          category: inventoryMaterialLabel(currentPurchase.materialType),
           description: currentPurchase.documentName,
           amount: money(input.amount),
           date: input.date,

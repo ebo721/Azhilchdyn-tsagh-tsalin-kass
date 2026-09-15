@@ -723,8 +723,17 @@ export interface InventoryPurchaseItem {
   totalAmount: number;
 }
 
+export type InventoryPurchaseMaterialType = typeof InventoryPurchaseMaterialType[keyof typeof InventoryPurchaseMaterialType];
+
+
+export const InventoryPurchaseMaterialType = {
+  food: 'food',
+  supply: 'supply',
+} as const;
+
 export interface InventoryPurchase {
   id: number;
+  materialType: InventoryPurchaseMaterialType;
   supplierName: string;
   hasReceipt: boolean;
   date: string;
@@ -764,7 +773,16 @@ export interface InventoryPurchaseItemInput {
   unitPrice: number;
 }
 
+export type InventoryPurchaseInputMaterialType = typeof InventoryPurchaseInputMaterialType[keyof typeof InventoryPurchaseInputMaterialType];
+
+
+export const InventoryPurchaseInputMaterialType = {
+  food: 'food',
+  supply: 'supply',
+} as const;
+
 export interface InventoryPurchaseInput {
+  materialType: InventoryPurchaseInputMaterialType;
   /** @minLength 1 */
   supplierName: string;
   hasReceipt: boolean;
@@ -811,8 +829,17 @@ export interface InventorySupplier {
   items: InventorySupplierItem[];
 }
 
+export type InventoryItemMaterialType = typeof InventoryItemMaterialType[keyof typeof InventoryItemMaterialType];
+
+
+export const InventoryItemMaterialType = {
+  food: 'food',
+  supply: 'supply',
+} as const;
+
 export interface InventoryItem {
   id: number;
+  materialType: InventoryItemMaterialType;
   name: string;
   category: string;
   unit: string;

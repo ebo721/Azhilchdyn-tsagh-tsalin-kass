@@ -94,6 +94,28 @@ describe("operating expenses", () => {
     }
   });
 
+  it("allows warehouse users to view and manage operating expenses", async () => {
+    const [warehouse] = await db.select().from(usersTable).where(eq(usersTable.role, "warehouse")).limit(1);
+    assert.ok(warehouse);
+    const warehouseCookie = `${hrCookie.name}=${createStaffSession(warehouse)}`;
+    const list = await fetch(`${baseUrl}/api/operating-expenses`, { headers: { cookie: warehouseCookie } });
+    assert.equal(list.status, 200);
+
+    const create = await fetch(`${baseUrl}/api/operating-expenses`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: warehouseCookie },
+      body: JSON.stringify({
+        description: `warehouse expense ${process.pid}`,
+        category: "Захирал",
+        date: "2099-05-10",
+        amount: 900,
+      }),
+    });
+    assert.equal(create.status, 201);
+    const created = await create.json() as { id: number };
+    await db.delete(operatingExpensesTable).where(eq(operatingExpensesTable.id, created.id));
+  });
+
   it("stores manual cash expenses under the operating expense category and keeps their subcategory", async () => {
     const create = await fetch(`${baseUrl}/api/cash/transactions`, {
       method: "POST",

@@ -5,9 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { InventoryPurchaseInputMaterialType } from './inventoryPurchaseInputMaterialType';
 import type { InventoryPurchaseItemInput } from './inventoryPurchaseItemInput';
 
 export interface InventoryPurchaseInput {
+  materialType: InventoryPurchaseInputMaterialType;
   /** @minLength 1 */
   supplierName: string;
   hasReceipt: boolean;

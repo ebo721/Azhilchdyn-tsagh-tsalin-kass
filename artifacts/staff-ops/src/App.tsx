@@ -348,7 +348,7 @@ function AppShell({ children, role, onLogout }: { children: ReactNode; role: 'ad
     : role === 'accountant'
       ? nav.filter((item) => ['/employees', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses'].includes(item.href))
       : role === 'warehouse'
-        ? nav.filter((item) => ['/inventory', '/fixed-assets'].includes(item.href))
+        ? nav.filter((item) => ['/inventory', '/fixed-assets', '/operating-expenses'].includes(item.href))
         : role === 'viewer'
           ? nav.filter((item) => ['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/inventory', '/fixed-assets'].includes(item.href))
           : nav;
@@ -865,7 +865,7 @@ function Payroll() {
 }
 
 type CashForm = { type: 'income' | 'expense'; category: string; description: string; amount: string; date: string; incomeMonth: string };
-const CASH_EXPENSE_CATEGORIES = ['Цалин', 'Бараа материал', 'Эд хөрөнгө', 'Үйл ажиллагааны зардал'] as const;
+const CASH_EXPENSE_CATEGORIES = ['Цалин', 'Хүнсний бараа материал', 'Хангамжийн материал', 'Эд хөрөнгө', 'Үйл ажиллагааны зардал'] as const;
 
 function CashDayCloseControls() {
   const [date, setDate] = useState(today());
@@ -1154,7 +1154,7 @@ function BankTransactions() {
           <h3 id="create-cash-title" className="text-sm font-bold">Касст шинээр үүсгэх</h3>
           <label className="mt-3 block space-y-2 text-xs font-semibold">{selectedBank.type === 'expense' ? 'Үйл ажиллагааны зардлын дэд ангилал' : 'Ангилал'}<input value={category} onChange={(event) => setCategory(event.target.value)} list="cash-category-options" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" placeholder={selectedBank.type === 'expense' ? 'Жишээ: Түрээс' : 'Ангилал сонгох эсвэл шинээр бичих'} aria-label="Шинэ кассын гүйлгээний ангилал" data-testid="input-bank-transfer-category" required /></label>
           {selectedBank.type === 'income' && <label className="mt-3 block space-y-2 text-xs font-semibold">Хамаарах сар<input type="month" value={incomeMonth} onChange={(event) => setIncomeMonth(event.target.value)} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="input-bank-transfer-income-month" required /></label>}
-          <datalist id="cash-category-options">{categories.map((existingCategory) => <option key={existingCategory} value={existingCategory} />)}</datalist>
+          <datalist id="cash-category-options">{[...new Set([...categories, 'Захирал'])].map((existingCategory) => <option key={existingCategory} value={existingCategory} />)}</datalist>
         </section>
         <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={closeCashTransfer} disabled={transfer.isPending || linkToCash.isPending} data-testid="button-cancel-bank-transfer">Болих</Button><Button type="submit" disabled={!category.trim() || (selectedBank.type === 'income' && !incomeMonth) || transfer.isPending || linkToCash.isPending} data-testid="button-confirm-bank-transfer">{transfer.isPending ? 'Үүсгэж байна...' : 'Касст шинээр үүсгэх'}</Button></div>
       </form>
@@ -1239,9 +1239,15 @@ function FixedAssets() {
 }
 
 const inventoryUnits = ['ширхэг', 'кг', 'грамм', 'литр', 'мл', 'метр', 'багц', 'хайрцаг'] as const;
+const inventoryMaterialTypes = [
+  { value: 'food', label: 'Хүнсний бараа материал' },
+  { value: 'supply', label: 'Хангамжийн материал' },
+] as const;
+type InventoryMaterialType = typeof inventoryMaterialTypes[number]['value'];
 const inventoryIssuePurposes = ['Түлш', 'УБ гал тогоо', 'Бусад'] as const;
 const inventoryPurchasesPerPage = 20;
 type InventoryForm = {
+  materialType: InventoryMaterialType;
   supplierName: string;
   hasReceipt: boolean;
   date: string;
@@ -1273,6 +1279,7 @@ function Inventory() {
   const [selectedSupplier, setSelectedSupplier] = useState<InventorySupplier | null>(null);
   const [editingSupplier, setEditingSupplier] = useState<InventorySupplier | null>(null);
   const [stockSearch, setStockSearch] = useState('');
+  const [materialTypeTab, setMaterialTypeTab] = useState<InventoryMaterialType>('food');
   const [inventoryTab, setInventoryTab] = useState<'stock' | 'purchases' | 'suppliers' | 'issues'>('stock');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [categoryItem, setCategoryItem] = useState<InventoryItem | null>(null);
@@ -1280,7 +1287,7 @@ function Inventory() {
   const [editingIssue, setEditingIssue] = useState<InventoryIssue | null>(null);
   const [purchasePage, setPurchasePage] = useState(1);
   const form = useForm<InventoryForm>({
-    defaultValues: { supplierName: '', hasReceipt: false, date: today(), items: [{ name: '', category: '', unit: 'ширхэг', quantity: '1', unitPrice: '' }] },
+    defaultValues: { materialType: 'food', supplierName: '', hasReceipt: false, date: today(), items: [{ name: '', category: '', unit: 'ширхэг', quantity: '1', unitPrice: '' }] },
   });
   const rows = useFieldArray({ control: form.control, name: 'items' });
   const issueForm = useForm<{ inventoryItemId: string; date: string; quantity: string; purpose: string }>({
@@ -1297,32 +1304,35 @@ function Inventory() {
   });
   const watchedItems = form.watch('items');
   const grandTotal = watchedItems.reduce((total, item) => total + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), 0);
-  const purchasePageCount = Math.max(1, Math.ceil((purchasesQuery.data?.length ?? 0) / inventoryPurchasesPerPage));
-  const paginatedPurchases = purchasesQuery.data?.slice(
+  const filteredPurchases = purchasesQuery.data?.filter((purchase) => purchase.materialType === materialTypeTab) ?? [];
+  const purchasePageCount = Math.max(1, Math.ceil(filteredPurchases.length / inventoryPurchasesPerPage));
+  const paginatedPurchases = filteredPurchases.slice(
     (purchasePage - 1) * inventoryPurchasesPerPage,
     purchasePage * inventoryPurchasesPerPage,
-  ) ?? [];
+  );
   const query = useMemo(() => {
     if (!purchasesQuery.data) return purchasesQuery;
-    const data = new Proxy(purchasesQuery.data, {
+    const data = new Proxy(filteredPurchases, {
       get(target, property, receiver) {
         if (property === 'map') return paginatedPurchases.map.bind(paginatedPurchases);
         return Reflect.get(target, property, receiver);
       },
     });
     return { ...purchasesQuery, data };
-  }, [paginatedPurchases, purchasesQuery]);
+  }, [filteredPurchases, paginatedPurchases, purchasesQuery]);
   useEffect(() => {
     if (purchasePage > purchasePageCount) setPurchasePage(purchasePageCount);
   }, [purchasePage, purchasePageCount]);
+  useEffect(() => setPurchasePage(1), [materialTypeTab]);
   const openForm = () => {
     setEditing(null);
-    form.reset({ supplierName: '', hasReceipt: false, date: today(), items: [{ name: '', category: '', unit: 'ширхэг', quantity: '1', unitPrice: '' }] });
+    form.reset({ materialType: materialTypeTab, supplierName: '', hasReceipt: false, date: today(), items: [{ name: '', category: '', unit: 'ширхэг', quantity: '1', unitPrice: '' }] });
     setOpen(true);
   };
   const editPurchase = (purchase: InventoryPurchase) => {
     setEditing(purchase);
     form.reset({
+      materialType: purchase.materialType,
       supplierName: purchase.supplierName,
       hasReceipt: purchase.hasReceipt,
       date: purchase.date,
@@ -1339,6 +1349,7 @@ function Inventory() {
   };
   const submit = (values: InventoryForm) => {
     const data = {
+      materialType: values.materialType,
       supplierName: values.supplierName,
       hasReceipt: values.hasReceipt,
       date: values.date,
@@ -1380,7 +1391,7 @@ function Inventory() {
       },
     });
   };
-  const filteredCatalog = catalog.data?.filter((item) => `${item.name} ${item.category}`.toLocaleLowerCase('mn-MN').includes(stockSearch.toLocaleLowerCase('mn-MN'))) ?? [];
+  const filteredCatalog = catalog.data?.filter((item) => item.materialType === materialTypeTab && `${item.name} ${item.category}`.toLocaleLowerCase('mn-MN').includes(stockSearch.toLocaleLowerCase('mn-MN'))) ?? [];
   const selectedItemHistory = selectedItem
     ? query.data?.flatMap((purchase) => purchase.items
       .filter((item) => item.inventoryItemId === selectedItem.id)
@@ -1491,6 +1502,7 @@ function Inventory() {
   };
   return <div className="page-enter">
     <div className="mb-6 flex flex-wrap items-center justify-between gap-3"><div className="inline-flex rounded-xl bg-secondary p-1"><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'stock' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('stock')} data-testid="tab-inventory-stock">Үлдэгдэл</button><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'purchases' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('purchases')} data-testid="tab-inventory-purchases">Худалдан авалт</button><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'suppliers' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('suppliers')} data-testid="tab-inventory-suppliers">Харилцагч</button><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'issues' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('issues')} data-testid="tab-inventory-issues">Зарлага</button></div>{inventoryTab === 'purchases' ? <Button onClick={openForm} data-testid="button-add-inventory-purchase"><Plus className="size-4" />Худалдан авалт бүртгэх</Button> : inventoryTab === 'issues' ? <Button onClick={openIssueForm} data-testid="button-add-inventory-issue"><Plus className="size-4" />Зарлага гаргах</Button> : null}</div>
+    {(inventoryTab === 'stock' || inventoryTab === 'purchases') && <div className="mb-5 inline-flex rounded-xl border border-border bg-card p-1" role="tablist" aria-label="Бараа материалын төрөл">{inventoryMaterialTypes.map((type) => <button key={type.value} role="tab" aria-selected={materialTypeTab === type.value} className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', materialTypeTab === type.value ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-secondary')} onClick={() => setMaterialTypeTab(type.value)} data-testid={`tab-inventory-material-${type.value}`}>{type.label}</button>)}</div>}
     {inventoryTab === 'stock' && <section className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between"><h2 className="text-base font-bold">Барааны үлдэгдэл</h2><div className="relative w-full sm:w-72"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={stockSearch} onChange={(event) => setStockSearch(event.target.value)} className="pl-9" placeholder="Нэр эсвэл ангиллаар хайх" data-testid="input-search-inventory-stock" /></div></div>
       {catalog.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : catalog.isError ? <ErrorBlock onRetry={() => catalog.refetch()} /> : !filteredCatalog.length ? <EmptyState title="Бараа материал олдсонгүй" detail={stockSearch ? 'Хайлтын үгээ өөрчлөөд үзнэ үү.' : 'Худалдан авалт бүртгэхэд барааны үлдэгдэл автоматаар үүснэ.'} icon={PackageOpen} /> : <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Бараа материал</th><th className="px-5 py-3">Ангилал</th><th className="px-5 py-3">Нэгж</th><th className="px-5 py-3 text-right">Үлдэгдэл</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{filteredCatalog.map((item) => <tr key={item.id} className="cursor-pointer transition-colors hover:bg-secondary/40" onClick={() => setSelectedItem(item)} data-testid={`row-inventory-stock-${item.id}`}><td className="px-5 py-3 text-sm font-semibold">{item.name}</td><td className="px-5 py-3 text-sm text-muted-foreground">{item.category}</td><td className="px-5 py-3 text-sm text-muted-foreground">{item.unit}</td><td className="px-5 py-3 text-right font-mono text-sm font-bold">{item.quantity}</td><td className="px-5 py-3 text-right"><Button size="icon" variant="ghost" title="Ангилал засах" onClick={(event) => { event.stopPropagation(); editCategory(item); }} data-testid={`button-edit-inventory-category-${item.id}`}><Pencil className="size-4" /></Button></td></tr>)}</tbody></table></div>}
@@ -1568,10 +1580,11 @@ function Inventory() {
     </Modal>}
     {open && <Modal wide fullScreen title={editing ? 'Худалдан авалт засах' : 'Бараа материалын худалдан авалт'} detail="Сангаас хайж сонгох эсвэл шинэ бараа бүртгэнэ." onClose={() => setOpen(false)}>
       <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-3">
+        <label className="block space-y-2 text-xs font-semibold">Бараа материалын төрөл<select className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('materialType', { required: true })} data-testid="select-inventory-material-type">{inventoryMaterialTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label>
         <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-xs font-semibold">Харилцагч<input list="inventory-supplier-options" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('supplierName', { required: true })} placeholder="Жишээ: Номин" data-testid="input-inventory-supplier-name" /></label><label className="space-y-2 text-xs font-semibold">Худалдан авалтын огноо<input type="date" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('date', { required: true })} data-testid="input-inventory-purchase-date" /></label></div>
         <label className="flex items-center gap-3 rounded-xl border border-border bg-secondary/35 px-4 py-3 text-sm font-semibold"><input type="checkbox" className="size-4 accent-primary" {...form.register('hasReceipt')} data-testid="checkbox-inventory-has-receipt" /><span>Баримттай</span></label>
         <datalist id="inventory-supplier-options">{suppliers.data?.map((supplier) => <option value={supplier.name} key={supplier.id} />)}</datalist>
-        <datalist id="inventory-catalog-options">{catalog.data?.map((item) => <option value={item.name} key={item.id}>{item.category} · {item.unit}</option>)}</datalist>
+        <datalist id="inventory-catalog-options">{catalog.data?.filter((item) => item.materialType === form.watch('materialType')).map((item) => <option value={item.name} key={item.id}>{item.category} · {item.unit}</option>)}</datalist>
         <div className="space-y-3">{rows.fields.map((field, index) => {
           const item = watchedItems[index];
           const total = (Number(item?.quantity) || 0) * (Number(item?.unitPrice) || 0);
@@ -1722,7 +1735,7 @@ function OperatingExpenseModal({ expense, onClose }: { expense?: OperatingExpens
         <form onSubmit={form.handleSubmit(submit)} className="space-y-4">
           <label className="block space-y-1.5 text-xs font-semibold">Утга<input className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('description', { required: true })} data-testid="input-expense-description" /></label>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block space-y-1.5 text-xs font-semibold">Ангилал<input className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" placeholder="Жишээ: Цахилгаан, Түрээс" {...form.register('category', { required: true })} data-testid="input-expense-category" /></label>
+            <label className="block space-y-1.5 text-xs font-semibold">Ангилал<input list="operating-expense-category-options" className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" placeholder="Жишээ: Цахилгаан, Түрээс" {...form.register('category', { required: true })} data-testid="input-expense-category" /><datalist id="operating-expense-category-options"><option value="Захирал" /></datalist></label>
             <label className="block space-y-1.5 text-xs font-semibold">Огноо<input type="date" className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('date', { required: true })} data-testid="input-expense-date" /></label>
             <label className="block space-y-1.5 text-xs font-semibold">Дүн<input type="number" min="0" className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('amount', { required: true })} data-testid="input-expense-amount" /></label>
           </div>
@@ -1885,13 +1898,13 @@ function Router() {
   useEffect(() => {
     if (role === 'hr' && !['/employees', '/attendance', '/hour-balance'].includes(location)) navigate('/employees', { replace: true });
     if (role === 'accountant' && !['/employees', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses'].includes(location)) navigate('/hour-balance', { replace: true });
-    if (role === 'warehouse' && !['/inventory', '/fixed-assets'].includes(location)) navigate('/inventory', { replace: true });
+    if (role === 'warehouse' && !['/inventory', '/fixed-assets', '/operating-expenses'].includes(location)) navigate('/inventory', { replace: true });
     if (role === 'viewer' && !['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/inventory', '/fixed-assets'].includes(location)) navigate('/employees', { replace: true });
   }, [location, navigate, role]);
   if (session.isLoading) return <div className="grid min-h-[100dvh] place-items-center"><LoadingBlock className="size-12" /></div>;
   if (!role) return <HrLogin />;
   const signOut = () => logout.mutate(undefined, { onSuccess: () => { queryClient.clear(); navigate('/'); } });
-  return <ErrorBoundary resetKey={location}><AppShell role={role} onLogout={signOut}>{role === 'admin' ? <Switch><Route path="/" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/bank-transactions" component={BankTransactions} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route path="/operating-expenses" component={OperatingExpenses} /><Route path="/deletion-requests" component={DeletionRequests} /><Route path="/users" component={UserSettings} /><Route component={NotFound} /></Switch> : role === 'hr' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route component={Employees} /></Switch> : role === 'accountant' ? <Switch><Route path="/employees" component={Employees} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/bank-transactions" component={BankTransactions} /><Route path="/operating-expenses" component={OperatingExpenses} /><Route component={HourBalance} /></Switch> : role === 'viewer' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/bank-transactions" component={BankTransactions} /><Route path="/operating-expenses" component={OperatingExpenses} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route component={Employees} /></Switch> : <Switch><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route component={Inventory} /></Switch>}</AppShell></ErrorBoundary>;
+  return <ErrorBoundary resetKey={location}><AppShell role={role} onLogout={signOut}>{role === 'admin' ? <Switch><Route path="/" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/bank-transactions" component={BankTransactions} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route path="/operating-expenses" component={OperatingExpenses} /><Route path="/deletion-requests" component={DeletionRequests} /><Route path="/users" component={UserSettings} /><Route component={NotFound} /></Switch> : role === 'hr' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route component={Employees} /></Switch> : role === 'accountant' ? <Switch><Route path="/employees" component={Employees} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/bank-transactions" component={BankTransactions} /><Route path="/operating-expenses" component={OperatingExpenses} /><Route component={HourBalance} /></Switch> : role === 'viewer' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/bank-transactions" component={BankTransactions} /><Route path="/operating-expenses" component={OperatingExpenses} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route component={Employees} /></Switch> : <Switch><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route path="/operating-expenses" component={OperatingExpenses} /><Route component={Inventory} /></Switch>}</AppShell></ErrorBoundary>;
 }
 
 function App() {

@@ -26,6 +26,7 @@ describe("inventory purchase payment", () => {
     assert.ok(admin, "An admin database user is required for the integration test");
     adminCookie = `${hrCookie.name}=${createStaffSession(admin)}`;
     const [purchase] = await db.insert(inventoryPurchasesTable).values({
+      materialType: "food",
       documentName: `Payment test ${process.pid}`,
       hasReceipt: true,
       date: "2099-01-10",
@@ -83,6 +84,7 @@ describe("inventory purchase payment", () => {
     ));
     assert.ok(cashExpense);
     assert.equal(cashExpense.date, "2099-01-15");
+    assert.equal(cashExpense.category, "Хүнсний бараа материал");
     assert.equal(Number(cashExpense.amount), 120_000);
     assert.equal(cashExpense.bankTransactionId, bankTransactionId);
     assert.ok(cashExpense.bankVerifiedAt);

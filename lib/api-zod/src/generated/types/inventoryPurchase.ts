@@ -6,9 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { InventoryPurchaseItem } from './inventoryPurchaseItem';
+import type { InventoryPurchaseMaterialType } from './inventoryPurchaseMaterialType';
 
 export interface InventoryPurchase {
   id: number;
+  materialType: InventoryPurchaseMaterialType;
   supplierName: string;
   hasReceipt: boolean;
   date: string;

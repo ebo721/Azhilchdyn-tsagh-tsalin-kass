@@ -169,6 +169,7 @@ export const bankTransactionsTable = pgTable("bank_transactions", {
 
 export const inventoryPurchasesTable = pgTable("inventory_purchases", {
   id: serial("id").primaryKey(),
+  materialType: text("material_type").notNull().default("supply"),
   documentName: text("document_name").notNull().default("Худалдан авалтын баримт"),
   hasReceipt: boolean("has_receipt").notNull().default(false),
   date: date("date", { mode: "string" }).notNull(),
@@ -187,6 +188,7 @@ export const inventorySuppliersTable = pgTable("inventory_suppliers", {
 
 export const inventoryItemsTable = pgTable("inventory_items", {
   id: serial("id").primaryKey(),
+  materialType: text("material_type").notNull().default("supply"),
   name: text("name").notNull(),
   normalizedName: text("normalized_name").notNull().unique(),
   category: text("category").notNull(),
