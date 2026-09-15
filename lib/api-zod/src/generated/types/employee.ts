@@ -17,6 +17,7 @@ export interface Employee {
   baseSalary: number;
   socialInsuranceSalary: number;
   payrollTaxExempt: boolean;
+  fullSalaryRegardlessAttendance: boolean;
   monthlyExpectedWorkDays: number;
   status: EmployeeStatus;
   joinedAt: string;

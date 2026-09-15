@@ -12,4 +12,5 @@ export interface EmployeeSalaryHistoryUpdate {
   baseSalary: number;
   /** @minimum 0 */
   socialInsuranceSalary: number;
+  fullSalaryRegardlessAttendance?: boolean;
 }

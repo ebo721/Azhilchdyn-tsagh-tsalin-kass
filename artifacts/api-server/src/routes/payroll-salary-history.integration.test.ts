@@ -470,4 +470,57 @@ describe("effective-dated payroll salary", () => {
       .where(eq(employeesTable.id, employeeId));
     assert.equal(employee.joinedAt, "2099-01-08");
   });
+
+  it("pays the full monthly salary without attendance only when an admin enables the special setting", async () => {
+    const [employee] = await db.insert(employeesTable).values({
+      name: `Full salary test ${process.pid}`,
+      role: "Test",
+      phone: "",
+      employeeType: "office",
+      salaryType: "monthly",
+      baseSalary: 1_800_000,
+      socialInsuranceSalary: 1_200_000,
+      payrollTaxExempt: false,
+      fullSalaryRegardlessAttendance: true,
+      monthlyExpectedWorkDays: 0,
+      status: "active",
+      joinedAt: "2099-07-01",
+    }).returning({ id: employeesTable.id });
+    await db.insert(employeeSalaryHistoryTable).values({
+      employeeId: employee.id,
+      effectiveFrom: "2099-07-01",
+      employeeType: "office",
+      baseSalary: 1_800_000,
+      socialInsuranceSalary: 1_200_000,
+      payrollTaxExempt: false,
+      fullSalaryRegardlessAttendance: true,
+    });
+    try {
+      const payrollResponse = await fetch(`${baseUrl}/api/payroll?month=2099-07`, {
+        headers: { cookie: adminCookie },
+      });
+      assert.equal(payrollResponse.status, 200);
+      const payroll = await payrollResponse.json() as {
+        lines: Array<{ employeeId: number; gross: number; socialInsuranceSalary: number }>;
+      };
+      const line = payroll.lines.find((item) => item.employeeId === employee.id);
+      assert.ok(line);
+      assert.equal(line.gross, 1_800_000);
+      assert.equal(line.socialInsuranceSalary, 1_200_000);
+
+      const [hr] = await db.select().from(usersTable).where(eq(usersTable.role, "hr")).limit(1);
+      assert.ok(hr);
+      const denied = await fetch(`${baseUrl}/api/employees/${employee.id}`, {
+        method: "PATCH",
+        headers: {
+          cookie: `${hrCookie.name}=${createStaffSession(hr)}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ fullSalaryRegardlessAttendance: false }),
+      });
+      assert.equal(denied.status, 403);
+    } finally {
+      await db.delete(employeesTable).where(eq(employeesTable.id, employee.id));
+    }
+  });
 });

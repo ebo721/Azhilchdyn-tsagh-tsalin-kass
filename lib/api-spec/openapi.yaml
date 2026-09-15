@@ -1375,7 +1375,7 @@ components:
         createdAt: { type: string }
     Employee:
       type: object
-      required: [id, name, role, phone, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, monthlyExpectedWorkDays, status, joinedAt, inactiveAt]
+      required: [id, name, role, phone, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, fullSalaryRegardlessAttendance, monthlyExpectedWorkDays, status, joinedAt, inactiveAt]
       properties:
         id: { type: integer }
         name: { type: string }
@@ -1385,13 +1385,14 @@ components:
         baseSalary: { type: number }
         socialInsuranceSalary: { type: number }
         payrollTaxExempt: { type: boolean }
+        fullSalaryRegardlessAttendance: { type: boolean }
         monthlyExpectedWorkDays: { type: integer }
         status: { type: string, enum: [active, inactive] }
         joinedAt: { type: string }
         inactiveAt: { type: [string, "null"] }
     EmployeeSalaryHistory:
       type: object
-      required: [id, employeeId, effectiveFrom, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, createdAt]
+      required: [id, employeeId, effectiveFrom, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, fullSalaryRegardlessAttendance, createdAt]
       properties:
         id: { type: integer }
         employeeId: { type: integer }
@@ -1400,6 +1401,7 @@ components:
         baseSalary: { type: number }
         socialInsuranceSalary: { type: number }
         payrollTaxExempt: { type: boolean }
+        fullSalaryRegardlessAttendance: { type: boolean }
         createdAt: { type: string }
     EmployeeSalaryHistoryUpdate:
       type: object
@@ -1408,6 +1410,7 @@ components:
         effectiveFrom: { type: string, format: date }
         baseSalary: { type: number, minimum: 0 }
         socialInsuranceSalary: { type: number, minimum: 0 }
+        fullSalaryRegardlessAttendance: { type: boolean }
     EmployeeInput:
       type: object
       required: [name, role, phone, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, monthlyExpectedWorkDays, joinedAt]
@@ -1419,6 +1422,7 @@ components:
         baseSalary: { type: number, minimum: 0 }
         socialInsuranceSalary: { type: number, minimum: 0 }
         payrollTaxExempt: { type: boolean }
+        fullSalaryRegardlessAttendance: { type: boolean }
         monthlyExpectedWorkDays: { type: integer, minimum: 0, maximum: 31 }
         joinedAt: { type: string, format: date }
     EmployeeUpdate:
@@ -1431,6 +1435,7 @@ components:
         baseSalary: { type: number, minimum: 0 }
         socialInsuranceSalary: { type: number, minimum: 0 }
         payrollTaxExempt: { type: boolean }
+        fullSalaryRegardlessAttendance: { type: boolean }
         monthlyExpectedWorkDays: { type: integer, minimum: 0, maximum: 31 }
         status: { type: string, enum: [active, inactive] }
         joinedAt: { type: string, format: date }

@@ -20,6 +20,7 @@ export interface EmployeeUpdate {
   /** @minimum 0 */
   socialInsuranceSalary?: number;
   payrollTaxExempt?: boolean;
+  fullSalaryRegardlessAttendance?: boolean;
   /**
      * @minimum 0
      * @maximum 31

@@ -342,6 +342,7 @@ function salaryAt(employee: typeof employeesTable.$inferSelect, history: SalaryH
       baseSalary: Number(employee.baseSalary),
       socialInsuranceSalary: Number(employee.socialInsuranceSalary),
       payrollTaxExempt: employee.payrollTaxExempt,
+      fullSalaryRegardlessAttendance: employee.fullSalaryRegardlessAttendance,
     };
 }
 
@@ -415,26 +416,40 @@ async function getPayrollSummary(month: string, existingData?: PayrollCalculatio
     const excessWorkedRecords = workedRecords
       .filter((record) => !eligibleWeekdays.includes(String(record.date)))
       .slice(0, excessWorkedDayCount);
-    const officeGross = paidWeekdays.reduce((total, date) => {
+    const officeSalaryDates = eligibleWeekdays.filter((date) => {
+      const salary = salaryAt(employee, salaryHistory, date);
+      return salary.fullSalaryRegardlessAttendance || paidWeekdays.includes(date);
+    });
+    const officeGross = officeSalaryDates.reduce((total, date) => {
       const salary = salaryAt(employee, salaryHistory, date);
       return total + (salary.employeeType === "office" ? Number(salary.baseSalary) / weekdays.length : 0);
     }, 0) + excessWorkedRecords.reduce((total, record) => {
       const salary = salaryAt(employee, salaryHistory, String(record.date));
-      return total + (salary.employeeType === "office" ? Number(salary.baseSalary) / weekdays.length : 0);
+      return total + (salary.employeeType === "office" && !salary.fullSalaryRegardlessAttendance ? Number(salary.baseSalary) / weekdays.length : 0);
     }, 0);
-    const shiftGross = employeeRecords
+    const fullShiftGross = eligibleWeekdays.reduce((total, date) => {
+      const salary = salaryAt(employee, salaryHistory, date);
+      return total + (salary.employeeType === "shift" && salary.fullSalaryRegardlessAttendance
+        ? Number(salary.baseSalary) * employee.monthlyExpectedWorkDays / weekdays.length
+        : 0);
+    }, 0);
+    const attendedShiftGross = employeeRecords
       .filter((record) => ["present", "late"].includes(record.status))
       .reduce((total, record) => {
         const salary = salaryAt(employee, salaryHistory, String(record.date));
-        return total + (salary.employeeType === "shift" ? Number(salary.baseSalary) : 0);
+        return total + (salary.employeeType === "shift" && !salary.fullSalaryRegardlessAttendance ? Number(salary.baseSalary) : 0);
       }, 0);
-    const gross = money(officeGross + shiftGross);
-    const socialInsuranceSalary = money(paidWeekdays.reduce((total, date) => {
+    const gross = money(officeGross + fullShiftGross + attendedShiftGross);
+    const insuredSalaryDates = eligibleWeekdays.filter((date) => {
+      const salary = salaryAt(employee, salaryHistory, date);
+      return salary.fullSalaryRegardlessAttendance || paidWeekdays.includes(date);
+    });
+    const socialInsuranceSalary = money(insuredSalaryDates.reduce((total, date) => {
       const salary = salaryAt(employee, salaryHistory, date);
       return total + (salary.payrollTaxExempt ? 0 : Number(salary.socialInsuranceSalary) / weekdays.length);
     }, 0) + excessWorkedRecords.reduce((total, record) => {
       const salary = salaryAt(employee, salaryHistory, String(record.date));
-      return total + (salary.payrollTaxExempt ? 0 : Number(salary.socialInsuranceSalary) / weekdays.length);
+      return total + (salary.payrollTaxExempt || salary.fullSalaryRegardlessAttendance ? 0 : Number(salary.socialInsuranceSalary) / weekdays.length);
     }, 0));
     const payrollTaxExempt = socialInsuranceSalary === 0;
     const socialInsurance = payrollTaxExempt ? 0 : money(socialInsuranceSalary * 0.115);
@@ -637,6 +652,11 @@ router.get("/employees", async (_req, res, next) => {
 router.post("/employees", async (req, res, next) => {
   try {
     const input = CreateEmployeeBody.parse(req.body);
+    const session = await getStaffSession(req);
+    if (input.fullSalaryRegardlessAttendance === true && session?.role !== "admin") {
+      res.status(403).json({ error: "Цалинг бүтэн бодох тусгай тохиргоог зөвхөн админ өөрчилнө" });
+      return;
+    }
     const joinedAt = calendarDateText(input.joinedAt);
     if (!isValidCalendarDate(joinedAt)) {
       res.status(400).json({ error: "Ажилд орсон огноо буруу байна" });
@@ -655,6 +675,7 @@ router.post("/employees", async (req, res, next) => {
         baseSalary: input.baseSalary,
         socialInsuranceSalary: input.socialInsuranceSalary,
         payrollTaxExempt: input.payrollTaxExempt,
+        fullSalaryRegardlessAttendance: input.fullSalaryRegardlessAttendance ?? false,
       });
       return created;
     });
@@ -672,6 +693,11 @@ router.patch("/employees/:id", async (req, res, next) => {
   try {
     const { id } = UpdateEmployeeParams.parse(req.params);
     const input = UpdateEmployeeBody.parse(req.body);
+    const session = await getStaffSession(req);
+    if (input.fullSalaryRegardlessAttendance !== undefined && session?.role !== "admin") {
+      res.status(403).json({ error: "Цалинг бүтэн бодох тусгай тохиргоог зөвхөн админ өөрчилнө" });
+      return;
+    }
     const [current] = await db.select().from(employeesTable).where(eq(employeesTable.id, id));
     if (!current) {
       res.status(404).json({ error: "Employee not found" });
@@ -701,7 +727,8 @@ router.patch("/employees/:id", async (req, res, next) => {
     const salaryChanged = (input.employeeType !== undefined && input.employeeType !== current.employeeType)
       || (input.baseSalary !== undefined && Number(input.baseSalary) !== Number(current.baseSalary))
       || (input.socialInsuranceSalary !== undefined && Number(input.socialInsuranceSalary) !== Number(current.socialInsuranceSalary))
-      || (input.payrollTaxExempt !== undefined && input.payrollTaxExempt !== current.payrollTaxExempt);
+      || (input.payrollTaxExempt !== undefined && input.payrollTaxExempt !== current.payrollTaxExempt)
+      || (input.fullSalaryRegardlessAttendance !== undefined && input.fullSalaryRegardlessAttendance !== current.fullSalaryRegardlessAttendance);
     const correctingInitialEmployment = joinedAtChanged
       && baselineSalary
       && String(baselineSalary.effectiveFrom) === String(current.joinedAt)
@@ -750,6 +777,7 @@ router.patch("/employees/:id", async (req, res, next) => {
             baseSalary: employeeInput.baseSalary ?? Number(current.baseSalary),
             socialInsuranceSalary: employeeInput.socialInsuranceSalary ?? Number(current.socialInsuranceSalary),
             payrollTaxExempt: employeeInput.payrollTaxExempt ?? current.payrollTaxExempt,
+            fullSalaryRegardlessAttendance: employeeInput.fullSalaryRegardlessAttendance ?? current.fullSalaryRegardlessAttendance,
           }).where(eq(employeeSalaryHistoryTable.id, baselineSalary.id));
         } else {
           await tx.insert(employeeSalaryHistoryTable).values({
@@ -759,6 +787,7 @@ router.patch("/employees/:id", async (req, res, next) => {
             baseSalary: employeeInput.baseSalary ?? Number(current.baseSalary),
             socialInsuranceSalary: employeeInput.socialInsuranceSalary ?? Number(current.socialInsuranceSalary),
             payrollTaxExempt: employeeInput.payrollTaxExempt ?? current.payrollTaxExempt,
+            fullSalaryRegardlessAttendance: employeeInput.fullSalaryRegardlessAttendance ?? current.fullSalaryRegardlessAttendance,
           });
         }
       } else if (joinedAtChanged && baselineSalary) {
@@ -806,6 +835,11 @@ router.patch("/employees/:id/salary-history/:historyId", async (req, res, next) 
   try {
     const { id, historyId } = UpdateEmployeeSalaryHistoryParams.parse(req.params);
     const input = UpdateEmployeeSalaryHistoryBody.parse(req.body);
+    const session = await getStaffSession(req);
+    if (input.fullSalaryRegardlessAttendance !== undefined && session?.role !== "admin") {
+      res.status(403).json({ error: "Цалинг бүтэн бодох тусгай тохиргоог зөвхөн админ өөрчилнө" });
+      return;
+    }
     const effectiveFrom = calendarDateText(input.effectiveFrom);
     if (!isValidCalendarDate(effectiveFrom)) {
       res.status(400).json({ error: "Цалин хүчинтэй болох огноо буруу байна" });
@@ -843,11 +877,17 @@ router.patch("/employees/:id/salary-history/:historyId", async (req, res, next) 
         effectiveFrom,
         baseSalary: input.baseSalary,
         socialInsuranceSalary: input.socialInsuranceSalary,
+        ...(input.fullSalaryRegardlessAttendance === undefined ? {} : {
+          fullSalaryRegardlessAttendance: input.fullSalaryRegardlessAttendance,
+        }),
       }).where(eq(employeeSalaryHistoryTable.id, historyId)).returning();
       if (index === history.length - 1) {
         await tx.update(employeesTable).set({
           baseSalary: input.baseSalary,
           socialInsuranceSalary: input.socialInsuranceSalary,
+          ...(input.fullSalaryRegardlessAttendance === undefined ? {} : {
+            fullSalaryRegardlessAttendance: input.fullSalaryRegardlessAttendance,
+          }),
         }).where(eq(employeesTable.id, id));
       }
       return row;
@@ -905,6 +945,7 @@ router.delete("/employees/:id/salary-history/:historyId", async (req, res, next)
           baseSalary: previous.baseSalary,
           socialInsuranceSalary: previous.socialInsuranceSalary,
           payrollTaxExempt: previous.payrollTaxExempt,
+          fullSalaryRegardlessAttendance: previous.fullSalaryRegardlessAttendance,
         }).where(eq(employeesTable.id, id));
       }
     });

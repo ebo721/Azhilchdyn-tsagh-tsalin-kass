@@ -116,6 +116,7 @@ export const ListEmployeesResponseItem = zod.object({
   "baseSalary": zod.number(),
   "socialInsuranceSalary": zod.number(),
   "payrollTaxExempt": zod.boolean(),
+  "fullSalaryRegardlessAttendance": zod.boolean(),
   "monthlyExpectedWorkDays": zod.number().int(),
   "status": zod.enum(['active', 'inactive']),
   "joinedAt": zod.string(),
@@ -146,6 +147,7 @@ export const CreateEmployeeBody = zod.object({
   "baseSalary": zod.number().min(createEmployeeBodyBaseSalaryMin),
   "socialInsuranceSalary": zod.number().min(createEmployeeBodySocialInsuranceSalaryMin),
   "payrollTaxExempt": zod.boolean(),
+  "fullSalaryRegardlessAttendance": zod.boolean().optional(),
   "monthlyExpectedWorkDays": zod.number().int().min(createEmployeeBodyMonthlyExpectedWorkDaysMin).max(createEmployeeBodyMonthlyExpectedWorkDaysMax),
   "joinedAt": zod.coerce.date()
 })
@@ -159,6 +161,7 @@ export const CreateEmployeeResponse = zod.object({
   "baseSalary": zod.number(),
   "socialInsuranceSalary": zod.number(),
   "payrollTaxExempt": zod.boolean(),
+  "fullSalaryRegardlessAttendance": zod.boolean(),
   "monthlyExpectedWorkDays": zod.number().int(),
   "status": zod.enum(['active', 'inactive']),
   "joinedAt": zod.string(),
@@ -192,6 +195,7 @@ export const UpdateEmployeeBody = zod.object({
   "baseSalary": zod.number().min(updateEmployeeBodyBaseSalaryMin).optional(),
   "socialInsuranceSalary": zod.number().min(updateEmployeeBodySocialInsuranceSalaryMin).optional(),
   "payrollTaxExempt": zod.boolean().optional(),
+  "fullSalaryRegardlessAttendance": zod.boolean().optional(),
   "monthlyExpectedWorkDays": zod.number().int().min(updateEmployeeBodyMonthlyExpectedWorkDaysMin).max(updateEmployeeBodyMonthlyExpectedWorkDaysMax).optional(),
   "status": zod.enum(['active', 'inactive']).optional(),
   "joinedAt": zod.coerce.date().optional(),
@@ -208,6 +212,7 @@ export const UpdateEmployeeResponse = zod.object({
   "baseSalary": zod.number(),
   "socialInsuranceSalary": zod.number(),
   "payrollTaxExempt": zod.boolean(),
+  "fullSalaryRegardlessAttendance": zod.boolean(),
   "monthlyExpectedWorkDays": zod.number().int(),
   "status": zod.enum(['active', 'inactive']),
   "joinedAt": zod.string(),
@@ -240,6 +245,7 @@ export const ListEmployeeSalaryHistoryResponseItem = zod.object({
   "baseSalary": zod.number(),
   "socialInsuranceSalary": zod.number(),
   "payrollTaxExempt": zod.boolean(),
+  "fullSalaryRegardlessAttendance": zod.boolean(),
   "createdAt": zod.string()
 })
 export const ListEmployeeSalaryHistoryResponse = zod.array(ListEmployeeSalaryHistoryResponseItem)
@@ -262,7 +268,8 @@ export const updateEmployeeSalaryHistoryBodySocialInsuranceSalaryMin = 0;
 export const UpdateEmployeeSalaryHistoryBody = zod.object({
   "effectiveFrom": zod.coerce.date(),
   "baseSalary": zod.number().min(updateEmployeeSalaryHistoryBodyBaseSalaryMin),
-  "socialInsuranceSalary": zod.number().min(updateEmployeeSalaryHistoryBodySocialInsuranceSalaryMin)
+  "socialInsuranceSalary": zod.number().min(updateEmployeeSalaryHistoryBodySocialInsuranceSalaryMin),
+  "fullSalaryRegardlessAttendance": zod.boolean().optional()
 })
 
 export const UpdateEmployeeSalaryHistoryResponse = zod.object({
@@ -273,6 +280,7 @@ export const UpdateEmployeeSalaryHistoryResponse = zod.object({
   "baseSalary": zod.number(),
   "socialInsuranceSalary": zod.number(),
   "payrollTaxExempt": zod.boolean(),
+  "fullSalaryRegardlessAttendance": zod.boolean(),
   "createdAt": zod.string()
 })
 

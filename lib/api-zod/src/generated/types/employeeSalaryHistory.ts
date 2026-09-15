@@ -15,5 +15,6 @@ export interface EmployeeSalaryHistory {
   baseSalary: number;
   socialInsuranceSalary: number;
   payrollTaxExempt: boolean;
+  fullSalaryRegardlessAttendance: boolean;
   createdAt: string;
 }
