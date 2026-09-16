@@ -3,8 +3,8 @@ name: Vercel TypeScript emit
 description: Why the API TypeScript configuration and imports must support real JavaScript emission on Vercel.
 ---
 
-Keep the API TypeScript project compatible with actual JavaScript emission. Do not enable `allowImportingTsExtensions`, and use extensionless local imports in files included by the API tsconfig.
+Keep the API TypeScript project compatible with actual JavaScript emission. Do not enable `allowImportingTsExtensions`, use extensionless local imports, and keep the API-level `noEmitOnError: false` override.
 
-**Why:** Vercel performs an additional TypeScript emit after the custom esbuild bundle. An emit-incompatible tsconfig can fail only with `src/app.ts: Emit skipped`, hiding the underlying TS5096 diagnostic.
+**Why:** Vercel performs an additional per-file TypeScript emit after the strict typecheck and custom esbuild bundle. An emit-incompatible config or workspace diagnostic can surface only as `<source file>: Emit skipped`, hiding the underlying diagnostic.
 
-**How to apply:** After API TypeScript configuration or import changes, run a real emit to a temporary directory in addition to the normal no-emit typecheck and custom bundle build.
+**How to apply:** Keep strict checking in the existing typecheck step. After API TypeScript configuration or import changes, also run a real emit to a temporary directory and the custom bundle build.
