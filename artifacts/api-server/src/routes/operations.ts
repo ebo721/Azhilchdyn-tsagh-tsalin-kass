@@ -2356,6 +2356,7 @@ router.get("/inventory/suppliers", async (_req, res, next) => {
         name: supplier.name,
         purchaseCount: supplierPurchases.length,
         totalAmount: money(supplierPurchases.reduce((total, purchase) => total + Number(purchase.totalAmount), 0)),
+        unpaidAmount: money(supplierPurchases.reduce((total, purchase) => total + Number(purchase.totalAmount) - Number(purchase.paymentAmount ?? 0), 0)),
         items: [...groupedItems.values()].map((item) => ({ ...item, totalAmount: money(item.totalAmount) })),
       };
     })));

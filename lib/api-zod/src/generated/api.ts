@@ -1633,6 +1633,7 @@ export const ListInventorySuppliersResponseItem = zod.object({
   "name": zod.string(),
   "purchaseCount": zod.number().int(),
   "totalAmount": zod.number(),
+  "unpaidAmount": zod.number().describe('totalAmount minus what has actually been paid across this supplier\'s purchases'),
   "items": zod.array(zod.object({
   "name": zod.string(),
   "unit": zod.string(),
@@ -1662,6 +1663,7 @@ export const UpdateInventorySupplierResponse = zod.object({
   "name": zod.string(),
   "purchaseCount": zod.number().int(),
   "totalAmount": zod.number(),
+  "unpaidAmount": zod.number().describe('totalAmount minus what has actually been paid across this supplier\'s purchases'),
   "items": zod.array(zod.object({
   "name": zod.string(),
   "unit": zod.string(),

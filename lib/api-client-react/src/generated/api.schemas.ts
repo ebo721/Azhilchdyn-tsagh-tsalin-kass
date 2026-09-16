@@ -836,6 +836,8 @@ export interface InventorySupplier {
   name: string;
   purchaseCount: number;
   totalAmount: number;
+  /** totalAmount minus what has actually been paid across this supplier's purchases */
+  unpaidAmount: number;
   items: InventorySupplierItem[];
 }
 

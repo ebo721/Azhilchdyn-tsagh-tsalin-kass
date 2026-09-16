@@ -1907,12 +1907,13 @@ components:
         totalAmount: { type: number }
     InventorySupplier:
       type: object
-      required: [id, name, purchaseCount, totalAmount, items]
+      required: [id, name, purchaseCount, totalAmount, unpaidAmount, items]
       properties:
         id: { type: integer }
         name: { type: string }
         purchaseCount: { type: integer }
         totalAmount: { type: number }
+        unpaidAmount: { type: number, description: "totalAmount minus what has actually been paid across this supplier's purchases" }
         items:
           type: array
           items:
