@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "azhilchdyn-tsagh-tsalin-kass-staff.vercel.app/api/:path*"
+      "destination": "https://azhilchdyn-tsagh-tsalin-kass-staff.vercel.app//api/:path*"
     }
   ]
 }
