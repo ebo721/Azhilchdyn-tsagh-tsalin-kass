@@ -1658,6 +1658,7 @@ export const ListInventoryItemsResponseItem = zod.object({
   "category": zod.string(),
   "unit": zod.string(),
   "quantity": zod.number(),
+  "totalValue": zod.number().describe('FIFO value of remaining stock (sum of unconsumed purchase lots at their original unit price)'),
   "createdAt": zod.string()
 })
 export const ListInventoryItemsResponse = zod.array(ListInventoryItemsResponseItem)
@@ -1686,6 +1687,7 @@ export const UpdateInventoryItemResponse = zod.object({
   "category": zod.string(),
   "unit": zod.string(),
   "quantity": zod.number(),
+  "totalValue": zod.number().describe('FIFO value of remaining stock (sum of unconsumed purchase lots at their original unit price)'),
   "createdAt": zod.string()
 })
 
@@ -1700,6 +1702,7 @@ export const ListInventoryIssuesResponseItem = zod.object({
   "unit": zod.string(),
   "date": zod.string(),
   "quantity": zod.number(),
+  "totalCost": zod.number().describe('FIFO cost of the stock consumed by this issue'),
   "purpose": zod.string(),
   "createdAt": zod.string()
 })
@@ -1729,6 +1732,7 @@ export const CreateInventoryIssueResponse = zod.object({
   "unit": zod.string(),
   "date": zod.string(),
   "quantity": zod.number(),
+  "totalCost": zod.number().describe('FIFO cost of the stock consumed by this issue'),
   "purpose": zod.string(),
   "createdAt": zod.string()
 })
@@ -1761,6 +1765,7 @@ export const UpdateInventoryIssueResponse = zod.object({
   "unit": zod.string(),
   "date": zod.string(),
   "quantity": zod.number(),
+  "totalCost": zod.number().describe('FIFO cost of the stock consumed by this issue'),
   "purpose": zod.string(),
   "createdAt": zod.string()
 })

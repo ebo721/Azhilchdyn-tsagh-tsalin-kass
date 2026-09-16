@@ -13,6 +13,8 @@ export interface InventoryIssue {
   unit: string;
   date: string;
   quantity: number;
+  /** FIFO cost of the stock consumed by this issue */
+  totalCost: number;
   purpose: string;
   createdAt: string;
 }

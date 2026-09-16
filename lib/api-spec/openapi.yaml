@@ -1894,7 +1894,7 @@ components:
             $ref: "#/components/schemas/InventorySupplierItem"
     InventoryItem:
       type: object
-      required: [id, materialType, name, category, unit, quantity, createdAt]
+      required: [id, materialType, name, category, unit, quantity, totalValue, createdAt]
       properties:
         id: { type: integer }
         materialType:
@@ -1904,6 +1904,7 @@ components:
         category: { type: string }
         unit: { type: string }
         quantity: { type: number }
+        totalValue: { type: number, description: "FIFO value of remaining stock (sum of unconsumed purchase lots at their original unit price)" }
         createdAt: { type: string }
     InventoryItemUpdate:
       type: object
@@ -1913,7 +1914,7 @@ components:
         category: { type: string, minLength: 1 }
     InventoryIssue:
       type: object
-      required: [id, inventoryItemId, itemName, unit, date, quantity, purpose, createdAt]
+      required: [id, inventoryItemId, itemName, unit, date, quantity, totalCost, purpose, createdAt]
       properties:
         id: { type: integer }
         inventoryItemId: { type: integer }
@@ -1921,6 +1922,7 @@ components:
         unit: { type: string }
         date: { type: string }
         quantity: { type: number }
+        totalCost: { type: number, description: "FIFO cost of the stock consumed by this issue" }
         purpose: { type: string }
         createdAt: { type: string }
     InventoryIssueInput:

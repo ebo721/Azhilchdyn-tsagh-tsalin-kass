@@ -207,6 +207,10 @@ export const inventoryPurchaseItemsTable = pgTable("inventory_purchase_items", {
   category: text("category").notNull().default("Бусад"),
   unit: text("unit").notNull(),
   quantity: numeric("quantity", { precision: 12, scale: 3, mode: "number" }).notNull(),
+  // FIFO lot tracking: how much of this purchase line hasn't been consumed by an
+  // inventory issue yet. Starts equal to `quantity` and is drawn down as issues
+  // consume from this lot (oldest lots first, see inventoryIssueConsumptionsTable).
+  remainingQuantity: numeric("remaining_quantity", { precision: 12, scale: 3, mode: "number" }).notNull(),
   unitPrice: numeric("unit_price", { precision: 14, scale: 2, mode: "number" }).notNull(),
   totalAmount: numeric("total_amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
 });
@@ -217,6 +221,20 @@ export const inventoryIssuesTable = pgTable("inventory_issues", {
   date: date("date", { mode: "string" }).notNull(),
   quantity: numeric("quantity", { precision: 14, scale: 3, mode: "number" }).notNull(),
   purpose: text("purpose").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Records exactly which purchase lot(s) an issue drew stock from, and at what
+// unit cost -- this is the FIFO consumption ledger. One issue can span multiple
+// lots if the oldest lot didn't have enough quantity left. Editing or deleting
+// an issue reverses these rows (adds the quantity back to remainingQuantity)
+// before recomputing, so lots never lose track of what's actually left.
+export const inventoryIssueConsumptionsTable = pgTable("inventory_issue_consumptions", {
+  id: serial("id").primaryKey(),
+  issueId: integer("issue_id").notNull().references(() => inventoryIssuesTable.id, { onDelete: "cascade" }),
+  purchaseItemId: integer("purchase_item_id").notNull().references(() => inventoryPurchaseItemsTable.id, { onDelete: "restrict" }),
+  quantity: numeric("quantity", { precision: 12, scale: 3, mode: "number" }).notNull(),
+  unitPrice: numeric("unit_price", { precision: 14, scale: 2, mode: "number" }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -287,6 +305,7 @@ export type InventorySupplier = typeof inventorySuppliersTable.$inferSelect;
 export type InventoryPurchaseItem = typeof inventoryPurchaseItemsTable.$inferSelect;
 export type InventoryItem = typeof inventoryItemsTable.$inferSelect;
 export type InventoryIssue = typeof inventoryIssuesTable.$inferSelect;
+export type InventoryIssueConsumption = typeof inventoryIssueConsumptionsTable.$inferSelect;
 export type FixedAsset = typeof fixedAssetsTable.$inferSelect;
 export type OperatingExpense = typeof operatingExpensesTable.$inferSelect;
 export type DeletionRequest = typeof deletionRequestsTable.$inferSelect;

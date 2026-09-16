@@ -108,7 +108,7 @@ import {
   UpdateEmployeeBody,
   UpdateEmployeeParams,
 } from "@workspace/api-zod";
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import {
   attendanceTable,
   cashTransactionsTable,
@@ -125,6 +125,7 @@ import {
   inventoryPurchaseItemsTable,
   inventoryItemsTable,
   inventoryIssuesTable,
+  inventoryIssueConsumptionsTable,
   fixedAssetsTable,
   operatingExpensesTable,
   deletionRequestsTable,
@@ -2450,7 +2451,20 @@ router.delete("/inventory/suppliers/:id", async (req, res, next) => {
 
 router.get("/inventory/items", async (_req, res, next) => {
   try {
-    const items = await db.select().from(inventoryItemsTable).orderBy(inventoryItemsTable.category, inventoryItemsTable.name);
+    const [items, lots] = await Promise.all([
+      db.select().from(inventoryItemsTable).orderBy(inventoryItemsTable.category, inventoryItemsTable.name),
+      db.select({
+        inventoryItemId: inventoryPurchaseItemsTable.inventoryItemId,
+        remainingQuantity: inventoryPurchaseItemsTable.remainingQuantity,
+        unitPrice: inventoryPurchaseItemsTable.unitPrice,
+      }).from(inventoryPurchaseItemsTable),
+    ]);
+    const valueByItem = new Map<number, number>();
+    for (const lot of lots) {
+      if (lot.inventoryItemId === null) continue;
+      const current = valueByItem.get(lot.inventoryItemId) ?? 0;
+      valueByItem.set(lot.inventoryItemId, current + Number(lot.remainingQuantity) * Number(lot.unitPrice));
+    }
     res.json(ListInventoryItemsResponse.parse(items.map((item) => ({
       id: item.id,
       materialType: item.materialType,
@@ -2458,6 +2472,7 @@ router.get("/inventory/items", async (_req, res, next) => {
       category: item.category,
       unit: item.unit,
       quantity: Number(item.quantity),
+      totalValue: money(valueByItem.get(item.id) ?? 0),
       createdAt: item.createdAt.toISOString(),
     }))));
   } catch (error) {
@@ -2509,25 +2524,120 @@ router.put("/inventory/items/:id", async (req, res, next) => {
   }
 });
 
+class InventoryInsufficientStockError extends Error {}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Reads available purchase lots for an item oldest-first (locking them for the
+ * rest of this transaction) and works out which lot(s) an issue of `quantity`
+ * would draw from. Read-only -- writes nothing. Returns null if the eligible
+ * lots don't cover the requested quantity.
+ */
+async function planInventoryFifoConsumption(tx: Tx, inventoryItemId: number, quantity: number) {
+  const lots = await tx
+    .select({
+      id: inventoryPurchaseItemsTable.id,
+      remainingQuantity: inventoryPurchaseItemsTable.remainingQuantity,
+      unitPrice: inventoryPurchaseItemsTable.unitPrice,
+    })
+    .from(inventoryPurchaseItemsTable)
+    .innerJoin(inventoryPurchasesTable, eq(inventoryPurchaseItemsTable.purchaseId, inventoryPurchasesTable.id))
+    .where(and(
+      eq(inventoryPurchaseItemsTable.inventoryItemId, inventoryItemId),
+      gt(inventoryPurchaseItemsTable.remainingQuantity, 0),
+    ))
+    .orderBy(inventoryPurchasesTable.date, inventoryPurchaseItemsTable.id)
+    .for("update");
+  let remaining = quantity;
+  const consumptions: Array<{ purchaseItemId: number; quantity: number; unitPrice: number }> = [];
+  for (const lot of lots) {
+    if (remaining <= 0) break;
+    const take = Math.min(Number(lot.remainingQuantity), remaining);
+    if (take <= 0) continue;
+    consumptions.push({ purchaseItemId: lot.id, quantity: take, unitPrice: Number(lot.unitPrice) });
+    remaining = money(remaining - take);
+  }
+  if (remaining > 0.0005) return null;
+  return consumptions;
+}
+
+/** Writes a plan from planInventoryFifoConsumption: draws down the lots, records the
+ * consumption ledger, and decrements the item's total quantity. Returns the FIFO cost. */
+async function applyInventoryFifoConsumption(
+  tx: Tx,
+  issueId: number,
+  inventoryItemId: number,
+  consumptions: Array<{ purchaseItemId: number; quantity: number; unitPrice: number }>,
+) {
+  for (const consumption of consumptions) {
+    await tx.update(inventoryPurchaseItemsTable)
+      .set({ remainingQuantity: sql`${inventoryPurchaseItemsTable.remainingQuantity} - ${consumption.quantity}` })
+      .where(eq(inventoryPurchaseItemsTable.id, consumption.purchaseItemId));
+  }
+  if (consumptions.length > 0) {
+    await tx.insert(inventoryIssueConsumptionsTable).values(
+      consumptions.map((consumption) => ({ issueId, ...consumption })),
+    );
+  }
+  const totalQuantity = money(consumptions.reduce((total, consumption) => total + consumption.quantity, 0));
+  await tx.update(inventoryItemsTable)
+    .set({ quantity: sql`${inventoryItemsTable.quantity} - ${totalQuantity}` })
+    .where(eq(inventoryItemsTable.id, inventoryItemId));
+  return money(consumptions.reduce((total, consumption) => total + consumption.quantity * consumption.unitPrice, 0));
+}
+
+/** Undoes a previous applyInventoryFifoConsumption for this issue: adds the
+ * consumed quantity back to its original lots and to the item's total, then
+ * clears the consumption ledger for this issue. */
+async function reverseInventoryFifoConsumption(tx: Tx, issueId: number, inventoryItemId: number) {
+  const consumptions = await tx.select().from(inventoryIssueConsumptionsTable).where(eq(inventoryIssueConsumptionsTable.issueId, issueId));
+  for (const consumption of consumptions) {
+    await tx.update(inventoryPurchaseItemsTable)
+      .set({ remainingQuantity: sql`${inventoryPurchaseItemsTable.remainingQuantity} + ${consumption.quantity}` })
+      .where(eq(inventoryPurchaseItemsTable.id, consumption.purchaseItemId));
+  }
+  const totalQuantity = money(consumptions.reduce((total, consumption) => total + Number(consumption.quantity), 0));
+  if (totalQuantity > 0) {
+    await tx.update(inventoryItemsTable)
+      .set({ quantity: sql`${inventoryItemsTable.quantity} + ${totalQuantity}` })
+      .where(eq(inventoryItemsTable.id, inventoryItemId));
+  }
+  await tx.delete(inventoryIssueConsumptionsTable).where(eq(inventoryIssueConsumptionsTable.issueId, issueId));
+}
+
 router.get("/inventory/issues", async (_req, res, next) => {
   try {
-    const rows = await db
-      .select({
-        id: inventoryIssuesTable.id,
-        inventoryItemId: inventoryIssuesTable.inventoryItemId,
-        itemName: inventoryItemsTable.name,
-        unit: inventoryItemsTable.unit,
-        date: inventoryIssuesTable.date,
-        quantity: inventoryIssuesTable.quantity,
-        purpose: inventoryIssuesTable.purpose,
-        createdAt: inventoryIssuesTable.createdAt,
-      })
-      .from(inventoryIssuesTable)
-      .innerJoin(inventoryItemsTable, eq(inventoryIssuesTable.inventoryItemId, inventoryItemsTable.id))
-      .orderBy(desc(inventoryIssuesTable.date), desc(inventoryIssuesTable.id));
+    const [rows, consumptions] = await Promise.all([
+      db
+        .select({
+          id: inventoryIssuesTable.id,
+          inventoryItemId: inventoryIssuesTable.inventoryItemId,
+          itemName: inventoryItemsTable.name,
+          unit: inventoryItemsTable.unit,
+          date: inventoryIssuesTable.date,
+          quantity: inventoryIssuesTable.quantity,
+          purpose: inventoryIssuesTable.purpose,
+          createdAt: inventoryIssuesTable.createdAt,
+        })
+        .from(inventoryIssuesTable)
+        .innerJoin(inventoryItemsTable, eq(inventoryIssuesTable.inventoryItemId, inventoryItemsTable.id))
+        .orderBy(desc(inventoryIssuesTable.date), desc(inventoryIssuesTable.id)),
+      db.select({
+        issueId: inventoryIssueConsumptionsTable.issueId,
+        quantity: inventoryIssueConsumptionsTable.quantity,
+        unitPrice: inventoryIssueConsumptionsTable.unitPrice,
+      }).from(inventoryIssueConsumptionsTable),
+    ]);
+    const costByIssue = new Map<number, number>();
+    for (const consumption of consumptions) {
+      const current = costByIssue.get(consumption.issueId) ?? 0;
+      costByIssue.set(consumption.issueId, current + Number(consumption.quantity) * Number(consumption.unitPrice));
+    }
     res.json(ListInventoryIssuesResponse.parse(rows.map((row) => ({
       ...row,
       quantity: Number(row.quantity),
+      totalCost: money(costByIssue.get(row.id) ?? 0),
       createdAt: row.createdAt.toISOString(),
     }))));
   } catch (error) {
@@ -2550,22 +2660,18 @@ router.post("/inventory/issues", async (req, res, next) => {
     const result = await db.transaction(async (tx) => {
       const [item] = await tx.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, input.inventoryItemId));
       if (!item) return { status: "not-found" as const };
-      const [updated] = await tx
-        .update(inventoryItemsTable)
-        .set({ quantity: sql`${inventoryItemsTable.quantity} - ${input.quantity}` })
-        .where(and(
-          eq(inventoryItemsTable.id, input.inventoryItemId),
-          gte(inventoryItemsTable.quantity, input.quantity),
-        ))
-        .returning();
-      if (!updated) return { status: "insufficient" as const };
+      // Plan first (read-only) so an insufficient-stock case never leaves a
+      // half-written issue behind: nothing is written until the plan succeeds.
+      const plan = await planInventoryFifoConsumption(tx, input.inventoryItemId, input.quantity);
+      if (!plan) return { status: "insufficient" as const };
       const [issue] = await tx.insert(inventoryIssuesTable).values({
         inventoryItemId: input.inventoryItemId,
         date: input.date,
         quantity: input.quantity,
         purpose,
       }).returning();
-      return { status: "created" as const, item, issue };
+      const totalCost = await applyInventoryFifoConsumption(tx, issue.id, input.inventoryItemId, plan);
+      return { status: "created" as const, item, issue, totalCost };
     });
     if (result.status === "not-found") {
       res.status(404).json({ error: "Бараа материал олдсонгүй" });
@@ -2582,6 +2688,7 @@ router.post("/inventory/issues", async (req, res, next) => {
       unit: result.item.unit,
       date: result.issue.date,
       quantity: Number(result.issue.quantity),
+      totalCost: result.totalCost,
       purpose: result.issue.purpose,
       createdAt: result.issue.createdAt.toISOString(),
     }));
@@ -2608,21 +2715,22 @@ router.put("/inventory/issues/:id", async (req, res, next) => {
       if (!existing) return { status: "not-found" as const };
       const [newItem] = await tx.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, input.inventoryItemId));
       if (!newItem) return { status: "item-not-found" as const };
-      const available = Number(newItem.quantity) + (existing.inventoryItemId === input.inventoryItemId ? Number(existing.quantity) : 0);
-      if (available < input.quantity) return { status: "insufficient" as const };
-      await tx.update(inventoryItemsTable)
-        .set({ quantity: sql`${inventoryItemsTable.quantity} + ${existing.quantity}` })
-        .where(eq(inventoryItemsTable.id, existing.inventoryItemId));
-      await tx.update(inventoryItemsTable)
-        .set({ quantity: sql`${inventoryItemsTable.quantity} - ${input.quantity}` })
-        .where(eq(inventoryItemsTable.id, input.inventoryItemId));
+      // Reverse the old consumption so its lots are free again, then re-plan
+      // for the new item/quantity. If the re-plan comes up short, throw so the
+      // whole transaction (including the reversal) rolls back -- returning a
+      // status here instead would still commit the reversal with nothing to
+      // replace it, silently conjuring stock that was never actually returned.
+      await reverseInventoryFifoConsumption(tx, existing.id, existing.inventoryItemId);
+      const plan = await planInventoryFifoConsumption(tx, input.inventoryItemId, input.quantity);
+      if (!plan) throw new InventoryInsufficientStockError();
       const [issue] = await tx.update(inventoryIssuesTable).set({
         inventoryItemId: input.inventoryItemId,
         date: input.date,
         quantity: input.quantity,
         purpose,
       }).where(eq(inventoryIssuesTable.id, id)).returning();
-      return { status: "updated" as const, issue, item: newItem };
+      const totalCost = await applyInventoryFifoConsumption(tx, issue.id, input.inventoryItemId, plan);
+      return { status: "updated" as const, issue, item: newItem, totalCost };
     });
     if (result.status === "not-found") {
       res.status(404).json({ error: "Зарлагын бүртгэл олдсонгүй" });
@@ -2632,10 +2740,6 @@ router.put("/inventory/issues/:id", async (req, res, next) => {
       res.status(404).json({ error: "Бараа материал олдсонгүй" });
       return;
     }
-    if (result.status === "insufficient") {
-      res.status(409).json({ error: "Барааны үлдэгдэл хүрэлцэхгүй байна" });
-      return;
-    }
     res.json(UpdateInventoryIssueResponse.parse({
       id: result.issue.id,
       inventoryItemId: result.issue.inventoryItemId,
@@ -2643,10 +2747,15 @@ router.put("/inventory/issues/:id", async (req, res, next) => {
       unit: result.item.unit,
       date: result.issue.date,
       quantity: Number(result.issue.quantity),
+      totalCost: result.totalCost,
       purpose: result.issue.purpose,
       createdAt: result.issue.createdAt.toISOString(),
     }));
   } catch (error) {
+    if (error instanceof InventoryInsufficientStockError) {
+      res.status(409).json({ error: "Барааны үлдэгдэл хүрэлцэхгүй байна" });
+      return;
+    }
     next(error);
   }
 });
@@ -2657,9 +2766,7 @@ router.delete("/inventory/issues/:id", async (req, res, next) => {
     const deleted = await db.transaction(async (tx) => {
       const [existing] = await tx.select().from(inventoryIssuesTable).where(eq(inventoryIssuesTable.id, id));
       if (!existing) return false;
-      await tx.update(inventoryItemsTable)
-        .set({ quantity: sql`${inventoryItemsTable.quantity} + ${existing.quantity}` })
-        .where(eq(inventoryItemsTable.id, existing.inventoryItemId));
+      await reverseInventoryFifoConsumption(tx, existing.id, existing.inventoryItemId);
       await tx.delete(inventoryIssuesTable).where(eq(inventoryIssuesTable.id, id));
       return true;
     });
@@ -2744,6 +2851,7 @@ router.post("/inventory/purchases", async (req, res, next) => {
           category: catalogItem.category,
           unit: catalogItem.unit,
           quantity: item.quantity,
+          remainingQuantity: item.quantity,
           unitPrice: item.unitPrice,
           totalAmount: item.totalAmount,
         });
@@ -2827,6 +2935,13 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
         }
       }
       const oldLines = await tx.select().from(inventoryPurchaseItemsTable).where(eq(inventoryPurchaseItemsTable.purchaseId, id));
+      // A lot that's already been (partially) consumed by a FIFO issue can't be
+      // silently replaced -- the issue's consumption record would point at a
+      // deleted row. Block the edit instead of corrupting the ledger.
+      const consumedLine = oldLines.find((line) => Number(line.remainingQuantity) < Number(line.quantity));
+      if (consumedLine) {
+        return { kind: "consumed" as const };
+      }
       for (const oldLine of oldLines) {
         if (oldLine.inventoryItemId) {
           await tx.update(inventoryItemsTable)
@@ -2861,6 +2976,7 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
           category: catalogItem.category,
           unit: catalogItem.unit,
           quantity: item.quantity,
+          remainingQuantity: item.quantity,
           unitPrice: item.unitPrice,
           totalAmount: item.totalAmount,
         });
@@ -2881,8 +2997,12 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
             eq(cashTransactionsTable.sourceKey, `purchase:${id}`),
           ));
       }
-      return { purchase, savedItems };
+      return { kind: "updated" as const, purchase, savedItems };
     });
+    if (result.kind === "consumed") {
+      res.status(409).json({ error: "Энэ худалдан авалтын бараа аль хэдийн зарлагдсан тул засах боломжгүй" });
+      return;
+    }
     res.json(UpdateInventoryPurchaseResponse.parse({
       id: result.purchase.id,
       materialType: result.purchase.materialType,
@@ -3164,11 +3284,16 @@ router.delete("/inventory/purchases/:id", async (req, res, next) => {
       res.status(409).json({ error: "Өндөрлөсөн өдрийн худалдан авалтыг устгах боломжгүй" });
       return;
     }
-    await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const [cash] = await tx.select().from(cashTransactionsTable).where(and(
         eq(cashTransactionsTable.sourceType, "inventory_purchase"),
         eq(cashTransactionsTable.sourceKey, `purchase:${id}`),
       ));
+      const lines = await tx.select().from(inventoryPurchaseItemsTable).where(eq(inventoryPurchaseItemsTable.purchaseId, id));
+      const consumedLine = lines.find((line) => Number(line.remainingQuantity) < Number(line.quantity));
+      if (consumedLine) {
+        return { kind: "consumed" as const };
+      }
       if (cash?.bankTransactionId) {
         await tx.update(bankTransactionsTable)
           .set({ cashTransactionId: null, transferredAt: null })
@@ -3177,7 +3302,6 @@ router.delete("/inventory/purchases/:id", async (req, res, next) => {
             eq(bankTransactionsTable.cashTransactionId, cash.id),
           ));
       }
-      const lines = await tx.select().from(inventoryPurchaseItemsTable).where(eq(inventoryPurchaseItemsTable.purchaseId, id));
       for (const line of lines) {
         if (line.inventoryItemId) {
           await tx.update(inventoryItemsTable)
@@ -3190,7 +3314,12 @@ router.delete("/inventory/purchases/:id", async (req, res, next) => {
         eq(cashTransactionsTable.sourceKey, `purchase:${id}`),
       ));
       await tx.delete(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, id));
+      return { kind: "deleted" as const };
     });
+    if (result.kind === "consumed") {
+      res.status(409).json({ error: "Энэ худалдан авалтын бараа аль хэдийн зарлагдсан тул устгах боломжгүй" });
+      return;
+    }
     res.status(204).send();
   } catch (error) {
     next(error);

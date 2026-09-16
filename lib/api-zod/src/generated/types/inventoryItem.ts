@@ -14,5 +14,7 @@ export interface InventoryItem {
   category: string;
   unit: string;
   quantity: number;
+  /** FIFO value of remaining stock (sum of unconsumed purchase lots at their original unit price) */
+  totalValue: number;
   createdAt: string;
 }
