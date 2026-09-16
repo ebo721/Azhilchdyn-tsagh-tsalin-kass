@@ -458,7 +458,7 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
   const form = useForm<EmployeeForm>({ defaultValues: { name: employee?.name ?? '', role: employee?.role ?? '', phone: employee?.phone ?? '', employeeType: employee?.employeeType ?? 'office', baseSalary: String(employee?.baseSalary ?? ''), socialInsuranceSalary: String(employee?.socialInsuranceSalary ?? ''), payrollTaxExempt: employee?.payrollTaxExempt ?? false, fullSalaryRegardlessAttendance: employee?.fullSalaryRegardlessAttendance ?? false, monthlyExpectedWorkDays: String(employee?.monthlyExpectedWorkDays ?? 0), joinedAt: employee?.joinedAt ?? today(), status: employee?.status ?? 'active', inactiveAt: employee?.inactiveAt ?? '', salaryEffectiveDate: '' } });
   const [salaryBaseline, setSalaryBaseline] = useState({
     baseSalary: Number(employee?.baseSalary ?? 0),
-    socialInsuranceSalary: Number(employee?.socialInsuranceSalary ?? 0),
+    socialInsuranceSalary: employee?.payrollTaxExempt ? 0 : Number(employee?.socialInsuranceSalary ?? 0),
     payrollTaxExempt: employee?.payrollTaxExempt ?? false,
     fullSalaryRegardlessAttendance: employee?.fullSalaryRegardlessAttendance ?? false,
     employeeType: employee?.employeeType ?? 'office',

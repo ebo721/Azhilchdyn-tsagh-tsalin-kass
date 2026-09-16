@@ -726,7 +726,8 @@ router.patch("/employees/:id", async (req, res, next) => {
     }
     const salaryChanged = (input.employeeType !== undefined && input.employeeType !== current.employeeType)
       || (input.baseSalary !== undefined && Number(input.baseSalary) !== Number(current.baseSalary))
-      || (input.socialInsuranceSalary !== undefined && Number(input.socialInsuranceSalary) !== Number(current.socialInsuranceSalary))
+      || (input.socialInsuranceSalary !== undefined
+        && Number(input.socialInsuranceSalary) !== (current.payrollTaxExempt ? 0 : Number(current.socialInsuranceSalary)))
       || (input.payrollTaxExempt !== undefined && input.payrollTaxExempt !== current.payrollTaxExempt)
       || (input.fullSalaryRegardlessAttendance !== undefined && input.fullSalaryRegardlessAttendance !== current.fullSalaryRegardlessAttendance);
     const correctingInitialEmployment = joinedAtChanged
