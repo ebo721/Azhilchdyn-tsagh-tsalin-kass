@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { Router, type IRouter } from "express";
 import {
   CreateAttendanceBody,
@@ -135,6 +136,47 @@ import { planShiftPlanCopy } from "../lib/shift-plan-copy.js";
 import { reconcileOperatingExpenses } from "../lib/operating-expense-sync.js";
 
 const router: IRouter = Router();
+
+/**
+ * Re-enters this router for an admin-approved deletion, the same way the original
+ * request would have, but without hopping over the network to `127.0.0.1:PORT` —
+ * that assumed a long-running server on a known port, which doesn't exist in a
+ * serverless function (each invocation is isolated and PORT isn't set). Instead we
+ * spin up a throwaway HTTP server bound to this router only for the duration of
+ * this one call, so the exact same DELETE handlers and the header-based approval
+ * check above run unchanged, in-process, on a loopback port the OS assigns us.
+ */
+function dispatchApprovedDeletion(
+  targetPath: string,
+  cookie: string,
+  requestId: number,
+): Promise<{ ok: boolean; status: number; text(): Promise<string> }> {
+  return new Promise((resolve, reject) => {
+    const server = createServer((req, res) => {
+      router(req as never, res as never, (err?: unknown) => {
+        if (err) {
+          res.statusCode = 500;
+          res.end();
+          return;
+        }
+        res.statusCode = 404;
+        res.end();
+      });
+    });
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      fetch(`http://127.0.0.1:${port}${targetPath}`, {
+        method: "DELETE",
+        headers: { cookie, "x-deletion-request-id": String(requestId) },
+      })
+        .then((response) => resolve(response as { ok: boolean; status: number; text(): Promise<string> }))
+        .catch(reject)
+        .finally(() => server.close());
+    });
+  });
+}
 
 async function isCashDateClosed(date: string) {
   const [closure] = await db
@@ -2021,18 +2063,11 @@ router.post("/deletion-requests/:id/approve", async (req, res, next) => {
       approvedAt: new Date(),
       error: null,
     }).where(eq(deletionRequestsTable.id, id)).returning();
-    const port = process.env["PORT"] ?? "8080";
-    const execution = await fetch(`http://127.0.0.1:${port}/api${request.targetPath}`, {
-      method: "DELETE",
-      headers: {
-        cookie: req.headers.cookie ?? "",
-        "x-deletion-request-id": String(id),
-      },
-    }) as {
-      ok: boolean;
-      status: number;
-      text(): Promise<string>;
-    };
+    const execution = await dispatchApprovedDeletion(
+      request.targetPath,
+      req.headers.cookie ?? "",
+      id,
+    );
     if (!execution.ok) {
       const errorBody = await execution.text();
       const [failed] = await db.update(deletionRequestsTable).set({
