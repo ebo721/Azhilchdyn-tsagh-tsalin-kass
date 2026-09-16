@@ -14,11 +14,38 @@ async function buildAll() {
   const distDir = path.resolve(artifactDir, "dist");
   await rm(distDir, { recursive: true, force: true });
 
+  await Promise.all([
+    esbuild({
+      entryPoints: {
+        index: path.resolve(artifactDir, "../../lib/api-zod/src/index.ts"),
+      },
+      platform: "node",
+      packages: "external",
+      bundle: true,
+      format: "esm",
+      outdir: path.resolve(artifactDir, "../../lib/api-zod/dist"),
+      logLevel: "info",
+    }),
+    esbuild({
+      entryPoints: {
+        index: path.resolve(artifactDir, "../../lib/db/src/index.ts"),
+        "schema/index": path.resolve(artifactDir, "../../lib/db/src/schema/index.ts"),
+      },
+      platform: "node",
+      packages: "external",
+      bundle: true,
+      format: "esm",
+      outdir: path.resolve(artifactDir, "../../lib/db/dist"),
+      logLevel: "info",
+    }),
+  ]);
+
   await esbuild({
     entryPoints: {
       index: path.resolve(artifactDir, "src/server.ts"),
     },
     platform: "node",
+    conditions: ["workspace"],
     bundle: true,
     format: "esm",
     outdir: distDir,
