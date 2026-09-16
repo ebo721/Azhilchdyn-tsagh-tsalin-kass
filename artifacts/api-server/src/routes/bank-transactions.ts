@@ -26,8 +26,8 @@ import {
 } from "@workspace/api-zod";
 import { and, desc, eq, gte, isNotNull, isNull, lte } from "drizzle-orm";
 import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, db, deletionRequestsTable } from "@workspace/db";
-import { getStaffSession } from "../lib/hr-session";
-import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync";
+import { getStaffSession } from "../lib/hr-session.js";
+import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.js";
 
 const router: IRouter = Router();
 const execFile = promisify(execFileCallback);

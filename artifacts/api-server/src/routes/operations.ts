@@ -129,10 +129,10 @@ import {
   deletionRequestsTable,
   shiftTemplatesTable,
 } from "@workspace/db";
-import { getStaffRole, getStaffSession, type StaffRole } from "../lib/hr-session";
-import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment";
-import { planShiftPlanCopy } from "../lib/shift-plan-copy";
-import { reconcileOperatingExpenses } from "../lib/operating-expense-sync";
+import { getStaffRole, getStaffSession, type StaffRole } from "../lib/hr-session.js";
+import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment.js";
+import { planShiftPlanCopy } from "../lib/shift-plan-copy.js";
+import { reconcileOperatingExpenses } from "../lib/operating-expense-sync.js";
 
 const router: IRouter = Router();
 

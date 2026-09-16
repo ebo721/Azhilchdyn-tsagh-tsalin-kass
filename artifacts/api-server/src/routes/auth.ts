@@ -9,7 +9,7 @@ import {
   isStaffRole,
   normalizeUsername,
   verifyPassword,
-} from "../lib/hr-session";
+} from "../lib/hr-session.js";
 
 const router: IRouter = Router();
 
