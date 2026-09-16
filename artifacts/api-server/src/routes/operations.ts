@@ -2028,7 +2028,11 @@ router.post("/deletion-requests/:id/approve", async (req, res, next) => {
         cookie: req.headers.cookie ?? "",
         "x-deletion-request-id": String(id),
       },
-    });
+    }) as {
+      ok: boolean;
+      status: number;
+      text(): Promise<string>;
+    };
     if (!execution.ok) {
       const errorBody = await execution.text();
       const [failed] = await db.update(deletionRequestsTable).set({
