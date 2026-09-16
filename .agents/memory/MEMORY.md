@@ -5,3 +5,4 @@
 - [Drizzle unique conflicts](drizzle-unique-conflicts.md) — PostgreSQL unique violations may be wrapped; inspect both error.code and error.cause.code for 23505.
 - [Vercel TypeScript emit](vercel-typescript-emit.md) — Keep the API tsconfig emit-compatible; Vercel may hide TS5096 behind “src/app.ts: Emit skipped.”
 - [Vercel workspace runtime packages](vercel-workspace-runtime-packages.md) — Internal TS libraries need declarations plus default runtime JS before Function tracing.
+- [Git and hosting boundaries](git-hosting-boundaries.md) — Never push database dumps; keep Replit runtime configuration separate from Vercel deployment settings.
