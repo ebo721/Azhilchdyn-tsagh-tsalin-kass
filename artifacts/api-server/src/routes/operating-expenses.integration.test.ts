@@ -4,8 +4,8 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { and, eq, inArray } from "drizzle-orm";
 import { bankTransactionsTable, cashTransactionsTable, db, operatingExpensesTable, usersTable } from "@workspace/db";
-import app from "../app.ts";
-import { createStaffSession, hrCookie } from "../lib/hr-session.ts";
+import app from "../app";
+import { createStaffSession, hrCookie } from "../lib/hr-session";
 
 describe("operating expenses", () => {
   let server: Server;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { planShiftPlanCopy, type ShiftPlanCopySource } from "./shift-plan-copy.ts";
+import { planShiftPlanCopy, type ShiftPlanCopySource } from "./shift-plan-copy";
 
 const source = (
   id: number,

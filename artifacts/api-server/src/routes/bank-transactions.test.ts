@@ -5,9 +5,9 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import app from "../app.ts";
-import { createStaffSession, hrCookie } from "../lib/hr-session.ts";
-import { isExcludedBankFee } from "./bank-transactions.ts";
+import app from "../app";
+import { createStaffSession, hrCookie } from "../lib/hr-session";
+import { isExcludedBankFee } from "./bank-transactions";
 
 describe("bank statement fee filtering", () => {
   it("excludes 50₮ message notification fees", () => {

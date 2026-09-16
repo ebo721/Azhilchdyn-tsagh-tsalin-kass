@@ -11,8 +11,8 @@ import {
   payrollAdjustmentsTable,
   usersTable,
 } from "@workspace/db";
-import app from "../app.ts";
-import { createStaffSession, hrCookie } from "../lib/hr-session.ts";
+import app from "../app";
+import { createStaffSession, hrCookie } from "../lib/hr-session";
 
 describe("effective-dated payroll salary", () => {
   let server: Server;

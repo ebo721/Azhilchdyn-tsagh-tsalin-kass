@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { planPayrollAdvancePayment } from "./payroll-advance-payment.ts";
+import { planPayrollAdvancePayment } from "./payroll-advance-payment";
 
 const sourceLines = [
   { employeeId: 11, employeeName: "A", advanceAmount: 100_000, paid: false },

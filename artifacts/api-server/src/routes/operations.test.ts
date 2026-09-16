@@ -6,8 +6,8 @@ import type { Server } from "node:http";
 import { UpsertShiftPlanBody } from "@workspace/api-zod";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import app from "../app.ts";
-import { createStaffSession, hrCookie } from "../lib/hr-session.ts";
+import app from "../app";
+import { createStaffSession, hrCookie } from "../lib/hr-session";
 
 describe("PUT /api/attendance/shift-plans", () => {
   let server: Server | undefined;
