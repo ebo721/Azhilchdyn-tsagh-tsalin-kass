@@ -814,6 +814,11 @@ export interface InventoryPurchaseBankSuggestion {
   score: number;
 }
 
+export interface ReclassifyInventoryPurchaseAsExpenseInput {
+  /** @minLength 1 */
+  category: string;
+}
+
 export interface InventorySupplierUpdate {
   /** @minLength 1 */
   name: string;

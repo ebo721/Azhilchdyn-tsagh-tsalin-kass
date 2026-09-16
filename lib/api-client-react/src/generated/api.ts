@@ -77,6 +77,7 @@ import type {
   PayrollAdvancePaymentInput,
   PayrollAdvanceSummary,
   PayrollSummary,
+  ReclassifyInventoryPurchaseAsExpenseInput,
   RevertPayrollAdvanceApprovalParams,
   Shift,
   ShiftInput,
@@ -4490,6 +4491,78 @@ export function useListInventoryPurchasePaymentBankSuggestions<TData = Awaited<R
 
 
 
+
+export const getReclassifyInventoryPurchaseAsExpenseUrl = (id: number,) => {
+
+
+
+
+  return `/api/inventory/purchases/${id}/reclassify-as-expense`
+}
+
+/**
+ * @summary Move a misclassified inventory purchase to operating expenses, choosing its category. Stock and any cash/bank link are carried over; blocked if the purchase's stock has already been issued.
+ */
+export const reclassifyInventoryPurchaseAsExpense = async (id: number,
+    reclassifyInventoryPurchaseAsExpenseInput: ReclassifyInventoryPurchaseAsExpenseInput, options?: Parameters<typeof customFetch>[1]): Promise<OperatingExpense> => {
+
+  return customFetch<OperatingExpense>(getReclassifyInventoryPurchaseAsExpenseUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reclassifyInventoryPurchaseAsExpenseInput)
+  }
+);}
+
+
+
+
+
+export const getReclassifyInventoryPurchaseAsExpenseMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reclassifyInventoryPurchaseAsExpense>>, TError,{id: number;data: BodyType<ReclassifyInventoryPurchaseAsExpenseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reclassifyInventoryPurchaseAsExpense>>, TError,{id: number;data: BodyType<ReclassifyInventoryPurchaseAsExpenseInput>}, TContext> => {
+
+const mutationKey = ['reclassifyInventoryPurchaseAsExpense'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reclassifyInventoryPurchaseAsExpense>>, {id: number;data: BodyType<ReclassifyInventoryPurchaseAsExpenseInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reclassifyInventoryPurchaseAsExpense(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReclassifyInventoryPurchaseAsExpenseMutationResult = NonNullable<Awaited<ReturnType<typeof reclassifyInventoryPurchaseAsExpense>>>
+    export type ReclassifyInventoryPurchaseAsExpenseMutationBody = BodyType<ReclassifyInventoryPurchaseAsExpenseInput>
+    export type ReclassifyInventoryPurchaseAsExpenseMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Move a misclassified inventory purchase to operating expenses, choosing its category. Stock and any cash/bank link are carried over; blocked if the purchase's stock has already been issued.
+ */
+export const useReclassifyInventoryPurchaseAsExpense = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reclassifyInventoryPurchaseAsExpense>>, TError,{id: number;data: BodyType<ReclassifyInventoryPurchaseAsExpenseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reclassifyInventoryPurchaseAsExpense>>,
+        TError,
+        {id: number;data: BodyType<ReclassifyInventoryPurchaseAsExpenseInput>},
+        TContext
+      > => {
+      return useMutation(getReclassifyInventoryPurchaseAsExpenseMutationOptions(options));
+    }
 
 export const getListOperatingExpensesUrl = () => {
 

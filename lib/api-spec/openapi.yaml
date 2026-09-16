@@ -970,6 +970,26 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/InventoryPurchaseBankSuggestion"
+  /inventory/purchases/{id}/reclassify-as-expense:
+    post:
+      operationId: reclassifyInventoryPurchaseAsExpense
+      tags: [inventory]
+      summary: Move a misclassified inventory purchase to operating expenses, choosing its category. Stock and any cash/bank link are carried over; blocked if the purchase's stock has already been issued.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReclassifyInventoryPurchaseAsExpenseInput"
+      responses:
+        "201":
+          description: Created operating expense (the inventory purchase is removed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatingExpense"
   /operating-expenses:
     get:
       operationId: listOperatingExpenses
@@ -1867,6 +1887,11 @@ components:
         amount: { type: number }
         description: { type: string }
         score: { type: number }
+    ReclassifyInventoryPurchaseAsExpenseInput:
+      type: object
+      required: [category]
+      properties:
+        category: { type: string, minLength: 1 }
     InventorySupplierUpdate:
       type: object
       required: [name]

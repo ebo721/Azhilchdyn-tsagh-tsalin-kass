@@ -1423,6 +1423,39 @@ export const ListInventoryPurchasePaymentBankSuggestionsResponseItem = zod.objec
 export const ListInventoryPurchasePaymentBankSuggestionsResponse = zod.array(ListInventoryPurchasePaymentBankSuggestionsResponseItem)
 
 
+/**
+ * @summary Move a misclassified inventory purchase to operating expenses, choosing its category. Stock and any cash/bank link are carried over; blocked if the purchase's stock has already been issued.
+ */
+export const ReclassifyInventoryPurchaseAsExpenseParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+
+export const ReclassifyInventoryPurchaseAsExpenseBody = zod.object({
+  "category": zod.string().min(1)
+})
+
+export const reclassifyInventoryPurchaseAsExpenseResponseDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const reclassifyInventoryPurchaseAsExpenseResponseAmountMin = 0;
+
+
+
+export const ReclassifyInventoryPurchaseAsExpenseResponse = zod.object({
+  "id": zod.number().int(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "date": zod.string().regex(reclassifyInventoryPurchaseAsExpenseResponseDateRegExp),
+  "amount": zod.number().min(reclassifyInventoryPurchaseAsExpenseResponseAmountMin),
+  "paymentDate": zod.string().nullable(),
+  "paymentAmount": zod.number().nullable(),
+  "bankTransactionId": zod.number().int().nullable(),
+  "cashTransactionId": zod.number().int().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
 export const listOperatingExpensesResponseDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
 export const listOperatingExpensesResponseAmountMin = 0;
 

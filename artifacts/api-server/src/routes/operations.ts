@@ -49,6 +49,9 @@ import {
   UpdateInventoryPurchaseParams,
   UpdateInventoryPurchaseResponse,
   DeleteInventoryPurchaseParams,
+  ReclassifyInventoryPurchaseAsExpenseParams,
+  ReclassifyInventoryPurchaseAsExpenseBody,
+  ReclassifyInventoryPurchaseAsExpenseResponse,
   ConfirmInventoryPurchasePaymentBody,
   ConfirmInventoryPurchasePaymentParams,
   ConfirmInventoryPurchasePaymentResponse,
@@ -3321,6 +3324,82 @@ router.delete("/inventory/purchases/:id", async (req, res, next) => {
       return;
     }
     res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/inventory/purchases/:id/reclassify-as-expense", async (req, res, next) => {
+  try {
+    const { id } = ReclassifyInventoryPurchaseAsExpenseParams.parse(req.params);
+    const input = ReclassifyInventoryPurchaseAsExpenseBody.parse(req.body);
+    const category = input.category.trim();
+    if (!category) {
+      res.status(400).json({ error: "Ангилал сонгоно уу" });
+      return;
+    }
+    const [existing] = await db.select().from(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, id));
+    if (!existing) {
+      res.status(404).json({ error: "Худалдан авалт олдсонгүй" });
+      return;
+    }
+    if (await isCashDateClosed(existing.date) || (existing.paymentDate && await isCashDateClosed(existing.paymentDate))) {
+      res.status(409).json({ error: "Өндөрлөсөн өдрийн худалдан авалтыг шилжүүлэх боломжгүй" });
+      return;
+    }
+    const result = await db.transaction(async (tx) => {
+      const lines = await tx.select().from(inventoryPurchaseItemsTable).where(eq(inventoryPurchaseItemsTable.purchaseId, id));
+      const consumedLine = lines.find((line) => Number(line.remainingQuantity) < Number(line.quantity));
+      if (consumedLine) {
+        return { kind: "consumed" as const };
+      }
+      // Reverse the stock this purchase added -- once reclassified it's not
+      // inventory anymore.
+      for (const line of lines) {
+        if (line.inventoryItemId) {
+          await tx.update(inventoryItemsTable)
+            .set({ quantity: sql`${inventoryItemsTable.quantity} - ${line.quantity}` })
+            .where(eq(inventoryItemsTable.id, line.inventoryItemId));
+        }
+      }
+      const [newExpense] = await tx.insert(operatingExpensesTable).values({
+        description: existing.documentName,
+        category,
+        date: existing.date,
+        amount: existing.totalAmount,
+        paymentDate: existing.paymentDate,
+        paymentAmount: existing.paymentAmount,
+      }).returning();
+      // If this purchase was already paid, retarget its existing cash
+      // transaction at the new expense (in place) instead of deleting and
+      // recreating one -- that keeps an existing bank-statement link intact
+      // rather than having to re-verify it.
+      const [cash] = await tx.select().from(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "inventory_purchase"),
+        eq(cashTransactionsTable.sourceKey, `purchase:${id}`),
+      ));
+      if (cash) {
+        await tx.update(cashTransactionsTable).set({
+          category: "Үйл ажиллагааны зардал",
+          description: existing.documentName,
+          sourceType: "operating_expense",
+          sourceKey: `expense:${newExpense.id}`,
+        }).where(eq(cashTransactionsTable.id, cash.id));
+        await tx.update(operatingExpensesTable).set({
+          bankTransactionId: cash.bankTransactionId,
+          cashTransactionId: cash.id,
+        }).where(eq(operatingExpensesTable.id, newExpense.id));
+      }
+      await tx.delete(inventoryPurchaseItemsTable).where(eq(inventoryPurchaseItemsTable.purchaseId, id));
+      await tx.delete(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, id));
+      const [savedExpense] = await tx.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.id, newExpense.id));
+      return { kind: "reclassified" as const, expense: savedExpense };
+    });
+    if (result.kind === "consumed") {
+      res.status(409).json({ error: "Энэ худалдан авалтын бараа аль хэдийн зарлагдсан тул шилжүүлэх боломжгүй" });
+      return;
+    }
+    res.status(201).json(ReclassifyInventoryPurchaseAsExpenseResponse.parse(operatingExpenseResponse(result.expense)));
   } catch (error) {
     next(error);
   }
