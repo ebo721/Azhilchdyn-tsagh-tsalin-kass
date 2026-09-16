@@ -1753,12 +1753,21 @@ function UserSettings() {
   </div>;
 }
 
-function OperatingExpenseModal({ expense, onClose }: { expense?: OperatingExpense; onClose: () => void }) {
+function OperatingExpenseModal({ expense, onClose, categories }: { expense?: OperatingExpense; onClose: () => void; categories: string[] }) {
   const isEdit = !!expense;
   const create = useCreateOperatingExpense();
   const update = useUpdateOperatingExpense();
   const qc = useQueryClient();
-  const form = useForm({ defaultValues: { description: expense?.description ?? '', category: expense?.category ?? '', date: expense?.date ?? today(), amount: String(expense?.amount ?? '') } });
+  const initialAddingCategory = categories.length === 0 || (isEdit && !categories.includes(expense!.category));
+  const [addingCategory, setAddingCategory] = useState(initialAddingCategory);
+  const form = useForm({
+    defaultValues: {
+      description: expense?.description ?? '',
+      category: expense?.category ?? (categories.length > 0 && !initialAddingCategory ? categories[0] : ''),
+      date: expense?.date ?? today(),
+      amount: String(expense?.amount ?? ''),
+    },
+  });
 
   const submit = (values: { description: string; category: string; date: string; amount: string }) => {
     const data = { description: values.description, category: values.category, date: values.date, amount: Number(values.amount) };
@@ -1773,7 +1782,21 @@ function OperatingExpenseModal({ expense, onClose }: { expense?: OperatingExpens
         <form onSubmit={form.handleSubmit(submit)} className="space-y-4">
           <label className="block space-y-1.5 text-xs font-semibold">Утга<input className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('description', { required: true })} data-testid="input-expense-description" /></label>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block space-y-1.5 text-xs font-semibold">Ангилал<input list="operating-expense-category-options" className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" placeholder="Жишээ: Цахилгаан, Түрээс" {...form.register('category', { required: true })} data-testid="input-expense-category" /><datalist id="operating-expense-category-options"><option value="Захирал" /></datalist></label>
+            <label className="block space-y-1.5 text-xs font-semibold">Ангилал
+              <div className="flex gap-2">
+                {addingCategory ? (
+                  <input className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" placeholder="Жишээ: Цахилгаан, Түрээс" {...form.register('category', { required: true })} data-testid="input-expense-category" />
+                ) : (
+                  <select className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('category', { required: true })} data-testid="select-expense-category">
+                    {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+                  </select>
+                )}
+                {categories.length > 0 && <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => {
+                  if (addingCategory) { setAddingCategory(false); form.setValue('category', categories[0]); }
+                  else { setAddingCategory(true); form.setValue('category', ''); }
+                }} data-testid="button-toggle-expense-category-mode">{addingCategory ? 'Сонгох' : 'Шинэ'}</Button>}
+              </div>
+            </label>
             <label className="block space-y-1.5 text-xs font-semibold">Огноо<input type="date" className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('date', { required: true })} data-testid="input-expense-date" /></label>
             <label className="block space-y-1.5 text-xs font-semibold">Дүн<input type="number" min="0" className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('amount', { required: true })} data-testid="input-expense-amount" /></label>
           </div>
@@ -1913,7 +1936,7 @@ function OperatingExpenses() {
           </table>
         </div>
       ) : <EmptyState title="Зардал бүртгэгдээгүй байна" detail="Шинээр үйл ажиллагааны зардал нэмж бүртгэнэ үү." icon={Receipt} />}
-      {editing && <OperatingExpenseModal expense={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
+      {editing && <OperatingExpenseModal expense={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} categories={expenseCategories} />}
       {paying && <OperatingExpensePaymentModal expense={paying} onClose={() => setPaying(null)} />}
     </div>
   );
