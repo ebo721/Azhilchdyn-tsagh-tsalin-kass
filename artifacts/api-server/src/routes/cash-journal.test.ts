@@ -24,7 +24,9 @@ describe("cash journal posting", () => {
   let cookie: string;
   let userId: number;
   let cashAccountId: number;
+  let inventoryAccountId: number;
   let revenueAccountId: number;
+  let mappedRevenueAccountId: number;
   let expenseAccountId: number;
   let testAccountIds: number[] = [];
   const cashIds: number[] = [];
@@ -36,7 +38,7 @@ describe("cash journal posting", () => {
     const [user] = await db.insert(usersTable).values({
       username: `cash-journal-${suffix}`,
       normalizedUsername: `cash-journal-${suffix}`,
-      role: "accountant",
+      role: "admin",
       passwordHash: "not-used-by-session-tests",
     }).returning({ id: usersTable.id, username: usersTable.username, role: usersTable.role, tokenVersion: usersTable.tokenVersion });
     userId = user.id;
@@ -52,9 +54,13 @@ describe("cash journal posting", () => {
     // actual production mapping without changing that mapping globally.
     const canonical = await db.select({ id: chartOfAccountsTable.id, code: chartOfAccountsTable.code })
       .from(chartOfAccountsTable)
-      .where(inArray(chartOfAccountsTable.code, ["1000", "4900", "6900"]));
+      .where(inArray(chartOfAccountsTable.code, ["1000", "1500", "4900", "6900"]));
     cashAccountId = canonical.find((row) => row.code === "1000")?.id ?? accounts[0].id;
+    inventoryAccountId = canonical.find((row) => row.code === "1500")?.id ?? accounts[0].id;
     revenueAccountId = canonical.find((row) => row.code === "4900")?.id ?? accounts[1].id;
+    const [mappedRevenue] = await db.select({ id: chartOfAccountsTable.id }).from(chartOfAccountsTable)
+      .where(eq(chartOfAccountsTable.code, "4000"));
+    mappedRevenueAccountId = mappedRevenue?.id ?? accounts[1].id;
     expenseAccountId = canonical.find((row) => row.code === "6900")?.id ?? accounts[2].id;
     const testApp = express();
     testApp.use(express.json());
@@ -76,8 +82,15 @@ describe("cash journal posting", () => {
     await db.delete(usersTable).where(eq(usersTable.id, userId));
   });
 
+  async function requestPath(path: string, init: RequestInit) {
+    return fetch(`${baseUrl}${path}`, {
+      ...init,
+      headers: { cookie, "content-type": "application/json", ...init.headers },
+    });
+  }
+
   async function request(body: Record<string, unknown>) {
-    return fetch(`${baseUrl}/api/cash/transactions`, {
+    return requestPath("/api/cash/transactions", {
       method: "POST",
       headers: { cookie, "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -141,6 +154,135 @@ describe("cash journal posting", () => {
     ]);
     const [cash] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, value.id));
     assert.equal(cash.journalEntryId, value.journalEntryId);
+  });
+
+  it("uses safe journal fallbacks for incompatible mapped categories without changing cash metadata", async () => {
+    const income = await request({
+      type: "income",
+      category: "Бараа материал",
+      description: "Incompatible income",
+      amount: 11,
+      date: "2025-01-23",
+      incomeMonth: "2025-01",
+    });
+    assert.equal(income.status, 201);
+    const incomeValue = await income.json() as { id: number; journalEntryId: number; accountId: number | null; accountCode: string | null; accountName: string | null };
+    assert.equal(incomeValue.accountId, inventoryAccountId);
+    assert.equal(incomeValue.accountCode, "1500");
+    assert.ok(incomeValue.journalEntryId);
+    cashIds.push(incomeValue.id);
+    journalIds.push(incomeValue.journalEntryId);
+    const incomeLines = await db.select().from(journalLinesTable).where(eq(journalLinesTable.journalEntryId, incomeValue.journalEntryId));
+    assert.equal(incomeLines.some((line) => line.accountId === revenueAccountId && line.credit === 11), true);
+
+    const expense = await request({
+      type: "expense",
+      category: "Таван толгой ХХК",
+      description: "Incompatible expense",
+      amount: 12,
+      date: "2025-01-24",
+      incomeMonth: null,
+    });
+    assert.equal(expense.status, 201);
+    const expenseValue = await expense.json() as { id: number; journalEntryId: number; accountId: number | null; accountCode: string | null; accountName: string | null };
+    assert.equal(expenseValue.accountId, mappedRevenueAccountId);
+    assert.equal(expenseValue.accountCode, "4000");
+    assert.ok(expenseValue.journalEntryId);
+    cashIds.push(expenseValue.id);
+    journalIds.push(expenseValue.journalEntryId);
+    const expenseLines = await db.select().from(journalLinesTable).where(eq(journalLinesTable.journalEntryId, expenseValue.journalEntryId));
+    assert.equal(expenseLines.some((line) => line.accountId === expenseAccountId && line.debit === 12), true);
+  });
+
+  it("replaces a changed journal exactly once and reverses the old entry", async () => {
+    const lifecycleCategory = `Lifecycle ${randomUUID()}`;
+    const create = await request({
+      type: "expense",
+      category: lifecycleCategory,
+      description: "Lifecycle original",
+      amount: 20,
+      date: "2025-01-25",
+      incomeMonth: null,
+    });
+    assert.equal(create.status, 201);
+    const original = await create.json() as { id: number; journalEntryId: number };
+    cashIds.push(original.id);
+    journalIds.push(original.journalEntryId);
+    const unchanged = await requestPath(`/api/cash/transactions/${original.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ type: "expense", category: lifecycleCategory, description: "Lifecycle original", amount: 20, date: "2025-01-25", incomeMonth: null }),
+    });
+    assert.equal(unchanged.status, 200);
+    const unchangedValue = await unchanged.json() as { journalEntryId: number };
+    assert.equal(unchangedValue.journalEntryId, original.journalEntryId);
+    const changed = await requestPath(`/api/cash/transactions/${original.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ type: "expense", category: "Lifecycle changed", description: "Lifecycle replacement", amount: 35, date: "2025-01-26", incomeMonth: null }),
+    });
+    assert.equal(changed.status, 200);
+    const replacement = await changed.json() as { journalEntryId: number };
+    assert.notEqual(replacement.journalEntryId, original.journalEntryId);
+    journalIds.push(replacement.journalEntryId);
+    const [oldEntry] = await db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, original.journalEntryId));
+    assert.equal(oldEntry.status, "void");
+    const [reversal] = await db.select().from(journalEntriesTable).where(and(
+      eq(journalEntriesTable.sourceType, "reversal"),
+      eq(journalEntriesTable.sourceId, original.journalEntryId),
+    ));
+    assert.ok(reversal);
+    journalIds.push(reversal.id);
+    const sourceEntries = await db.select().from(journalEntriesTable).where(and(
+      eq(journalEntriesTable.sourceType, "cash"),
+      eq(journalEntriesTable.sourceId, original.id),
+    ));
+    assert.equal(sourceEntries.length, 2);
+  });
+
+  it("voids the linked journal before deleting a cash transaction", async () => {
+    const create = await request({
+      type: "income",
+      category: `Delete ${randomUUID()}`,
+      description: "Delete lifecycle",
+      amount: 17,
+      date: "2025-01-27",
+      incomeMonth: "2025-01",
+    });
+    const original = await create.json() as { id: number; journalEntryId: number };
+    assert.equal(create.status, 201);
+    journalIds.push(original.journalEntryId);
+    const removed = await requestPath(`/api/cash/transactions/${original.id}`, { method: "DELETE" });
+    assert.equal(removed.status, 204);
+    const [cash] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, original.id));
+    assert.equal(cash, undefined);
+    const [entry] = await db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, original.journalEntryId));
+    assert.equal(entry.status, "void");
+    const [reversal] = await db.select().from(journalEntriesTable).where(and(
+      eq(journalEntriesTable.sourceType, "reversal"),
+      eq(journalEntriesTable.sourceId, original.journalEntryId),
+    ));
+    assert.ok(reversal);
+    journalIds.push(reversal.id);
+  });
+
+  it("does not backfill a historical cash row with a null journal link", async () => {
+    const [cash] = await db.insert(cashTransactionsTable).values({
+      type: "expense",
+      category: "Historical",
+      accountId: null,
+      description: "Historical null journal",
+      amount: 9,
+      date: "2025-01-28",
+      incomeMonth: null,
+      journalEntryId: null,
+    }).returning();
+    cashIds.push(cash.id);
+    const response = await requestPath(`/api/cash/transactions/${cash.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ type: "expense", category: "Historical changed", description: "Historical changed", amount: 10, date: "2025-01-29", incomeMonth: null }),
+    });
+    assert.equal(response.status, 200);
+    const value = await response.json() as { journalEntryId: number | null };
+    assert.equal(value.journalEntryId, null);
   });
 
   it("rolls back the cash row when the cash posting account is unavailable", async () => {
