@@ -5,6 +5,104 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface ErrorResponse {
+  error: string;
+}
+
+export interface JournalEntryLine {
+  id: number;
+  accountId: number;
+  /** @minimum 0 */
+  debit: number;
+  /** @minimum 0 */
+  credit: number;
+  /** @nullable */
+  memo: string | null;
+}
+
+export interface JournalEntryLineInput {
+  /** @minimum 1 */
+  accountId: number;
+  /** @minimum 0 */
+  debit: number;
+  /** @minimum 0 */
+  credit: number;
+  /** @nullable */
+  memo?: string | null;
+}
+
+export interface JournalEntryInput {
+  date: string;
+  /** @minLength 1 */
+  description: string;
+  /** @minItems 2 */
+  lines: JournalEntryLineInput[];
+}
+
+export interface JournalEntryUpdateInput {
+  /** @minItems 2 */
+  lines: JournalEntryLineInput[];
+}
+
+export type JournalEntrySummaryStatus = typeof JournalEntrySummaryStatus[keyof typeof JournalEntrySummaryStatus];
+
+
+export const JournalEntrySummaryStatus = {
+  draft: 'draft',
+  posted: 'posted',
+  void: 'void',
+} as const;
+
+export interface JournalEntrySummary {
+  id: number;
+  date: string;
+  description: string;
+  sourceType: string;
+  /** @nullable */
+  sourceId: number | null;
+  status: JournalEntrySummaryStatus;
+  /** @nullable */
+  createdBy: number | null;
+  createdAt: string;
+}
+
+export type JournalEntry = JournalEntrySummary & ({
+  lines: JournalEntryLine[];
+  /** @nullable */
+  voidedAt: string | null;
+  /** @nullable */
+  voidedBy: number | null;
+});
+
+export interface JournalVoidResult {
+  reversalEntryId: number;
+}
+
+export interface JournalLedgerEntry {
+  date: string;
+  journalEntryId: number;
+  debit: number;
+  credit: number;
+  balance: number;
+}
+
+export interface JournalLedger {
+  accountId: number;
+  entries: JournalLedgerEntry[];
+}
+
+export interface JournalTrialBalanceAccount {
+  accountId: number;
+  debit: number;
+  credit: number;
+  balance: number;
+}
+
+export interface JournalTrialBalance {
+  balanced: boolean;
+  accounts: JournalTrialBalanceAccount[];
+}
+
 /**
  * @nullable
  */
@@ -1246,6 +1344,38 @@ export interface DeletionRequestInput {
   label: string;
 }
 
+/**
+ * Invalid request
+ */
+export type BadRequestResponse = ErrorResponse;
+
+/**
+ * Resource not found
+ */
+export type NotFoundResponse = ErrorResponse;
+
+/**
+ * Operation conflicts with the current resource state
+ */
+export type ConflictResponse = ErrorResponse;
+
+export type JournalDateFromParameter = string;
+
+export type JournalDateToParameter = string;
+
+export type JournalSourceTypeParameter = string;
+
+export type JournalAccountIdParameter = number;
+
+export type JournalStatusParameter = typeof JournalStatusParameter[keyof typeof JournalStatusParameter];
+
+
+export const JournalStatusParameter = {
+  draft: 'draft',
+  posted: 'posted',
+  void: 'void',
+} as const;
+
 export type ListAttendanceParams = {
 date?: string;
 /**
@@ -1299,5 +1429,16 @@ export type ImportKapitronBankTransactionsParams = {
  * @minimum 1
  */
 bankAccountId: number;
+};
+
+export type ListJournalEntriesParams = {
+dateFrom?: JournalDateFromParameter;
+dateTo?: JournalDateToParameter;
+sourceType?: JournalSourceTypeParameter;
+/**
+ * @minimum 1
+ */
+accountId?: JournalAccountIdParameter;
+status?: JournalStatusParameter;
 };
 

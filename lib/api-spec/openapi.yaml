@@ -30,6 +30,8 @@ tags:
     description: Admin user management
   - name: chart-of-accounts
     description: Accounting chart management
+  - name: journal
+    description: General journal and accounting reports
 paths:
   /auth/me:
     get:
@@ -1436,6 +1438,127 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeletionRequest"
+  /journal/entries:
+    get:
+      operationId: listJournalEntries
+      tags: [journal]
+      summary: List journal entries
+      parameters:
+        - $ref: "#/components/parameters/JournalDateFrom"
+        - $ref: "#/components/parameters/JournalDateTo"
+        - $ref: "#/components/parameters/JournalSourceType"
+        - $ref: "#/components/parameters/JournalAccountId"
+        - $ref: "#/components/parameters/JournalStatus"
+      responses:
+        "200":
+          description: Journal entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/JournalEntrySummary" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      operationId: createJournalEntry
+      tags: [journal]
+      summary: Create a manual journal entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JournalEntryInput" }
+      responses:
+        "201":
+          description: Created journal entry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalEntry" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /journal/entries/{id}:
+    get:
+      operationId: getJournalEntry
+      tags: [journal]
+      summary: Get a journal entry with lines
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Journal entry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalEntry" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: updateJournalEntry
+      tags: [journal]
+      summary: Update a draft journal entry
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JournalEntryUpdateInput" }
+      responses:
+        "200":
+          description: Updated journal entry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalEntry" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /journal/entries/{id}/void:
+    post:
+      operationId: voidJournalEntry
+      tags: [journal]
+      summary: Void a posted journal entry
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Voided journal entry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalVoidResult" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /journal/accounts/{id}/ledger:
+    get:
+      operationId: getJournalAccountLedger
+      tags: [journal]
+      summary: Get the posted ledger for an account
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Posted ledger entries with a running balance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalLedger" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /journal/trial-balance:
+    get:
+      operationId: getJournalTrialBalance
+      tags: [journal]
+      summary: Get the posted trial balance
+      responses:
+        "200":
+          description: Trial balance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalTrialBalance" }
 components:
   parameters:
     Id:
@@ -1444,7 +1567,158 @@ components:
       required: true
       schema:
         type: integer
+    JournalDateFrom:
+      in: query
+      name: dateFrom
+      required: false
+      schema:
+        type: string
+        format: date
+    JournalDateTo:
+      in: query
+      name: dateTo
+      required: false
+      schema:
+        type: string
+        format: date
+    JournalSourceType:
+      in: query
+      name: sourceType
+      required: false
+      schema:
+        type: string
+    JournalAccountId:
+      in: query
+      name: accountId
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+    JournalStatus:
+      in: query
+      name: status
+      required: false
+      schema:
+        type: string
+        enum: [draft, posted, void]
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Conflict:
+      description: Operation conflicts with the current resource state
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
   schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    JournalEntryLine:
+      type: object
+      required: [id, accountId, debit, credit, memo]
+      properties:
+        id: { type: integer }
+        accountId: { type: integer }
+        debit: { type: number, minimum: 0 }
+        credit: { type: number, minimum: 0 }
+        memo: { type: ["string", "null"] }
+    JournalEntryLineInput:
+      type: object
+      required: [accountId, debit, credit]
+      properties:
+        accountId: { type: integer, minimum: 1 }
+        debit: { type: number, minimum: 0 }
+        credit: { type: number, minimum: 0 }
+        memo: { type: ["string", "null"] }
+    JournalEntryInput:
+      type: object
+      required: [date, description, lines]
+      properties:
+        date: { type: string, format: date }
+        description: { type: string, minLength: 1 }
+        lines:
+          type: array
+          minItems: 2
+          items: { $ref: "#/components/schemas/JournalEntryLineInput" }
+    JournalEntryUpdateInput:
+      type: object
+      required: [lines]
+      properties:
+        lines:
+          type: array
+          minItems: 2
+          items: { $ref: "#/components/schemas/JournalEntryLineInput" }
+    JournalEntrySummary:
+      type: object
+      required: [id, date, description, sourceType, sourceId, status, createdBy, createdAt]
+      properties:
+        id: { type: integer }
+        date: { type: string, format: date }
+        description: { type: string }
+        sourceType: { type: string }
+        sourceId: { type: ["integer", "null"] }
+        status: { type: string, enum: [draft, posted, void] }
+        createdBy: { type: ["integer", "null"] }
+        createdAt: { type: string, format: date-time }
+    JournalEntry:
+      allOf:
+        - $ref: "#/components/schemas/JournalEntrySummary"
+        - type: object
+          required: [lines, voidedAt, voidedBy]
+          properties:
+            lines:
+              type: array
+              items: { $ref: "#/components/schemas/JournalEntryLine" }
+            voidedAt: { type: ["string", "null"], format: date-time }
+            voidedBy: { type: ["integer", "null"] }
+    JournalVoidResult:
+      type: object
+      required: [reversalEntryId]
+      properties:
+        reversalEntryId: { type: integer }
+    JournalLedger:
+      type: object
+      required: [accountId, entries]
+      properties:
+        accountId: { type: integer }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/JournalLedgerEntry" }
+    JournalLedgerEntry:
+      type: object
+      required: [date, journalEntryId, debit, credit, balance]
+      properties:
+        date: { type: string, format: date }
+        journalEntryId: { type: integer }
+        debit: { type: number }
+        credit: { type: number }
+        balance: { type: number }
+    JournalTrialBalance:
+      type: object
+      required: [balanced, accounts]
+      properties:
+        balanced: { type: boolean }
+        accounts:
+          type: array
+          items: { $ref: "#/components/schemas/JournalTrialBalanceAccount" }
+    JournalTrialBalanceAccount:
+      type: object
+      required: [accountId, debit, credit, balance]
+      properties:
+        accountId: { type: integer }
+        debit: { type: number }
+        credit: { type: number }
+        balance: { type: number }
     AuthSession:
       type: object
       required: [authenticated, id, role, username]

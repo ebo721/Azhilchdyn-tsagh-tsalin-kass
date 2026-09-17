@@ -2400,3 +2400,215 @@ export const CancelDeletionRequestResponse = zod.object({
 })
 
 
+/**
+ * @summary List journal entries
+ */
+
+
+
+export const ListJournalEntriesQueryParams = zod.object({
+  "dateFrom": zod.date().optional(),
+  "dateTo": zod.date().optional(),
+  "sourceType": zod.coerce.string().optional(),
+  "accountId": zod.coerce.number().int().min(1).optional(),
+  "status": zod.enum(['draft', 'posted', 'void']).optional()
+})
+
+export const ListJournalEntriesResponseItem = zod.object({
+  "id": zod.number().int(),
+  "date": zod.coerce.date(),
+  "description": zod.string(),
+  "sourceType": zod.string(),
+  "sourceId": zod.number().int().nullable(),
+  "status": zod.enum(['draft', 'posted', 'void']),
+  "createdBy": zod.number().int().nullable(),
+  "createdAt": zod.coerce.date()
+})
+export const ListJournalEntriesResponse = zod.array(ListJournalEntriesResponseItem)
+
+
+/**
+ * @summary Create a manual journal entry
+ */
+
+
+export const createJournalEntryBodyLinesItemDebitMin = 0;
+
+export const createJournalEntryBodyLinesItemCreditMin = 0;
+
+export const createJournalEntryBodyLinesMin = 2;
+
+
+
+export const CreateJournalEntryBody = zod.object({
+  "date": zod.coerce.date(),
+  "description": zod.string().min(1),
+  "lines": zod.array(zod.object({
+  "accountId": zod.number().int().min(1),
+  "debit": zod.number().min(createJournalEntryBodyLinesItemDebitMin),
+  "credit": zod.number().min(createJournalEntryBodyLinesItemCreditMin),
+  "memo": zod.string().nullish()
+})).min(createJournalEntryBodyLinesMin)
+})
+
+export const createJournalEntryResponseTwoLinesItemDebitMin = 0;
+
+export const createJournalEntryResponseTwoLinesItemCreditMin = 0;
+
+
+
+export const CreateJournalEntryResponse = zod.object({
+  "id": zod.number().int(),
+  "date": zod.coerce.date(),
+  "description": zod.string(),
+  "sourceType": zod.string(),
+  "sourceId": zod.number().int().nullable(),
+  "status": zod.enum(['draft', 'posted', 'void']),
+  "createdBy": zod.number().int().nullable(),
+  "createdAt": zod.coerce.date()
+}).and(zod.object({
+  "lines": zod.array(zod.object({
+  "id": zod.number().int(),
+  "accountId": zod.number().int(),
+  "debit": zod.number().min(createJournalEntryResponseTwoLinesItemDebitMin),
+  "credit": zod.number().min(createJournalEntryResponseTwoLinesItemCreditMin),
+  "memo": zod.string().nullable()
+})),
+  "voidedAt": zod.coerce.date().nullable(),
+  "voidedBy": zod.number().int().nullable()
+}))
+
+
+/**
+ * @summary Get a journal entry with lines
+ */
+export const GetJournalEntryParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const getJournalEntryResponseTwoLinesItemDebitMin = 0;
+
+export const getJournalEntryResponseTwoLinesItemCreditMin = 0;
+
+
+
+export const GetJournalEntryResponse = zod.object({
+  "id": zod.number().int(),
+  "date": zod.coerce.date(),
+  "description": zod.string(),
+  "sourceType": zod.string(),
+  "sourceId": zod.number().int().nullable(),
+  "status": zod.enum(['draft', 'posted', 'void']),
+  "createdBy": zod.number().int().nullable(),
+  "createdAt": zod.coerce.date()
+}).and(zod.object({
+  "lines": zod.array(zod.object({
+  "id": zod.number().int(),
+  "accountId": zod.number().int(),
+  "debit": zod.number().min(getJournalEntryResponseTwoLinesItemDebitMin),
+  "credit": zod.number().min(getJournalEntryResponseTwoLinesItemCreditMin),
+  "memo": zod.string().nullable()
+})),
+  "voidedAt": zod.coerce.date().nullable(),
+  "voidedBy": zod.number().int().nullable()
+}))
+
+
+/**
+ * @summary Update a draft journal entry
+ */
+export const UpdateJournalEntryParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+export const updateJournalEntryBodyLinesItemDebitMin = 0;
+
+export const updateJournalEntryBodyLinesItemCreditMin = 0;
+
+export const updateJournalEntryBodyLinesMin = 2;
+
+
+
+export const UpdateJournalEntryBody = zod.object({
+  "lines": zod.array(zod.object({
+  "accountId": zod.number().int().min(1),
+  "debit": zod.number().min(updateJournalEntryBodyLinesItemDebitMin),
+  "credit": zod.number().min(updateJournalEntryBodyLinesItemCreditMin),
+  "memo": zod.string().nullish()
+})).min(updateJournalEntryBodyLinesMin)
+})
+
+export const updateJournalEntryResponseTwoLinesItemDebitMin = 0;
+
+export const updateJournalEntryResponseTwoLinesItemCreditMin = 0;
+
+
+
+export const UpdateJournalEntryResponse = zod.object({
+  "id": zod.number().int(),
+  "date": zod.coerce.date(),
+  "description": zod.string(),
+  "sourceType": zod.string(),
+  "sourceId": zod.number().int().nullable(),
+  "status": zod.enum(['draft', 'posted', 'void']),
+  "createdBy": zod.number().int().nullable(),
+  "createdAt": zod.coerce.date()
+}).and(zod.object({
+  "lines": zod.array(zod.object({
+  "id": zod.number().int(),
+  "accountId": zod.number().int(),
+  "debit": zod.number().min(updateJournalEntryResponseTwoLinesItemDebitMin),
+  "credit": zod.number().min(updateJournalEntryResponseTwoLinesItemCreditMin),
+  "memo": zod.string().nullable()
+})),
+  "voidedAt": zod.coerce.date().nullable(),
+  "voidedBy": zod.number().int().nullable()
+}))
+
+
+/**
+ * @summary Void a posted journal entry
+ */
+export const VoidJournalEntryParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const VoidJournalEntryResponse = zod.object({
+  "reversalEntryId": zod.number().int()
+})
+
+
+/**
+ * @summary Get the posted ledger for an account
+ */
+export const GetJournalAccountLedgerParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const GetJournalAccountLedgerResponse = zod.object({
+  "accountId": zod.number().int(),
+  "entries": zod.array(zod.object({
+  "date": zod.coerce.date(),
+  "journalEntryId": zod.number().int(),
+  "debit": zod.number(),
+  "credit": zod.number(),
+  "balance": zod.number()
+}))
+})
+
+
+/**
+ * @summary Get the posted trial balance
+ */
+export const GetJournalTrialBalanceResponse = zod.object({
+  "balanced": zod.boolean(),
+  "accounts": zod.array(zod.object({
+  "accountId": zod.number().int(),
+  "debit": zod.number(),
+  "credit": zod.number(),
+  "balance": zod.number()
+}))
+})
+
+
