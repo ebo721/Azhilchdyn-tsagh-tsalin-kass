@@ -3466,8 +3466,10 @@ router.post("/operating-expenses", async (req, res, next) => {
     const input = CreateOperatingExpenseBody.parse(req.body);
     if (!isValidCalendarDate(input.date)) { res.status(400).json({ error: "Хуанлийн огноо буруу байна" }); return; }
     if (await isCashDateClosed(input.date)) { res.status(409).json({ error: "Өндөрлөсөн өдөр зардал бүртгэх боломжгүй" }); return; }
+    const [account] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, input.categoryId));
+    if (!account) { res.status(400).json({ error: "Сонгосон данс олдсонгүй" }); return; }
     const [row] = await db.insert(operatingExpensesTable).values({
-      description: input.description.trim(), category: input.category.trim(), date: input.date, amount: money(input.amount),
+      description: input.description.trim(), category: account.name, categoryId: account.id, date: input.date, amount: money(input.amount),
     }).returning();
     res.status(201).json(CreateOperatingExpenseResponse.parse(operatingExpenseResponse(row)));
   } catch (error) { next(error); }
@@ -3479,6 +3481,8 @@ router.put("/operating-expenses/:id", async (req, res, next) => {
     const input = UpdateOperatingExpenseBody.parse(req.body);
     if (!isValidCalendarDate(input.date)) { res.status(400).json({ error: "Хуанлийн огноо буруу байна" }); return; }
     if (await isCashDateClosed(input.date)) { res.status(409).json({ error: "Өндөрлөсөн өдөр зардал бүртгэх боломжгүй" }); return; }
+    const [account] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, input.categoryId));
+    if (!account) { res.status(400).json({ error: "Сонгосон данс олдсонгүй" }); return; }
     const result = await db.transaction(async (tx) => {
       const [old] = await tx.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.id, id)).for("update");
       if (!old) return null;
@@ -3486,7 +3490,7 @@ router.put("/operating-expenses/:id", async (req, res, next) => {
       const [oldClosure] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, old.date));
       if (oldClosure) return "closed" as const;
       return (await tx.update(operatingExpensesTable).set({
-        description: input.description.trim(), category: input.category.trim(), date: input.date, amount: money(input.amount),
+        description: input.description.trim(), category: account.name, categoryId: account.id, date: input.date, amount: money(input.amount),
       }).where(eq(operatingExpensesTable.id, id)).returning())[0];
     });
     if (result === null) { res.status(404).json({ error: "Зардал олдсонгүй" }); return; }

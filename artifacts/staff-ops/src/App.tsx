@@ -1825,24 +1825,22 @@ function UserSettings() {
   </div>;
 }
 
-function OperatingExpenseModal({ expense, onClose, categories }: { expense?: OperatingExpense; onClose: () => void; categories: string[] }) {
+function OperatingExpenseModal({ expense, accounts, onClose }: { expense?: OperatingExpense; accounts: ChartOfAccount[]; onClose: () => void }) {
   const isEdit = !!expense;
   const create = useCreateOperatingExpense();
   const update = useUpdateOperatingExpense();
   const qc = useQueryClient();
-  const initialAddingCategory = categories.length === 0 || (isEdit && !categories.includes(expense!.category));
-  const [addingCategory, setAddingCategory] = useState(initialAddingCategory);
   const form = useForm({
     defaultValues: {
       description: expense?.description ?? '',
-      category: expense?.category ?? (categories.length > 0 && !initialAddingCategory ? categories[0] : ''),
+      categoryId: expense?.categoryId ?? accounts[0]?.id ?? 0,
       date: expense?.date ?? today(),
       amount: String(expense?.amount ?? ''),
     },
   });
 
-  const submit = (values: { description: string; category: string; date: string; amount: string }) => {
-    const data = { description: values.description, category: values.category, date: values.date, amount: Number(values.amount) };
+  const submit = (values: { description: string; categoryId: number; date: string; amount: string }) => {
+    const data = { description: values.description, categoryId: values.categoryId, date: values.date, amount: Number(values.amount) };
     const done = () => { qc.invalidateQueries({ queryKey: getListOperatingExpensesQueryKey() }); qc.invalidateQueries({ queryKey: getGetCashSummaryQueryKey() }); qc.invalidateQueries({ queryKey: getListCashTransactionsQueryKey() }); onClose(); };
     if (isEdit && expense) update.mutate({ id: expense.id, data }, { onSuccess: done, onError: (e) => window.alert(e instanceof Error ? e.message : 'Алдаа гарлаа.') });
     else create.mutate({ data }, { onSuccess: done, onError: (e) => window.alert(e instanceof Error ? e.message : 'Алдаа гарлаа.') });
@@ -1854,21 +1852,7 @@ function OperatingExpenseModal({ expense, onClose, categories }: { expense?: Ope
         <form onSubmit={form.handleSubmit(submit)} className="space-y-4">
           <label className="block space-y-1.5 text-xs font-semibold">Утга<input className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('description', { required: true })} data-testid="input-expense-description" /></label>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block space-y-1.5 text-xs font-semibold">Ангилал
-              <div className="flex gap-2">
-                {addingCategory ? (
-                  <input className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" placeholder="Жишээ: Цахилгаан, Түрээс" {...form.register('category', { required: true })} data-testid="input-expense-category" />
-                ) : (
-                  <select className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('category', { required: true })} data-testid="select-expense-category">
-                    {categories.map((category) => <option key={category} value={category}>{category}</option>)}
-                  </select>
-                )}
-                {categories.length > 0 && <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => {
-                  if (addingCategory) { setAddingCategory(false); form.setValue('category', categories[0]); }
-                  else { setAddingCategory(true); form.setValue('category', ''); }
-                }} data-testid="button-toggle-expense-category-mode">{addingCategory ? 'Сонгох' : 'Шинэ'}</Button>}
-              </div>
-            </label>
+            <label className="block space-y-1.5 text-xs font-semibold">Зардлын данс<select className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('categoryId', { required: true, valueAsNumber: true, min: 1 })} data-testid="select-expense-category-account">{accounts.map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></label>
             <label className="block space-y-1.5 text-xs font-semibold">Огноо<input type="date" className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('date', { required: true })} data-testid="input-expense-date" /></label>
             <label className="block space-y-1.5 text-xs font-semibold">Дүн<input type="number" min="0" className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('amount', { required: true })} data-testid="input-expense-amount" /></label>
           </div>
@@ -1940,6 +1924,7 @@ function OperatingExpensePaymentModal({ expense, onClose }: { expense: Operating
 
 function OperatingExpenses() {
   const query = useListOperatingExpenses();
+  const accounts = useListChartOfAccounts();
   const session = useGetAuthSession();
   const isViewer = session.data?.authenticated && session.data.role === 'viewer';
   const qc = useQueryClient();
@@ -1947,9 +1932,9 @@ function OperatingExpenses() {
   const cancelPayment = useCancelOperatingExpensePayment();
   const [editing, setEditing] = useState<OperatingExpense | 'new' | null>(null);
   const [paying, setPaying] = useState<OperatingExpense | null>(null);
-  const [filterCategory, setFilterCategory] = useState('all');
-  const expenseCategories = useMemo(() => [...new Set((query.data ?? []).map((expense) => expense.category.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'mn')), [query.data]);
-  const filteredExpenses = (query.data ?? []).filter((expense) => filterCategory === 'all' || expense.category === filterCategory);
+  const [filterCategoryId, setFilterCategoryId] = useState('all');
+  const accountById = useMemo(() => new Map((accounts.data ?? []).map((account) => [account.id, account])), [accounts.data]);
+  const filteredExpenses = (query.data ?? []).filter((expense) => filterCategoryId === 'all' || String(expense.categoryId) === filterCategoryId);
 
   const remove = (expense: OperatingExpense) => {
     if (window.confirm(`"${expense.description}" зардлыг устгах уу?`)) deletion.request(`/operating-expenses/${expense.id}`, `Зардал: ${expense.description}`);
@@ -1966,8 +1951,8 @@ function OperatingExpenses() {
 
   return (
     <div className="page-enter space-y-6">
-      <PageHeading title="Үйл ажиллагааны зардал" detail="Байгууллагын тогтмол болон бусад үйл ажиллагааны зардлын бүртгэл." action={!isViewer && <Button onClick={() => setEditing('new')} data-testid="button-add-expense"><Plus className="mr-2 size-4" />Зардал нэмэх</Button>} />
-      {!query.isLoading && !query.isError && query.data?.length ? <div className="flex justify-end"><label className="space-y-1 text-xs font-semibold">Дэд ангилал<select value={filterCategory} onChange={(event) => setFilterCategory(event.target.value)} className="block h-10 min-w-52 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="select-operating-expense-category"><option value="all">Бүх дэд ангилал</option>{expenseCategories.map((category) => <option key={category} value={category}>{category}</option>)}</select></label></div> : null}
+      <PageHeading title="Үйл ажиллагааны зардал" detail="Байгууллагын тогтмол болон бусад үйл ажиллагааны зардлын бүртгэл." action={!isViewer && <Button onClick={() => setEditing('new')} disabled={!accounts.data?.length} data-testid="button-add-expense"><Plus className="mr-2 size-4" />Зардал нэмэх</Button>} />
+      {!query.isLoading && !query.isError && query.data?.length ? <div className="flex justify-end"><label className="space-y-1 text-xs font-semibold">Зардлын данс<select value={filterCategoryId} onChange={(event) => setFilterCategoryId(event.target.value)} className="block h-10 min-w-64 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="select-operating-expense-category"><option value="all">Бүх данс</option>{(accounts.data ?? []).map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></label></div> : null}
       {query.isLoading ? <div className="space-y-4"><LoadingBlock className="h-16" /><LoadingBlock className="h-16" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : query.data?.length ? (
         <div className="overflow-hidden rounded-2xl border border-border bg-card">
           <table className="w-full text-left text-sm" data-testid="table-expenses">
@@ -1979,7 +1964,7 @@ function OperatingExpenses() {
                 <tr key={ex.id} className="transition-colors hover:bg-secondary/20" data-testid={`row-expense-${ex.id}`}>
                   <td className="px-5 py-3 font-mono text-xs">{ex.date}</td>
                   <td className="px-5 py-3 font-medium">{ex.description}</td>
-                  <td className="px-5 py-3 text-xs">{ex.category}</td>
+                  <td className="px-5 py-3 text-xs">{ex.categoryId && accountById.get(ex.categoryId) ? `${accountById.get(ex.categoryId)!.code} — ${accountById.get(ex.categoryId)!.name}` : ex.category}</td>
                   <td className="px-5 py-3 text-right font-mono font-bold text-destructive">{money(ex.amount)}</td>
                   <td className="px-5 py-3 text-center">
                     {ex.paymentDate ? (
@@ -2008,7 +1993,7 @@ function OperatingExpenses() {
           </table>
         </div>
       ) : <EmptyState title="Зардал бүртгэгдээгүй байна" detail="Шинээр үйл ажиллагааны зардал нэмж бүртгэнэ үү." icon={Receipt} />}
-      {editing && <OperatingExpenseModal expense={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} categories={expenseCategories} />}
+      {editing && <OperatingExpenseModal expense={editing === 'new' ? undefined : editing} accounts={accounts.data ?? []} onClose={() => setEditing(null)} />}
       {paying && <OperatingExpensePaymentModal expense={paying} onClose={() => setPaying(null)} />}
     </div>
   );

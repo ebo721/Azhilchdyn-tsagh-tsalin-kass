@@ -9,8 +9,8 @@
 export interface OperatingExpenseInput {
   /** @minLength 1 */
   description: string;
-  /** @minLength 1 */
-  category: string;
+  /** @minimum 1 */
+  categoryId: number;
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
   date: string;
   /** @exclusiveMinimum 0 */

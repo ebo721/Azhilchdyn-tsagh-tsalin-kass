@@ -260,6 +260,7 @@ export const operatingExpensesTable = pgTable("operating_expenses", {
   id: serial("id").primaryKey(),
   description: text("description").notNull(),
   category: text("category").notNull(),
+  categoryId: integer("category_id").references(() => chartOfAccountsTable.id),
   date: date("date", { mode: "string" }).notNull(),
   amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
   paymentDate: date("payment_date", { mode: "string" }),
