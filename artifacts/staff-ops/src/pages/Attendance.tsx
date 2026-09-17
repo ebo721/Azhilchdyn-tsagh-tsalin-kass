@@ -28,7 +28,8 @@ import {
   type Shift,
 } from '@workspace/api-client-react';
 import { EmptyState, ErrorBlock, LoadingBlock, Modal } from '@/components/ui-primitives';
-import { currentMonth, dateLabel, shiftMonth, today, useQueueDeletion } from '@/App';
+import { currentMonth, dateLabel, shiftMonth, today } from '@/lib/app-shared';
+import { useQueueDeletion } from '@/hooks/useQueueDeletion';
 
 const mongolianMonthLabel = (value: string) => {
   const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value);

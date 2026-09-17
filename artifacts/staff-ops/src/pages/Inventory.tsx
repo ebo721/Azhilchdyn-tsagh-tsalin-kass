@@ -180,7 +180,8 @@ import { AttendancePage } from '@/pages/Attendance';
 import { Payroll } from '@/pages/Payroll';
 import { Cash, CashLegacy, CashDayCloseControls, AccountLabel, BankTransactions, bankDateTimeLabel } from '@/pages/Cash';
 import { FixedAssets } from '@/pages/FixedAssets';
-import { useQueueDeletion, money, dateLabel, today, currentMonth, shiftMonth } from '@/App';
+import { money, dateLabel, today, currentMonth, shiftMonth } from '@/lib/app-shared';
+import { useQueueDeletion } from '@/hooks/useQueueDeletion';
 const mongolianMonthLabel = (value: string) => { const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value); return match ? `${match[1]} он ${Number(match[2])} сар` : value; };
 
 

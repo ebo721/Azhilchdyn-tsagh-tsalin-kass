@@ -15,7 +15,8 @@ import {
   useUpdateFixedAsset,
   type FixedAsset,
 } from '@workspace/api-client-react';
-import { dateLabel, money, today, useQueueDeletion } from '@/App';
+import { dateLabel, money, today } from '@/lib/app-shared';
+import { useQueueDeletion } from '@/hooks/useQueueDeletion';
 
 type FixedAssetForm = { name: string; unitPrice: string; quantity: string; date: string; purchased: boolean };
 

@@ -6,7 +6,7 @@ import {
 import { cn } from '@/lib/utils';
 import { EmptyState, ErrorBlock, LoadingBlock } from '@/components/ui-primitives';
 import { bankDateTimeLabel } from '@/pages/Cash';
-import { dateLabel, money } from '@/App';
+import { dateLabel, money } from '@/lib/app-shared';
 
 export function UnclearTransactionsSettings() {
   const list = useListUnclearTransactions();

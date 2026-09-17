@@ -1,7 +1,7 @@
 import { Activity, Banknote, PackageOpen, TrendingUp, UsersRound } from 'lucide-react';
 import { useGetDashboard } from '@workspace/api-client-react';
 import { EmptyState, ErrorBlock, LoadingBlock, StatCard } from '@/components/ui-primitives';
-import { currentMonth, dateLabel, money, shiftMonth } from '@/App';
+import { currentMonth, dateLabel, money, shiftMonth } from '@/lib/app-shared';
 
 export function Dashboard() {
   const query = useGetDashboard();

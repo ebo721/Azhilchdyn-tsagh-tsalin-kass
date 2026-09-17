@@ -170,7 +170,8 @@ import {
   type OperatingExpenseBankSuggestion,
 } from '@workspace/api-client-react';
 import { EmptyState, ErrorBlock, LoadingBlock, Modal, PageHeading, StatCard } from '@/components/ui-primitives';
-import { currentMonth, dateLabel, money, shiftMonth, today, useQueueDeletion } from '@/App';
+import { currentMonth, dateLabel, money, shiftMonth, today } from '@/lib/app-shared';
+import { useQueueDeletion } from '@/hooks/useQueueDeletion';
 const mongolianMonthLabel = (value: string) => {
   const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value);
   return match ? `${match[1]} он ${Number(match[2])} сар` : value;

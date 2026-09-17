@@ -2,7 +2,22 @@ import { type ReactNode, useState } from 'react';
 import { BriefcaseBusiness, ChevronRight, LogOut, Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { cn } from '@/lib/utils';
-import { nav } from '@/App';
+import { Banknote, Clock3, Landmark, LayoutDashboard, PackageOpen, Receipt, ShieldCheck, Timer, UserRound, UsersRound, WalletCards } from 'lucide-react';
+
+export const nav = [
+  { href: '/', label: 'Статистик', icon: LayoutDashboard },
+  { href: '/employees', label: 'Ажилчид', icon: UsersRound },
+  { href: '/attendance', label: 'Ирц', icon: Clock3 },
+  { href: '/hour-balance', label: 'Цагийн баланс', icon: Timer },
+  { href: '/payroll', label: 'Цалин', icon: Banknote },
+  { href: '/cash', label: 'Касс', icon: WalletCards },
+  { href: '/bank-transactions', label: 'Банкны гүйлгээ', icon: Landmark },
+  { href: '/operating-expenses', label: 'Үйл ажиллагааны зардал', icon: Receipt },
+  { href: '/inventory', label: 'Бараа материал', icon: PackageOpen },
+  { href: '/fixed-assets', label: 'Эд хөрөнгө', icon: BriefcaseBusiness },
+  { href: '/deletion-requests', label: 'Устгах хүсэлт', icon: ShieldCheck },
+  { href: '/users', label: 'Хэрэглэгчийн тохиргоо', icon: UserRound },
+];
 
 export function AppShell({ children, role, onLogout }: { children: ReactNode; role: 'admin' | 'hr' | 'accountant' | 'warehouse' | 'viewer'; onLogout: () => void }) {
   const [location] = useLocation();

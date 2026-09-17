@@ -13,7 +13,8 @@ import {
   useListChartOfAccounts, useListOperatingExpensePaymentBankSuggestions, useListOperatingExpenses, useUpdateOperatingExpense,
   type OperatingExpense,
 } from '@workspace/api-client-react';
-import { money, today, useQueueDeletion } from '@/App';
+import { money, today } from '@/lib/app-shared';
+import { useQueueDeletion } from '@/hooks/useQueueDeletion';
 
 function OperatingExpenseModal({ expense, onClose }: { expense?: OperatingExpense; onClose: () => void }) {
   const isEdit = !!expense;

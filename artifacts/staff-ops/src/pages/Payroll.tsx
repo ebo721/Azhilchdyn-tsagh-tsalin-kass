@@ -7,7 +7,8 @@ import { cn } from '@/lib/utils';
 import { CalendarDays, Banknote, Check, ChevronRight, Coins, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { getGetDashboardQueryKey, getGetPayrollAdvanceQueryKey, getGetPayrollQueryKey, getGetPayrollScheduleQueryKey, useApprovePayrollAdvance, useGetAuthSession, useGetPayroll, useGetPayrollAdvance, useGetPayrollSchedule, useListCashClosures, useUpdatePayrollAdvancePayment, useUpdatePayrollSchedule, useUpsertPayrollAdjustment, type PayrollLine, type PayrollScheduleInput } from '@workspace/api-client-react';
 import { EmptyState, ErrorBlock, LoadingBlock, Modal } from '@/components/ui-primitives';
-import { dateLabel, currentMonth, money, shiftMonth, today, useQueueDeletion } from '@/App';
+import { dateLabel, currentMonth, money, shiftMonth, today } from '@/lib/app-shared';
+import { useQueueDeletion } from '@/hooks/useQueueDeletion';
 
 const mongolianMonthLabel = (value: string) => {
   const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value);

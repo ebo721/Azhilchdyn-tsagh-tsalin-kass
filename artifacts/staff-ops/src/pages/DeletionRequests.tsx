@@ -9,7 +9,7 @@ import {
   useCancelDeletionRequest,
   useListDeletionRequests,
 } from '@workspace/api-client-react';
-import { dateLabel } from '@/App';
+import { dateLabel } from '@/lib/app-shared';
 
 export function DeletionRequests() {
   const list = useListDeletionRequests();
