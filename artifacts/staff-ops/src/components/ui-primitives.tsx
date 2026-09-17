@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Activity, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { CashDayCloseControls } from '@/App';
+import { CashDayCloseControls } from '@/pages/Cash';
 
 export function LoadingBlock({ className = '' }: { className?: string }) {
   return <div className={cn('animate-pulse rounded-lg bg-foreground/8', className)} data-testid="loading-skeleton" />;
