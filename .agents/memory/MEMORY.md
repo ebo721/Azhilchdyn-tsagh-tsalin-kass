@@ -7,3 +7,4 @@
 - [Vercel workspace runtime packages](vercel-workspace-runtime-packages.md) — Internal TS libraries need declarations plus default runtime JS before Function tracing.
 - [Git and hosting boundaries](git-hosting-boundaries.md) — Never push database dumps; keep Replit runtime configuration separate from Vercel deployment settings.
 - [Payroll schedule immutability](payroll-schedule-immutability.md) — Version schedules by effective month and serialize schedule edits with payroll freezing/payment writes.
+- [Neon production migration sessions](neon-production-migration-sessions.md) — Set public search_path inside pooled sessions; do not rely on startup options or an older pg_dump client.
