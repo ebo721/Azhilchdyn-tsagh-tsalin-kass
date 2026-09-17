@@ -885,12 +885,13 @@ function calculatePayrollAdvanceLine(
   periodEnd?: string,
   advancePeriodEnd?: string,
 ) {
-  const daysWorked = records.filter((record) =>
-    record.employeeId === employee.id && ["present", "late"].includes(record.status)
-  ).length;
   const attendedRecords = records.filter((record) =>
-    record.employeeId === employee.id && ["present", "late"].includes(record.status),
+    record.employeeId === employee.id
+    && ["present", "late"].includes(record.status)
+    && (!periodStart || String(record.date) >= periodStart)
+    && (!advancePeriodEnd || String(record.date) <= advancePeriodEnd),
   );
+  const daysWorked = attendedRecords.length;
   const salaryFor = (date: string) => salaryAt(employee, salaryHistory, date);
   const firstSalary = salaryFor(
     attendedRecords[0] ? String(attendedRecords[0].date) : (advancePeriodEnd ?? employee.joinedAt),

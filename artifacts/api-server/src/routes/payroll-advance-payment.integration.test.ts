@@ -143,6 +143,24 @@ describe("concurrent payroll advance payments", () => {
       hours: 8,
       status: "present",
     });
+    await db.insert(attendanceTable).values([
+      {
+        employeeId,
+        date: `${month}-16`,
+        clockIn: "09:00",
+        clockOut: "18:00",
+        hours: 8,
+        status: "present",
+      },
+      {
+        employeeId,
+        date: `${month}-17`,
+        clockIn: "09:00",
+        clockOut: "18:00",
+        hours: 8,
+        status: "present",
+      },
+    ]);
 
     const response = await fetch(`${baseUrl}/api/payroll-advance/payment`, {
       method: "PUT",
