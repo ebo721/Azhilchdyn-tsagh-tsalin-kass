@@ -7,6 +7,6 @@
  */
 
 export interface ReclassifyInventoryPurchaseAsExpenseInput {
-  /** @minLength 1 */
-  category: string;
+  /** @minimum 1 */
+  accountId: number;
 }

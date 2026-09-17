@@ -1,8 +1,18 @@
 import { and, eq } from "drizzle-orm";
-import { bankTransactionsTable, cashTransactionsTable, operatingExpensesTable } from "@workspace/db";
+import { bankTransactionsTable, cashTransactionsTable, chartOfAccountsTable, operatingExpensesTable } from "@workspace/db";
 
 const SYSTEM_SOURCES = ["payroll", "payroll_advance", "inventory_purchase", "fixed_asset_purchase"];
 const OPERATING_EXPENSE_CATEGORY = "Үйл ажиллагааны зардал";
+
+const expenseAccountCode = (category: string) => {
+  const normalized = category.toLocaleLowerCase("mn-MN");
+  if (normalized.includes("түрээс")) return "6100";
+  if (normalized.includes("тээвэр") || normalized.includes("шатахуун")) return "6200";
+  if (normalized.includes("цахилгаан") || normalized.includes("дулаан") || normalized.includes("ус")) return "6300";
+  if (normalized.includes("интернет") || normalized.includes("холбоо")) return "6400";
+  if (normalized.includes("засвар")) return "6500";
+  return "6900";
+};
 
 export async function syncOperatingExpenseForBankCash(tx: any, bankId: number, cashId: number) {
   const [[bank], [cash]] = await Promise.all([
@@ -15,8 +25,29 @@ export async function syncOperatingExpenseForBankCash(tx: any, bankId: number, c
   const subcategory = cash.category === OPERATING_EXPENSE_CATEGORY
     ? (byCash?.category ?? "Бусад")
     : cash.category;
+  const accountCode = expenseAccountCode(subcategory);
+  if (!byCash) {
+    const defaults: Record<string, string> = {
+      "6100": "Түрээсийн зардал",
+      "6200": "Тээврийн зардал",
+      "6300": "Цахилгаан, дулаан, ус",
+      "6400": "Харилцаа холбоо, интернэт",
+      "6500": "Засвар үйлчилгээ",
+      "6900": "Бусад үйл ажиллагааны зардал",
+    };
+    await tx.insert(chartOfAccountsTable).values({
+      code: accountCode,
+      name: defaults[accountCode],
+      type: "expense",
+    }).onConflictDoNothing({ target: chartOfAccountsTable.code });
+  }
+  const [fallbackAccount] = byCash ? [null] : await tx.select().from(chartOfAccountsTable).where(and(
+    eq(chartOfAccountsTable.code, accountCode),
+    eq(chartOfAccountsTable.type, "expense"),
+  ));
+  if (!byCash && !fallbackAccount) throw new Error(`Operating expense account ${accountCode} is missing`);
   const values = {
-    description: cash.description, category: subcategory, date: String(cash.date), amount: Number(cash.amount),
+    description: cash.description, category: subcategory, accountId: byCash?.accountId ?? fallbackAccount.id, date: String(cash.date), amount: Number(cash.amount),
     paymentDate: String(cash.date), paymentAmount: Number(cash.amount), bankTransactionId: bankId, cashTransactionId: cashId,
   };
   if (cash.category !== OPERATING_EXPENSE_CATEGORY) {

@@ -69,7 +69,7 @@ test.describe("operating expense payments", () => {
 
       await page.getByTestId("button-add-expense").click();
       await page.getByTestId("input-expense-description").fill(originalDescription);
-      await page.getByTestId("input-expense-category").fill("E2E ангилал");
+      await page.getByTestId("select-expense-account").selectOption({ label: "6900 · Бусад үйл ажиллагааны зардал" });
       await page.getByTestId("input-expense-date").fill(bankDate);
       await page.getByTestId("input-expense-amount").fill(String(bankAmount));
       await page.getByTestId("button-save-expense").click();

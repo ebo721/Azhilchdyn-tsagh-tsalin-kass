@@ -234,10 +234,49 @@ const defaultChartOfAccounts = [
   { code: "6900", name: "Бусад үйл ажиллагааны зардал", type: "expense" },
 ] as const;
 
+const operatingExpenseAccountCodes = ["6100", "6200", "6300", "6400", "6500", "6900"] as const;
+
 const chartOfAccountResponse = (row: typeof chartOfAccountsTable.$inferSelect) => ({
   ...row,
   createdAt: row.createdAt.toISOString(),
 });
+
+async function ensureDefaultChartOfAccounts(tx: any) {
+  await tx.insert(chartOfAccountsTable).values([...defaultChartOfAccounts]).onConflictDoNothing({
+    target: chartOfAccountsTable.code,
+  });
+  const conflicting = await tx.select({ code: chartOfAccountsTable.code })
+    .from(chartOfAccountsTable)
+    .where(and(inArray(chartOfAccountsTable.code, [...operatingExpenseAccountCodes]), sql`${chartOfAccountsTable.type} <> 'expense'`));
+  if (conflicting.length) {
+    throw new Error(`Reserved operating expense account codes have a non-expense type: ${conflicting.map((row: { code: string }) => row.code).join(", ")}`);
+  }
+}
+
+async function lockedExpenseAccount(tx: any, accountId: number) {
+  const [account] = await tx.select().from(chartOfAccountsTable).where(and(
+    eq(chartOfAccountsTable.id, accountId),
+    eq(chartOfAccountsTable.type, "expense"),
+  )).for("update");
+  return account ?? null;
+}
+
+export async function fallbackExpenseAccount(tx: any, category: string) {
+  await ensureDefaultChartOfAccounts(tx);
+  const normalized = category.toLocaleLowerCase("mn-MN");
+  const preferredCode = normalized.includes("түрээс") ? "6100"
+    : normalized.includes("тээвэр") || normalized.includes("шатахуун") ? "6200"
+      : normalized.includes("цахилгаан") || normalized.includes("дулаан") || normalized.includes("ус") ? "6300"
+        : normalized.includes("интернет") || normalized.includes("холбоо") ? "6400"
+          : normalized.includes("засвар") ? "6500"
+            : "6900";
+  const [account] = await tx.select().from(chartOfAccountsTable).where(and(
+    eq(chartOfAccountsTable.code, preferredCode),
+    eq(chartOfAccountsTable.type, "expense"),
+  ));
+  if (!account) throw new Error(`Expense account ${preferredCode} is missing or has an invalid type`);
+  return account;
+}
 
 router.use(async (req, res, next) => {
   const session = await getStaffSession(req);
@@ -1857,9 +1896,11 @@ router.post("/cash/transactions", async (req, res, next) => {
         incomeMonth: input.type === "income" ? input.incomeMonth : null,
       }).returning();
       if (input.type === "expense") {
+        const account = await fallbackExpenseAccount(tx, input.category);
         await tx.insert(operatingExpensesTable).values({
           description: input.description.trim(),
           category: input.category.trim(),
+          accountId: account.id,
           date: input.date,
           amount: money(input.amount),
           paymentDate: input.date,
@@ -1917,9 +1958,11 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
         .returning();
       await tx.delete(operatingExpensesTable).where(eq(operatingExpensesTable.cashTransactionId, id));
       if (input.type === "expense") {
+        const account = await fallbackExpenseAccount(tx, input.category);
         await tx.insert(operatingExpensesTable).values({
           description: input.description.trim(),
           category: input.category.trim(),
+          accountId: account.id,
           date: input.date,
           amount: money(input.amount),
           paymentDate: input.date,
@@ -3382,11 +3425,6 @@ router.post("/inventory/purchases/:id/reclassify-as-expense", async (req, res, n
   try {
     const { id } = ReclassifyInventoryPurchaseAsExpenseParams.parse(req.params);
     const input = ReclassifyInventoryPurchaseAsExpenseBody.parse(req.body);
-    const category = input.category.trim();
-    if (!category) {
-      res.status(400).json({ error: "Ангилал сонгоно уу" });
-      return;
-    }
     const [existing] = await db.select().from(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, id));
     if (!existing) {
       res.status(404).json({ error: "Худалдан авалт олдсонгүй" });
@@ -3397,6 +3435,8 @@ router.post("/inventory/purchases/:id/reclassify-as-expense", async (req, res, n
       return;
     }
     const result = await db.transaction(async (tx) => {
+      const account = await lockedExpenseAccount(tx, input.accountId);
+      if (!account) return { kind: "invalid_account" as const };
       const lines = await tx.select().from(inventoryPurchaseItemsTable).where(eq(inventoryPurchaseItemsTable.purchaseId, id));
       const consumedLine = lines.find((line) => Number(line.remainingQuantity) < Number(line.quantity));
       if (consumedLine) {
@@ -3413,7 +3453,8 @@ router.post("/inventory/purchases/:id/reclassify-as-expense", async (req, res, n
       }
       const [newExpense] = await tx.insert(operatingExpensesTable).values({
         description: existing.documentName,
-        category,
+        category: account.name,
+        accountId: account.id,
         date: existing.date,
         amount: existing.totalAmount,
         paymentDate: existing.paymentDate,
@@ -3448,6 +3489,10 @@ router.post("/inventory/purchases/:id/reclassify-as-expense", async (req, res, n
       res.status(409).json({ error: "Энэ худалдан авалтын бараа аль хэдийн зарлагдсан тул шилжүүлэх боломжгүй" });
       return;
     }
+    if (result.kind === "invalid_account") {
+      res.status(400).json({ error: "Зардлын хүчинтэй данс сонгоно уу" });
+      return;
+    }
     res.status(201).json(ReclassifyInventoryPurchaseAsExpenseResponse.parse(operatingExpenseResponse(result.expense)));
   } catch (error) {
     next(error);
@@ -3466,11 +3511,14 @@ router.post("/operating-expenses", async (req, res, next) => {
     const input = CreateOperatingExpenseBody.parse(req.body);
     if (!isValidCalendarDate(input.date)) { res.status(400).json({ error: "Хуанлийн огноо буруу байна" }); return; }
     if (await isCashDateClosed(input.date)) { res.status(409).json({ error: "Өндөрлөсөн өдөр зардал бүртгэх боломжгүй" }); return; }
-    const [account] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, input.categoryId));
-    if (!account) { res.status(400).json({ error: "Сонгосон данс олдсонгүй" }); return; }
-    const [row] = await db.insert(operatingExpensesTable).values({
-      description: input.description.trim(), category: account.name, categoryId: account.id, date: input.date, amount: money(input.amount),
-    }).returning();
+    const row = await db.transaction(async (tx) => {
+      const account = await lockedExpenseAccount(tx, input.accountId);
+      if (!account) return null;
+      return (await tx.insert(operatingExpensesTable).values({
+        description: input.description.trim(), category: account.name, accountId: account.id, date: input.date, amount: money(input.amount),
+      }).returning())[0];
+    });
+    if (!row) { res.status(400).json({ error: "Зардлын хүчинтэй данс сонгоно уу" }); return; }
     res.status(201).json(CreateOperatingExpenseResponse.parse(operatingExpenseResponse(row)));
   } catch (error) { next(error); }
 });
@@ -3481,21 +3529,22 @@ router.put("/operating-expenses/:id", async (req, res, next) => {
     const input = UpdateOperatingExpenseBody.parse(req.body);
     if (!isValidCalendarDate(input.date)) { res.status(400).json({ error: "Хуанлийн огноо буруу байна" }); return; }
     if (await isCashDateClosed(input.date)) { res.status(409).json({ error: "Өндөрлөсөн өдөр зардал бүртгэх боломжгүй" }); return; }
-    const [account] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, input.categoryId));
-    if (!account) { res.status(400).json({ error: "Сонгосон данс олдсонгүй" }); return; }
     const result = await db.transaction(async (tx) => {
+      const account = await lockedExpenseAccount(tx, input.accountId);
+      if (!account) return "invalid_account" as const;
       const [old] = await tx.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.id, id)).for("update");
       if (!old) return null;
       if (old.paymentDate) return "paid" as const;
       const [oldClosure] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, old.date));
       if (oldClosure) return "closed" as const;
       return (await tx.update(operatingExpensesTable).set({
-        description: input.description.trim(), category: account.name, categoryId: account.id, date: input.date, amount: money(input.amount),
+        description: input.description.trim(), category: account.name, accountId: account.id, date: input.date, amount: money(input.amount),
       }).where(eq(operatingExpensesTable.id, id)).returning())[0];
     });
     if (result === null) { res.status(404).json({ error: "Зардал олдсонгүй" }); return; }
     if (result === "paid") { res.status(409).json({ error: "Төлбөр батлагдсан зардлыг засах боломжгүй" }); return; }
     if (result === "closed") { res.status(409).json({ error: "Өндөрлөсөн өдрийн зардлыг засах боломжгүй" }); return; }
+    if (result === "invalid_account") { res.status(400).json({ error: "Зардлын хүчинтэй данс сонгоно уу" }); return; }
     res.json(UpdateOperatingExpenseResponse.parse(operatingExpenseResponse(result)));
   } catch (error) { next(error); }
 });
@@ -3631,9 +3680,7 @@ router.get("/chart-of-accounts", async (_req, res, next) => {
   try {
     let rows = await db.select().from(chartOfAccountsTable).orderBy(asc(chartOfAccountsTable.code));
     if (rows.length === 0) {
-      await db.insert(chartOfAccountsTable).values([...defaultChartOfAccounts]).onConflictDoNothing({
-        target: chartOfAccountsTable.code,
-      });
+      await ensureDefaultChartOfAccounts(db);
       rows = await db.select().from(chartOfAccountsTable).orderBy(asc(chartOfAccountsTable.code));
     }
     res.json(ListChartOfAccountsResponse.parse(rows.map(chartOfAccountResponse)));
@@ -3648,6 +3695,10 @@ router.post("/chart-of-accounts", async (req, res, next) => {
     const name = input.name.trim();
     if (!name) {
       res.status(400).json({ error: "Дансны нэр хоосон байж болохгүй" });
+      return;
+    }
+    if ((operatingExpenseAccountCodes as readonly string[]).includes(input.code) && input.type !== "expense") {
+      res.status(400).json({ error: "Үйл ажиллагааны зардлын нөөц код нь expense төрөлтэй байна" });
       return;
     }
     const [row] = await db.insert(chartOfAccountsTable).values({
@@ -3676,15 +3727,39 @@ router.put("/chart-of-accounts/:id", async (req, res, next) => {
       res.status(400).json({ error: "Дансны нэр хоосон байж болохгүй" });
       return;
     }
-    const [row] = await db.update(chartOfAccountsTable).set({
-      code: input.code,
-      name,
-      type: input.type,
-    }).where(eq(chartOfAccountsTable.id, id)).returning();
-    if (!row) {
+    if ((operatingExpenseAccountCodes as readonly string[]).includes(input.code) && input.type !== "expense") {
+      res.status(400).json({ error: "Үйл ажиллагааны зардлын нөөц код нь expense төрөлтэй байна" });
+      return;
+    }
+    const result = await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, id)).for("update");
+      if (!existing) return { kind: "missing" as const };
+      if (existing.type === "expense" && input.type !== "expense") {
+        const [linked] = await tx.select({ id: operatingExpensesTable.id })
+          .from(operatingExpensesTable)
+          .where(eq(operatingExpensesTable.accountId, id))
+          .limit(1);
+        if (linked) return { kind: "in_use" as const };
+      }
+      const [row] = await tx.update(chartOfAccountsTable).set({
+        code: input.code,
+        name,
+        type: input.type,
+      }).where(eq(chartOfAccountsTable.id, id)).returning();
+      if (existing.name !== name) {
+        await tx.update(operatingExpensesTable).set({ category: name }).where(eq(operatingExpensesTable.accountId, id));
+      }
+      return { kind: "updated" as const, row };
+    });
+    if (result.kind === "missing") {
       res.status(404).json({ error: "Данс олдсонгүй" });
       return;
     }
+    if (result.kind === "in_use") {
+      res.status(409).json({ error: "Зардалд ашиглагдсан дансны төрлийг өөрчлөх боломжгүй" });
+      return;
+    }
+    const row = result.row;
     res.json(UpdateChartOfAccountResponse.parse(chartOfAccountResponse(row)));
   } catch (error) {
     const code = (error as { code?: string; cause?: { code?: string } }).code
@@ -3709,6 +3784,12 @@ router.delete("/chart-of-accounts/:id", async (req, res, next) => {
     }
     res.status(204).send();
   } catch (error) {
+    const code = (error as { code?: string; cause?: { code?: string } }).code
+      ?? (error as { cause?: { code?: string } }).cause?.code;
+    if (code === "23503") {
+      res.status(409).json({ error: "Энэ данс зардлын бүртгэлд ашиглагдсан тул устгах боломжгүй" });
+      return;
+    }
     next(error);
   }
 });

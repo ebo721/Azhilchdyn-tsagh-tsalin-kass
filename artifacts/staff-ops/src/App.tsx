@@ -1283,7 +1283,7 @@ function Inventory() {
   const create = useCreateInventoryPurchase();
   const update = useUpdateInventoryPurchase();
   const reclassify = useReclassifyInventoryPurchaseAsExpense();
-  const expensesForCategoryOptions = useListOperatingExpenses();
+  const chartOfAccounts = useListChartOfAccounts();
   const confirmPurchasePayment = useConfirmInventoryPurchasePayment();
   const cancelPurchasePayment = useCancelInventoryPurchasePayment();
   const deletion = useQueueDeletion();
@@ -1317,7 +1317,7 @@ function Inventory() {
     defaultValues: { inventoryItemId: '', date: today(), quantity: '', purpose: '' },
   });
   const categoryForm = useForm<{ name: string; category: string }>({ defaultValues: { name: '', category: '' } });
-  const reclassifyForm = useForm<{ category: string }>({ defaultValues: { category: '' } });
+  const reclassifyForm = useForm<{ accountId: string }>({ defaultValues: { accountId: '' } });
   const supplierForm = useForm<{ name: string }>({ defaultValues: { name: '' } });
   const paymentForm = useForm<{ date: string; amount: string }>({ defaultValues: { date: today(), amount: '' } });
   const paymentBankSuggestions = useListInventoryPurchasePaymentBankSuggestions(paymentPurchase?.id ?? 0, {
@@ -1430,11 +1430,11 @@ function Inventory() {
   };
   const openReclassify = (purchase: InventoryPurchase) => {
     setReclassifyPurchase(purchase);
-    reclassifyForm.reset({ category: '' });
+    reclassifyForm.reset({ accountId: '' });
   };
-  const submitReclassify = (values: { category: string }) => {
+  const submitReclassify = (values: { accountId: string }) => {
     if (!reclassifyPurchase) return;
-    reclassify.mutate({ id: reclassifyPurchase.id, data: { category: values.category } }, {
+    reclassify.mutate({ id: reclassifyPurchase.id, data: { accountId: Number(values.accountId) } }, {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getListInventoryPurchasesQueryKey() });
         qc.invalidateQueries({ queryKey: getListInventoryItemsQueryKey() });
@@ -1615,8 +1615,7 @@ function Inventory() {
     </Modal>}
     {reclassifyPurchase && <Modal title="Үйл ажиллагааны зардал руу шилжүүлэх" detail={`${reclassifyPurchase.supplierName} · ${money(reclassifyPurchase.totalAmount)} — энэ худалдан авалт бараа материалаас хасагдаж, зардал болно.`} onClose={() => setReclassifyPurchase(null)}>
       <Form {...reclassifyForm}><form onSubmit={reclassifyForm.handleSubmit(submitReclassify)} className="space-y-5" data-testid="form-inventory-reclassify">
-        <label className="block space-y-2 text-xs font-semibold">Зардлын ангилал<input list="reclassify-expense-category-options" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" placeholder="Жишээ: Цахилгаан, Түрээс" {...reclassifyForm.register('category', { required: true })} data-testid="input-reclassify-category" /></label>
-        <datalist id="reclassify-expense-category-options">{[...new Set((expensesForCategoryOptions.data ?? []).map((expense) => expense.category.trim()).filter(Boolean))].map((category) => <option value={category} key={category} />)}</datalist>
+        <label className="block space-y-2 text-xs font-semibold">Зардлын данс<select className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...reclassifyForm.register('accountId', { required: true })} data-testid="select-reclassify-account"><option value="">Данс сонгоно уу</option>{chartOfAccounts.data?.filter((account) => account.type === 'expense').map((account) => <option value={account.id} key={account.id}>{account.code} · {account.name}</option>)}</select></label>
         {reclassify.isError && <p className="text-xs font-semibold text-destructive">Шилжүүлэхэд алдаа гарлаа. Барааны үлдэгдэл аль хэдийн зарлагдсан эсэхийг шалгана уу.</p>}
         <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setReclassifyPurchase(null)}>Болих</Button><Button type="submit" disabled={reclassify.isPending} data-testid="button-save-reclassify">{reclassify.isPending ? 'Шилжүүлж байна...' : 'Шилжүүлэх'}</Button></div>
       </form></Form>
@@ -1825,22 +1824,23 @@ function UserSettings() {
   </div>;
 }
 
-function OperatingExpenseModal({ expense, accounts, onClose }: { expense?: OperatingExpense; accounts: ChartOfAccount[]; onClose: () => void }) {
+function OperatingExpenseModal({ expense, onClose }: { expense?: OperatingExpense; onClose: () => void }) {
   const isEdit = !!expense;
   const create = useCreateOperatingExpense();
   const update = useUpdateOperatingExpense();
   const qc = useQueryClient();
+  const accounts = useListChartOfAccounts();
   const form = useForm({
     defaultValues: {
       description: expense?.description ?? '',
-      categoryId: expense?.categoryId ?? accounts[0]?.id ?? 0,
+      accountId: expense ? String(expense.accountId) : '',
       date: expense?.date ?? today(),
       amount: String(expense?.amount ?? ''),
     },
   });
 
-  const submit = (values: { description: string; categoryId: number; date: string; amount: string }) => {
-    const data = { description: values.description, categoryId: values.categoryId, date: values.date, amount: Number(values.amount) };
+  const submit = (values: { description: string; accountId: string; date: string; amount: string }) => {
+    const data = { description: values.description, accountId: Number(values.accountId), date: values.date, amount: Number(values.amount) };
     const done = () => { qc.invalidateQueries({ queryKey: getListOperatingExpensesQueryKey() }); qc.invalidateQueries({ queryKey: getGetCashSummaryQueryKey() }); qc.invalidateQueries({ queryKey: getListCashTransactionsQueryKey() }); onClose(); };
     if (isEdit && expense) update.mutate({ id: expense.id, data }, { onSuccess: done, onError: (e) => window.alert(e instanceof Error ? e.message : 'Алдаа гарлаа.') });
     else create.mutate({ data }, { onSuccess: done, onError: (e) => window.alert(e instanceof Error ? e.message : 'Алдаа гарлаа.') });
@@ -1852,7 +1852,7 @@ function OperatingExpenseModal({ expense, accounts, onClose }: { expense?: Opera
         <form onSubmit={form.handleSubmit(submit)} className="space-y-4">
           <label className="block space-y-1.5 text-xs font-semibold">Утга<input className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('description', { required: true })} data-testid="input-expense-description" /></label>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block space-y-1.5 text-xs font-semibold">Зардлын данс<select className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('categoryId', { required: true, valueAsNumber: true, min: 1 })} data-testid="select-expense-category-account">{accounts.map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></label>
+            <label className="block space-y-1.5 text-xs font-semibold">Зардлын данс<select className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('accountId', { required: true })} data-testid="select-expense-account"><option value="">Данс сонгоно уу</option>{accounts.data?.filter((account) => account.type === 'expense').map((account) => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}</select></label>
             <label className="block space-y-1.5 text-xs font-semibold">Огноо<input type="date" className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('date', { required: true })} data-testid="input-expense-date" /></label>
             <label className="block space-y-1.5 text-xs font-semibold">Дүн<input type="number" min="0" className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('amount', { required: true })} data-testid="input-expense-amount" /></label>
           </div>
@@ -1932,9 +1932,9 @@ function OperatingExpenses() {
   const cancelPayment = useCancelOperatingExpensePayment();
   const [editing, setEditing] = useState<OperatingExpense | 'new' | null>(null);
   const [paying, setPaying] = useState<OperatingExpense | null>(null);
-  const [filterCategoryId, setFilterCategoryId] = useState('all');
+  const [filterAccountId, setFilterAccountId] = useState('all');
   const accountById = useMemo(() => new Map((accounts.data ?? []).map((account) => [account.id, account])), [accounts.data]);
-  const filteredExpenses = (query.data ?? []).filter((expense) => filterCategoryId === 'all' || String(expense.categoryId) === filterCategoryId);
+  const filteredExpenses = (query.data ?? []).filter((expense) => filterAccountId === 'all' || String(expense.accountId) === filterAccountId);
 
   const remove = (expense: OperatingExpense) => {
     if (window.confirm(`"${expense.description}" зардлыг устгах уу?`)) deletion.request(`/operating-expenses/${expense.id}`, `Зардал: ${expense.description}`);
@@ -1951,8 +1951,8 @@ function OperatingExpenses() {
 
   return (
     <div className="page-enter space-y-6">
-      <PageHeading title="Үйл ажиллагааны зардал" detail="Байгууллагын тогтмол болон бусад үйл ажиллагааны зардлын бүртгэл." action={!isViewer && <Button onClick={() => setEditing('new')} disabled={!accounts.data?.length} data-testid="button-add-expense"><Plus className="mr-2 size-4" />Зардал нэмэх</Button>} />
-      {!query.isLoading && !query.isError && query.data?.length ? <div className="flex justify-end"><label className="space-y-1 text-xs font-semibold">Зардлын данс<select value={filterCategoryId} onChange={(event) => setFilterCategoryId(event.target.value)} className="block h-10 min-w-64 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="select-operating-expense-category"><option value="all">Бүх данс</option>{(accounts.data ?? []).map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></label></div> : null}
+      <PageHeading title="Үйл ажиллагааны зардал" detail="Байгууллагын тогтмол болон бусад үйл ажиллагааны зардлын бүртгэл." action={!isViewer && <Button onClick={() => setEditing('new')} disabled={!accounts.data?.some((account) => account.type === 'expense')} data-testid="button-add-expense"><Plus className="mr-2 size-4" />Зардал нэмэх</Button>} />
+      {!query.isLoading && !query.isError && query.data?.length ? <div className="flex justify-end"><label className="space-y-1 text-xs font-semibold">Зардлын данс<select value={filterAccountId} onChange={(event) => setFilterAccountId(event.target.value)} className="block h-10 min-w-64 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="select-operating-expense-category"><option value="all">Бүх данс</option>{(accounts.data ?? []).filter((account) => account.type === 'expense').map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></label></div> : null}
       {query.isLoading ? <div className="space-y-4"><LoadingBlock className="h-16" /><LoadingBlock className="h-16" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : query.data?.length ? (
         <div className="overflow-hidden rounded-2xl border border-border bg-card">
           <table className="w-full text-left text-sm" data-testid="table-expenses">
@@ -1964,7 +1964,7 @@ function OperatingExpenses() {
                 <tr key={ex.id} className="transition-colors hover:bg-secondary/20" data-testid={`row-expense-${ex.id}`}>
                   <td className="px-5 py-3 font-mono text-xs">{ex.date}</td>
                   <td className="px-5 py-3 font-medium">{ex.description}</td>
-                  <td className="px-5 py-3 text-xs">{ex.categoryId && accountById.get(ex.categoryId) ? `${accountById.get(ex.categoryId)!.code} — ${accountById.get(ex.categoryId)!.name}` : ex.category}</td>
+                  <td className="px-5 py-3 text-xs">{accountById.get(ex.accountId) ? `${accountById.get(ex.accountId)!.code} — ${accountById.get(ex.accountId)!.name}` : ex.category}</td>
                   <td className="px-5 py-3 text-right font-mono font-bold text-destructive">{money(ex.amount)}</td>
                   <td className="px-5 py-3 text-center">
                     {ex.paymentDate ? (
@@ -1993,7 +1993,7 @@ function OperatingExpenses() {
           </table>
         </div>
       ) : <EmptyState title="Зардал бүртгэгдээгүй байна" detail="Шинээр үйл ажиллагааны зардал нэмж бүртгэнэ үү." icon={Receipt} />}
-      {editing && <OperatingExpenseModal expense={editing === 'new' ? undefined : editing} accounts={accounts.data ?? []} onClose={() => setEditing(null)} />}
+      {editing && <OperatingExpenseModal expense={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
       {paying && <OperatingExpensePaymentModal expense={paying} onClose={() => setPaying(null)} />}
     </div>
   );

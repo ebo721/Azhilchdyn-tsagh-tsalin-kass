@@ -856,8 +856,8 @@ export interface InventoryPurchaseBankSuggestion {
 }
 
 export interface ReclassifyInventoryPurchaseAsExpenseInput {
-  /** @minLength 1 */
-  category: string;
+  /** @minimum 1 */
+  accountId: number;
 }
 
 export interface InventorySupplierUpdate {
@@ -936,8 +936,7 @@ export interface OperatingExpense {
   id: number;
   description: string;
   category: string;
-  /** @nullable */
-  categoryId: number | null;
+  accountId: number;
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
   date: string;
   /** @minimum 0 */
@@ -957,7 +956,7 @@ export interface OperatingExpenseInput {
   /** @minLength 1 */
   description: string;
   /** @minimum 1 */
-  categoryId: number;
+  accountId: number;
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
   date: string;
   /** @exclusiveMinimum 0 */

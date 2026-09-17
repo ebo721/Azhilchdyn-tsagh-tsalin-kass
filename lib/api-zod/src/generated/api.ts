@@ -1509,7 +1509,7 @@ export const ReclassifyInventoryPurchaseAsExpenseParams = zod.object({
 
 
 export const ReclassifyInventoryPurchaseAsExpenseBody = zod.object({
-  "category": zod.string().min(1)
+  "accountId": zod.number().int().min(1)
 })
 
 export const reclassifyInventoryPurchaseAsExpenseResponseDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
@@ -1521,7 +1521,7 @@ export const ReclassifyInventoryPurchaseAsExpenseResponse = zod.object({
   "id": zod.number().int(),
   "description": zod.string(),
   "category": zod.string(),
-  "categoryId": zod.number().int().nullable(),
+  "accountId": zod.number().int(),
   "date": zod.string().regex(reclassifyInventoryPurchaseAsExpenseResponseDateRegExp),
   "amount": zod.number().min(reclassifyInventoryPurchaseAsExpenseResponseAmountMin),
   "paymentDate": zod.string().nullable(),
@@ -1541,7 +1541,7 @@ export const ListOperatingExpensesResponseItem = zod.object({
   "id": zod.number().int(),
   "description": zod.string(),
   "category": zod.string(),
-  "categoryId": zod.number().int().nullable(),
+  "accountId": zod.number().int(),
   "date": zod.string().regex(listOperatingExpensesResponseDateRegExp),
   "amount": zod.number().min(listOperatingExpensesResponseAmountMin),
   "paymentDate": zod.string().nullable(),
@@ -1562,7 +1562,7 @@ export const createOperatingExpenseBodyAmountExclusiveMin = 0;
 
 export const CreateOperatingExpenseBody = zod.object({
   "description": zod.string().min(1),
-  "categoryId": zod.number().int().min(1),
+  "accountId": zod.number().int().min(1),
   "date": zod.string().regex(createOperatingExpenseBodyDateRegExp),
   "amount": zod.number().gt(createOperatingExpenseBodyAmountExclusiveMin)
 })
@@ -1576,7 +1576,7 @@ export const CreateOperatingExpenseResponse = zod.object({
   "id": zod.number().int(),
   "description": zod.string(),
   "category": zod.string(),
-  "categoryId": zod.number().int().nullable(),
+  "accountId": zod.number().int(),
   "date": zod.string().regex(createOperatingExpenseResponseDateRegExp),
   "amount": zod.number().min(createOperatingExpenseResponseAmountMin),
   "paymentDate": zod.string().nullable(),
@@ -1600,7 +1600,7 @@ export const updateOperatingExpenseBodyAmountExclusiveMin = 0;
 
 export const UpdateOperatingExpenseBody = zod.object({
   "description": zod.string().min(1),
-  "categoryId": zod.number().int().min(1),
+  "accountId": zod.number().int().min(1),
   "date": zod.string().regex(updateOperatingExpenseBodyDateRegExp),
   "amount": zod.number().gt(updateOperatingExpenseBodyAmountExclusiveMin)
 })
@@ -1614,7 +1614,7 @@ export const UpdateOperatingExpenseResponse = zod.object({
   "id": zod.number().int(),
   "description": zod.string(),
   "category": zod.string(),
-  "categoryId": zod.number().int().nullable(),
+  "accountId": zod.number().int(),
   "date": zod.string().regex(updateOperatingExpenseResponseDateRegExp),
   "amount": zod.number().min(updateOperatingExpenseResponseAmountMin),
   "paymentDate": zod.string().nullable(),
@@ -1671,7 +1671,7 @@ export const ConfirmOperatingExpensePaymentResponse = zod.object({
   "id": zod.number().int(),
   "description": zod.string(),
   "category": zod.string(),
-  "categoryId": zod.number().int().nullable(),
+  "accountId": zod.number().int(),
   "date": zod.string().regex(confirmOperatingExpensePaymentResponseDateRegExp),
   "amount": zod.number().min(confirmOperatingExpensePaymentResponseAmountMin),
   "paymentDate": zod.string().nullable(),
@@ -1695,7 +1695,7 @@ export const CancelOperatingExpensePaymentResponse = zod.object({
   "id": zod.number().int(),
   "description": zod.string(),
   "category": zod.string(),
-  "categoryId": zod.number().int().nullable(),
+  "accountId": zod.number().int(),
   "date": zod.string().regex(cancelOperatingExpensePaymentResponseDateRegExp),
   "amount": zod.number().min(cancelOperatingExpensePaymentResponseAmountMin),
   "paymentDate": zod.string().nullable(),

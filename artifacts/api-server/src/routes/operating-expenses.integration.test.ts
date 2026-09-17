@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { and, eq, inArray } from "drizzle-orm";
-import { bankTransactionsTable, cashTransactionsTable, db, operatingExpensesTable, usersTable } from "@workspace/db";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { bankTransactionsTable, cashTransactionsTable, chartOfAccountsTable, db, operatingExpensesTable, usersTable } from "@workspace/db";
 import app from "../app";
 import { createStaffSession, hrCookie } from "../lib/hr-session";
+import { fallbackExpenseAccount } from "./operations";
 
 describe("operating expenses", () => {
   let server: Server;
@@ -13,12 +14,16 @@ describe("operating expenses", () => {
   let adminCookie: string;
   let expenseId: number;
   let bankId: number;
+  let expenseAccountId: number;
   before(async () => {
     process.env.SESSION_SECRET = "operating-expense-test";
     const [admin] = await db.select().from(usersTable).where(eq(usersTable.role, "admin")).limit(1);
     assert.ok(admin);
     adminCookie = `${hrCookie.name}=${createStaffSession(admin)}`;
-    const [expense] = await db.insert(operatingExpensesTable).values({ description: `test expense ${process.pid}`, category: "supplies", date: "2099-03-10", amount: 1200 }).returning({ id: operatingExpensesTable.id });
+    await db.insert(chartOfAccountsTable).values({ code: "6900", name: "Бусад үйл ажиллагааны зардал", type: "expense" }).onConflictDoNothing({ target: chartOfAccountsTable.code });
+    const [expenseAccount] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "6900"));
+    expenseAccountId = expenseAccount.id;
+    const [expense] = await db.insert(operatingExpensesTable).values({ description: `test expense ${process.pid}`, category: "supplies", accountId: expenseAccountId, date: "2099-03-10", amount: 1200 }).returning({ id: operatingExpensesTable.id });
     expenseId = expense.id;
     const [bank] = await db.insert(bankTransactionsTable).values({
       transactionAt: new Date("2099-03-12T09:00:00Z"), type: "expense", amount: 1300,
@@ -37,12 +42,12 @@ describe("operating expenses", () => {
   });
 
   it("supports CRUD, ranked suggestions, linking, cancellation and deletion", async () => {
-    const create = await fetch(`${baseUrl}/api/operating-expenses`, { method: "POST", headers: { "content-type": "application/json", cookie: adminCookie }, body: JSON.stringify({ description: "new expense", category: "supplies", date: "2099-03-11", amount: 1250 }) });
+    const create = await fetch(`${baseUrl}/api/operating-expenses`, { method: "POST", headers: { "content-type": "application/json", cookie: adminCookie }, body: JSON.stringify({ description: "new expense", accountId: expenseAccountId, date: "2099-03-11", amount: 1250 }) });
     assert.equal(create.status, 201);
     const created = await create.json() as { id: number };
     const list = await fetch(`${baseUrl}/api/operating-expenses`, { headers: { cookie: adminCookie } });
     assert.equal(list.status, 200);
-    const update = await fetch(`${baseUrl}/api/operating-expenses/${created.id}`, { method: "PUT", headers: { "content-type": "application/json", cookie: adminCookie }, body: JSON.stringify({ description: "updated", category: "supplies", date: "2099-03-11", amount: 1300 }) });
+    const update = await fetch(`${baseUrl}/api/operating-expenses/${created.id}`, { method: "PUT", headers: { "content-type": "application/json", cookie: adminCookie }, body: JSON.stringify({ description: "updated", accountId: expenseAccountId, date: "2099-03-11", amount: 1300 }) });
     assert.equal(update.status, 200);
     const suggestions = await fetch(`${baseUrl}/api/operating-expenses/${expenseId}/payment-bank-suggestions`, { headers: { cookie: adminCookie } });
     assert.equal(suggestions.status, 200);
@@ -67,8 +72,8 @@ describe("operating expenses", () => {
 
   it("allows one concurrent bank claim and gives viewers read-only access", async () => {
     const rows = await db.insert(operatingExpensesTable).values([
-      { description: "concurrent a", category: "x", date: "2099-04-10", amount: 500 },
-      { description: "concurrent b", category: "x", date: "2099-04-10", amount: 500 },
+      { description: "concurrent a", category: "x", accountId: expenseAccountId, date: "2099-04-10", amount: 500 },
+      { description: "concurrent b", category: "x", accountId: expenseAccountId, date: "2099-04-10", amount: 500 },
     ]).returning({ id: operatingExpensesTable.id });
     const [bank] = await db.insert(bankTransactionsTable).values({ transactionAt: new Date("2099-04-11T10:00:00Z"), type: "expense", amount: 500, description: "concurrent", fingerprint: `operating-concurrent-${process.pid}` }).returning({ id: bankTransactionsTable.id });
     try {
@@ -81,7 +86,7 @@ describe("operating expenses", () => {
         const deniedMutation = await fetch(`${baseUrl}/api/operating-expenses`, {
           method: "POST",
           headers: { "content-type": "application/json", cookie: `${hrCookie.name}=${createStaffSession(viewer[0])}` },
-          body: JSON.stringify({ description: "viewer must not create", category: "x", date: "2099-04-10", amount: 500 }),
+          body: JSON.stringify({ description: "viewer must not create", accountId: expenseAccountId, date: "2099-04-10", amount: 500 }),
         });
         assert.equal(deniedMutation.status, 403);
       }
@@ -106,7 +111,7 @@ describe("operating expenses", () => {
       headers: { "content-type": "application/json", cookie: warehouseCookie },
       body: JSON.stringify({
         description: `warehouse expense ${process.pid}`,
-        category: "Захирал",
+        accountId: expenseAccountId,
         date: "2099-05-10",
         amount: 900,
       }),
@@ -144,6 +149,9 @@ describe("operating expenses", () => {
     const [expense] = await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.cashTransactionId, created.id));
     assert.ok(expense);
     assert.equal(expense.category, "Түрээс");
+    const [mappedAccount] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, expense.accountId));
+    assert.equal(mappedAccount.code, "6100");
+    assert.equal(mappedAccount.type, "expense");
 
     const remove = await fetch(`${baseUrl}/api/cash/transactions/${created.id}`, {
       method: "DELETE",
@@ -151,6 +159,97 @@ describe("operating expenses", () => {
     });
     assert.equal(remove.status, 204);
     assert.equal((await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.cashTransactionId, created.id))).length, 0);
+  });
+
+  it("rejects a reserved fallback code when it is not an expense account", async () => {
+    const [account] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "6500"));
+    assert.ok(account);
+    await db.update(chartOfAccountsTable).set({ type: "asset" }).where(eq(chartOfAccountsTable.id, account.id));
+    try {
+      await assert.rejects(
+        () => fallbackExpenseAccount(db, "Засвар үйлчилгээ"),
+        /non-expense type|invalid type/,
+      );
+    } finally {
+      await db.update(chartOfAccountsTable).set({ type: "expense" }).where(eq(chartOfAccountsTable.id, account.id));
+    }
+  });
+
+  it("prevents account edits from breaking later cash expense creation", async () => {
+    const [account] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "6500"));
+    assert.ok(account);
+    const update = await fetch(`${baseUrl}/api/chart-of-accounts/${account.id}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json", cookie: adminCookie },
+      body: JSON.stringify({ code: account.code, name: account.name, type: "asset" }),
+    });
+    assert.equal(update.status, 400);
+
+    const create = await fetch(`${baseUrl}/api/cash/transactions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: adminCookie },
+      body: JSON.stringify({
+        type: "expense",
+        category: "Засвар үйлчилгээ",
+        description: `reserved account route test ${process.pid}`,
+        amount: 100,
+        date: "2099-06-11",
+        incomeMonth: null,
+      }),
+    });
+    assert.equal(create.status, 201);
+    const created = await create.json() as { id: number };
+    const [expense] = await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.cashTransactionId, created.id));
+    assert.equal(expense.accountId, account.id);
+    await db.delete(operatingExpensesTable).where(eq(operatingExpensesTable.cashTransactionId, created.id));
+    await db.delete(cashTransactionsTable).where(eq(cashTransactionsTable.id, created.id));
+  });
+
+  it("serializes expense creation against account type changes", async () => {
+    const code = `79${String(process.pid).slice(-2)}`;
+    const [account] = await db.insert(chartOfAccountsTable).values({
+      code,
+      name: `Concurrent expense ${process.pid}`,
+      type: "expense",
+    }).returning();
+    let createdExpenseId: number | undefined;
+    try {
+      const [create, update] = await Promise.all([
+        fetch(`${baseUrl}/api/operating-expenses`, {
+          method: "POST",
+          headers: { "content-type": "application/json", cookie: adminCookie },
+          body: JSON.stringify({
+            description: `concurrent account expense ${process.pid}`,
+            accountId: account.id,
+            date: "2099-06-12",
+            amount: 200,
+          }),
+        }),
+        fetch(`${baseUrl}/api/chart-of-accounts/${account.id}`, {
+          method: "PUT",
+          headers: { "content-type": "application/json", cookie: adminCookie },
+          body: JSON.stringify({ code, name: account.name, type: "asset" }),
+        }),
+      ]);
+      assert.ok(
+        (create.status === 201 && update.status === 409)
+        || (create.status === 400 && update.status === 200),
+        `unexpected statuses: create=${create.status}, update=${update.status}`,
+      );
+      if (create.status === 201) {
+        createdExpenseId = ((await create.json()) as { id: number }).id;
+      }
+      const invalidRows = await db.select({ id: operatingExpensesTable.id })
+        .from(operatingExpensesTable)
+        .innerJoin(chartOfAccountsTable, eq(chartOfAccountsTable.id, operatingExpensesTable.accountId))
+        .where(and(eq(operatingExpensesTable.accountId, account.id), sql`${chartOfAccountsTable.type} <> 'expense'`));
+      assert.equal(invalidRows.length, 0);
+    } finally {
+      if (createdExpenseId) {
+        await db.delete(operatingExpensesTable).where(eq(operatingExpensesTable.id, createdExpenseId));
+      }
+      await db.delete(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, account.id));
+    }
   });
 
   it("reconciles historical and future bank expenses while excluding system sources", async () => {
@@ -200,6 +299,10 @@ describe("operating expenses", () => {
       assert.equal(reconciled[0].cashTransactionId, historical.cash.id);
       assert.equal(reconciled[0].category, "Түрээс");
       assert.equal(reconciled[0].paymentDate, "2099-05-10");
+      const [historicalExpense] = await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.bankTransactionId, historical.bank.id));
+      const [historicalAccount] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, historicalExpense.accountId));
+      assert.equal(historicalAccount.code, "6100");
+      assert.equal(historicalAccount.type, "expense");
       for (const pair of excluded) {
         assert.equal(firstRows.some((row) => row.bankTransactionId === pair.bank.id), false);
       }
