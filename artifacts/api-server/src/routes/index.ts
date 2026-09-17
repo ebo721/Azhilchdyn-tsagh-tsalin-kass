@@ -13,6 +13,7 @@ import operatingExpensesRouter from "./operating-expenses.js";
 import chartOfAccountsRouter from "./chart-of-accounts.js";
 import deletionRequestsRouter from "./deletion-requests.js";
 import dashboardRouter from "./dashboard.js";
+import journalRouter from "./journal.js";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(operatingExpensesRouter);
 router.use(chartOfAccountsRouter);
 router.use(deletionRequestsRouter);
 router.use(dashboardRouter);
+router.use(journalRouter);
 
 export default router;

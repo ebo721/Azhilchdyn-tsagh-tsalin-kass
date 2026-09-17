@@ -3,12 +3,15 @@ import { and, eq, inArray } from "drizzle-orm";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+export class JournalValidationError extends Error {}
+
 type JournalLineInput = {
   accountId: number;
   debit: number;
   credit: number;
   memo?: string | null;
 };
+export type JournalEntryLineInput = JournalLineInput;
 
 type PostJournalEntryInput = {
   date: string;
@@ -31,39 +34,7 @@ async function postJournalEntryInternal(
   input: PostJournalEntryInput,
   allowInactiveAccounts: boolean,
 ): Promise<{ journalEntryId: number; status: "draft" | "posted" }> {
-  if (input.lines.length < 2) {
-    throw new Error("Journal entry must contain at least two lines");
-  }
-
-  const lines = input.lines.map((line) => ({
-    ...line,
-    debitCents: Math.round(line.debit * 100),
-    creditCents: Math.round(line.credit * 100),
-  }));
-  for (const line of lines) {
-    const safeCents = Number.isSafeInteger(line.debitCents) && Number.isSafeInteger(line.creditCents);
-    const debitOnly = safeCents && Number.isFinite(line.debit) && line.debitCents > 0 && line.creditCents === 0;
-    const creditOnly = safeCents && Number.isFinite(line.credit) && line.creditCents > 0 && line.debitCents === 0;
-    if (!debitOnly && !creditOnly) {
-      throw new Error("Each journal line must contain either a debit or a credit");
-    }
-  }
-
-  const accountIds = [...new Set(lines.map((line) => line.accountId))];
-  const accounts = await tx
-    .select({ id: chartOfAccountsTable.id })
-    .from(chartOfAccountsTable)
-    .where(allowInactiveAccounts
-      ? inArray(chartOfAccountsTable.id, accountIds)
-      : and(inArray(chartOfAccountsTable.id, accountIds), eq(chartOfAccountsTable.isActive, true)));
-  const validAccountIds = new Set(accounts.map((account) => account.id));
-  if (accounts.length !== accountIds.length || accountIds.some((id) => !validAccountIds.has(id))) {
-    throw new Error("Every journal line must use an active account");
-  }
-
-  const debitCents = lines.reduce((sum, line) => sum + BigInt(line.debitCents), 0n);
-  const creditCents = lines.reduce((sum, line) => sum + BigInt(line.creditCents), 0n);
-  const status = debitCents === creditCents ? "posted" : "draft";
+  const { lines, status } = await validateAndNormalizeJournalLines(tx, input.lines, allowInactiveAccounts);
 
   const [entry] = await tx.insert(journalEntriesTable).values({
     date: input.date,
@@ -83,6 +54,36 @@ async function postJournalEntryInternal(
   })));
 
   return { journalEntryId: entry.id, status };
+}
+
+export async function validateAndNormalizeJournalLines(
+  tx: Tx,
+  inputLines: JournalLineInput[],
+  allowInactiveAccounts = false,
+) {
+  if (inputLines.length < 2) throw new JournalValidationError("Journal entry must contain at least two lines");
+  const lines = inputLines.map((line) => ({
+    ...line,
+    debitCents: Math.round(line.debit * 100),
+    creditCents: Math.round(line.credit * 100),
+  }));
+  for (const line of lines) {
+    const safeCents = Number.isSafeInteger(line.debitCents) && Number.isSafeInteger(line.creditCents);
+    const debitOnly = safeCents && Number.isFinite(line.debit) && line.debitCents > 0 && line.creditCents === 0;
+    const creditOnly = safeCents && Number.isFinite(line.credit) && line.creditCents > 0 && line.debitCents === 0;
+    if (!debitOnly && !creditOnly) throw new JournalValidationError("Each journal line must contain either a debit or a credit");
+  }
+  const accountIds = [...new Set(lines.map((line) => line.accountId))];
+  const accounts = await tx.select({ id: chartOfAccountsTable.id }).from(chartOfAccountsTable).where(
+    allowInactiveAccounts ? inArray(chartOfAccountsTable.id, accountIds) : and(inArray(chartOfAccountsTable.id, accountIds), eq(chartOfAccountsTable.isActive, true)),
+  );
+  const validAccountIds = new Set(accounts.map((account) => account.id));
+  if (accounts.length !== accountIds.length || accountIds.some((id) => !validAccountIds.has(id))) {
+    throw new JournalValidationError("Every journal line must use an active account");
+  }
+  const debitCents = lines.reduce((sum, line) => sum + BigInt(line.debitCents), 0n);
+  const creditCents = lines.reduce((sum, line) => sum + BigInt(line.creditCents), 0n);
+  return { lines, status: debitCents === creditCents ? "posted" as const : "draft" as const };
 }
 
 export async function voidJournalEntry(

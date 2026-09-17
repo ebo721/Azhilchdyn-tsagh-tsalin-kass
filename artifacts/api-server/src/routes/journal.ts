@@ -1,0 +1,190 @@
+import { Router, type IRouter } from "express";
+import {
+  CreateJournalEntryBody, CreateJournalEntryResponse, GetJournalEntryParams, GetJournalEntryResponse,
+  ListJournalEntriesQueryParams, ListJournalEntriesResponse, UpdateJournalEntryBody, UpdateJournalEntryParams,
+  UpdateJournalEntryResponse, VoidJournalEntryParams, VoidJournalEntryResponse,
+  GetJournalAccountLedgerParams, GetJournalAccountLedgerResponse, GetJournalTrialBalanceResponse,
+} from "@workspace/api-zod";
+import { and, asc, desc, eq, gte, lte, inArray } from "drizzle-orm";
+import { db, chartOfAccountsTable, journalEntriesTable, journalLinesTable, type JournalEntry, type JournalLine } from "@workspace/db";
+import { getStaffSession } from "../lib/hr-session.js";
+import {
+  JournalValidationError, postJournalEntry, validateAndNormalizeJournalLines, voidJournalEntry,
+} from "../lib/journal-posting.js";
+
+const router: IRouter = Router();
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : "Invalid journal entry";
+function journalDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) throw new JournalValidationError("Journal date must use YYYY-MM-DD");
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    throw new JournalValidationError("Journal date is not a valid calendar date");
+  }
+  return value;
+}
+type JournalEntryWithLines = JournalEntry & { lines: JournalLine[] };
+function entryWithLines(entry: JournalEntry, lines: JournalLine[]): JournalEntryWithLines {
+  return { ...entry, lines };
+}
+async function loadEntry(id: number): Promise<JournalEntryWithLines | null> {
+  const [entry] = await db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, id));
+  if (!entry) return null;
+  const lines = await db.select().from(journalLinesTable).where(eq(journalLinesTable.journalEntryId, id)).orderBy(journalLinesTable.id);
+  return entryWithLines(entry, lines);
+}
+
+router.get("/journal/entries", async (req, res, next) => {
+  try {
+    const raw = ListJournalEntriesQueryParams.parse(req.query);
+    const filters = [];
+    if (raw.dateFrom) filters.push(gte(journalEntriesTable.date, journalDate(raw.dateFrom)));
+    if (raw.dateTo) filters.push(lte(journalEntriesTable.date, journalDate(raw.dateTo)));
+    if (raw.sourceType) filters.push(eq(journalEntriesTable.sourceType, raw.sourceType));
+    if (raw.status) filters.push(eq(journalEntriesTable.status, raw.status));
+    if (raw.accountId) {
+      const ids = await db.select({ id: journalLinesTable.journalEntryId }).from(journalLinesTable).where(eq(journalLinesTable.accountId, raw.accountId));
+      filters.push(inArray(journalEntriesTable.id, ids.map((row) => row.id)));
+    }
+    const rows = await db.select().from(journalEntriesTable).where(filters.length ? and(...filters) : undefined).orderBy(desc(journalEntriesTable.date), desc(journalEntriesTable.id));
+    res.json(ListJournalEntriesResponse.parse(rows));
+  } catch (error) {
+    if (error instanceof JournalValidationError) return res.status(400).json({ error: error.message });
+    return next(error);
+  }
+});
+
+router.get("/journal/entries/:id", async (req, res, next) => {
+  try {
+    const { id } = GetJournalEntryParams.parse(req.params);
+    const result = await loadEntry(id);
+    if (!result) return res.status(404).json({ error: "Journal entry not found" });
+    return res.json(GetJournalEntryResponse.parse(result));
+  } catch (error) { return next(error); }
+});
+
+router.post("/journal/entries", async (req, res, next) => {
+  try {
+    const body = CreateJournalEntryBody.parse(req.body);
+    const session = await getStaffSession(req);
+    const result = await db.transaction((tx) => postJournalEntry(tx, {
+      date: journalDate(body.date), description: body.description, sourceType: "manual", sourceId: null,
+      createdBy: session?.id ?? null, lines: body.lines,
+    }));
+    const entry = await loadEntry(result.journalEntryId);
+    return res.status(201).json(CreateJournalEntryResponse.parse(entry));
+  } catch (error) {
+    if (error instanceof JournalValidationError) return res.status(400).json({ error: error.message });
+    return next(error);
+  }
+});
+
+router.put("/journal/entries/:id", async (req, res, next) => {
+  try {
+    const { id } = UpdateJournalEntryParams.parse(req.params);
+    const body = UpdateJournalEntryBody.parse(req.body);
+    const result = await db.transaction(async (tx) => {
+      const [entry] = await tx.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, id)).for("update");
+      if (!entry) throw Object.assign(new Error("Journal entry not found"), { status: 404 });
+      if (entry.status !== "draft") throw Object.assign(new Error("Only draft journal entries can be updated"), { status: 409 });
+      const normalized = await validateAndNormalizeJournalLines(tx, body.lines);
+      await tx.delete(journalLinesTable).where(eq(journalLinesTable.journalEntryId, id));
+      await tx.insert(journalLinesTable).values(normalized.lines.map((line) => ({
+        journalEntryId: id, accountId: line.accountId, debit: line.debitCents / 100, credit: line.creditCents / 100, memo: line.memo ?? null,
+      })));
+      await tx.update(journalEntriesTable).set({ status: normalized.status }).where(eq(journalEntriesTable.id, id));
+      return normalized.status;
+    });
+    const entry = await loadEntry(id);
+    return res.json(UpdateJournalEntryResponse.parse(entry));
+  } catch (error) {
+    if (error && typeof error === "object" && "status" in error) return res.status(Number(error.status)).json({ error: errorMessage(error) });
+    if (error instanceof JournalValidationError) return res.status(400).json({ error: error.message });
+    return next(error);
+  }
+});
+
+router.post("/journal/entries/:id/void", async (req, res, next) => {
+  try {
+    const { id } = VoidJournalEntryParams.parse(req.params);
+    const session = await getStaffSession(req);
+    const result = await db.transaction((tx) => voidJournalEntry(tx, { journalEntryId: id, voidedBy: session?.id ?? null }));
+    return res.json(VoidJournalEntryResponse.parse(result));
+  } catch (error) {
+    const message = errorMessage(error);
+    if (message === "Journal entry not found") return res.status(404).json({ error: message });
+    if (message === "Only a posted journal entry can be voided") return res.status(409).json({ error: message });
+    return next(error);
+  }
+});
+
+const cents = (value: number) => BigInt(Math.round(value * 100));
+const amount = (value: bigint) => Number(value) / 100;
+
+router.get("/journal/accounts/:id/ledger", async (req, res, next) => {
+  try {
+    const { id } = GetJournalAccountLedgerParams.parse(req.params);
+    const [account] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, id));
+    if (!account) return res.status(404).json({ error: "Account not found" });
+    const rows = await db.select({
+      date: journalEntriesTable.date, journalEntryId: journalEntriesTable.id, lineId: journalLinesTable.id,
+      debit: journalLinesTable.debit, credit: journalLinesTable.credit,
+    }).from(journalLinesTable)
+      .innerJoin(journalEntriesTable, eq(journalEntriesTable.id, journalLinesTable.journalEntryId))
+      .where(and(eq(journalLinesTable.accountId, id), inArray(journalEntriesTable.status, ["posted", "void"])))
+      .orderBy(asc(journalEntriesTable.date), asc(journalEntriesTable.id), asc(journalLinesTable.id));
+    const grouped = new Map<number, { date: string; journalEntryId: number; debit: bigint; credit: bigint }>();
+    for (const row of rows) {
+      const current = grouped.get(row.journalEntryId);
+      if (current) {
+        current.debit += cents(row.debit);
+        current.credit += cents(row.credit);
+      } else grouped.set(row.journalEntryId, {
+        date: row.date, journalEntryId: row.journalEntryId, debit: cents(row.debit), credit: cents(row.credit),
+      });
+    }
+    let running = 0n;
+    const entries = [...grouped.values()].map((row) => {
+      running += account.normalBalance === "credit" ? row.credit - row.debit : row.debit - row.credit;
+      return { date: row.date, journalEntryId: row.journalEntryId, debit: amount(row.debit), credit: amount(row.credit), balance: amount(running) };
+    });
+    return res.json(GetJournalAccountLedgerResponse.parse({
+      accountId: id, code: account.code, name: account.name, normalBalance: account.normalBalance, entries,
+    }));
+  } catch (error) { return next(error); }
+});
+
+router.get("/journal/trial-balance", async (_req, res, next) => {
+  try {
+    const rows = await db.select({
+      accountId: chartOfAccountsTable.id, code: chartOfAccountsTable.code, name: chartOfAccountsTable.name,
+      normalBalance: chartOfAccountsTable.normalBalance, debit: journalLinesTable.debit, credit: journalLinesTable.credit,
+    }).from(journalLinesTable)
+      .innerJoin(journalEntriesTable, eq(journalEntriesTable.id, journalLinesTable.journalEntryId))
+      .innerJoin(chartOfAccountsTable, eq(chartOfAccountsTable.id, journalLinesTable.accountId))
+      .where(inArray(journalEntriesTable.status, ["posted", "void"]));
+    const totals = new Map<number, { accountId: number; code: string; name: string; normalBalance: string; debit: bigint; credit: bigint }>();
+    for (const row of rows) {
+      const current = totals.get(row.accountId) ?? {
+        accountId: row.accountId, code: row.code, name: row.name, normalBalance: row.normalBalance, debit: 0n, credit: 0n,
+      };
+      current.debit += cents(row.debit); current.credit += cents(row.credit); totals.set(row.accountId, current);
+    }
+    const accountTotals = [...totals.values()].sort((a, b) => a.accountId - b.accountId);
+    const totalDebit = accountTotals.reduce((sum, row) => sum + row.debit, 0n);
+    const totalCredit = accountTotals.reduce((sum, row) => sum + row.credit, 0n);
+    const accounts = accountTotals.map((row) => ({
+      accountId: row.accountId, code: row.code, name: row.name, normalBalance: row.normalBalance,
+      debit: amount(row.debit), credit: amount(row.credit),
+      balance: amount(row.normalBalance === "credit" ? row.credit - row.debit : row.debit - row.credit),
+    }));
+    return res.json(GetJournalTrialBalanceResponse.parse({
+      balanced: totalDebit === totalCredit, totalDebit: amount(totalDebit), totalCredit: amount(totalCredit), accounts,
+    }));
+  } catch (error) { return next(error); }
+});
+
+export default router;

@@ -6,6 +6,133 @@
  * OpenAPI spec version: 0.1.0
  */
 /**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+export type JournalDate = string;
+
+export interface ErrorResponse {
+  error: string;
+}
+
+export interface JournalEntryLine {
+  id: number;
+  accountId: number;
+  /** @minimum 0 */
+  debit: number;
+  /** @minimum 0 */
+  credit: number;
+  /** @nullable */
+  memo: string | null;
+}
+
+export interface JournalEntryLineInput {
+  /** @minimum 1 */
+  accountId: number;
+  /** @minimum 0 */
+  debit: number;
+  /** @minimum 0 */
+  credit: number;
+  /** @nullable */
+  memo?: string | null;
+}
+
+export interface JournalEntryInput {
+  date: JournalDate;
+  /** @minLength 1 */
+  description: string;
+  /** @minItems 2 */
+  lines: JournalEntryLineInput[];
+}
+
+export interface JournalEntryUpdateInput {
+  /** @minItems 2 */
+  lines: JournalEntryLineInput[];
+}
+
+export type JournalEntrySummaryStatus = typeof JournalEntrySummaryStatus[keyof typeof JournalEntrySummaryStatus];
+
+
+export const JournalEntrySummaryStatus = {
+  draft: 'draft',
+  posted: 'posted',
+  void: 'void',
+} as const;
+
+export interface JournalEntrySummary {
+  id: number;
+  date: JournalDate;
+  description: string;
+  sourceType: string;
+  /** @nullable */
+  sourceId: number | null;
+  status: JournalEntrySummaryStatus;
+  /** @nullable */
+  createdBy: number | null;
+  createdAt: string;
+}
+
+export type JournalEntry = JournalEntrySummary & ({
+  lines: JournalEntryLine[];
+  /** @nullable */
+  voidedAt: string | null;
+  /** @nullable */
+  voidedBy: number | null;
+});
+
+export interface JournalVoidResult {
+  reversalEntryId: number;
+}
+
+export type JournalLedgerNormalBalance = typeof JournalLedgerNormalBalance[keyof typeof JournalLedgerNormalBalance];
+
+
+export const JournalLedgerNormalBalance = {
+  debit: 'debit',
+  credit: 'credit',
+} as const;
+
+export interface JournalLedgerEntry {
+  date: JournalDate;
+  journalEntryId: number;
+  debit: number;
+  credit: number;
+  balance: number;
+}
+
+export interface JournalLedger {
+  accountId: number;
+  code: string;
+  name: string;
+  normalBalance: JournalLedgerNormalBalance;
+  entries: JournalLedgerEntry[];
+}
+
+export type JournalTrialBalanceAccountNormalBalance = typeof JournalTrialBalanceAccountNormalBalance[keyof typeof JournalTrialBalanceAccountNormalBalance];
+
+
+export const JournalTrialBalanceAccountNormalBalance = {
+  debit: 'debit',
+  credit: 'credit',
+} as const;
+
+export interface JournalTrialBalanceAccount {
+  accountId: number;
+  code: string;
+  name: string;
+  normalBalance: JournalTrialBalanceAccountNormalBalance;
+  debit: number;
+  credit: number;
+  balance: number;
+}
+
+export interface JournalTrialBalance {
+  balanced: boolean;
+  totalDebit: number;
+  totalCredit: number;
+  accounts: JournalTrialBalanceAccount[];
+}
+
+/**
  * @nullable
  */
 export type AuthSessionRole = typeof AuthSessionRole[keyof typeof AuthSessionRole] | null;
@@ -1246,6 +1373,38 @@ export interface DeletionRequestInput {
   label: string;
 }
 
+/**
+ * Invalid request
+ */
+export type BadRequestResponse = ErrorResponse;
+
+/**
+ * Resource not found
+ */
+export type NotFoundResponse = ErrorResponse;
+
+/**
+ * Operation conflicts with the current resource state
+ */
+export type ConflictResponse = ErrorResponse;
+
+export type JournalDateFromParameter = JournalDate;
+
+export type JournalDateToParameter = JournalDate;
+
+export type JournalSourceTypeParameter = string;
+
+export type JournalAccountIdParameter = number;
+
+export type JournalStatusParameter = typeof JournalStatusParameter[keyof typeof JournalStatusParameter];
+
+
+export const JournalStatusParameter = {
+  draft: 'draft',
+  posted: 'posted',
+  void: 'void',
+} as const;
+
 export type ListAttendanceParams = {
 date?: string;
 /**
@@ -1299,5 +1458,22 @@ export type ImportKapitronBankTransactionsParams = {
  * @minimum 1
  */
 bankAccountId: number;
+};
+
+export type ListJournalEntriesParams = {
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+dateFrom?: JournalDateFromParameter;
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+dateTo?: JournalDateToParameter;
+sourceType?: JournalSourceTypeParameter;
+/**
+ * @minimum 1
+ */
+accountId?: JournalAccountIdParameter;
+status?: JournalStatusParameter;
 };
 
