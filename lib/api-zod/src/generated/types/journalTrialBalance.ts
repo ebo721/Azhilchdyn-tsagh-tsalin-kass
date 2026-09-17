@@ -9,5 +9,7 @@ import type { JournalTrialBalanceAccount } from './journalTrialBalanceAccount';
 
 export interface JournalTrialBalance {
   balanced: boolean;
+  totalDebit: number;
+  totalCredit: number;
   accounts: JournalTrialBalanceAccount[];
 }

@@ -78,6 +78,14 @@ export interface JournalVoidResult {
   reversalEntryId: number;
 }
 
+export type JournalLedgerNormalBalance = typeof JournalLedgerNormalBalance[keyof typeof JournalLedgerNormalBalance];
+
+
+export const JournalLedgerNormalBalance = {
+  debit: 'debit',
+  credit: 'credit',
+} as const;
+
 export interface JournalLedgerEntry {
   date: string;
   journalEntryId: number;
@@ -88,11 +96,25 @@ export interface JournalLedgerEntry {
 
 export interface JournalLedger {
   accountId: number;
+  code: string;
+  name: string;
+  normalBalance: JournalLedgerNormalBalance;
   entries: JournalLedgerEntry[];
 }
 
+export type JournalTrialBalanceAccountNormalBalance = typeof JournalTrialBalanceAccountNormalBalance[keyof typeof JournalTrialBalanceAccountNormalBalance];
+
+
+export const JournalTrialBalanceAccountNormalBalance = {
+  debit: 'debit',
+  credit: 'credit',
+} as const;
+
 export interface JournalTrialBalanceAccount {
   accountId: number;
+  code: string;
+  name: string;
+  normalBalance: JournalTrialBalanceAccountNormalBalance;
   debit: number;
   credit: number;
   balance: number;
@@ -100,6 +122,8 @@ export interface JournalTrialBalanceAccount {
 
 export interface JournalTrialBalance {
   balanced: boolean;
+  totalDebit: number;
+  totalCredit: number;
   accounts: JournalTrialBalanceAccount[];
 }
 

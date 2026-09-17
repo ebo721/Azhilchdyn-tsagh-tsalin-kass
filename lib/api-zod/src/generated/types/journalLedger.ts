@@ -6,8 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { JournalLedgerEntry } from './journalLedgerEntry';
+import type { JournalLedgerNormalBalance } from './journalLedgerNormalBalance';
 
 export interface JournalLedger {
   accountId: number;
+  code: string;
+  name: string;
+  normalBalance: JournalLedgerNormalBalance;
   entries: JournalLedgerEntry[];
 }

@@ -2588,6 +2588,9 @@ export const GetJournalAccountLedgerParams = zod.object({
 
 export const GetJournalAccountLedgerResponse = zod.object({
   "accountId": zod.number().int(),
+  "code": zod.string(),
+  "name": zod.string(),
+  "normalBalance": zod.enum(['debit', 'credit']),
   "entries": zod.array(zod.object({
   "date": zod.coerce.date(),
   "journalEntryId": zod.number().int(),
@@ -2603,8 +2606,13 @@ export const GetJournalAccountLedgerResponse = zod.object({
  */
 export const GetJournalTrialBalanceResponse = zod.object({
   "balanced": zod.boolean(),
+  "totalDebit": zod.number(),
+  "totalCredit": zod.number(),
   "accounts": zod.array(zod.object({
   "accountId": zod.number().int(),
+  "code": zod.string(),
+  "name": zod.string(),
+  "normalBalance": zod.enum(['debit', 'credit']),
   "debit": zod.number(),
   "credit": zod.number(),
   "balance": zod.number()

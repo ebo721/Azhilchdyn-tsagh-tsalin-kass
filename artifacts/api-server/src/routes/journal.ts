@@ -3,9 +3,10 @@ import {
   CreateJournalEntryBody, CreateJournalEntryResponse, GetJournalEntryParams, GetJournalEntryResponse,
   ListJournalEntriesQueryParams, ListJournalEntriesResponse, UpdateJournalEntryBody, UpdateJournalEntryParams,
   UpdateJournalEntryResponse, VoidJournalEntryParams, VoidJournalEntryResponse,
+  GetJournalAccountLedgerParams, GetJournalAccountLedgerResponse, GetJournalTrialBalanceResponse,
 } from "@workspace/api-zod";
-import { and, desc, eq, gte, lte, inArray } from "drizzle-orm";
-import { db, journalEntriesTable, journalLinesTable, type JournalEntry, type JournalLine } from "@workspace/db";
+import { and, asc, desc, eq, gte, lte, inArray } from "drizzle-orm";
+import { db, chartOfAccountsTable, journalEntriesTable, journalLinesTable, type JournalEntry, type JournalLine } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import { postJournalEntry, validateAndNormalizeJournalLines, voidJournalEntry } from "../lib/journal-posting.js";
 
@@ -102,6 +103,72 @@ router.post("/journal/entries/:id/void", async (req, res, next) => {
     if (message === "Only a posted journal entry can be voided") return res.status(409).json({ error: message });
     return next(error);
   }
+});
+
+const cents = (value: number) => BigInt(Math.round(value * 100));
+const amount = (value: bigint) => Number(value) / 100;
+
+router.get("/journal/accounts/:id/ledger", async (req, res, next) => {
+  try {
+    const { id } = GetJournalAccountLedgerParams.parse(req.params);
+    const [account] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, id));
+    if (!account) return res.status(404).json({ error: "Account not found" });
+    const rows = await db.select({
+      date: journalEntriesTable.date, journalEntryId: journalEntriesTable.id, lineId: journalLinesTable.id,
+      debit: journalLinesTable.debit, credit: journalLinesTable.credit,
+    }).from(journalLinesTable)
+      .innerJoin(journalEntriesTable, eq(journalEntriesTable.id, journalLinesTable.journalEntryId))
+      .where(and(eq(journalLinesTable.accountId, id), inArray(journalEntriesTable.status, ["posted", "void"])))
+      .orderBy(asc(journalEntriesTable.date), asc(journalEntriesTable.id), asc(journalLinesTable.id));
+    const grouped = new Map<number, { date: string; journalEntryId: number; debit: bigint; credit: bigint }>();
+    for (const row of rows) {
+      const current = grouped.get(row.journalEntryId);
+      if (current) {
+        current.debit += cents(row.debit);
+        current.credit += cents(row.credit);
+      } else grouped.set(row.journalEntryId, {
+        date: row.date, journalEntryId: row.journalEntryId, debit: cents(row.debit), credit: cents(row.credit),
+      });
+    }
+    let running = 0n;
+    const entries = [...grouped.values()].map((row) => {
+      running += account.normalBalance === "credit" ? row.credit - row.debit : row.debit - row.credit;
+      return { date: row.date, journalEntryId: row.journalEntryId, debit: amount(row.debit), credit: amount(row.credit), balance: amount(running) };
+    });
+    return res.json(GetJournalAccountLedgerResponse.parse({
+      accountId: id, code: account.code, name: account.name, normalBalance: account.normalBalance, entries,
+    }));
+  } catch (error) { return next(error); }
+});
+
+router.get("/journal/trial-balance", async (_req, res, next) => {
+  try {
+    const rows = await db.select({
+      accountId: chartOfAccountsTable.id, code: chartOfAccountsTable.code, name: chartOfAccountsTable.name,
+      normalBalance: chartOfAccountsTable.normalBalance, debit: journalLinesTable.debit, credit: journalLinesTable.credit,
+    }).from(journalLinesTable)
+      .innerJoin(journalEntriesTable, eq(journalEntriesTable.id, journalLinesTable.journalEntryId))
+      .innerJoin(chartOfAccountsTable, eq(chartOfAccountsTable.id, journalLinesTable.accountId))
+      .where(inArray(journalEntriesTable.status, ["posted", "void"]));
+    const totals = new Map<number, { accountId: number; code: string; name: string; normalBalance: string; debit: bigint; credit: bigint }>();
+    for (const row of rows) {
+      const current = totals.get(row.accountId) ?? {
+        accountId: row.accountId, code: row.code, name: row.name, normalBalance: row.normalBalance, debit: 0n, credit: 0n,
+      };
+      current.debit += cents(row.debit); current.credit += cents(row.credit); totals.set(row.accountId, current);
+    }
+    const accountTotals = [...totals.values()].sort((a, b) => a.accountId - b.accountId);
+    const totalDebit = accountTotals.reduce((sum, row) => sum + row.debit, 0n);
+    const totalCredit = accountTotals.reduce((sum, row) => sum + row.credit, 0n);
+    const accounts = accountTotals.map((row) => ({
+      accountId: row.accountId, code: row.code, name: row.name, normalBalance: row.normalBalance,
+      debit: amount(row.debit), credit: amount(row.credit),
+      balance: amount(row.normalBalance === "credit" ? row.credit - row.debit : row.debit - row.credit),
+    }));
+    return res.json(GetJournalTrialBalanceResponse.parse({
+      balanced: totalDebit === totalCredit, totalDebit: amount(totalDebit), totalCredit: amount(totalCredit), accounts,
+    }));
+  } catch (error) { return next(error); }
 });
 
 export default router;

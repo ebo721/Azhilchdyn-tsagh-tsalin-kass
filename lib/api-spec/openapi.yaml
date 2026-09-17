@@ -1688,9 +1688,12 @@ components:
         reversalEntryId: { type: integer }
     JournalLedger:
       type: object
-      required: [accountId, entries]
+      required: [accountId, code, name, normalBalance, entries]
       properties:
         accountId: { type: integer }
+        code: { type: string }
+        name: { type: string }
+        normalBalance: { type: string, enum: [debit, credit] }
         entries:
           type: array
           items: { $ref: "#/components/schemas/JournalLedgerEntry" }
@@ -1705,17 +1708,22 @@ components:
         balance: { type: number }
     JournalTrialBalance:
       type: object
-      required: [balanced, accounts]
+      required: [balanced, totalDebit, totalCredit, accounts]
       properties:
         balanced: { type: boolean }
+        totalDebit: { type: number }
+        totalCredit: { type: number }
         accounts:
           type: array
           items: { $ref: "#/components/schemas/JournalTrialBalanceAccount" }
     JournalTrialBalanceAccount:
       type: object
-      required: [accountId, debit, credit, balance]
+      required: [accountId, code, name, normalBalance, debit, credit, balance]
       properties:
         accountId: { type: integer }
+        code: { type: string }
+        name: { type: string }
+        normalBalance: { type: string, enum: [debit, credit] }
         debit: { type: number }
         credit: { type: number }
         balance: { type: number }
