@@ -149,6 +149,7 @@ import {
 import { getStaffRole, getStaffSession, type StaffRole } from "../lib/hr-session.js";
 import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment.js";
 import { planShiftPlanCopy } from "../lib/shift-plan-copy.js";
+import { postJournalEntry } from "../lib/journal-posting.js";
 import { reconcileOperatingExpenses } from "../lib/operating-expense-sync.js";
 import {
   cashAccountForCategory,
@@ -257,6 +258,17 @@ router.post("/cash/transactions", async (req, res, next) => {
     const result = await db.transaction(async (tx) => {
       const category = input.category.trim();
       const cashAccount = await cashAccountForCategory(tx, category);
+      const linkedAccount = cashAccount
+        ?? (input.type === "expense"
+          ? await fallbackExpenseAccount(tx, category)
+          : (await tx.select().from(chartOfAccountsTable).where(and(
+            eq(chartOfAccountsTable.code, "4900"),
+            eq(chartOfAccountsTable.type, "revenue"),
+            eq(chartOfAccountsTable.isActive, true),
+          )))[0]);
+      if (!linkedAccount) {
+        throw new Error("Other revenue account 4900 is missing or inactive");
+      }
       const [cash] = await tx.insert(cashTransactionsTable).values({
         ...input,
         category,
@@ -264,23 +276,58 @@ router.post("/cash/transactions", async (req, res, next) => {
         incomeMonth: input.type === "income" ? input.incomeMonth : null,
       }).returning();
       if (input.type === "expense" && shouldMirrorCashAsOperatingExpense(category)) {
-        const account = await fallbackExpenseAccount(tx, input.category);
         await tx.insert(operatingExpensesTable).values({
           description: input.description.trim(),
-          accountId: account.id,
+          accountId: linkedAccount.id,
           date: input.date,
           amount: money(input.amount),
           paymentDate: input.date,
           paymentAmount: money(input.amount),
           cashTransactionId: cash.id,
         });
-        return { cash, subcategory: account.name, cashAccount };
       }
-      return { cash, subcategory: null, cashAccount };
+      const [cashLedgerAccount] = await tx.select().from(chartOfAccountsTable).where(and(
+        eq(chartOfAccountsTable.code, "1000"),
+        eq(chartOfAccountsTable.type, "asset"),
+        eq(chartOfAccountsTable.normalBalance, "debit"),
+        eq(chartOfAccountsTable.isActive, true),
+      ));
+      if (!cashLedgerAccount) {
+        throw new Error("Cash account 1000 is missing or inactive");
+      }
+      const posting = await postJournalEntry(tx, {
+        date: input.date,
+        description: input.description.trim(),
+        sourceType: "cash",
+        sourceId: cash.id,
+        createdBy: null,
+        lines: input.type === "income"
+          ? [
+            { accountId: cashLedgerAccount.id, debit: input.amount, credit: 0 },
+            { accountId: linkedAccount.id, debit: 0, credit: input.amount },
+          ]
+          : [
+            { accountId: linkedAccount.id, debit: input.amount, credit: 0 },
+            { accountId: cashLedgerAccount.id, debit: 0, credit: input.amount },
+          ],
+      });
+      if (posting.status !== "posted") {
+        throw new Error("Cash journal entry must be balanced");
+      }
+      const [linkedCash] = await tx.update(cashTransactionsTable)
+        .set({ journalEntryId: posting.journalEntryId })
+        .where(eq(cashTransactionsTable.id, cash.id))
+        .returning();
+      return {
+        cash: linkedCash,
+        subcategory: input.type === "expense" && shouldMirrorCashAsOperatingExpense(category) ? linkedAccount.name : null,
+        cashAccount,
+      };
     });
     const { cash: transaction, subcategory, cashAccount } = result;
     res.status(201).json({
       ...transaction,
+      category: transaction.category,
       subcategory,
       accountId: transaction.accountId,
       accountCode: cashAccount?.code ?? null,
