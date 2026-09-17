@@ -570,14 +570,74 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
 
 function Employees() {
   const query = useListEmployees();
-  const session = useGetAuthSession();
+  const shifts = useListShifts();
+  const [shiftMonth, setShiftMonth] = useState(currentMonth());
+  const shiftPlans = useListShiftPlans({ month: shiftMonth });
   const deletion = useQueueDeletion();
   const qc = useQueryClient();
   const [modal, setModal] = useState<{ open: boolean; employee?: Employee }>({ open: false });
   const [search, setSearch] = useState('');
-  const employees = useMemo(() => (query.data ?? []).filter((e) => `${e.name} ${e.role} ${e.phone}`.toLowerCase().includes(search.toLowerCase())), [query.data, search]);
+  const [employeeTypeFilter, setEmployeeTypeFilter] = useState<'all' | 'office' | 'shift'>('all');
+  const [shiftFilter, setShiftFilter] = useState<'all' | 'unassigned' | `${number}`>('all');
+  const employeeShiftIds = useMemo(() => {
+    const result = new Map<number, Set<number>>();
+    for (const plan of shiftPlans.data ?? []) {
+      const assigned = result.get(plan.employeeId) ?? new Set<number>();
+      assigned.add(plan.shiftId);
+      result.set(plan.employeeId, assigned);
+    }
+    return result;
+  }, [shiftPlans.data]);
+  const employees = useMemo(() => (query.data ?? []).filter((employee) => {
+    if (!`${employee.name} ${employee.role} ${employee.phone}`.toLowerCase().includes(search.toLowerCase())) return false;
+    if (employeeTypeFilter !== 'all' && employee.employeeType !== employeeTypeFilter) return false;
+    if (employee.employeeType === EmployeeEmployeeType.shift && shiftFilter !== 'all') {
+      const assigned = employeeShiftIds.get(employee.id);
+      if (shiftFilter === 'unassigned') return !assigned?.size;
+      return assigned?.has(Number(shiftFilter)) ?? false;
+    }
+    return true;
+  }), [employeeShiftIds, employeeTypeFilter, query.data, search, shiftFilter]);
   const del = (employee: Employee) => { if (window.confirm(`${employee.name}-г устгах уу?`)) deletion.request(`/employees/${employee.id}`, `${employee.name} ажилтны бүртгэл`); };
+  const officeEmployees = employees.filter((employee) => employee.employeeType === EmployeeEmployeeType.office);
+  const shiftEmployees = employees.filter((employee) => employee.employeeType === EmployeeEmployeeType.shift);
+  const employeeTable = (rows: Employee[]) => (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[850px] text-left">
+        <thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3 font-bold">Ажилтан</th><th className="px-5 py-3 font-bold">Утас</th><th className="px-5 py-3 font-bold">Төрөл</th><th className="px-5 py-3 font-bold">Цалин</th><th className="px-5 py-3 font-bold">НДШ-ийн цалин</th><th className="px-5 py-3 font-bold">Төлөв</th><th className="px-5 py-3 text-right font-bold">Үйлдэл</th></tr></thead>
+        <tbody className="divide-y divide-border">{rows.map((employee) => <tr className="group transition-colors hover:bg-secondary/35" key={employee.id} data-testid={`row-employee-${employee.id}`}><td className="px-5 py-4"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent/30 text-xs font-bold text-foreground">{employee.name.slice(0, 1)}</span><div><p className="text-sm font-semibold">{employee.name}</p><p className="text-xs text-muted-foreground">{employee.role}</p></div></div></td><td className="px-5 py-4 text-sm text-muted-foreground">{employee.phone || '—'}</td><td className="px-5 py-4 text-sm">{employee.employeeType === EmployeeEmployeeType.office ? 'Оффис' : employee.salaryType === 'monthly' ? 'Ээлж (сарын)' : 'Ээлж (өдрийн)'}</td><td className="px-5 py-4"><p className="font-mono text-sm">{money(employee.baseSalary)}</p><p className="text-[10px] text-muted-foreground">{employee.salaryType === 'monthly' ? 'сарын' : 'өдрийн'}</p></td><td className="px-5 py-4 font-mono text-sm">{money(employee.socialInsuranceSalary)}</td><td className="px-5 py-4"><StatusPill value={employee.status} /></td><td className="px-5 py-4"><div className="flex justify-end gap-1"><button className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={() => setModal({ open: true, employee })} aria-label={`${employee.name} засах`} data-testid={`button-edit-employee-${employee.id}`}><Pencil className="size-4" /></button><button className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => del(employee)} aria-label={`${employee.name} устгах хүсэлт`} data-testid={`button-delete-employee-${employee.id}`}><Trash2 className="size-4" /></button></div></td></tr>)}</tbody>
+      </table>
+    </div>
+  );
+  return <div className="page-enter space-y-5">
+    <div className="flex justify-end"><Button onClick={() => setModal({ open: true })} data-testid="button-add-employee"><Plus className="size-4" />Ажилтан нэмэх</Button></div>
+    <section className="rounded-2xl border border-border bg-card p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+        <div className="flex flex-wrap gap-2">
+          {([
+            ['all', `Бүгд (${query.data?.length ?? 0})`],
+            ['office', `Оффис (${(query.data ?? []).filter((employee) => employee.employeeType === EmployeeEmployeeType.office).length})`],
+            ['shift', `Ээлж (${(query.data ?? []).filter((employee) => employee.employeeType === EmployeeEmployeeType.shift).length})`],
+          ] as const).map(([value, label]) => <Button key={value} type="button" size="sm" variant={employeeTypeFilter === value ? 'default' : 'outline'} onClick={() => setEmployeeTypeFilter(value)} data-testid={`button-employee-type-${value}`}>{label}</Button>)}
+        </div>
+        <div className="grid flex-1 gap-3 sm:grid-cols-[150px_minmax(180px,1fr)_minmax(180px,1fr)]">
+          <label className="space-y-1 text-xs font-semibold">Ээлжийн сар<Input type="month" value={shiftMonth} onChange={(event) => setShiftMonth(event.target.value)} data-testid="input-employee-shift-month" /></label>
+          <label className="space-y-1 text-xs font-semibold">Ээлжээр шүүх<select value={shiftFilter} onChange={(event) => setShiftFilter(event.target.value as typeof shiftFilter)} className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="select-employee-shift-filter"><option value="all">Бүх ээлж</option>{(shifts.data ?? []).map((shift) => <option key={shift.id} value={shift.id}>{shift.name} · {shift.startTime}–{shift.endTime}</option>)}<option value="unassigned">Ээлж оноогоогүй</option></select></label>
+          <label className="space-y-1 text-xs font-semibold">Хайх<div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} className="pl-9" placeholder="Нэр, албан тушаал, утас" data-testid="input-search-employees" /></div></label>
+        </div>
+      </div>
+    </section>
+    {query.isLoading || shiftPlans.isLoading || shifts.isLoading ? <section className="space-y-3 rounded-2xl border border-border bg-card p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></section> : query.isError || shiftPlans.isError || shifts.isError ? <ErrorBlock onRetry={() => { query.refetch(); shiftPlans.refetch(); shifts.refetch(); }} /> : employees.length === 0 ? <section className="rounded-2xl border border-border bg-card"><EmptyState title="Ажилтан олдсонгүй" detail="Хайлт болон шүүлтүүрээ өөрчлөөд үзнэ үү." icon={UsersRound} /></section> : <>
+      {employeeTypeFilter !== 'shift' && officeEmployees.length > 0 && <section className="overflow-hidden rounded-2xl border border-border bg-card"><div className="flex items-center justify-between border-b border-border px-5 py-4"><div><h2 className="font-bold">Оффис ажилтнууд</h2><p className="text-xs text-muted-foreground">Тогтмол ажлын хуваарьтай ажилтнууд</p></div><span className="rounded-full bg-secondary px-3 py-1 font-mono text-xs font-bold">{officeEmployees.length}</span></div>{employeeTable(officeEmployees)}</section>}
+      {employeeTypeFilter !== 'office' && shiftEmployees.length > 0 && <section className="overflow-hidden rounded-2xl border border-border bg-card"><div className="flex items-center justify-between border-b border-border px-5 py-4"><div><h2 className="font-bold">Ээлжийн ажилтнууд</h2><p className="text-xs text-muted-foreground">{shiftMonth} сарын ээлжийн хуваариар шүүж байна</p></div><span className="rounded-full bg-secondary px-3 py-1 font-mono text-xs font-bold">{shiftEmployees.length}</span></div>{employeeTable(shiftEmployees)}</section>}
+    </>}
+    {modal.open && <EmployeeModal employee={modal.employee} onClose={() => setModal({ open: false })} />}
+  </div>;
+  /*
   return <div className="page-enter"><div className="mb-6 flex justify-end"><Button onClick={() => setModal({ open: true })} data-testid="button-add-employee"><Plus className="size-4" />Ажилтан нэмэх</Button></div><section className="overflow-hidden rounded-2xl border border-border bg-card"><div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm font-bold">Бүх ажилтан <span className="ml-1 font-mono text-xs text-muted-foreground">{query.data?.length ?? 0}</span></p><div className="relative w-full sm:w-64"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" placeholder="Нэрээр хайх" data-testid="input-search-employees" /></div></div>{query.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : employees.length === 0 ? <EmptyState title="Ажилтан олдсонгүй" detail={search ? 'Хайлтын үгээ өөрчлөөд үзнэ үү.' : 'Эхний ажилтнаа бүртгэж эхлээрэй.'} icon={UsersRound} /> : <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3 font-bold">Ажилтан</th><th className="px-5 py-3 font-bold">Утас</th><th className="px-5 py-3 font-bold">Ажилтны төрөл</th><th className="px-5 py-3 font-bold">Цалин</th><th className="px-5 py-3 font-bold">НДШ-ийн цалин</th><th className="px-5 py-3 font-bold">Төлөв</th><th className="px-5 py-3 text-right font-bold">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{employees.map((employee) => <tr className="group transition-colors hover:bg-secondary/35" key={employee.id} data-testid={`row-employee-${employee.id}`}><td className="px-5 py-4"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent/30 text-xs font-bold text-foreground">{employee.name.slice(0, 1)}</span><div><p className="text-sm font-semibold">{employee.name}</p><p className="text-xs text-muted-foreground">{employee.role}</p></div></div></td><td className="px-5 py-4 text-sm text-muted-foreground">{employee.phone || '—'}</td><td className="px-5 py-4 text-sm">{employee.employeeType === EmployeeEmployeeType.office ? 'Оффис' : employee.salaryType === 'monthly' ? 'Ээлж (сарын)' : 'Ээлж (өдрийн)'}</td><td className="px-5 py-4"><p className="font-mono text-sm">{money(employee.baseSalary)}</p><p className="text-[10px] text-muted-foreground">{employee.salaryType === 'monthly' ? 'сарын' : 'өдрийн'}</p></td><td className="px-5 py-4 font-mono text-sm">{money(employee.socialInsuranceSalary)}</td><td className="px-5 py-4"><StatusPill value={employee.status} /></td><td className="px-5 py-4"><div className="flex justify-end gap-1"><button className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={() => setModal({ open: true, employee })} aria-label={`${employee.name} засах`} data-testid={`button-edit-employee-${employee.id}`}><Pencil className="size-4" /></button><button className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => del(employee)} aria-label={`${employee.name} устгах хүсэлт`} data-testid={`button-delete-employee-${employee.id}`}><Trash2 className="size-4" /></button></div></td></tr>)}</tbody></table></div>}</section>{modal.open && <EmployeeModal employee={modal.employee} onClose={() => setModal({ open: false })} />}</div>;
+}
+
+  */
 }
 
 type ShiftForm = { name: string; startTime: string; endTime: string };
