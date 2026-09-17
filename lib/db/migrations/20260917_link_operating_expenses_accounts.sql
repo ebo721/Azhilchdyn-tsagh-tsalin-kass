@@ -2,12 +2,35 @@ BEGIN;
 
 LOCK TABLE operating_expenses IN SHARE ROW EXCLUSIVE MODE;
 
-CREATE TABLE operating_expenses_account_backup_20260917 AS
+CREATE TABLE IF NOT EXISTS operating_expenses_category_backup_20260917 AS
 SELECT id, category
-FROM operating_expenses;
+FROM operating_expenses
+WITH NO DATA;
+CREATE UNIQUE INDEX IF NOT EXISTS operating_expenses_category_backup_20260917_id_idx
+  ON operating_expenses_category_backup_20260917(id);
+INSERT INTO operating_expenses_category_backup_20260917 (id, category)
+SELECT id, category
+FROM operating_expenses
+ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS chart_of_accounts (
+  id serial PRIMARY KEY,
+  code text NOT NULL UNIQUE,
+  name text NOT NULL,
+  type text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now()
+);
 
 INSERT INTO chart_of_accounts (code, name, type)
 VALUES
+  ('1000', 'Касс', 'asset'),
+  ('1100', 'Банкны харилцах', 'asset'),
+  ('1200', 'Авлага', 'asset'),
+  ('2000', 'Өглөг', 'liability'),
+  ('3000', 'Эзэмшигчийн өмч', 'equity'),
+  ('4000', 'Борлуулалтын орлого', 'income'),
+  ('5000', 'Бараа материалын зардал (COGS)', 'expense'),
+  ('6000', 'Цалингийн зардал', 'expense'),
   ('6100', 'Түрээсийн зардал', 'expense'),
   ('6200', 'Тээврийн зардал', 'expense'),
   ('6300', 'Цахилгаан, дулаан, ус', 'expense'),
@@ -28,10 +51,10 @@ BEGIN
   END IF;
 END $$;
 
-ALTER TABLE operating_expenses ADD COLUMN account_id integer;
+ALTER TABLE operating_expenses ADD COLUMN IF NOT EXISTS category_id integer;
 
 UPDATE operating_expenses expense
-SET account_id = account.id
+SET category_id = account.id
 FROM chart_of_accounts account
 WHERE account.code = CASE
   WHEN lower(expense.category) LIKE '%түрээс%' THEN '6100'
@@ -41,19 +64,28 @@ WHERE account.code = CASE
   WHEN lower(expense.category) LIKE '%засвар%' THEN '6500'
   ELSE '6900'
 END
-AND account.type = 'expense';
+AND account.type = 'expense'
+AND expense.category_id IS NULL;
 
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM operating_expenses WHERE account_id IS NULL) THEN
+  IF EXISTS (SELECT 1 FROM operating_expenses WHERE category_id IS NULL) THEN
     RAISE EXCEPTION 'Operating expense account mapping is incomplete';
   END IF;
 END $$;
 
-ALTER TABLE operating_expenses ALTER COLUMN account_id SET NOT NULL;
-ALTER TABLE operating_expenses
-  ADD CONSTRAINT operating_expenses_account_id_chart_of_accounts_id_fk
-  FOREIGN KEY (account_id) REFERENCES chart_of_accounts(id) ON DELETE RESTRICT;
-CREATE INDEX operating_expenses_account_id_idx ON operating_expenses(account_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'operating_expenses_category_id_chart_of_accounts_id_fk'
+  ) THEN
+    ALTER TABLE operating_expenses
+      ADD CONSTRAINT operating_expenses_category_id_chart_of_accounts_id_fk
+      FOREIGN KEY (category_id) REFERENCES chart_of_accounts(id) ON DELETE RESTRICT;
+  END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS operating_expenses_category_id_idx ON operating_expenses(category_id);
 
 COMMIT;
