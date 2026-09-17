@@ -259,7 +259,6 @@ export const fixedAssetsTable = pgTable("fixed_assets", {
 export const operatingExpensesTable = pgTable("operating_expenses", {
   id: serial("id").primaryKey(),
   description: text("description").notNull(),
-  category: text("category").notNull(),
   accountId: integer("category_id").notNull().references(() => chartOfAccountsTable.id, { onDelete: "restrict" }),
   date: date("date", { mode: "string" }).notNull(),
   amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),

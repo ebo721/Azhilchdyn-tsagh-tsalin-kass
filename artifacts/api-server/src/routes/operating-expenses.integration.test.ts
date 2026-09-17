@@ -23,7 +23,7 @@ describe("operating expenses", () => {
     await db.insert(chartOfAccountsTable).values({ code: "6900", name: "Бусад үйл ажиллагааны зардал", type: "expense" }).onConflictDoNothing({ target: chartOfAccountsTable.code });
     const [expenseAccount] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "6900"));
     expenseAccountId = expenseAccount.id;
-    const [expense] = await db.insert(operatingExpensesTable).values({ description: `test expense ${process.pid}`, category: "supplies", accountId: expenseAccountId, date: "2099-03-10", amount: 1200 }).returning({ id: operatingExpensesTable.id });
+    const [expense] = await db.insert(operatingExpensesTable).values({ description: `test expense ${process.pid}`, accountId: expenseAccountId, date: "2099-03-10", amount: 1200 }).returning({ id: operatingExpensesTable.id });
     expenseId = expense.id;
     const [bank] = await db.insert(bankTransactionsTable).values({
       transactionAt: new Date("2099-03-12T09:00:00Z"), type: "expense", amount: 1300,
@@ -72,8 +72,8 @@ describe("operating expenses", () => {
 
   it("allows one concurrent bank claim and gives viewers read-only access", async () => {
     const rows = await db.insert(operatingExpensesTable).values([
-      { description: "concurrent a", category: "x", accountId: expenseAccountId, date: "2099-04-10", amount: 500 },
-      { description: "concurrent b", category: "x", accountId: expenseAccountId, date: "2099-04-10", amount: 500 },
+      { description: "concurrent a", accountId: expenseAccountId, date: "2099-04-10", amount: 500 },
+      { description: "concurrent b", accountId: expenseAccountId, date: "2099-04-10", amount: 500 },
     ]).returning({ id: operatingExpensesTable.id });
     const [bank] = await db.insert(bankTransactionsTable).values({ transactionAt: new Date("2099-04-11T10:00:00Z"), type: "expense", amount: 500, description: "concurrent", fingerprint: `operating-concurrent-${process.pid}` }).returning({ id: bankTransactionsTable.id });
     try {
@@ -137,19 +137,19 @@ describe("operating expenses", () => {
     assert.equal(create.status, 201);
     const created = await create.json() as { id: number; category: string; subcategory: string | null };
     assert.equal(created.category, "Үйл ажиллагааны зардал");
-    assert.equal(created.subcategory, "Түрээс");
+    assert.equal(created.subcategory, "Түрээсийн зардал");
 
     const list = await fetch(`${baseUrl}/api/cash/transactions`, { headers: { cookie: adminCookie } });
     assert.equal(list.status, 200);
     const listed = (await list.json() as Array<{ id: number; category: string; subcategory: string | null }>)
       .find((row) => row.id === created.id);
     assert.equal(listed?.category, "Үйл ажиллагааны зардал");
-    assert.equal(listed?.subcategory, "Түрээс");
+    assert.equal(listed?.subcategory, "Түрээсийн зардал");
 
     const [expense] = await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.cashTransactionId, created.id));
     assert.ok(expense);
-    assert.equal(expense.category, "Түрээс");
     const [mappedAccount] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, expense.accountId));
+    assert.equal(mappedAccount.name, "Түрээсийн зардал");
     assert.equal(mappedAccount.code, "6100");
     assert.equal(mappedAccount.type, "expense");
 
@@ -297,7 +297,7 @@ describe("operating expenses", () => {
       const reconciled = firstRows.filter((row) => row.bankTransactionId === historical.bank.id);
       assert.equal(reconciled.length, 1);
       assert.equal(reconciled[0].cashTransactionId, historical.cash.id);
-      assert.equal(reconciled[0].category, "Түрээс");
+      assert.equal(reconciled[0].category, "Түрээсийн зардал");
       assert.equal(reconciled[0].paymentDate, "2099-05-10");
       const [historicalExpense] = await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.bankTransactionId, historical.bank.id));
       const [historicalAccount] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, historicalExpense.accountId));
@@ -327,7 +327,6 @@ describe("operating expenses", () => {
       assert.equal(transfer.status, 200);
       const [futureExpense] = await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.bankTransactionId, futureBank.id));
       assert.ok(futureExpense);
-      assert.equal(futureExpense.category, "Шатахуун");
       assert.ok(futureExpense.cashTransactionId);
       cashIds.push(futureExpense.cashTransactionId);
 
@@ -356,7 +355,6 @@ describe("operating expenses", () => {
       const [linkedExpense] = await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.bankTransactionId, linkBank.id));
       assert.ok(linkedExpense);
       assert.equal(linkedExpense.cashTransactionId, manualCash.id);
-      assert.equal(linkedExpense.category, "Интернет");
     } finally {
       if (bankIds.length) await db.delete(operatingExpensesTable).where(inArray(operatingExpensesTable.bankTransactionId, bankIds));
       if (bankIds.length) await db.update(bankTransactionsTable).set({ cashTransactionId: null, transferredAt: null }).where(inArray(bankTransactionsTable.id, bankIds));

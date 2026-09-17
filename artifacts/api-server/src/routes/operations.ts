@@ -198,10 +198,19 @@ async function isCashDateClosed(date: string) {
   return Boolean(closure);
 }
 
-function operatingExpenseResponse(row: typeof operatingExpensesTable.$inferSelect) {
-  return { ...row, date: String(row.date), amount: Number(row.amount), paymentDate: row.paymentDate ? String(row.paymentDate) : null,
+function operatingExpenseResponse(row: typeof operatingExpensesTable.$inferSelect, category: string) {
+  return { ...row, category, date: String(row.date), amount: Number(row.amount), paymentDate: row.paymentDate ? String(row.paymentDate) : null,
     paymentAmount: row.paymentAmount === null ? null : Number(row.paymentAmount), bankTransactionId: row.bankTransactionId,
     cashTransactionId: row.cashTransactionId, createdAt: String(row.createdAt) };
+}
+
+async function operatingExpenseAccountName(accountId: number) {
+  const [account] = await db
+    .select({ name: chartOfAccountsTable.name })
+    .from(chartOfAccountsTable)
+    .where(eq(chartOfAccountsTable.id, accountId));
+  if (!account) throw new Error(`Operating expense account ${accountId} is missing`);
+  return account.name;
 }
 
 const inventoryMaterialLabel = (materialType: string) =>
@@ -1844,8 +1853,8 @@ router.get("/cash/transactions", async (_req, res, next) => {
     const [expenseRows, inventoryPurchases] = await Promise.all([
       db.select({
         cashTransactionId: operatingExpensesTable.cashTransactionId,
-        category: operatingExpensesTable.category,
-      }).from(operatingExpensesTable).where(isNotNull(operatingExpensesTable.cashTransactionId)),
+        category: chartOfAccountsTable.name,
+      }).from(operatingExpensesTable).innerJoin(chartOfAccountsTable, eq(chartOfAccountsTable.id, operatingExpensesTable.accountId)).where(isNotNull(operatingExpensesTable.cashTransactionId)),
       db.select({ id: inventoryPurchasesTable.id, materialType: inventoryPurchasesTable.materialType }).from(inventoryPurchasesTable),
     ]);
     const subcategoryByCashId = new Map(expenseRows.map((expense) => [expense.cashTransactionId, expense.category]));
@@ -1889,7 +1898,7 @@ router.post("/cash/transactions", async (req, res, next) => {
       res.status(409).json({ error: `${input.date} өдрийн касс өндөрлөсөн тул гүйлгээ нэмэх боломжгүй` });
       return;
     }
-    const transaction = await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const [cash] = await tx.insert(cashTransactionsTable).values({
         ...input,
         category: input.type === "expense" ? "Үйл ажиллагааны зардал" : input.category.trim(),
@@ -1899,7 +1908,6 @@ router.post("/cash/transactions", async (req, res, next) => {
         const account = await fallbackExpenseAccount(tx, input.category);
         await tx.insert(operatingExpensesTable).values({
           description: input.description.trim(),
-          category: input.category.trim(),
           accountId: account.id,
           date: input.date,
           amount: money(input.amount),
@@ -1907,12 +1915,14 @@ router.post("/cash/transactions", async (req, res, next) => {
           paymentAmount: money(input.amount),
           cashTransactionId: cash.id,
         });
+        return { cash, subcategory: account.name };
       }
-      return cash;
+      return { cash, subcategory: null };
     });
+    const { cash: transaction, subcategory } = result;
     res.status(201).json({
       ...transaction,
-      subcategory: input.type === "expense" ? input.category.trim() : null,
+      subcategory,
       amount: Number(transaction.amount),
       date: String(transaction.date),
       bankTransactionId: transaction.bankTransactionId,
@@ -1947,7 +1957,7 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
       res.status(409).json({ error: "Өндөрлөсөн өдрийн гүйлгээг засах боломжгүй" });
       return;
     }
-    const transaction = await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const [cash] = await tx.update(cashTransactionsTable)
         .set({
           ...input,
@@ -1961,7 +1971,6 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
         const account = await fallbackExpenseAccount(tx, input.category);
         await tx.insert(operatingExpensesTable).values({
           description: input.description.trim(),
-          category: input.category.trim(),
           accountId: account.id,
           date: input.date,
           amount: money(input.amount),
@@ -1969,12 +1978,14 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
           paymentAmount: money(input.amount),
           cashTransactionId: id,
         });
+        return { cash, subcategory: account.name };
       }
-      return cash;
+      return { cash, subcategory: null };
     });
+    const { cash: transaction, subcategory } = result;
     res.json({
       ...transaction,
-      subcategory: input.type === "expense" ? input.category.trim() : null,
+      subcategory,
       amount: Number(transaction.amount),
       date: String(transaction.date),
       bankTransactionId: transaction.bankTransactionId,
@@ -3453,7 +3464,6 @@ router.post("/inventory/purchases/:id/reclassify-as-expense", async (req, res, n
       }
       const [newExpense] = await tx.insert(operatingExpensesTable).values({
         description: existing.documentName,
-        category: account.name,
         accountId: account.id,
         date: existing.date,
         amount: existing.totalAmount,
@@ -3483,7 +3493,7 @@ router.post("/inventory/purchases/:id/reclassify-as-expense", async (req, res, n
       await tx.delete(inventoryPurchaseItemsTable).where(eq(inventoryPurchaseItemsTable.purchaseId, id));
       await tx.delete(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, id));
       const [savedExpense] = await tx.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.id, newExpense.id));
-      return { kind: "reclassified" as const, expense: savedExpense };
+      return { kind: "reclassified" as const, expense: savedExpense, accountName: account.name };
     });
     if (result.kind === "consumed") {
       res.status(409).json({ error: "Энэ худалдан авалтын бараа аль хэдийн зарлагдсан тул шилжүүлэх боломжгүй" });
@@ -3493,7 +3503,7 @@ router.post("/inventory/purchases/:id/reclassify-as-expense", async (req, res, n
       res.status(400).json({ error: "Зардлын хүчинтэй данс сонгоно уу" });
       return;
     }
-    res.status(201).json(ReclassifyInventoryPurchaseAsExpenseResponse.parse(operatingExpenseResponse(result.expense)));
+    res.status(201).json(ReclassifyInventoryPurchaseAsExpenseResponse.parse(operatingExpenseResponse(result.expense, result.accountName)));
   } catch (error) {
     next(error);
   }
@@ -3501,8 +3511,14 @@ router.post("/inventory/purchases/:id/reclassify-as-expense", async (req, res, n
 
 router.get("/operating-expenses", async (_req, res, next) => {
   try {
-    const rows = await db.transaction((tx) => reconcileOperatingExpenses(tx));
-    res.json(ListOperatingExpensesResponse.parse(rows.map(operatingExpenseResponse)));
+    const rows = await db.transaction((tx) => reconcileOperatingExpenses(tx)) as Array<typeof operatingExpensesTable.$inferSelect>;
+    const accounts = await db.select().from(chartOfAccountsTable);
+    const names = new Map(accounts.map((account) => [account.id, account.name]));
+    res.json(ListOperatingExpensesResponse.parse(rows.map((row) => {
+      const category = names.get(row.accountId);
+      if (!category) throw new Error(`Operating expense account ${row.accountId} is missing`);
+      return operatingExpenseResponse(row, category);
+    })));
   } catch (error) { next(error); }
 });
 
@@ -3515,11 +3531,11 @@ router.post("/operating-expenses", async (req, res, next) => {
       const account = await lockedExpenseAccount(tx, input.accountId);
       if (!account) return null;
       return (await tx.insert(operatingExpensesTable).values({
-        description: input.description.trim(), category: account.name, accountId: account.id, date: input.date, amount: money(input.amount),
+        description: input.description.trim(), accountId: account.id, date: input.date, amount: money(input.amount),
       }).returning())[0];
     });
     if (!row) { res.status(400).json({ error: "Зардлын хүчинтэй данс сонгоно уу" }); return; }
-    res.status(201).json(CreateOperatingExpenseResponse.parse(operatingExpenseResponse(row)));
+    res.status(201).json(CreateOperatingExpenseResponse.parse(operatingExpenseResponse(row, await operatingExpenseAccountName(row.accountId))));
   } catch (error) { next(error); }
 });
 
@@ -3538,14 +3554,14 @@ router.put("/operating-expenses/:id", async (req, res, next) => {
       const [oldClosure] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, old.date));
       if (oldClosure) return "closed" as const;
       return (await tx.update(operatingExpensesTable).set({
-        description: input.description.trim(), category: account.name, accountId: account.id, date: input.date, amount: money(input.amount),
+        description: input.description.trim(), accountId: account.id, date: input.date, amount: money(input.amount),
       }).where(eq(operatingExpensesTable.id, id)).returning())[0];
     });
     if (result === null) { res.status(404).json({ error: "Зардал олдсонгүй" }); return; }
     if (result === "paid") { res.status(409).json({ error: "Төлбөр батлагдсан зардлыг засах боломжгүй" }); return; }
     if (result === "closed") { res.status(409).json({ error: "Өндөрлөсөн өдрийн зардлыг засах боломжгүй" }); return; }
     if (result === "invalid_account") { res.status(400).json({ error: "Зардлын хүчинтэй данс сонгоно уу" }); return; }
-    res.json(UpdateOperatingExpenseResponse.parse(operatingExpenseResponse(result)));
+    res.json(UpdateOperatingExpenseResponse.parse(operatingExpenseResponse(result, await operatingExpenseAccountName(result.accountId))));
   } catch (error) { next(error); }
 });
 
@@ -3561,7 +3577,8 @@ router.get("/operating-expenses/:id/payment-bank-suggestions", async (req, res, 
       isNull(bankTransactionsTable.transferredAt), isNull(bankTransactionsTable.unclearAt),
       gte(bankTransactionsTable.transactionAt, start), lte(bankTransactionsTable.transactionAt, end),
     ));
-    const words = `${expense.description} ${expense.category}`.toLocaleLowerCase("mn-MN").split(/\s+/).filter((w) => w.length > 1);
+    const expenseAccountName = await operatingExpenseAccountName(expense.accountId);
+    const words = `${expense.description} ${expenseAccountName}`.toLocaleLowerCase("mn-MN").split(/\s+/).filter((w) => w.length > 1);
     const result = banks.map((bank) => {
       const days = Math.abs(new Date(bank.transactionAt).getTime() - new Date(`${expense.date}T12:00:00Z`).getTime()) / 86400000;
       const text = `${bank.description} ${bank.counterparty}`.toLocaleLowerCase("mn-MN");
@@ -3616,7 +3633,7 @@ router.put("/operating-expenses/:id/payment", async (req, res, next) => {
     if (result === "bank_missing") { res.status(404).json({ error: "Банкны гүйлгээ олдсонгүй" }); return; }
     if (result === "bank_conflict") { res.status(409).json({ error: "Банкны гүйлгээ тохирохгүй эсвэл холбогдсон байна" }); return; }
     const [row] = await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.id, id));
-    res.json(ConfirmOperatingExpensePaymentResponse.parse(operatingExpenseResponse(row)));
+    res.json(ConfirmOperatingExpensePaymentResponse.parse(operatingExpenseResponse(row, await operatingExpenseAccountName(row.accountId))));
   } catch (error) {
     const code = (error as { code?: string; cause?: { code?: string } }).code ?? (error as { cause?: { code?: string } }).cause?.code;
     if (error instanceof OperatingExpenseBankPaymentConflictError || code === "23505") {
@@ -3649,7 +3666,7 @@ router.delete("/operating-expenses/:id/payment", async (req, res, next) => {
     if (result === "missing") { res.status(404).json({ error: "Зардал олдсонгүй" }); return; }
     if (result === "closed") { res.status(409).json({ error: "Өндөрлөсөн өдрийн төлбөрийг цуцлах боломжгүй" }); return; }
     const [row] = await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.id, id));
-    res.json(CancelOperatingExpensePaymentResponse.parse(operatingExpenseResponse(row)));
+    res.json(CancelOperatingExpensePaymentResponse.parse(operatingExpenseResponse(row, await operatingExpenseAccountName(row.accountId))));
   } catch (error) { next(error); }
 });
 
@@ -3746,9 +3763,6 @@ router.put("/chart-of-accounts/:id", async (req, res, next) => {
         name,
         type: input.type,
       }).where(eq(chartOfAccountsTable.id, id)).returning();
-      if (existing.name !== name) {
-        await tx.update(operatingExpensesTable).set({ category: name }).where(eq(operatingExpensesTable.accountId, id));
-      }
       return { kind: "updated" as const, row };
     });
     if (result.kind === "missing") {

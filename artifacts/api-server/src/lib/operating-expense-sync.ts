@@ -22,8 +22,10 @@ export async function syncOperatingExpenseForBankCash(tx: any, bankId: number, c
   if (!bank || !cash || bank.type !== "expense" || (cash.sourceType && SYSTEM_SOURCES.includes(cash.sourceType))) return null;
   const [existing] = await tx.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.bankTransactionId, bankId)).for("update");
   const [byCash] = existing ? [existing] : await tx.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.cashTransactionId, cashId)).for("update");
+  const [linkedAccount] = byCash ? await tx.select({ name: chartOfAccountsTable.name }).from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, byCash.accountId)) : [];
+  if (byCash && !linkedAccount) throw new Error(`Operating expense account ${byCash.accountId} is missing`);
   const subcategory = cash.category === OPERATING_EXPENSE_CATEGORY
-    ? (byCash?.category ?? "Бусад")
+    ? (linkedAccount?.name ?? "Бусад")
     : cash.category;
   const accountCode = expenseAccountCode(subcategory);
   if (!byCash) {
@@ -47,7 +49,7 @@ export async function syncOperatingExpenseForBankCash(tx: any, bankId: number, c
   ));
   if (!byCash && !fallbackAccount) throw new Error(`Operating expense account ${accountCode} is missing`);
   const values = {
-    description: cash.description, category: subcategory, accountId: byCash?.accountId ?? fallbackAccount.id, date: String(cash.date), amount: Number(cash.amount),
+    description: cash.description, accountId: byCash?.accountId ?? fallbackAccount.id, date: String(cash.date), amount: Number(cash.amount),
     paymentDate: String(cash.date), paymentAmount: Number(cash.amount), bankTransactionId: bankId, cashTransactionId: cashId,
   };
   if (cash.category !== OPERATING_EXPENSE_CATEGORY) {
