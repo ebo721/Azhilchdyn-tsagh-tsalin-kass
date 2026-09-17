@@ -23,9 +23,12 @@ import {
   TransferBankTransactionToCashBody,
   TransferBankTransactionToCashParams,
   TransferBankTransactionToCashResponse,
+  UpdateBankTransactionAccountBody,
+  UpdateBankTransactionAccountParams,
+  UpdateBankTransactionAccountResponse,
 } from "@workspace/api-zod";
 import { and, desc, eq, gte, isNotNull, isNull, lte } from "drizzle-orm";
-import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, db, deletionRequestsTable } from "@workspace/db";
+import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.js";
 import { cashAccountForCategory } from "../lib/cash-account.js";
@@ -175,9 +178,14 @@ async function readXlsx(buffer: Buffer) {
   }
 }
 
-const response = (row: typeof bankTransactionsTable.$inferSelect) => ({
+const response = (
+  row: typeof bankTransactionsTable.$inferSelect,
+  accountCode: string | null = null,
+  accountName: string | null = null,
+) => ({
   id: row.id, transactionAt: row.transactionAt.toISOString(), type: row.type as "income" | "expense",
-  amount: Number(row.amount), account: row.account, counterparty: row.counterparty, description: row.description,
+  amount: Number(row.amount), accountId: row.accountId, accountCode, accountName,
+  account: row.account, counterparty: row.counterparty, description: row.description,
   executedAt: row.executedAt?.toISOString() ?? null, balance: row.balance === null ? null : Number(row.balance),
   transferredAt: row.transferredAt?.toISOString() ?? null, cashTransactionId: row.cashTransactionId,
   bankAccountId: row.bankAccountId, bankName: row.bankName, bankAccountNumber: row.bankAccountNumber,
@@ -217,10 +225,46 @@ router.post("/bank-accounts", async (req, res, next) => {
 
 router.get("/bank-transactions", async (_req, res, next) => {
   try {
-    const rows = await db.select().from(bankTransactionsTable)
+    const rows = await db.select({
+      transaction: bankTransactionsTable,
+      accountCode: chartOfAccountsTable.code,
+      accountName: chartOfAccountsTable.name,
+    }).from(bankTransactionsTable)
+      .leftJoin(chartOfAccountsTable, eq(bankTransactionsTable.accountId, chartOfAccountsTable.id))
       .where(and(isNull(bankTransactionsTable.cashTransactionId), isNull(bankTransactionsTable.transferredAt), isNull(bankTransactionsTable.unclearAt)))
       .orderBy(desc(bankTransactionsTable.transactionAt), desc(bankTransactionsTable.id));
-    res.json(ListBankTransactionsResponse.parse(rows.map(response)));
+    res.json(ListBankTransactionsResponse.parse(rows.map((row) =>
+      response(row.transaction, row.accountCode, row.accountName))));
+  } catch (error) { next(error); }
+});
+
+router.patch("/bank-transactions/:id/account", async (req, res, next) => {
+  try {
+    const { id } = UpdateBankTransactionAccountParams.parse(req.params);
+    const { accountId } = UpdateBankTransactionAccountBody.parse(req.body);
+    const result = await db.transaction(async (tx) => {
+      const account = accountId === null
+        ? null
+        : (await tx.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, accountId)))[0] ?? null;
+      if (accountId !== null && !account) return "invalid_account" as const;
+      const [updated] = await tx.update(bankTransactionsTable)
+        .set({ accountId })
+        .where(eq(bankTransactionsTable.id, id))
+        .returning();
+      if (!updated) return null;
+      return { updated, account };
+    });
+    if (result === null) {
+      res.status(404).json({ error: "Банкны гүйлгээ олдсонгүй" });
+      return;
+    }
+    if (result === "invalid_account") {
+      res.status(400).json({ error: "Хүчинтэй данс сонгоно уу" });
+      return;
+    }
+    res.json(UpdateBankTransactionAccountResponse.parse(
+      response(result.updated, result.account?.code ?? null, result.account?.name ?? null),
+    ));
   } catch (error) { next(error); }
 });
 

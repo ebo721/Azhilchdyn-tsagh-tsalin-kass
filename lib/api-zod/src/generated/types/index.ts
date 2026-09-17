@@ -18,6 +18,7 @@ export * from './authSessionRole';
 export * from './bankAccount';
 export * from './bankAccountInput';
 export * from './bankTransaction';
+export * from './bankTransactionAccountInput';
 export * from './bankTransactionCashLinkInput';
 export * from './bankTransactionCashTransferInput';
 export * from './bankTransactionImportResult';

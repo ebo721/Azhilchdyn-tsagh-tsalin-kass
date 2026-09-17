@@ -12,6 +12,12 @@ export interface BankTransaction {
   transactionAt: Date;
   type: BankTransactionType;
   amount: number;
+  /** @nullable */
+  accountId: number | null;
+  /** @nullable */
+  accountCode: string | null;
+  /** @nullable */
+  accountName: string | null;
   account: string;
   counterparty: string;
   description: string;

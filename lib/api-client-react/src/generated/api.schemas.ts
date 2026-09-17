@@ -735,6 +735,12 @@ export interface BankTransaction {
   transactionAt: string;
   type: BankTransactionType;
   amount: number;
+  /** @nullable */
+  accountId: number | null;
+  /** @nullable */
+  accountCode: string | null;
+  /** @nullable */
+  accountName: string | null;
   account: string;
   counterparty: string;
   description: string;
@@ -753,6 +759,14 @@ export interface BankTransaction {
   /** @nullable */
   bankAccountNumber: string | null;
   createdAt: string;
+}
+
+export interface BankTransactionAccountInput {
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  accountId: number | null;
 }
 
 export interface BankTransactionImportResult {

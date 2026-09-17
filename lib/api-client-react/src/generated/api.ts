@@ -27,6 +27,7 @@ import type {
   BankAccount,
   BankAccountInput,
   BankTransaction,
+  BankTransactionAccountInput,
   BankTransactionCashLinkInput,
   BankTransactionCashTransferInput,
   BankTransactionImportResult,
@@ -3604,6 +3605,78 @@ export function useListBankTransactions<TData = Awaited<ReturnType<typeof listBa
 
 
 
+
+export const getUpdateBankTransactionAccountUrl = (id: number,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}/account`
+}
+
+/**
+ * @summary Assign or clear a chart account on a bank transaction
+ */
+export const updateBankTransactionAccount = async (id: number,
+    bankTransactionAccountInput: BankTransactionAccountInput, options?: Parameters<typeof customFetch>[1]): Promise<BankTransaction> => {
+
+  return customFetch<BankTransaction>(getUpdateBankTransactionAccountUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bankTransactionAccountInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateBankTransactionAccountMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBankTransactionAccount>>, TError,{id: number;data: BodyType<BankTransactionAccountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateBankTransactionAccount>>, TError,{id: number;data: BodyType<BankTransactionAccountInput>}, TContext> => {
+
+const mutationKey = ['updateBankTransactionAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateBankTransactionAccount>>, {id: number;data: BodyType<BankTransactionAccountInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateBankTransactionAccount(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateBankTransactionAccountMutationResult = NonNullable<Awaited<ReturnType<typeof updateBankTransactionAccount>>>
+    export type UpdateBankTransactionAccountMutationBody = BodyType<BankTransactionAccountInput>
+    export type UpdateBankTransactionAccountMutationError = ErrorType<void>
+
+    /**
+ * @summary Assign or clear a chart account on a bank transaction
+ */
+export const useUpdateBankTransactionAccount = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBankTransactionAccount>>, TError,{id: number;data: BodyType<BankTransactionAccountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateBankTransactionAccount>>,
+        TError,
+        {id: number;data: BodyType<BankTransactionAccountInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateBankTransactionAccountMutationOptions(options));
+    }
 
 export const getListBankAccountsUrl = () => {
 

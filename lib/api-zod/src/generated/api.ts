@@ -1061,6 +1061,9 @@ export const ListBankTransactionsResponseItem = zod.object({
   "transactionAt": zod.coerce.date(),
   "type": zod.enum(['income', 'expense']),
   "amount": zod.number(),
+  "accountId": zod.number().int().nullable(),
+  "accountCode": zod.string().nullable(),
+  "accountName": zod.string().nullable(),
   "account": zod.string(),
   "counterparty": zod.string(),
   "description": zod.string(),
@@ -1074,6 +1077,45 @@ export const ListBankTransactionsResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const ListBankTransactionsResponse = zod.array(ListBankTransactionsResponseItem)
+
+
+/**
+ * @summary Assign or clear a chart account on a bank transaction
+ */
+
+
+
+export const UpdateBankTransactionAccountParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+
+
+
+export const UpdateBankTransactionAccountBody = zod.object({
+  "accountId": zod.number().int().min(1).nullable()
+})
+
+export const UpdateBankTransactionAccountResponse = zod.object({
+  "id": zod.number().int(),
+  "transactionAt": zod.coerce.date(),
+  "type": zod.enum(['income', 'expense']),
+  "amount": zod.number(),
+  "accountId": zod.number().int().nullable(),
+  "accountCode": zod.string().nullable(),
+  "accountName": zod.string().nullable(),
+  "account": zod.string(),
+  "counterparty": zod.string(),
+  "description": zod.string(),
+  "executedAt": zod.coerce.date().nullable(),
+  "balance": zod.number().nullable(),
+  "transferredAt": zod.coerce.date().nullable(),
+  "cashTransactionId": zod.number().int().nullable(),
+  "bankAccountId": zod.number().int().nullable(),
+  "bankName": zod.string().nullable(),
+  "bankAccountNumber": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})
 
 
 /**
@@ -1157,6 +1199,9 @@ export const TransferBankTransactionToCashResponse = zod.object({
   "transactionAt": zod.coerce.date(),
   "type": zod.enum(['income', 'expense']),
   "amount": zod.number(),
+  "accountId": zod.number().int().nullable(),
+  "accountCode": zod.string().nullable(),
+  "accountName": zod.string().nullable(),
   "account": zod.string(),
   "counterparty": zod.string(),
   "description": zod.string(),
@@ -1215,6 +1260,9 @@ export const LinkBankTransactionToCashResponse = zod.object({
   "transactionAt": zod.coerce.date(),
   "type": zod.enum(['income', 'expense']),
   "amount": zod.number(),
+  "accountId": zod.number().int().nullable(),
+  "accountCode": zod.string().nullable(),
+  "accountName": zod.string().nullable(),
   "account": zod.string(),
   "counterparty": zod.string(),
   "description": zod.string(),

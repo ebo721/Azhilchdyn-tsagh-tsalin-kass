@@ -162,6 +162,7 @@ export const bankTransactionsTable = pgTable("bank_transactions", {
   transactionAt: timestamp("transaction_at", { withTimezone: true, precision: 0 }).notNull(),
   type: text("type").notNull(),
   amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  accountId: integer("account_id").references(() => chartOfAccountsTable.id, { onDelete: "restrict" }),
   account: text("account").notNull().default(""),
   counterparty: text("counterparty").notNull().default(""),
   balance: numeric("balance", { precision: 14, scale: 2, mode: "number" }),
@@ -178,6 +179,7 @@ export const bankTransactionsTable = pgTable("bank_transactions", {
 }, (table) => [
   uniqueIndex("bank_transactions_fingerprint_idx").on(table.fingerprint),
   uniqueIndex("bank_transactions_cash_transaction_idx").on(table.cashTransactionId),
+  index("bank_transactions_account_id_idx").on(table.accountId),
 ]);
 
 export const inventoryPurchasesTable = pgTable("inventory_purchases", {

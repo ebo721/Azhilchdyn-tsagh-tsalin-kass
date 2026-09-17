@@ -783,6 +783,31 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/BankTransaction" }
+  /bank-transactions/{id}/account:
+    patch:
+      operationId: updateBankTransactionAccount
+      tags: [bank-transactions]
+      summary: Assign or clear a chart account on a bank transaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankTransactionAccountInput" }
+      responses:
+        "200":
+          description: Updated bank transaction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankTransaction" }
+        "400":
+          description: Invalid chart account
+        "404":
+          description: Bank transaction not found
   /bank-accounts:
     get:
       operationId: listBankAccounts
@@ -1859,12 +1884,15 @@ components:
         todayExpense: { type: number }
     BankTransaction:
       type: object
-      required: [id, transactionAt, type, amount, account, counterparty, description, executedAt, balance, transferredAt, cashTransactionId, bankAccountId, bankName, bankAccountNumber, createdAt]
+      required: [id, transactionAt, type, amount, accountId, accountCode, accountName, account, counterparty, description, executedAt, balance, transferredAt, cashTransactionId, bankAccountId, bankName, bankAccountNumber, createdAt]
       properties:
         id: { type: integer }
         transactionAt: { type: string, format: date-time }
         type: { type: string, enum: [income, expense] }
         amount: { type: number }
+        accountId: { type: ["integer", "null"] }
+        accountCode: { type: ["string", "null"] }
+        accountName: { type: ["string", "null"] }
         account: { type: string }
         counterparty: { type: string }
         description: { type: string }
@@ -1876,6 +1904,11 @@ components:
         bankName: { type: ["string", "null"] }
         bankAccountNumber: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
+    BankTransactionAccountInput:
+      type: object
+      required: [accountId]
+      properties:
+        accountId: { type: ["integer", "null"], minimum: 1 }
     BankTransactionImportResult:
       type: object
       required: [imported, skippedDuplicate, skippedZero]
