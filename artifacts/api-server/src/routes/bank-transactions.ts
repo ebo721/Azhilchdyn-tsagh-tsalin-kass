@@ -32,6 +32,7 @@ import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransa
 import { getStaffSession } from "../lib/hr-session.js";
 import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.js";
 import { cashAccountForCategory } from "../lib/cash-account.js";
+import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
 
 const router: IRouter = Router();
 const execFile = promisify(execFileCallback);
@@ -41,6 +42,36 @@ const maxRows = 20_000;
 const requiredHeaders = ["Огноо", "Зарлага", "Орлого", "Exchange", "Харьцсан данс / Нэр", "Үлдэгдэл", "Гүйлгээний утга", "Гүйлгээ хийсэн огноо"];
 
 class BankCashLinkConflictError extends Error {}
+
+async function accountByCode(tx: any, code: string, type: string) {
+  const [account] = await tx.select().from(chartOfAccountsTable).where(and(
+    eq(chartOfAccountsTable.code, code),
+    eq(chartOfAccountsTable.type, type),
+    eq(chartOfAccountsTable.isActive, true),
+  ));
+  if (!account) throw new Error(`Journal account ${code} is missing or inactive`);
+  return account;
+}
+
+async function counterAccount(tx: any, type: string, category: string, mapped: any) {
+  if (type === "income" && mapped?.isActive && mapped.type === "revenue") return mapped;
+  if (type === "expense" && mapped?.isActive && ["expense", "asset"].includes(mapped.type)) return mapped;
+  return type === "income"
+    ? accountByCode(tx, "4900", "revenue")
+    : accountByCode(tx, "6900", "expense");
+}
+
+async function postBankCashJournal(tx: any, cash: any, counter: any) {
+  const bank = await accountByCode(tx, "1010", "asset");
+  const result = await postJournalEntry(tx, {
+    date: String(cash.date), description: cash.description.trim(), sourceType: "cash", sourceId: cash.id, createdBy: null,
+    lines: cash.type === "income"
+      ? [{ accountId: bank.id, debit: Number(cash.amount), credit: 0 }, { accountId: counter.id, debit: 0, credit: Number(cash.amount) }]
+      : [{ accountId: counter.id, debit: Number(cash.amount), credit: 0 }, { accountId: bank.id, debit: 0, credit: Number(cash.amount) }],
+  });
+  if (result.status !== "posted") throw new Error("Bank cash journal entry must be balanced");
+  return result.journalEntryId;
+}
 
 router.use(async (req, res, next) => {
   const isBankRoute = ["/bank-accounts", "/bank-transactions", "/unclear-transactions"]
@@ -381,13 +412,16 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
         sourceKey: String(id),
         bankTransactionId: id,
         bankVerifiedAt: verifiedAt,
-      }).onConflictDoNothing().returning({ id: cashTransactionsTable.id });
+      }).onConflictDoNothing().returning();
       if (!cash) throw new BankCashLinkConflictError();
       const [updated] = await tx.update(bankTransactionsTable)
         .set({ transferredAt: verifiedAt, cashTransactionId: cash.id })
         .where(and(eq(bankTransactionsTable.id, id), isNull(bankTransactionsTable.cashTransactionId), isNull(bankTransactionsTable.transferredAt)))
         .returning();
       if (!updated) throw new BankCashLinkConflictError();
+      const linkedCounter = await counterAccount(tx, cash.type, category, account);
+      const journalEntryId = await postBankCashJournal(tx, cash, linkedCounter);
+      await tx.update(cashTransactionsTable).set({ journalEntryId }).where(eq(cashTransactionsTable.id, cash.id));
       await syncOperatingExpenseForBankCash(tx, id, cash.id);
       return updated;
     });
@@ -450,7 +484,7 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
     const { id } = LinkBankTransactionToCashParams.parse(req.params);
     const { cashTransactionId } = LinkBankTransactionToCashBody.parse(req.body);
     const result = await db.transaction(async (tx) => {
-      const [[bank], [cash]] = await Promise.all([
+       const [[bank], [cash]] = await Promise.all([
         tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id)),
         tx.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, cashTransactionId)),
       ]);
@@ -474,7 +508,16 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
         .where(and(eq(bankTransactionsTable.id, id), isNull(bankTransactionsTable.cashTransactionId), isNull(bankTransactionsTable.transferredAt)))
         .returning();
       if (!linkedBank) throw new BankCashLinkConflictError();
-      await syncOperatingExpenseForBankCash(tx, id, cashTransactionId);
+       if (cash.journalEntryId) {
+         await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
+         const mapped = cash.accountId
+           ? (await tx.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, cash.accountId)))[0]
+           : null;
+         const counter = await counterAccount(tx, cash.type, cash.category, mapped);
+         const journalEntryId = await postBankCashJournal(tx, { ...cash, bankTransactionId: id }, counter);
+         await tx.update(cashTransactionsTable).set({ journalEntryId }).where(eq(cashTransactionsTable.id, cashTransactionId));
+       }
+       await syncOperatingExpenseForBankCash(tx, id, cash.id);
       return linkedBank;
     });
     if (result === "missing-bank" || result === "missing-cash") {

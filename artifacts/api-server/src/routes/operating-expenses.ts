@@ -155,10 +155,38 @@ import {
   isCanonicalCashCategory,
   shouldMirrorCashAsOperatingExpense,
 } from "../lib/cash-account.js";
+import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
 import * as shared from "../lib/route-shared.js";
 import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-shared.js";
 
 const router: IRouter = Router();
+async function settlementAccount(tx: any, code: string) {
+  const [account] = await tx.select().from(chartOfAccountsTable).where(and(
+    eq(chartOfAccountsTable.code, code),
+    eq(chartOfAccountsTable.type, "asset"),
+    eq(chartOfAccountsTable.isActive, true),
+  ));
+  if (!account) throw new Error(`Journal account ${code} is missing or inactive`);
+  return account;
+}
+
+async function postOperatingExpenseJournal(tx: any, cash: any, expenseAccountId: number, bankTransactionId: number | null) {
+  const [expenseAccount] = await tx.select().from(chartOfAccountsTable).where(and(
+    eq(chartOfAccountsTable.id, expenseAccountId),
+    eq(chartOfAccountsTable.isActive, true),
+  ));
+  if (!expenseAccount) throw new Error("Operating expense account is missing or inactive");
+  const settlement = await settlementAccount(tx, bankTransactionId == null ? "1000" : "1010");
+  const result = await postJournalEntry(tx, {
+    date: String(cash.date), description: cash.description.trim(), sourceType: "cash", sourceId: cash.id, createdBy: null,
+    lines: [
+      { accountId: expenseAccount.id, debit: Number(cash.amount), credit: 0 },
+      { accountId: settlement.id, debit: 0, credit: Number(cash.amount) },
+    ],
+  });
+  if (result.status !== "posted") throw new Error("Operating expense journal entry must be balanced");
+  return result.journalEntryId;
+}
 const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, operatingExpenseAccountName, inventoryMaterialLabel, defaultChartOfAccounts, operatingExpenseAccountCodes, inventoryPurchaseAccountCodes, reservedAccountTypes, chartOfAccountResponse, ensureDefaultChartOfAccounts, inventoryPurchaseAccount, lockedExpenseAccount, fallbackExpenseAccount, today, currentMonth, money, InventoryBankPaymentConflictError, OperatingExpenseBankPaymentConflictError, calendarDateOffset, descriptionTokens, inventoryBankSuggestionScore, deletionTargetPatterns, roleCanRequestDeletion, deletionRequestResponse, monthlyIncomeTaxRelief, hoursBetween, previousMonth, nextMonth, daysInMonth, isValidCalendarDate, calendarDateText, weekdayCount, monthWeekdays, defaultPayrollSchedule, getPayrollSchedule, scheduleDate, payrollPeriod, selectPayrollScheduleVersion, scheduleVersionAffectsMonth, shiftDailyRate, weekdayDatesBetween, salaryAt, getPayrollSummary, getPayrollAdvanceSummary, calculatePayrollAdvanceLine, InventoryInsufficientStockError, planInventoryFifoConsumption, applyInventoryFifoConsumption, reverseInventoryFifoConsumption, inventoryPurchaseResponse } = shared;
 
 
@@ -282,6 +310,8 @@ router.put("/operating-expenses/:id/payment", async (req, res, next) => {
         paymentDate: input.date, paymentAmount: money(input.amount),
         bankTransactionId: input.bankTransactionId ?? null, cashTransactionId: cash.id,
       }).where(eq(operatingExpensesTable.id, id));
+      const journalEntryId = await postOperatingExpenseJournal(tx, cash, expense.accountId, input.bankTransactionId ?? null);
+      await tx.update(cashTransactionsTable).set({ journalEntryId }).where(eq(cashTransactionsTable.id, cash.id));
       return "ok" as const;
     });
     if (result === "missing") { res.status(404).json({ error: "Зардал олдсонгүй" }); return; }
@@ -313,6 +343,7 @@ router.delete("/operating-expenses/:id/payment", async (req, res, next) => {
         eq(cashTransactionsTable.id, expense.cashTransactionId ?? -1),
       )).for("update");
       const [legacyCash] = cash ? [cash] : await tx.select().from(cashTransactionsTable).where(and(eq(cashTransactionsTable.sourceType, "operating_expense"), eq(cashTransactionsTable.sourceKey, `expense:${id}`))).for("update");
+      if (legacyCash?.journalEntryId) await voidJournalEntry(tx, { journalEntryId: legacyCash.journalEntryId, voidedBy: null });
       if (legacyCash?.bankTransactionId) await tx.update(bankTransactionsTable).set({ cashTransactionId: null, transferredAt: null }).where(eq(bankTransactionsTable.id, legacyCash.bankTransactionId));
       await tx.update(operatingExpensesTable).set({ bankTransactionId: null, cashTransactionId: null }).where(eq(operatingExpensesTable.id, id));
       await tx.delete(cashTransactionsTable).where(eq(cashTransactionsTable.id, legacyCash?.id ?? -1));
@@ -337,6 +368,7 @@ router.delete("/operating-expenses/:id", async (req, res, next) => {
       if (expense.paymentDate && await isCashDateClosed(expense.paymentDate)) return "closed" as const;
       const [cash] = await tx.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, expense.cashTransactionId ?? -1)).for("update");
       const [legacyCash] = cash ? [cash] : await tx.select().from(cashTransactionsTable).where(and(eq(cashTransactionsTable.sourceType, "operating_expense"), eq(cashTransactionsTable.sourceKey, `expense:${id}`))).for("update");
+      if (legacyCash?.journalEntryId) await voidJournalEntry(tx, { journalEntryId: legacyCash.journalEntryId, voidedBy: null });
       if (legacyCash?.bankTransactionId) await tx.update(bankTransactionsTable).set({ cashTransactionId: null, transferredAt: null }).where(eq(bankTransactionsTable.id, legacyCash.bankTransactionId));
       await tx.update(operatingExpensesTable).set({ bankTransactionId: null, cashTransactionId: null }).where(eq(operatingExpensesTable.id, id));
       await tx.delete(cashTransactionsTable).where(eq(cashTransactionsTable.id, legacyCash?.id ?? -1));
