@@ -1,0 +1,605 @@
+import { Router, type IRouter } from "express";
+import { createServer } from "node:http";
+import {
+  CreateAttendanceBody,
+  CreateShiftBody,
+  CreateCashTransactionBody,
+  CloseCashDayBody,
+  CreateEmployeeBody,
+  DeleteAttendanceQueryParams,
+  CopyPreviousShiftPlansBody,
+  CopyPreviousShiftPlansResponse,
+  ApprovePayrollAdvanceBody,
+  GetDashboardResponse,
+  GetHourBalanceQueryParams,
+  GetHourBalanceResponse,
+  GetPayrollQueryParams,
+  GetPayrollResponse,
+  GetPayrollAdvanceQueryParams,
+  GetPayrollAdvanceResponse,
+  GetCashSummaryResponse,
+  ListAttendanceQueryParams,
+  ListAttendanceResponse,
+  ListShiftPlansQueryParams,
+  ListShiftPlansResponse,
+  ListShiftsResponse,
+  RevertPayrollAdvanceApprovalQueryParams,
+  ListCashTransactionsResponse,
+  ListCashClosuresResponse,
+  CloseCashDayResponse,
+  UpdateCashTransactionBody,
+  UpdateCashTransactionParams,
+  UpdateBankCashTransactionIncomeMonthBody,
+  UpdateBankCashTransactionIncomeMonthParams,
+  UpdateBankCashTransactionIncomeMonthResponse,
+  DeleteCashTransactionParams,
+  CreateInventoryPurchaseBody,
+  CreateInventoryPurchaseResponse,
+  ListInventoryPurchasesResponse,
+  ListInventorySuppliersResponse,
+  UpdateInventorySupplierBody,
+  UpdateInventorySupplierParams,
+  UpdateInventorySupplierResponse,
+  DeleteInventorySupplierParams,
+  ListInventoryItemsResponse,
+  UpdateInventoryItemBody,
+  UpdateInventoryItemParams,
+  UpdateInventoryItemResponse,
+  UpdateInventoryPurchaseBody,
+  UpdateInventoryPurchaseParams,
+  UpdateInventoryPurchaseResponse,
+  DeleteInventoryPurchaseParams,
+  ReclassifyInventoryPurchaseAsExpenseParams,
+  ReclassifyInventoryPurchaseAsExpenseBody,
+  ReclassifyInventoryPurchaseAsExpenseResponse,
+  ConfirmInventoryPurchasePaymentBody,
+  ConfirmInventoryPurchasePaymentParams,
+  ConfirmInventoryPurchasePaymentResponse,
+  ListInventoryPurchasePaymentBankSuggestionsParams,
+  ListInventoryPurchasePaymentBankSuggestionsResponse,
+  CancelInventoryPurchasePaymentParams,
+  CancelInventoryPurchasePaymentResponse,
+  CreateInventoryIssueBody,
+  CreateInventoryIssueResponse,
+  ListInventoryIssuesResponse,
+  UpdateInventoryIssueBody,
+  UpdateInventoryIssueParams,
+  UpdateInventoryIssueResponse,
+  DeleteInventoryIssueParams,
+  CreateFixedAssetBody,
+  CreateFixedAssetResponse,
+  UpdateFixedAssetBody,
+  UpdateFixedAssetParams,
+  UpdateFixedAssetResponse,
+  DeleteFixedAssetParams,
+  ListFixedAssetsResponse,
+  CreateOperatingExpenseBody,
+  CreateOperatingExpenseResponse,
+  ListOperatingExpensesResponse,
+  UpdateOperatingExpenseBody,
+  UpdateOperatingExpenseParams,
+  UpdateOperatingExpenseResponse,
+  DeleteOperatingExpenseParams,
+  ListOperatingExpensePaymentBankSuggestionsParams,
+  ListOperatingExpensePaymentBankSuggestionsResponse,
+  ConfirmOperatingExpensePaymentBody,
+  ConfirmOperatingExpensePaymentParams,
+  ConfirmOperatingExpensePaymentResponse,
+  CancelOperatingExpensePaymentParams,
+  CancelOperatingExpensePaymentResponse,
+  CreateDeletionRequestBody,
+  CreateDeletionRequestResponse,
+  ListDeletionRequestsResponse,
+  ApproveDeletionRequestParams,
+  ApproveDeletionRequestResponse,
+  CancelDeletionRequestParams,
+  CancelDeletionRequestResponse,
+  ListEmployeesResponse,
+  ListEmployeeSalaryHistoryParams,
+  ListEmployeeSalaryHistoryResponse,
+  DeleteEmployeeSalaryHistoryParams,
+  UpdateEmployeeSalaryHistoryBody,
+  UpdateEmployeeSalaryHistoryParams,
+  UpdateEmployeeSalaryHistoryResponse,
+  DeletePayrollAdjustmentTransactionParams,
+  UpsertPayrollAdjustmentBody,
+  UpdatePayrollAdvancePaymentBody,
+  UpsertAttendanceBody,
+  UpsertShiftPlanBody,
+  UpdateShiftBody,
+  UpdateShiftParams,
+  UpdateEmployeeBody,
+  UpdateEmployeeParams,
+  ListChartOfAccountsResponse,
+  GetPayrollScheduleResponse,
+  UpdatePayrollScheduleBody,
+  UpdatePayrollScheduleResponse,
+  CreateChartOfAccountBody,
+  CreateChartOfAccountResponse,
+  UpdateChartOfAccountBody,
+  UpdateChartOfAccountParams,
+  UpdateChartOfAccountResponse,
+  DeleteChartOfAccountParams,
+} from "@workspace/api-zod";
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import {
+  attendanceTable,
+  cashTransactionsTable,
+  cashClosuresTable,
+  bankTransactionsTable,
+  db,
+  employeesTable,
+  employeeSalaryHistoryTable,
+  employeeShiftPlansTable,
+  payrollAdjustmentsTable,
+  payrollAdvanceApprovalsTable,
+  inventoryPurchasesTable,
+  inventorySuppliersTable,
+  inventoryPurchaseItemsTable,
+  inventoryItemsTable,
+  inventoryIssuesTable,
+  inventoryIssueConsumptionsTable,
+  fixedAssetsTable,
+  operatingExpensesTable,
+  deletionRequestsTable,
+  shiftTemplatesTable,
+  chartOfAccountsTable,
+  payrollScheduleSettingsTable,
+} from "@workspace/db";
+import { getStaffRole, getStaffSession, type StaffRole } from "../lib/hr-session.js";
+import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment.js";
+import { planShiftPlanCopy } from "../lib/shift-plan-copy.js";
+import { reconcileOperatingExpenses } from "../lib/operating-expense-sync.js";
+import {
+  cashAccountForCategory,
+  isCanonicalCashCategory,
+  shouldMirrorCashAsOperatingExpense,
+} from "../lib/cash-account.js";
+import * as shared from "../lib/route-shared.js";
+import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-shared.js";
+
+const router: IRouter = Router();
+const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, operatingExpenseAccountName, inventoryMaterialLabel, defaultChartOfAccounts, operatingExpenseAccountCodes, inventoryPurchaseAccountCodes, reservedAccountTypes, chartOfAccountResponse, ensureDefaultChartOfAccounts, inventoryPurchaseAccount, lockedExpenseAccount, fallbackExpenseAccount, today, currentMonth, money, InventoryBankPaymentConflictError, OperatingExpenseBankPaymentConflictError, calendarDateOffset, descriptionTokens, inventoryBankSuggestionScore, deletionTargetPatterns, roleCanRequestDeletion, deletionRequestResponse, monthlyIncomeTaxRelief, hoursBetween, previousMonth, nextMonth, daysInMonth, isValidCalendarDate, calendarDateText, weekdayCount, monthWeekdays, defaultPayrollSchedule, getPayrollSchedule, scheduleDate, payrollPeriod, selectPayrollScheduleVersion, scheduleVersionAffectsMonth, shiftDailyRate, weekdayDatesBetween, salaryAt, getPayrollSummary, getPayrollAdvanceSummary, calculatePayrollAdvanceLine, InventoryInsufficientStockError, planInventoryFifoConsumption, applyInventoryFifoConsumption, reverseInventoryFifoConsumption, inventoryPurchaseResponse } = shared;
+
+
+
+router.get("/payroll-schedule", async (_req, res, next) => {
+  try {
+    const schedule = await getPayrollSchedule();
+    res.json(GetPayrollScheduleResponse.parse(schedule));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/payroll-schedule", async (req, res, next) => {
+  try {
+    const input = UpdatePayrollScheduleBody.parse(req.body);
+    const effectiveFromMonth = currentMonth();
+    const spansPreviousMonth = input.periodStartDay > input.periodEndDay;
+    if (!spansPreviousMonth
+      && (input.advanceCutoffDay < input.periodStartDay || input.advanceCutoffDay > input.periodEndDay)) {
+      res.status(400).json({ error: "Урьдчилгааны таслах өдөр цалингийн хугацааны дотор байх ёстой" });
+      return;
+    }
+    if (spansPreviousMonth && input.advanceCutoffDay > input.periodEndDay && input.advanceCutoffDay < input.periodStartDay) {
+      res.status(400).json({ error: "Урьдчилгааны таслах өдөр цалингийн хугацааны дотор байх ёстой" });
+      return;
+    }
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
+      const [nextVersion] = await tx.select({
+        effectiveFromMonth: payrollScheduleSettingsTable.effectiveFromMonth,
+      }).from(payrollScheduleSettingsTable)
+        .where(gt(payrollScheduleSettingsTable.effectiveFromMonth, effectiveFromMonth))
+        .orderBy(asc(payrollScheduleSettingsTable.effectiveFromMonth))
+        .limit(1);
+      const [approvedMonths, paidMonths] = await Promise.all([
+        tx.select({ month: payrollAdvanceApprovalsTable.month })
+          .from(payrollAdvanceApprovalsTable)
+          .where(gte(payrollAdvanceApprovalsTable.month, effectiveFromMonth)),
+        tx.select({ month: payrollAdjustmentsTable.month })
+          .from(payrollAdjustmentsTable).where(and(
+          gte(payrollAdjustmentsTable.month, effectiveFromMonth),
+          sql`(${payrollAdjustmentsTable.paidAmount} > 0 OR ${payrollAdjustmentsTable.secondPaidAmount} > 0)`,
+        )),
+      ]);
+      const protectedMonth = [...approvedMonths, ...paidMonths].find((row) =>
+        scheduleVersionAffectsMonth(
+          row.month,
+          effectiveFromMonth,
+          nextVersion?.effectiveFromMonth,
+        )
+      );
+      if (protectedMonth) return { protectedMonth: protectedMonth.month, saved: null };
+      const [saved] = await tx.insert(payrollScheduleSettingsTable)
+        .values({ ...input, effectiveFromMonth })
+        .onConflictDoUpdate({
+          target: payrollScheduleSettingsTable.effectiveFromMonth,
+          set: { ...input, updatedAt: new Date() },
+        }).returning();
+      return { protectedMonth: null, saved };
+    });
+    if (result.protectedMonth) {
+      res.status(409).json({ error: `${result.protectedMonth} сарын цалин батлагдсан эсвэл олгогдсон тул энэ үечлэлийн тохиргоог өөрчлөх боломжгүй` });
+      return;
+    }
+    res.json(UpdatePayrollScheduleResponse.parse(result.saved));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/payroll", async (req, res, next) => {
+  try {
+    const { month } = GetPayrollQueryParams.parse(req.query);
+    res.json(GetPayrollResponse.parse(await getPayrollSummary(month ?? currentMonth())));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/payroll-adjustments", async (req, res, next) => {
+  try {
+    const input = UpsertPayrollAdjustmentBody.parse(req.body);
+    if (input.paidAmount > 0 && (!input.paymentDate || !isValidCalendarDate(input.paymentDate))) {
+      res.status(400).json({ error: "Цалин олгосон огноог зөв оруулна уу" });
+      return;
+    }
+    if (input.secondPaidAmount > 0 && (!input.secondPaymentDate || !isValidCalendarDate(input.secondPaymentDate))) {
+      res.status(400).json({ error: "Хоёр дахь цалин олгосон огноог зөв оруулна уу" });
+      return;
+    }
+    const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, input.employeeId));
+    if (!employee) {
+      res.status(404).json({ error: "Ажилтан олдсонгүй" });
+      return;
+    }
+    const [existingAdjustment] = await db
+      .select()
+      .from(payrollAdjustmentsTable)
+      .where(and(
+        eq(payrollAdjustmentsTable.employeeId, input.employeeId),
+        eq(payrollAdjustmentsTable.month, input.month),
+      ));
+    const protectedDates = new Set([
+      Number(existingAdjustment?.paidAmount ?? 0) > 0 ? existingAdjustment?.paymentDate : null,
+      Number(existingAdjustment?.secondPaidAmount ?? 0) > 0 ? existingAdjustment?.secondPaymentDate : null,
+      input.paidAmount > 0 ? input.paymentDate : null,
+      input.secondPaidAmount > 0 ? input.secondPaymentDate : null,
+    ].filter((date): date is string => typeof date === "string"));
+    for (const date of protectedDates) {
+      if (await isCashDateClosed(date)) {
+        res.status(409).json({ error: `${date} өдрийн касс өндөрлөсөн тул цалингийн гүйлгээг засах боломжгүй` });
+        return;
+      }
+    }
+    const sourceType = "payroll";
+    const sourceKey = `${input.month}:${input.employeeId}`;
+    const adjustment = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
+      const [savedAdjustment] = await tx
+        .insert(payrollAdjustmentsTable)
+        .values(input)
+        .onConflictDoUpdate({
+          target: [payrollAdjustmentsTable.employeeId, payrollAdjustmentsTable.month],
+          set: {
+            manualDeduction: input.manualDeduction,
+            paidAmount: input.paidAmount,
+            paymentDate: input.paidAmount > 0 ? input.paymentDate : null,
+            secondPaidAmount: input.secondPaidAmount,
+            secondPaymentDate: input.secondPaidAmount > 0 ? input.secondPaymentDate : null,
+            updatedAt: new Date(),
+          },
+        })
+        .returning();
+
+      if (input.paidAmount > 0 && input.paymentDate) {
+        const account = await cashAccountForCategory(tx, "Цалин");
+        await tx.insert(cashTransactionsTable).values({
+          type: "expense",
+          category: "Цалин",
+          accountId: account?.id ?? null,
+          description: `${employee.name} · ${input.month} сарын цалин`,
+          amount: input.paidAmount,
+          date: input.paymentDate,
+          sourceType,
+          sourceKey,
+        }).onConflictDoUpdate({
+          target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
+          set: {
+            accountId: account?.id ?? null,
+            amount: input.paidAmount,
+            date: input.paymentDate,
+            description: `${employee.name} · ${input.month} сарын цалин`,
+          },
+        });
+      } else {
+        await tx.delete(cashTransactionsTable).where(and(
+          eq(cashTransactionsTable.sourceType, sourceType),
+          eq(cashTransactionsTable.sourceKey, sourceKey),
+        ));
+      }
+
+      const secondSourceKey = `${sourceKey}:2`;
+      if (input.secondPaidAmount > 0 && input.secondPaymentDate) {
+        const account = await cashAccountForCategory(tx, "Цалин");
+        await tx.insert(cashTransactionsTable).values({
+          type: "expense",
+          category: "Цалин",
+          accountId: account?.id ?? null,
+          description: `${employee.name} · ${input.month} сарын цалин · 2-р олголт`,
+          amount: input.secondPaidAmount,
+          date: input.secondPaymentDate,
+          sourceType,
+          sourceKey: secondSourceKey,
+        }).onConflictDoUpdate({
+          target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
+          set: {
+            accountId: account?.id ?? null,
+            amount: input.secondPaidAmount,
+            date: input.secondPaymentDate,
+            description: `${employee.name} · ${input.month} сарын цалин · 2-р олголт`,
+          },
+        });
+      } else {
+        await tx.delete(cashTransactionsTable).where(and(
+          eq(cashTransactionsTable.sourceType, sourceType),
+          eq(cashTransactionsTable.sourceKey, secondSourceKey),
+        ));
+      }
+
+      return savedAdjustment;
+    });
+    res.json({
+      employeeId: adjustment.employeeId,
+      month: adjustment.month,
+      taxRelief: Number(adjustment.taxRelief),
+      manualDeduction: Number(adjustment.manualDeduction),
+      paidAmount: Number(adjustment.paidAmount),
+      paymentDate: adjustment.paymentDate,
+      secondPaidAmount: Number(adjustment.secondPaidAmount),
+      secondPaymentDate: adjustment.secondPaymentDate,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/payroll-adjustments/:month/:employeeId/transactions/:sequence", async (req, res, next) => {
+  try {
+    const { month, employeeId, sequence } = DeletePayrollAdjustmentTransactionParams.parse({
+      ...req.params,
+      sequence: Number(req.params.sequence),
+    });
+    const [adjustment] = await db
+      .select()
+      .from(payrollAdjustmentsTable)
+      .where(and(
+        eq(payrollAdjustmentsTable.employeeId, employeeId),
+        eq(payrollAdjustmentsTable.month, month),
+      ));
+    if (!adjustment) {
+      res.status(404).json({ error: "Цалингийн тохируулга олдсонгүй" });
+      return;
+    }
+
+    const paymentDate = sequence === 1 ? adjustment.paymentDate : adjustment.secondPaymentDate;
+    const paidAmount = Number(sequence === 1 ? adjustment.paidAmount : adjustment.secondPaidAmount);
+    if (paidAmount <= 0) {
+      res.status(404).json({ error: `${sequence}-р гүйлгээ олдсонгүй` });
+      return;
+    }
+    if (paymentDate && await isCashDateClosed(paymentDate)) {
+      res.status(409).json({ error: `${paymentDate} өдрийн касс өндөрлөсөн тул цалингийн гүйлгээг устгах боломжгүй` });
+      return;
+    }
+
+    const sourceKey = sequence === 1 ? `${month}:${employeeId}` : `${month}:${employeeId}:2`;
+    await db.transaction(async (tx) => {
+      await tx
+        .update(payrollAdjustmentsTable)
+        .set(sequence === 1
+          ? { paidAmount: 0, paymentDate: null, updatedAt: new Date() }
+          : { secondPaidAmount: 0, secondPaymentDate: null, updatedAt: new Date() })
+        .where(eq(payrollAdjustmentsTable.id, adjustment.id));
+      await tx.delete(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "payroll"),
+        eq(cashTransactionsTable.sourceKey, sourceKey),
+      ));
+    });
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/payroll-advance", async (req, res, next) => {
+  try {
+    const { month } = GetPayrollAdvanceQueryParams.parse(req.query);
+    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month ?? currentMonth())));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/payroll-advance/approve", async (req, res, next) => {
+  try {
+    const { month, approvalDate } = ApprovePayrollAdvanceBody.parse(req.body);
+    if (!isValidCalendarDate(approvalDate)) {
+      res.status(400).json({ error: "Урьдчилгаа цалин батлах огноог зөв оруулна уу" });
+      return;
+    }
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
+      const existing = await getPayrollAdvanceSummary(month);
+      if (!existing.approved) {
+        await tx.insert(payrollAdvanceApprovalsTable).values({
+          month,
+          lines: existing.lines,
+          totalAmount: existing.totalAmount,
+          approvalDate,
+        }).onConflictDoNothing();
+      }
+    });
+    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/payroll-advance/approval", async (req, res, next) => {
+  try {
+    if (await getStaffRole(req) !== "admin") {
+      res.status(403).json({ error: "Урьдчилгаа цалингийн батлалтыг зөвхөн ерөнхий админ буцаана" });
+      return;
+    }
+    const { month } = RevertPayrollAdvanceApprovalQueryParams.parse(req.query);
+    const [approval] = await db
+      .select()
+      .from(payrollAdvanceApprovalsTable)
+      .where(eq(payrollAdvanceApprovalsTable.month, month));
+    if (!approval) {
+      res.status(404).json({ error: "Батлагдсан урьдчилгаа цалин олдсонгүй" });
+      return;
+    }
+    const lines = Array.isArray(approval.lines)
+      ? approval.lines as Array<{ paid?: boolean }>
+      : [];
+    if (lines.some((line) => line.paid === true)) {
+      res.status(409).json({ error: "Эхлээд олгосон урьдчилгаа цалингийн мөрүүдийг Олгоогүй болгоно уу" });
+      return;
+    }
+    await db
+      .delete(payrollAdvanceApprovalsTable)
+      .where(eq(payrollAdvanceApprovalsTable.id, approval.id));
+    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/payroll-advance/payment", async (req, res, next) => {
+  try {
+    const input = UpdatePayrollAdvancePaymentBody.parse(req.body);
+    if (input.paid && (!input.paymentDate || !isValidCalendarDate(input.paymentDate))) {
+      res.status(400).json({ error: "Урьдчилгаа олгосон огноог зөв оруулна уу" });
+      return;
+    }
+    const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, input.employeeId));
+    if (!employee) {
+      res.status(404).json({ error: "Ажилтан олдсонгүй" });
+      return;
+    }
+    const paymentResult = await db.transaction(async (tx) => {
+      const [approval] = await tx
+        .select()
+        .from(payrollAdvanceApprovalsTable)
+        .where(eq(payrollAdvanceApprovalsTable.month, input.month))
+        .for("update");
+      if (!approval) return "approval_not_found" as const;
+
+      const sourceLines = Array.isArray(approval.lines)
+        ? approval.lines as Array<Record<string, unknown>>
+        : [];
+      if (!sourceLines.some((line) => Number(line.employeeId) === input.employeeId)) {
+        return "line_not_found" as const;
+      }
+      const previousLine = sourceLines.find((line) => Number(line.employeeId) === input.employeeId);
+      const protectedDates = new Set([
+        previousLine?.paid === true && typeof previousLine.paymentDate === "string" ? previousLine.paymentDate : null,
+        input.paid ? input.paymentDate : null,
+      ].filter((date): date is string => typeof date === "string"));
+      for (const date of protectedDates) {
+        const [closure] = await tx
+          .select({ id: cashClosuresTable.id })
+          .from(cashClosuresTable)
+          .where(eq(cashClosuresTable.date, date));
+        if (closure) return "cash_closed" as const;
+      }
+      let paymentInput = input;
+      let paymentSourceLines = sourceLines;
+      if (!input.paid) {
+        const attendanceRecords = await tx
+          .select()
+          .from(attendanceTable)
+          .where(eq(attendanceTable.employeeId, input.employeeId));
+        const [scheduleRow] = await tx.select().from(payrollScheduleSettingsTable)
+          .where(lte(payrollScheduleSettingsTable.effectiveFromMonth, input.month))
+          .orderBy(desc(payrollScheduleSettingsTable.effectiveFromMonth))
+          .limit(1);
+        const schedule = scheduleRow ?? { ...defaultPayrollSchedule };
+        const period = payrollPeriod(input.month, schedule);
+        const firstHalfRecords = attendanceRecords.filter((record) =>
+          String(record.date) >= period.periodStart
+          && String(record.date) <= period.advancePeriodEnd
+        );
+        const history = await tx.select().from(employeeSalaryHistoryTable)
+          .where(eq(employeeSalaryHistoryTable.employeeId, input.employeeId));
+        const refreshedLine = calculatePayrollAdvanceLine(
+          employee,
+          firstHalfRecords,
+          history,
+          period.periodStart,
+          period.periodEnd,
+          period.advancePeriodEnd,
+        );
+        paymentSourceLines = sourceLines.map((line) =>
+          Number(line.employeeId) === input.employeeId ? refreshedLine : line
+        );
+        paymentInput = { ...input, advanceAmount: refreshedLine.advanceAmount };
+      }
+      const { lines, totalAmount, cashTransaction } = planPayrollAdvancePayment(paymentSourceLines, paymentInput);
+
+      await tx
+        .update(payrollAdvanceApprovalsTable)
+        .set({ lines, totalAmount })
+        .where(eq(payrollAdvanceApprovalsTable.id, approval.id));
+
+      if (cashTransaction) {
+        const account = await cashAccountForCategory(tx, "Урьдчилгаа цалин");
+        await tx.insert(cashTransactionsTable).values({
+          type: "expense",
+          category: "Урьдчилгаа цалин",
+          accountId: account?.id ?? null,
+          description: `${employee.name} · ${input.month} сарын урьдчилгаа`,
+          amount: cashTransaction.amount,
+          date: cashTransaction.date,
+          sourceType: cashTransaction.sourceType,
+          sourceKey: cashTransaction.sourceKey,
+        }).onConflictDoUpdate({
+          target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
+          set: {
+            accountId: account?.id ?? null,
+            amount: cashTransaction.amount,
+            date: cashTransaction.date,
+            description: `${employee.name} · ${input.month} сарын урьдчилгаа`,
+          },
+        });
+      } else {
+        await tx.delete(cashTransactionsTable).where(and(
+          eq(cashTransactionsTable.sourceType, "payroll_advance"),
+          eq(cashTransactionsTable.sourceKey, `${input.month}:${input.employeeId}`),
+        ));
+      }
+      return "updated" as const;
+    });
+    if (paymentResult === "approval_not_found") {
+      res.status(409).json({ error: "Эхлээд тухайн сарын урьдчилгаа цалинг батална уу" });
+      return;
+    }
+    if (paymentResult === "line_not_found") {
+      res.status(404).json({ error: "Урьдчилгаа цалингийн мөр олдсонгүй" });
+      return;
+    }
+    if (paymentResult === "cash_closed") {
+      res.status(409).json({ error: "Касс өндөрлөсөн өдрийн урьдчилгааны гүйлгээг засах боломжгүй" });
+      return;
+    }
+    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(input.month)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+export default router;
