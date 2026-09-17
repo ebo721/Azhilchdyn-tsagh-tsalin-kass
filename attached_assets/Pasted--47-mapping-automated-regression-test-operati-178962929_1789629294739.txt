@@ -1,0 +1,23 @@
+Даалгавар #47: Дансны mapping-ийн automated regression test
+
+Зорилго: Ирээдүйд ижил төрлийн (operating_expenses, inventory_purchases, cash_transactions) category→account mapping хийхэд, production дээр ажиллуулахаас өмнө буруу/дутуу mapping-ийг автоматаар илрүүлдэг, давтан ажиллуулж болох тест болгоно.
+
+Контекст: Энэ chat-д хийсэн 4 удаагийн mapping ажилд бид тус бүрд нь гараар preflight SELECT ажиллуулж, distinct утгуудыг харж, зөвшөөрөл авсан. Энэ процессыг скрипт болгож, дараагийн удаа хүн гараар шалгах шаардлагагүй, автоматаар "энэ mapping бүрэн, зөв үү" гэдгийг хариулдаг болгоно.
+
+Хийх зүйл:
+
+scripts/src/ дотор validate-account-mapping.ts гэсэн шинэ script нэм. Энэ нь дараах зүйлийг шалгана:
+Тухайн хүснэгтийн ангилах талбарын (жишээ нь category, material_type) бүх distinct утга chart_of_accounts-д тохирох mapping-тэй эсэх (mapping repo дотор JSON/config файлаар тодорхойлогдсон байна, жишээ нь lib/db/mappings/cash-transaction-categories.json)
+Mapping-д зааcaн бүх code тухайн орчны chart_of_accounts-д бодитоор байгаа эсэх
+Хэрэв шинэ, mapping-гүй утга (жишээ нь шинэ category нэр) гарч ирвэл — тестийг FAIL болгож, тодорхой алдааны мессежээр аль утга mapping дутуу байгааг заана
+Энэ script-ийг --env=development болон --env=production (read-only, зөвхөн SELECT) хоёуланд нь ажиллуулж болохоор хий.
+package.json-д "validate-mapping": "tsx ./src/validate-account-mapping.ts" script нэм.
+Одоо байгаа 4 mapping-ийг (inventory material_type, cash category, operating_expenses category — хэрэв хадгалагдсан бол) config файл болгон бичиж, шинэ script-ээр шалгуулж, одоо PASS болохыг баталгаажуул.
+
+Хамрах хүрээнээс ГАДУУР (энэ ажилд хамаарахгүй):
+
+bank_transactions-ийг автоматаар mapping хийхгүй (энэ нь зориудаар гар аргаар)
+Шинэ ALTER/UPDATE/migration үүсгэхгүй — энэ бол зөвхөн шалгах script, өгөгдөл өөрчлөхгүй
+CI/CD pipeline-д автоматаар холбохгүй (тусдаа ажил байж болно)
+
+Аюулгүй байдал: Энэ бол зөвхөн SELECT query ашигладаг, ямар ч ALTER/UPDATE/INSERT байхгүй тул харьцангуй эрсдэл багатай. Гэсэн ч, production дээр ажиллуулахдаа өмнөх дүрмийн дагуу мэдэгдээрэй (гэхдээ зөвхөн уншдаг тул зөвшөөрөл авах шаардлага бага).

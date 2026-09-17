@@ -6,6 +6,7 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "backfill-inventory-fifo": "tsx ./src/backfill-inventory-fifo.ts",
+    "validate-mapping": "tsx ./src/validate-account-mapping.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

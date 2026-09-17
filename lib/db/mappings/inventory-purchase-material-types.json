@@ -1,0 +1,7 @@
+{
+  "name": "inventory_purchases.material_type",
+  "mappings": [
+    { "value": "food", "accountCode": "1500", "accountType": "asset" },
+    { "value": "supply", "accountCode": "1510", "accountType": "asset" }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "operating_expenses.category_id",
+  "note": "The legacy category text column was removed. Validate current rows against automatic operating-expense accounts plus explicit receivable and COGS reclassification accounts.",
+  "allowedAccounts": [
+    { "accountCode": "1200", "accountType": "asset" },
+    { "accountCode": "5000", "accountType": "expense" },
+    { "accountCode": "6100", "accountType": "expense" },
+    { "accountCode": "6200", "accountType": "expense" },
+    { "accountCode": "6300", "accountType": "expense" },
+    { "accountCode": "6400", "accountType": "expense" },
+    { "accountCode": "6500", "accountType": "expense" },
+    { "accountCode": "6900", "accountType": "expense" }
+  ]
+}

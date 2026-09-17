@@ -1,0 +1,13 @@
+{
+  "name": "cash_transactions.category",
+  "mappings": [
+    { "value": "Бараа материал", "accountCode": "1500", "accountType": "asset" },
+    { "value": "Хангамжийн материал", "accountCode": "1510", "accountType": "asset" },
+    { "value": "Хүнсний бараа материал", "accountCode": "1500", "accountType": "asset" },
+    { "value": "Цалин", "accountCode": "6000", "accountType": "expense" },
+    { "value": "Урьдчилгаа цалин", "accountCode": "6000", "accountType": "expense" },
+    { "value": "Эд хөрөнгө", "accountCode": "1800", "accountType": "asset" },
+    { "value": "Үйл ажиллагааны зардал", "accountCode": "6900", "accountType": "expense" },
+    { "value": "Таван толгой ХХК", "accountCode": "4000", "accountType": "revenue" }
+  ]
+}
