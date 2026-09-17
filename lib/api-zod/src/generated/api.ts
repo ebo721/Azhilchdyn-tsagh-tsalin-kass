@@ -1261,6 +1261,9 @@ export const MarkTransactionUnclearResponse = zod.void()
 export const ListInventoryPurchasesResponseItem = zod.object({
   "id": zod.number().int(),
   "materialType": zod.enum(['food', 'supply']),
+  "accountId": zod.number().int().nullable(),
+  "accountCode": zod.string().nullable(),
+  "accountName": zod.string().nullable(),
   "supplierName": zod.string(),
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
@@ -1316,6 +1319,9 @@ export const CreateInventoryPurchaseBody = zod.object({
 export const CreateInventoryPurchaseResponse = zod.object({
   "id": zod.number().int(),
   "materialType": zod.enum(['food', 'supply']),
+  "accountId": zod.number().int().nullable(),
+  "accountCode": zod.string().nullable(),
+  "accountName": zod.string().nullable(),
   "supplierName": zod.string(),
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
@@ -1374,6 +1380,9 @@ export const UpdateInventoryPurchaseBody = zod.object({
 export const UpdateInventoryPurchaseResponse = zod.object({
   "id": zod.number().int(),
   "materialType": zod.enum(['food', 'supply']),
+  "accountId": zod.number().int().nullable(),
+  "accountCode": zod.string().nullable(),
+  "accountName": zod.string().nullable(),
   "supplierName": zod.string(),
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
@@ -1427,6 +1436,9 @@ export const ConfirmInventoryPurchasePaymentBody = zod.object({
 export const ConfirmInventoryPurchasePaymentResponse = zod.object({
   "id": zod.number().int(),
   "materialType": zod.enum(['food', 'supply']),
+  "accountId": zod.number().int().nullable(),
+  "accountCode": zod.string().nullable(),
+  "accountName": zod.string().nullable(),
   "supplierName": zod.string(),
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
@@ -1459,6 +1471,9 @@ export const CancelInventoryPurchasePaymentParams = zod.object({
 export const CancelInventoryPurchasePaymentResponse = zod.object({
   "id": zod.number().int(),
   "materialType": zod.enum(['food', 'supply']),
+  "accountId": zod.number().int().nullable(),
+  "accountCode": zod.string().nullable(),
+  "accountName": zod.string().nullable(),
   "supplierName": zod.string(),
   "hasReceipt": zod.boolean(),
   "date": zod.string(),

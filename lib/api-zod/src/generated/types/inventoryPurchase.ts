@@ -11,6 +11,9 @@ import type { InventoryPurchaseMaterialType } from './inventoryPurchaseMaterialT
 export interface InventoryPurchase {
   id: number;
   materialType: InventoryPurchaseMaterialType;
+  accountId: number | null;
+  accountCode: string | null;
+  accountName: string | null;
   supplierName: string;
   hasReceipt: boolean;
   date: string;

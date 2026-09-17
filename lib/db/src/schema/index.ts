@@ -1,6 +1,7 @@
 import {
   boolean,
   date,
+  index,
   integer,
   jsonb,
   numeric,
@@ -180,6 +181,7 @@ export const bankTransactionsTable = pgTable("bank_transactions", {
 export const inventoryPurchasesTable = pgTable("inventory_purchases", {
   id: serial("id").primaryKey(),
   materialType: text("material_type").notNull().default("supply"),
+  accountId: integer("account_id").references(() => chartOfAccountsTable.id, { onDelete: "restrict" }),
   documentName: text("document_name").notNull().default("Худалдан авалтын баримт"),
   hasReceipt: boolean("has_receipt").notNull().default(false),
   date: date("date", { mode: "string" }).notNull(),
@@ -187,7 +189,9 @@ export const inventoryPurchasesTable = pgTable("inventory_purchases", {
   paymentDate: date("payment_date", { mode: "string" }),
   paymentAmount: numeric("payment_amount", { precision: 14, scale: 2, mode: "number" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  index("inventory_purchases_account_id_idx").on(table.accountId),
+]);
 
 export const inventorySuppliersTable = pgTable("inventory_suppliers", {
   id: serial("id").primaryKey(),

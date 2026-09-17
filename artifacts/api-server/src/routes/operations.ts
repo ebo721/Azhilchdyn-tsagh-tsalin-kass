@@ -221,6 +221,7 @@ const defaultChartOfAccounts = [
   { code: "1010", name: "Банкны данс", type: "asset" },
   { code: "1200", name: "Авлага", type: "asset" },
   { code: "1500", name: "Бараа материалын үлдэгдэл", type: "asset" },
+  { code: "1510", name: "Хангамжийн материалын үлдэгдэл", type: "asset" },
   { code: "1800", name: "Үндсэн хөрөнгө", type: "asset" },
   { code: "1810", name: "Хуримтлагдсан элэгдэл", type: "asset" },
   { code: "2000", name: "Өглөг", type: "liability" },
@@ -244,6 +245,7 @@ const defaultChartOfAccounts = [
 ] as const;
 
 const operatingExpenseAccountCodes = ["6100", "6200", "6300", "6400", "6500", "6900"] as const;
+const inventoryPurchaseAccountCodes = ["1500", "1510"] as const;
 
 const chartOfAccountResponse = (row: typeof chartOfAccountsTable.$inferSelect) => ({
   ...row,
@@ -260,6 +262,23 @@ async function ensureDefaultChartOfAccounts(tx: any) {
   if (conflicting.length) {
     throw new Error(`Reserved operating expense account codes have a non-expense type: ${conflicting.map((row: { code: string }) => row.code).join(", ")}`);
   }
+  const conflictingInventoryAccounts = await tx.select({ code: chartOfAccountsTable.code })
+    .from(chartOfAccountsTable)
+    .where(and(inArray(chartOfAccountsTable.code, [...inventoryPurchaseAccountCodes]), sql`${chartOfAccountsTable.type} <> 'asset'`));
+  if (conflictingInventoryAccounts.length) {
+    throw new Error(`Reserved inventory account codes have a non-asset type: ${conflictingInventoryAccounts.map((row: { code: string }) => row.code).join(", ")}`);
+  }
+}
+
+async function inventoryPurchaseAccount(tx: any, materialType: string) {
+  await ensureDefaultChartOfAccounts(tx);
+  const code = materialType === "food" ? "1500" : "1510";
+  const [account] = await tx.select().from(chartOfAccountsTable).where(and(
+    eq(chartOfAccountsTable.code, code),
+    eq(chartOfAccountsTable.type, "asset"),
+  ));
+  if (!account) throw new Error(`Inventory account ${code} is missing or has an invalid type`);
+  return account;
 }
 
 async function lockedExpenseAccount(tx: any, accountId: number) {
@@ -2395,25 +2414,34 @@ router.delete("/fixed-assets/:id", async (req, res, next) => {
 router.get("/inventory/purchases", async (_req, res, next) => {
   try {
     const [purchases, items, closures] = await Promise.all([
-      db.select().from(inventoryPurchasesTable).orderBy(desc(inventoryPurchasesTable.date), desc(inventoryPurchasesTable.id)),
+      db.select({
+        purchase: inventoryPurchasesTable,
+        accountCode: chartOfAccountsTable.code,
+        accountName: chartOfAccountsTable.name,
+      }).from(inventoryPurchasesTable)
+        .leftJoin(chartOfAccountsTable, eq(inventoryPurchasesTable.accountId, chartOfAccountsTable.id))
+        .orderBy(desc(inventoryPurchasesTable.date), desc(inventoryPurchasesTable.id)),
       db.select().from(inventoryPurchaseItemsTable).orderBy(inventoryPurchaseItemsTable.id),
       db.select({ date: cashClosuresTable.date }).from(cashClosuresTable),
     ]);
     const closedDates = new Set(closures.map((closure) => closure.date));
-    res.json(ListInventoryPurchasesResponse.parse(purchases.map((purchase) => ({
-      id: purchase.id,
-      materialType: purchase.materialType,
-      supplierName: purchase.documentName,
-      hasReceipt: purchase.hasReceipt,
-      date: purchase.date,
-      totalAmount: Number(purchase.totalAmount),
-      paid: purchase.paymentDate !== null,
-      paymentDate: purchase.paymentDate,
-      paymentAmount: purchase.paymentAmount === null ? null : Number(purchase.paymentAmount),
-      createdAt: purchase.createdAt.toISOString(),
-      editable: !closedDates.has(purchase.date),
+    res.json(ListInventoryPurchasesResponse.parse(purchases.map((row) => ({
+      id: row.purchase.id,
+      materialType: row.purchase.materialType,
+      accountId: row.purchase.accountId,
+      accountCode: row.accountCode,
+      accountName: row.accountName,
+      supplierName: row.purchase.documentName,
+      hasReceipt: row.purchase.hasReceipt,
+      date: row.purchase.date,
+      totalAmount: Number(row.purchase.totalAmount),
+      paid: row.purchase.paymentDate !== null,
+      paymentDate: row.purchase.paymentDate,
+      paymentAmount: row.purchase.paymentAmount === null ? null : Number(row.purchase.paymentAmount),
+      createdAt: row.purchase.createdAt.toISOString(),
+      editable: !closedDates.has(row.purchase.date),
       items: items
-        .filter((item) => item.purchaseId === purchase.id)
+        .filter((item) => item.purchaseId === row.purchase.id)
         .map((item) => ({
           id: item.id,
           inventoryItemId: item.inventoryItemId,
@@ -2914,6 +2942,7 @@ router.post("/inventory/purchases", async (req, res, next) => {
     }
     const totalAmount = money(normalizedItems.reduce((total, item) => total + item.totalAmount, 0));
     const result = await db.transaction(async (tx) => {
+      const account = await inventoryPurchaseAccount(tx, input.materialType);
       const normalizedSupplierName = supplierName.toLocaleLowerCase("mn-MN");
       let [supplier] = await tx.select().from(inventorySuppliersTable)
         .where(eq(inventorySuppliersTable.normalizedName, normalizedSupplierName));
@@ -2929,7 +2958,7 @@ router.post("/inventory/purchases", async (req, res, next) => {
       }
       const [purchase] = await tx
         .insert(inventoryPurchasesTable)
-        .values({ materialType: input.materialType, documentName: supplier.name, hasReceipt: input.hasReceipt, date: input.date, totalAmount })
+        .values({ materialType: input.materialType, accountId: account.id, documentName: supplier.name, hasReceipt: input.hasReceipt, date: input.date, totalAmount })
         .returning();
       const purchaseLines = [];
       for (const item of normalizedItems) {
@@ -2963,11 +2992,14 @@ router.post("/inventory/purchases", async (req, res, next) => {
         });
       }
       const savedItems = await tx.insert(inventoryPurchaseItemsTable).values(purchaseLines).returning();
-      return { purchase, savedItems };
+      return { purchase, savedItems, account };
     });
     res.status(201).json(CreateInventoryPurchaseResponse.parse({
       id: result.purchase.id,
       materialType: result.purchase.materialType,
+      accountId: result.purchase.accountId,
+      accountCode: result.account.code,
+      accountName: result.account.name,
       supplierName: result.purchase.documentName,
       hasReceipt: result.purchase.hasReceipt,
       date: result.purchase.date,
@@ -3027,6 +3059,7 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
     }
     const totalAmount = money(normalizedItems.reduce((total, item) => total + item.totalAmount, 0));
     const result = await db.transaction(async (tx) => {
+      const account = await inventoryPurchaseAccount(tx, input.materialType);
       const normalizedSupplierName = supplierName.toLocaleLowerCase("mn-MN");
       let [supplier] = await tx.select().from(inventorySuppliersTable)
         .where(eq(inventorySuppliersTable.normalizedName, normalizedSupplierName));
@@ -3090,6 +3123,7 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
       const savedItems = await tx.insert(inventoryPurchaseItemsTable).values(purchaseLines).returning();
       const [purchase] = await tx.update(inventoryPurchasesTable).set({
         materialType: input.materialType,
+        accountId: account.id,
         documentName: supplier.name,
         hasReceipt: input.hasReceipt,
         date: input.date,
@@ -3103,7 +3137,7 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
             eq(cashTransactionsTable.sourceKey, `purchase:${id}`),
           ));
       }
-      return { kind: "updated" as const, purchase, savedItems };
+      return { kind: "updated" as const, purchase, savedItems, account };
     });
     if (result.kind === "consumed") {
       res.status(409).json({ error: "Энэ худалдан авалтын бараа аль хэдийн зарлагдсан тул засах боломжгүй" });
@@ -3112,6 +3146,9 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
     res.json(UpdateInventoryPurchaseResponse.parse({
       id: result.purchase.id,
       materialType: result.purchase.materialType,
+      accountId: result.purchase.accountId,
+      accountCode: result.account.code,
+      accountName: result.account.name,
       supplierName: result.purchase.documentName,
       hasReceipt: result.purchase.hasReceipt,
       date: result.purchase.date,
@@ -3138,8 +3175,15 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
 });
 
 async function inventoryPurchaseResponse(id: number) {
-  const [purchase] = await db.select().from(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, id));
-  if (!purchase) return null;
+  const [row] = await db.select({
+    purchase: inventoryPurchasesTable,
+    accountCode: chartOfAccountsTable.code,
+    accountName: chartOfAccountsTable.name,
+  }).from(inventoryPurchasesTable)
+    .leftJoin(chartOfAccountsTable, eq(inventoryPurchasesTable.accountId, chartOfAccountsTable.id))
+    .where(eq(inventoryPurchasesTable.id, id));
+  if (!row) return null;
+  const purchase = row.purchase;
   const [items, closure] = await Promise.all([
     db.select().from(inventoryPurchaseItemsTable).where(eq(inventoryPurchaseItemsTable.purchaseId, id)),
     db.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, purchase.date)),
@@ -3147,6 +3191,9 @@ async function inventoryPurchaseResponse(id: number) {
   return {
     id: purchase.id,
     materialType: purchase.materialType,
+    accountId: purchase.accountId,
+    accountCode: row.accountCode,
+    accountName: row.accountName,
     supplierName: purchase.documentName,
     hasReceipt: purchase.hasReceipt,
     date: purchase.date,

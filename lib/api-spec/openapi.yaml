@@ -1894,12 +1894,15 @@ components:
         totalAmount: { type: number }
     InventoryPurchase:
       type: object
-      required: [id, materialType, supplierName, hasReceipt, date, totalAmount, paid, createdAt, editable, items]
+      required: [id, materialType, accountId, accountCode, accountName, supplierName, hasReceipt, date, totalAmount, paid, createdAt, editable, items]
       properties:
         id: { type: integer }
         materialType:
           type: string
           enum: [food, supply]
+        accountId: { type: integer, nullable: true }
+        accountCode: { type: string, nullable: true }
+        accountName: { type: string, nullable: true }
         supplierName: { type: string }
         hasReceipt: { type: boolean }
         date: { type: string }
