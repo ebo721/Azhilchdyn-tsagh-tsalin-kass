@@ -8,6 +8,9 @@ import {
   cashTransactionsTable,
   db,
   employeesTable,
+  chartOfAccountsTable,
+  journalEntriesTable,
+  journalLinesTable,
   payrollAdvanceApprovalsTable,
   usersTable,
 } from "@workspace/db";
@@ -67,6 +70,22 @@ describe("concurrent payroll advance payments", () => {
 
   after(async () => {
     if (employeeIds.length > 0) {
+      const [approval] = await db.select({ id: payrollAdvanceApprovalsTable.id })
+        .from(payrollAdvanceApprovalsTable)
+        .where(eq(payrollAdvanceApprovalsTable.month, month));
+      if (approval) {
+        const payrollEntries = await db.select({ id: journalEntriesTable.id })
+          .from(journalEntriesTable)
+          .where(and(
+            eq(journalEntriesTable.sourceType, "payroll"),
+            eq(journalEntriesTable.sourceId, approval.id),
+          ));
+        const payrollIds = payrollEntries.map((entry) => entry.id);
+        if (payrollIds.length) {
+          await db.delete(journalEntriesTable).where(inArray(journalEntriesTable.sourceId, payrollIds));
+          await db.delete(journalEntriesTable).where(inArray(journalEntriesTable.id, payrollIds));
+        }
+      }
       await db.delete(cashTransactionsTable).where(and(
         eq(cashTransactionsTable.sourceType, "payroll_advance"),
         inArray(cashTransactionsTable.sourceKey, employeeIds.map((id) => `${month}:${id}`)),
@@ -116,6 +135,54 @@ describe("concurrent payroll advance payments", () => {
       employeeIds.map((id) => Number(cashRows.find((row) => row.sourceKey === `${month}:${id}`)?.amount)),
       amounts,
     );
+    assert.ok(cashRows.every((row) => row.journalEntryId !== null));
+    const firstEntryId = cashRows.find((row) => row.sourceKey === `${month}:${employeeIds[0]}`)?.journalEntryId;
+    assert.ok(firstEntryId);
+    const firstLines = await db.select().from(journalLinesTable)
+      .where(eq(journalLinesTable.journalEntryId, firstEntryId!));
+    assert.equal(firstLines.length, 2);
+    assert.equal(firstLines.reduce((sum, line) => sum + Number(line.debit), 0), amounts[0]);
+    assert.equal(firstLines.reduce((sum, line) => sum + Number(line.credit), 0), amounts[0]);
+
+    const repeat = await fetch(`${baseUrl}/api/payroll-advance/payment`, {
+      method: "PUT",
+      headers: { "content-type": "application/json", cookie: adminCookie },
+      body: JSON.stringify({
+        month,
+        employeeId: employeeIds[0],
+        advanceAmount: amounts[0],
+        paid: true,
+        paymentDate: "2098-11-15",
+      }),
+    });
+    assert.equal(repeat.status, 200);
+    const repeatedCash = await db.select().from(cashTransactionsTable).where(and(
+      eq(cashTransactionsTable.sourceType, "payroll_advance"),
+      eq(cashTransactionsTable.sourceKey, `${month}:${employeeIds[0]}`),
+    ));
+    assert.equal(repeatedCash[0]?.journalEntryId, firstEntryId);
+
+    const changed = await fetch(`${baseUrl}/api/payroll-advance/payment`, {
+      method: "PUT",
+      headers: { "content-type": "application/json", cookie: adminCookie },
+      body: JSON.stringify({
+        month,
+        employeeId: employeeIds[0],
+        advanceAmount: 130_000,
+        paid: true,
+        paymentDate: "2098-11-16",
+      }),
+    });
+    assert.equal(changed.status, 200);
+    const changedCash = await db.select().from(cashTransactionsTable).where(and(
+      eq(cashTransactionsTable.sourceType, "payroll_advance"),
+      eq(cashTransactionsTable.sourceKey, `${month}:${employeeIds[0]}`),
+    ));
+    assert.notEqual(changedCash[0]?.journalEntryId, firstEntryId);
+    const [voidedOld] = await db.select({ status: journalEntriesTable.status })
+      .from(journalEntriesTable)
+      .where(eq(journalEntriesTable.id, firstEntryId!));
+    assert.equal(voidedOld.status, "void");
 
     const payrollResponse = await fetch(`${baseUrl}/api/payroll?month=${month}`, {
       headers: { cookie: adminCookie },
@@ -126,7 +193,7 @@ describe("concurrent payroll advance payments", () => {
     };
     assert.deepEqual(
       employeeIds.map((id) => payroll.lines.find((line) => line.employeeId === id)?.advanceAmount),
-      amounts,
+      [130_000, amounts[1]],
     );
   });
 
@@ -204,5 +271,45 @@ describe("concurrent payroll advance payments", () => {
       eq(cashTransactionsTable.sourceKey, `${month}:${employeeId}`),
     ));
     assert.equal(cashRows.length, 0);
+    const payrollEntries = await db.select({ id: journalEntriesTable.id, status: journalEntriesTable.status })
+      .from(journalEntriesTable)
+      .where(eq(journalEntriesTable.sourceType, "payroll"));
+    assert.ok(payrollEntries.some((entry) => entry.status === "void"));
+  });
+
+  it("rolls back payment and cash changes when a canonical posting account is inactive", async () => {
+    const employeeId = employeeIds[1];
+    const [cashAccount] = await db.select({ id: chartOfAccountsTable.id })
+      .from(chartOfAccountsTable)
+      .where(eq(chartOfAccountsTable.code, "1000"));
+    assert.ok(cashAccount);
+    await db.update(chartOfAccountsTable).set({ isActive: false }).where(eq(chartOfAccountsTable.id, cashAccount.id));
+    try {
+      const response = await fetch(`${baseUrl}/api/payroll-advance/payment`, {
+        method: "PUT",
+        headers: { "content-type": "application/json", cookie: adminCookie },
+        body: JSON.stringify({
+          month,
+          employeeId,
+          advanceAmount: 140_000,
+          paid: true,
+          paymentDate: "2098-11-17",
+        }),
+      });
+      assert.equal(response.status, 500);
+      const [approval] = await db.select().from(payrollAdvanceApprovalsTable)
+        .where(eq(payrollAdvanceApprovalsTable.month, month));
+      const line = (approval.lines as Array<{ employeeId: number; advanceAmount: number; paid: boolean }>)
+        .find((candidate) => candidate.employeeId === employeeId);
+      assert.equal(line?.advanceAmount, 135_000);
+      assert.equal(line?.paid, true);
+      const cashRows = await db.select().from(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "payroll_advance"),
+        eq(cashTransactionsTable.sourceKey, `${month}:${employeeId}`),
+      ));
+      assert.equal(cashRows[0]?.amount, 135_000);
+    } finally {
+      await db.update(chartOfAccountsTable).set({ isActive: true }).where(eq(chartOfAccountsTable.id, cashAccount.id));
+    }
   });
 });
