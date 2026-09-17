@@ -192,6 +192,15 @@ const response = (
   createdAt: row.createdAt.toISOString(),
 });
 
+async function responseWithAccount(row: typeof bankTransactionsTable.$inferSelect) {
+  if (row.accountId === null) return response(row);
+  const [account] = await db.select({
+    code: chartOfAccountsTable.code,
+    name: chartOfAccountsTable.name,
+  }).from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, row.accountId));
+  return response(row, account?.code ?? null, account?.name ?? null);
+}
+
 export const isExcludedBankFee = (amount: number, description: string) => {
   const normalizedDescription = description.toLocaleUpperCase("mn-MN");
   return (amount === 200 && normalizedDescription.includes("ШИМТГЭЛ"))
@@ -394,7 +403,7 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
       res.status(400).json({ error: "Орлогын хамаарах сар шаардлагатай" });
       return;
     }
-    res.json(TransferBankTransactionToCashResponse.parse(response(result)));
+    res.json(TransferBankTransactionToCashResponse.parse(await responseWithAccount(result)));
   } catch (error) {
     const databaseCode = (error as { code?: string; cause?: { code?: string } }).code
       ?? (error as { cause?: { code?: string } }).cause?.code;
@@ -402,7 +411,7 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
       const { id } = TransferBankTransactionToCashParams.parse(req.params);
       const [bank] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id));
       if (bank && (bank.cashTransactionId !== null || bank.transferredAt !== null)) {
-        res.json(TransferBankTransactionToCashResponse.parse(response(bank)));
+        res.json(TransferBankTransactionToCashResponse.parse(await responseWithAccount(bank)));
         return;
       }
       res.status(409).json({ error: "Банк эсвэл кассын гүйлгээ аль хэдийн холбогдсон байна" });
@@ -482,7 +491,7 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
       res.status(409).json({ error: errors[result] });
       return;
     }
-    res.json(LinkBankTransactionToCashResponse.parse(response(result)));
+    res.json(LinkBankTransactionToCashResponse.parse(await responseWithAccount(result)));
   } catch (error) {
     const databaseCode = (error as { code?: string; cause?: { code?: string } }).code
       ?? (error as { cause?: { code?: string } }).cause?.code;
@@ -491,7 +500,7 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
       const { cashTransactionId } = LinkBankTransactionToCashBody.parse(req.body);
       const [bank] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id));
       if (bank?.cashTransactionId === cashTransactionId && bank.transferredAt !== null) {
-        res.json(LinkBankTransactionToCashResponse.parse(response(bank)));
+        res.json(LinkBankTransactionToCashResponse.parse(await responseWithAccount(bank)));
         return;
       }
       res.status(409).json({ error: "Банк эсвэл кассын гүйлгээ аль хэдийн холбогдсон байна" });

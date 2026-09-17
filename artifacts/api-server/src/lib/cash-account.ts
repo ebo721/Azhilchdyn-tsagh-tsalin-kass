@@ -12,6 +12,12 @@ const cashCategoryAccounts: Record<string, { code: string; type: string }> = {
   "Таван толгой ХХК": { code: "4000", type: "revenue" },
 };
 
+export const isCanonicalCashCategory = (category: string) =>
+  Object.hasOwn(cashCategoryAccounts, category);
+
+export const shouldMirrorCashAsOperatingExpense = (category: string) =>
+  cashCategoryAccounts[category]?.code === "6900" || !isCanonicalCashCategory(category);
+
 export async function cashAccountForCategory(tx: any, category: string) {
   const expected = cashCategoryAccounts[category];
   if (!expected) return null;

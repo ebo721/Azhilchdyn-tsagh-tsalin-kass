@@ -146,7 +146,11 @@ import { getStaffRole, getStaffSession, type StaffRole } from "../lib/hr-session
 import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment.js";
 import { planShiftPlanCopy } from "../lib/shift-plan-copy.js";
 import { reconcileOperatingExpenses } from "../lib/operating-expense-sync.js";
-import { cashAccountForCategory } from "../lib/cash-account.js";
+import {
+  cashAccountForCategory,
+  isCanonicalCashCategory,
+  shouldMirrorCashAsOperatingExpense,
+} from "../lib/cash-account.js";
 
 const router: IRouter = Router();
 
@@ -247,6 +251,19 @@ const defaultChartOfAccounts = [
 
 const operatingExpenseAccountCodes = ["6100", "6200", "6300", "6400", "6500", "6900"] as const;
 const inventoryPurchaseAccountCodes = ["1500", "1510"] as const;
+const reservedAccountTypes: Record<string, string> = {
+  "1500": "asset",
+  "1510": "asset",
+  "1800": "asset",
+  "4000": "revenue",
+  "6000": "expense",
+  "6100": "expense",
+  "6200": "expense",
+  "6300": "expense",
+  "6400": "expense",
+  "6500": "expense",
+  "6900": "expense",
+};
 
 const chartOfAccountResponse = (row: typeof chartOfAccountsTable.$inferSelect) => ({
   ...row,
@@ -1897,21 +1914,24 @@ router.get("/cash/transactions", async (_req, res, next) => {
     const inventoryCategoryBySourceKey = new Map(inventoryPurchases.map((purchase) => [`purchase:${purchase.id}`, inventoryMaterialLabel(purchase.materialType)]));
     res.json(ListCashTransactionsResponse.parse(rows.map((row) => {
       const transaction = row.transaction;
-      return {
-      ...transaction,
-      accountId: transaction.accountId,
-      accountCode: row.accountCode,
-      accountName: row.accountName,
-      category: transaction.type === "expense"
+      const category = transaction.type === "expense"
         ? transaction.sourceType === "payroll" || transaction.sourceType === "payroll_advance"
           ? "Цалин"
           : transaction.sourceType === "inventory_purchase"
             ? inventoryCategoryBySourceKey.get(transaction.sourceKey ?? "") ?? "Хангамжийн материал"
             : transaction.sourceType === "fixed_asset_purchase"
               ? "Эд хөрөнгө"
-              : "Үйл ажиллагааны зардал"
-        : transaction.category,
-      subcategory: transaction.type === "expense"
+              : isCanonicalCashCategory(transaction.category)
+                ? transaction.category
+                : "Үйл ажиллагааны зардал"
+        : transaction.category;
+      return {
+      ...transaction,
+      accountId: transaction.accountId,
+      accountCode: row.accountCode,
+      accountName: row.accountName,
+      category,
+      subcategory: category === "Үйл ажиллагааны зардал"
         && !["payroll", "payroll_advance", "inventory_purchase", "fixed_asset_purchase"].includes(transaction.sourceType ?? "")
         ? subcategoryByCashId.get(transaction.id) ?? (transaction.category !== "Үйл ажиллагааны зардал" ? transaction.category : null)
         : null,
@@ -1941,7 +1961,7 @@ router.post("/cash/transactions", async (req, res, next) => {
       return;
     }
     const result = await db.transaction(async (tx) => {
-      const category = input.type === "expense" ? "Үйл ажиллагааны зардал" : input.category.trim();
+      const category = input.category.trim();
       const cashAccount = await cashAccountForCategory(tx, category);
       const [cash] = await tx.insert(cashTransactionsTable).values({
         ...input,
@@ -1949,7 +1969,7 @@ router.post("/cash/transactions", async (req, res, next) => {
         accountId: cashAccount?.id ?? null,
         incomeMonth: input.type === "income" ? input.incomeMonth : null,
       }).returning();
-      if (input.type === "expense") {
+      if (input.type === "expense" && shouldMirrorCashAsOperatingExpense(category)) {
         const account = await fallbackExpenseAccount(tx, input.category);
         await tx.insert(operatingExpensesTable).values({
           description: input.description.trim(),
@@ -2006,7 +2026,7 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
       return;
     }
     const result = await db.transaction(async (tx) => {
-      const category = input.type === "expense" ? "Үйл ажиллагааны зардал" : input.category.trim();
+      const category = input.category.trim();
       const cashAccount = await cashAccountForCategory(tx, category);
       const [cash] = await tx.update(cashTransactionsTable)
         .set({
@@ -2018,7 +2038,7 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
         .where(eq(cashTransactionsTable.id, id))
         .returning();
       await tx.delete(operatingExpensesTable).where(eq(operatingExpensesTable.cashTransactionId, id));
-      if (input.type === "expense") {
+      if (input.type === "expense" && shouldMirrorCashAsOperatingExpense(category)) {
         const account = await fallbackExpenseAccount(tx, input.category);
         await tx.insert(operatingExpensesTable).values({
           description: input.description.trim(),
@@ -3815,8 +3835,9 @@ router.post("/chart-of-accounts", async (req, res, next) => {
       res.status(400).json({ error: "Дансны нэр хоосон байж болохгүй" });
       return;
     }
-    if ((operatingExpenseAccountCodes as readonly string[]).includes(input.code) && input.type !== "expense") {
-      res.status(400).json({ error: "Үйл ажиллагааны зардлын нөөц код нь expense төрөлтэй байна" });
+    const reservedType = reservedAccountTypes[input.code];
+    if (reservedType && input.type !== reservedType) {
+      res.status(400).json({ error: `Нөөц ${input.code} код нь ${reservedType} төрөлтэй байна` });
       return;
     }
     const [row] = await db.insert(chartOfAccountsTable).values({
@@ -3845,13 +3866,18 @@ router.put("/chart-of-accounts/:id", async (req, res, next) => {
       res.status(400).json({ error: "Дансны нэр хоосон байж болохгүй" });
       return;
     }
-    if ((operatingExpenseAccountCodes as readonly string[]).includes(input.code) && input.type !== "expense") {
-      res.status(400).json({ error: "Үйл ажиллагааны зардлын нөөц код нь expense төрөлтэй байна" });
+    const reservedType = reservedAccountTypes[input.code];
+    if (reservedType && input.type !== reservedType) {
+      res.status(400).json({ error: `Нөөц ${input.code} код нь ${reservedType} төрөлтэй байна` });
       return;
     }
     const result = await db.transaction(async (tx) => {
       const [existing] = await tx.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, id)).for("update");
       if (!existing) return { kind: "missing" as const };
+      const existingReservedType = reservedAccountTypes[existing.code];
+      if (existingReservedType && (input.code !== existing.code || input.type !== existingReservedType)) {
+        return { kind: "reserved" as const };
+      }
       if (existing.type === "expense" && input.type !== "expense") {
         const [linked] = await tx.select({ id: operatingExpensesTable.id })
           .from(operatingExpensesTable)
@@ -3874,6 +3900,10 @@ router.put("/chart-of-accounts/:id", async (req, res, next) => {
       res.status(409).json({ error: "Зардалд ашиглагдсан дансны төрлийг өөрчлөх боломжгүй" });
       return;
     }
+    if (result.kind === "reserved") {
+      res.status(409).json({ error: "Системийн mapping-д ашиглагддаг дансны код болон төрлийг өөрчлөх боломжгүй" });
+      return;
+    }
     const row = result.row;
     res.json(UpdateChartOfAccountResponse.parse(chartOfAccountResponse(row)));
   } catch (error) {
@@ -3890,6 +3920,13 @@ router.put("/chart-of-accounts/:id", async (req, res, next) => {
 router.delete("/chart-of-accounts/:id", async (req, res, next) => {
   try {
     const { id } = DeleteChartOfAccountParams.parse(req.params);
+    const [existing] = await db.select({ code: chartOfAccountsTable.code })
+      .from(chartOfAccountsTable)
+      .where(eq(chartOfAccountsTable.id, id));
+    if (existing && reservedAccountTypes[existing.code]) {
+      res.status(409).json({ error: "Системийн mapping-д ашиглагддаг дансыг устгах боломжгүй" });
+      return;
+    }
     const [row] = await db.delete(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, id)).returning({
       id: chartOfAccountsTable.id,
     });
