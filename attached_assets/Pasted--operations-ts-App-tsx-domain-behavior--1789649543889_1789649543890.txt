@@ -1,0 +1,66 @@
+Даалгавар: operations.ts болон App.tsx-г domain-аар нь файлаар задлах
+Зорилго
+
+Зан үйл (behavior) огт өөрчлөхгүйгээр, зөвхөн кодыг файлаар нь зохион байгуулах (pure refactor). Энэ бол rewrite биш — функцуудыг зөвхөн өөр файлд зөөж, import/export холбоно.
+
+ЗААВАЛ дагах хязгаарлалт
+Логик нэг мөр ч бүү өөрчил. Route handler, тооцооллын функц бүгд яг хуучин байгаагаар нь cut-paste хий.
+API endpoint URL, request/response contract бүү өөрчил. openapi.yaml-д хамаарах зүйл байхгүй.
+DB schema, migration бүү хий.
+main branch руу шууд push бүү хий. refactor/split-routes нэртэй branch үүсгэж, тэн дээр ажилла.
+Алхам бүрийн дараа pnpm run typecheck амжилттай дамжсаны дараа л дараагийн алхамд шилж.
+Алхам бүрийг тусдаа commit болго (жишээ нь: "Split inventory routes into routes/inventory.ts").
+Backend: artifacts/api-server/src/routes/operations.ts (4266 мөр) → задлах
+
+Дараах route prefix-үүдийг тус тусад нь шинэ файл болгож зөөх (RBAC middleware-д байгаа allowedPrefixes-тэй яг тохирсон хуваалт):
+
+Шинэ файл	Route prefix
+routes/employees.ts	/employees, /employees/:id/salary-history
+routes/attendance.ts	/attendance, /attendance/shifts, /attendance/shift-plans
+routes/hour-balance.ts	/hour-balance
+routes/payroll.ts	/payroll, /payroll-schedule, /payroll-adjustments, /payroll-advance
+routes/cash.ts	/cash/*
+routes/inventory.ts	/inventory/*, /fixed-assets
+routes/operating-expenses.ts	/operating-expenses/*
+routes/chart-of-accounts.ts	/chart-of-accounts/*
+routes/deletion-requests.ts	/deletion-requests/*
+routes/dashboard.ts	/dashboard
+
+Нэмэлт алхмууд:
+
+Global RBAC middleware-г (session шалгах, role-based access control хийдэг router.use(async (req, res, next) => {...}) хэсэг) middlewares/require-staff-auth.ts болгож тусад нь гарга, дараа нь routes/index.ts-д бүх route-оос өмнө нэг л удаа хэрэглэ.
+Тооцооллын цэвэр функцуудыг (monthlyIncomeTaxRelief, hoursBetween, salaryAt, FIFO consumption логик, ensureDefaultChartOfAccounts, inventoryPurchaseAccount, lockedExpenseAccount, fallbackExpenseAccount гэх мэт) lib/payroll-calc.ts, lib/inventory-fifo.ts, lib/chart-of-accounts.ts файлуудад зөөж, тэдгээрийг route файлуудаас import хий.
+tx: any гэж бичсэн helper функцуудын transaction параметрийг зөөж байх зуураа Drizzle-ийн жинхэнэ transaction type-оор солих (жишээ нь PgTransaction<...> эсвэл db.transaction-ий callback-аас гарах inferred type).
+routes/index.ts-д бүх шинэ router-уудыг холбо.
+Frontend: artifacts/staff-ops/src/App.tsx (2235 мөр) → задлах
+Шинэ файл	Одоогийн компонент(ууд)
+components/ui-primitives.tsx	LoadingBlock, ErrorBlock, EmptyState, StatCard, StatusPill, PageHeading, Modal
+components/AppShell.tsx	AppShell
+pages/Dashboard.tsx	Dashboard
+pages/Employees.tsx	Employees, EmployeeModal, SalaryHistoryRowEditor
+pages/Attendance.tsx	AttendancePage, ShiftSettingsModal
+pages/HourBalance.tsx	HourBalance
+pages/Payroll.tsx	Payroll, PayrollAdjustmentModal, PayrollScheduleSettingsModal
+pages/Cash.tsx	Cash, CashLegacy, CashDayCloseControls, AccountLabel, BankTransactions
+pages/FixedAssets.tsx	FixedAssets
+pages/Inventory.tsx	Inventory
+pages/OperatingExpenses.tsx	OperatingExpenses, OperatingExpenseModal, OperatingExpensePaymentModal
+pages/DeletionRequests.tsx	DeletionRequests
+pages/settings/UserSettings.tsx	UserSettings, UserEditModal
+pages/settings/ChartOfAccountsSettings.tsx	ChartOfAccountsSettings, ChartOfAccountModal
+pages/settings/UnclearTransactionsSettings.tsx	UnclearTransactionsSettings
+pages/HrLogin.tsx	HrLogin
+App.tsx	зөвхөн Router() болон App() үлдэнэ (~100 мөр)
+Гүйцэтгэх дараалал
+Branch үүсгэ: git checkout -b refactor/split-routes
+Эхлээд зөвхөн нэг domain-ийг (жишээ нь inventory.ts) зөөгөөд, typecheck дамжсаныг шалга, commit хий
+Дараагийн domain-уудыг нэг нэгээр нь дараалуулж давт
+Бэкенд бүрэн дууссаны дараа frontend рүү шилж, мөн нэг нэгээр нь хий
+Бүгд дууссаны дараа:
+pnpm run typecheck (бүх packages)
+pnpm --filter @workspace/api-server run test (DATABASE_URL шалгаарай — Helium руу дэмий тест мөр бичихээс зайлсхийхийн тулд боломжтой бол тест-specific DB ашигла)
+Frontend-ийг Replit preview дээр нээж үндсэн цэсүүд (Employees, Payroll, Cash, Inventory) алдаагүй ачаалж байгааг нүдээр шалга
+Бүгд шалгагдсаны дараа PR үүсгэ, өөрөө main руу бүү merge хий — намайг эсвэл эзэмшигчийг шалгуулаад мержил.
+Битгий хий
+Route handler дотор ямар нэг "сайжруулалт" (жишээ нь алдаа засах, edge case нэмэх) бүү оруул — энэ бол зөвхөн зохион байгуулалтын ажил
+Файлын нэр, экспортын нэрийг дээрх хүснэгтээс өөрөөр бүү нэрлэ (frontend талд import эвдрэхээс сэргийлэх)
