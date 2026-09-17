@@ -25,7 +25,6 @@ import {
   EyeOff,
   LayoutDashboard,
   Landmark,
-  LockKeyhole,
   LogOut,
   Menu,
   Pencil,
@@ -133,7 +132,6 @@ import {
   useListOperatingExpensePaymentBankSuggestions,
   useConfirmOperatingExpensePayment,
   useCancelOperatingExpensePayment,
-  useLoginHrManager,
   useLogoutHrManager,
   useRevertPayrollAdvanceApproval,
   useUpsertPayrollAdjustment,
@@ -186,6 +184,7 @@ import { DeletionRequests } from '@/pages/DeletionRequests';
 import { UserSettings } from '@/pages/settings/UserSettings';
 import { ChartOfAccountsSettings } from '@/pages/settings/ChartOfAccountsSettings';
 import { UnclearTransactionsSettings } from '@/pages/settings/UnclearTransactionsSettings';
+import { HrLogin } from '@/pages/HrLogin';
 
 const queryClient = new QueryClient();
 
@@ -267,14 +266,6 @@ export const nav = [
   { href: '/users', label: 'Хэрэглэгчийн тохиргоо', icon: UserRound },
 ];
 
-
-function HrLogin() {
-  const login = useLoginHrManager();
-  const qc = useQueryClient();
-  const form = useForm<{ username: string; password: string }>({ defaultValues: { username: '', password: '' } });
-  const submit = (values: { username: string; password: string }) => login.mutate({ data: values }, { onSuccess: () => qc.invalidateQueries({ queryKey: getGetAuthSessionQueryKey() }) });
-  return <div className="grid min-h-[100dvh] place-items-center bg-background app-grid p-5"><div className="w-full max-w-sm rounded-2xl border border-border bg-card p-7 shadow-xl"><div className="mb-6 grid size-12 place-items-center rounded-xl bg-primary text-primary-foreground"><LockKeyhole className="size-5" /></div><h1 className="text-2xl font-bold tracking-tight">Нэвтрэх</h1><p className="mt-2 text-sm text-muted-foreground">Өөрийн эрхийн мэдээллээр системд нэвтэрнэ.</p><Form {...form}><form onSubmit={form.handleSubmit(submit)} className="mt-7 space-y-4"><label className="block space-y-2 text-xs font-semibold">Нэвтрэх нэр<input className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" autoComplete="username" {...form.register('username', { required: true })} data-testid="input-login-username" /></label><label className="block space-y-2 text-xs font-semibold">Нууц үг<input type="password" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" autoComplete="current-password" {...form.register('password', { required: true })} data-testid="input-login-password" /></label>{login.isError && <p className="text-xs font-semibold text-destructive">Нэвтрэх нэр эсвэл нууц үг буруу байна.</p>}<Button type="submit" className="w-full" disabled={login.isPending} data-testid="button-login">{login.isPending ? 'Нэвтэрч байна...' : 'Нэвтрэх'}</Button></form></Form></div></div>;
-}
 
 function Router() {
   const [location] = useLocation();
