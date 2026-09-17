@@ -24,6 +24,7 @@ describe("cash journal posting", () => {
   let cookie: string;
   let userId: number;
   let cashAccountId: number;
+  let bankAccountId: number;
   let inventoryAccountId: number;
   let revenueAccountId: number;
   let mappedRevenueAccountId: number;
@@ -54,8 +55,9 @@ describe("cash journal posting", () => {
     // actual production mapping without changing that mapping globally.
     const canonical = await db.select({ id: chartOfAccountsTable.id, code: chartOfAccountsTable.code })
       .from(chartOfAccountsTable)
-      .where(inArray(chartOfAccountsTable.code, ["1000", "1500", "4900", "6900"]));
+       .where(inArray(chartOfAccountsTable.code, ["1000", "1010", "1500", "4900", "6900"]));
     cashAccountId = canonical.find((row) => row.code === "1000")?.id ?? accounts[0].id;
+    bankAccountId = canonical.find((row) => row.code === "1010")?.id ?? accounts[0].id;
     inventoryAccountId = canonical.find((row) => row.code === "1500")?.id ?? accounts[0].id;
     revenueAccountId = canonical.find((row) => row.code === "4900")?.id ?? accounts[1].id;
     const [mappedRevenue] = await db.select({ id: chartOfAccountsTable.id }).from(chartOfAccountsTable)
@@ -262,6 +264,45 @@ describe("cash journal posting", () => {
     ));
     assert.ok(reversal);
     journalIds.push(reversal.id);
+  });
+
+  it("keeps a bank-linked cash PUT idempotent and settled through bank", async () => {
+    const category = `Bank linked ${randomUUID()}`;
+    const create = await request({
+      type: "expense",
+      category,
+      description: "Bank linked original",
+      amount: 21,
+      date: "2025-01-28",
+      incomeMonth: null,
+    });
+    assert.equal(create.status, 201);
+    const original = await create.json() as { id: number; journalEntryId: number };
+    cashIds.push(original.id);
+    journalIds.push(original.journalEntryId);
+    await db.update(cashTransactionsTable).set({ bankTransactionId: 987654321 }).where(eq(cashTransactionsTable.id, original.id));
+    await db.update(journalLinesTable)
+      .set({ accountId: bankAccountId })
+      .where(and(eq(journalLinesTable.journalEntryId, original.journalEntryId), eq(journalLinesTable.accountId, cashAccountId)));
+
+    const unchanged = await requestPath(`/api/cash/transactions/${original.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ type: "expense", category, description: "Bank linked original", amount: 21, date: "2025-01-28", incomeMonth: null }),
+    });
+    assert.equal(unchanged.status, 200);
+    const unchangedValue = await unchanged.json() as { journalEntryId: number };
+    assert.equal(unchangedValue.journalEntryId, original.journalEntryId);
+
+    const changed = await requestPath(`/api/cash/transactions/${original.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ type: "expense", category: `Bank linked changed ${randomUUID()}`, description: "Bank linked changed", amount: 22, date: "2025-01-29", incomeMonth: null }),
+    });
+    assert.equal(changed.status, 200);
+    const replacement = await changed.json() as { journalEntryId: number };
+    assert.notEqual(replacement.journalEntryId, original.journalEntryId);
+    journalIds.push(replacement.journalEntryId);
+    const lines = await db.select().from(journalLinesTable).where(eq(journalLinesTable.journalEntryId, replacement.journalEntryId));
+    assert.equal(lines.some((line) => line.accountId === bankAccountId && line.credit === 22), true);
   });
 
   it("does not backfill a historical cash row with a null journal link", async () => {

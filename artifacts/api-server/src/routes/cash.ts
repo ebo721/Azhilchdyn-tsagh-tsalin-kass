@@ -182,10 +182,11 @@ async function activeAccountByCode(tx: any, code: string, type: string) {
   return account;
 }
 
-async function cashLedgerAccount(tx: any) {
-  const account = await activeAccountByCode(tx, "1000", "asset");
+async function cashLedgerAccount(tx: any, bankTransactionId: number | null = null) {
+  const code = bankTransactionId === null ? "1000" : "1010";
+  const account = await activeAccountByCode(tx, code, "asset");
   if (!account || account.normalBalance !== "debit") {
-    throw new Error("Cash account 1000 is missing or inactive");
+    throw new Error(`Settlement account ${code} is missing or inactive`);
   }
   return account;
 }
@@ -230,7 +231,7 @@ async function postCashJournal(tx: any, cash: any, counterAccount: any, cashAcco
   return posting.journalEntryId;
 }
 
-async function journalNeedsReplacement(tx: any, existing: any, input: any, counterAccount: any) {
+async function journalNeedsReplacement(tx: any, existing: any, input: any, counterAccount: any, settlementAccountId: number) {
   if (existing.type !== input.type
     || existing.category !== input.category.trim()
     || Number(existing.amount) !== Number(input.amount)
@@ -238,11 +239,7 @@ async function journalNeedsReplacement(tx: any, existing: any, input: any, count
     || existing.description !== input.description) return true;
   if (!existing.journalEntryId) return false;
   const lines = await tx.select().from(journalLinesTable).where(eq(journalLinesTable.journalEntryId, existing.journalEntryId));
-  const [ledgerAccount] = await tx.select({ id: chartOfAccountsTable.id }).from(chartOfAccountsTable)
-    .where(eq(chartOfAccountsTable.code, "1000"));
-  const counterLines = ledgerAccount
-    ? lines.filter((line: any) => line.accountId !== ledgerAccount.id)
-    : lines;
+  const counterLines = lines.filter((line: any) => line.accountId !== settlementAccountId);
   return counterLines.length !== 1 || counterLines[0].accountId !== counterAccount.id;
 }
 
@@ -360,7 +357,7 @@ router.post("/cash/transactions", async (req, res, next) => {
           cashTransactionId: cash.id,
         });
       }
-      const ledgerAccount = await cashLedgerAccount(tx);
+      const ledgerAccount = await cashLedgerAccount(tx, cash.bankTransactionId);
       const journalEntryId = await postCashJournal(tx, cash, linkedAccount, ledgerAccount);
       const [linkedCash] = await tx.update(cashTransactionsTable)
         .set({ journalEntryId })
@@ -413,11 +410,14 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
       const mirrorAccount = input.type === "expense" && shouldMirrorCashAsOperatingExpense(category)
         ? await fallbackExpenseAccount(tx, category)
         : null;
+      const ledgerAccount = existing.journalEntryId
+        ? await cashLedgerAccount(tx, existing.bankTransactionId)
+        : null;
       const counterAccount = existing.journalEntryId
         ? await journalCounterAccount(tx, input.type, category, cashAccount)
         : mirrorAccount;
       const replacement = existing.journalEntryId
-        ? await journalNeedsReplacement(tx, existing, input, counterAccount)
+        ? await journalNeedsReplacement(tx, existing, input, counterAccount, ledgerAccount!.id)
         : false;
       const [cash] = await tx.update(cashTransactionsTable)
         .set({
@@ -442,9 +442,8 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
       }
       let journalEntryId = existing.journalEntryId;
       if (existing.journalEntryId && replacement) {
-        const ledgerAccount = await cashLedgerAccount(tx);
         await voidJournalEntry(tx, { journalEntryId: existing.journalEntryId, voidedBy: null });
-        journalEntryId = await postCashJournal(tx, cash, counterAccount, ledgerAccount);
+        journalEntryId = await postCashJournal(tx, cash, counterAccount, ledgerAccount!);
         const [linkedCash] = await tx.update(cashTransactionsTable)
           .set({ journalEntryId })
           .where(eq(cashTransactionsTable.id, id))
