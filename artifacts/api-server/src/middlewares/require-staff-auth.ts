@@ -196,7 +196,7 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
     next();
     return;
   }
-  const viewerReadPrefixes = ["/employees", "/attendance", "/hour-balance", "/payroll", "/payroll-advance", "/cash", "/bank-transactions", "/inventory", "/fixed-assets", "/operating-expenses"];
+  const viewerReadPrefixes = ["/employees", "/attendance", "/hour-balance", "/payroll", "/payroll-advance", "/cash", "/bank-accounts", "/bank-transactions", "/inventory", "/fixed-assets", "/operating-expenses"];
   if (role === "viewer" && req.method === "GET" && viewerReadPrefixes.some((prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`))) {
     next();
     return;
@@ -216,7 +216,7 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
   const allowedPrefixes = role === "hr"
     ? ["/employees", "/attendance", "/hour-balance"]
       : role === "accountant"
-        ? ["/hour-balance", "/payroll", "/payroll-schedule", "/cash", "/bank-transactions"]
+        ? ["/hour-balance", "/payroll", "/payroll-schedule", "/cash", "/bank-accounts", "/bank-transactions"]
       : role === "warehouse"
         ? ["/inventory", "/fixed-assets", "/operating-expenses"]
         : [];
