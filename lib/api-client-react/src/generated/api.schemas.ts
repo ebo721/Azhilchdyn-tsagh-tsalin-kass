@@ -65,6 +65,47 @@ export interface UserUpdateInput {
   newPassword?: string;
 }
 
+export type ChartOfAccountType = typeof ChartOfAccountType[keyof typeof ChartOfAccountType];
+
+
+export const ChartOfAccountType = {
+  asset: 'asset',
+  liability: 'liability',
+  equity: 'equity',
+  revenue: 'revenue',
+  expense: 'expense',
+} as const;
+
+export interface ChartOfAccount {
+  id: number;
+  code: string;
+  name: string;
+  type: ChartOfAccountType;
+  createdAt: string;
+}
+
+export type ChartOfAccountInputType = typeof ChartOfAccountInputType[keyof typeof ChartOfAccountInputType];
+
+
+export const ChartOfAccountInputType = {
+  asset: 'asset',
+  liability: 'liability',
+  equity: 'equity',
+  revenue: 'revenue',
+  expense: 'expense',
+} as const;
+
+export interface ChartOfAccountInput {
+  /**
+     * @minLength 1
+     * @pattern ^[0-9]+$
+     */
+  code: string;
+  /** @minLength 1 */
+  name: string;
+  type: ChartOfAccountInputType;
+}
+
 export interface LoginInput {
   username: string;
   password: string;

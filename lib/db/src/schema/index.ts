@@ -54,6 +54,14 @@ export const usersTable = pgTable("users", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
+export const chartOfAccountsTable = pgTable("chart_of_accounts", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  type: text("type").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const shiftTemplatesTable = pgTable("shift_templates", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),

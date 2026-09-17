@@ -110,8 +110,15 @@ import {
   UpdateShiftParams,
   UpdateEmployeeBody,
   UpdateEmployeeParams,
+  ListChartOfAccountsResponse,
+  CreateChartOfAccountBody,
+  CreateChartOfAccountResponse,
+  UpdateChartOfAccountBody,
+  UpdateChartOfAccountParams,
+  UpdateChartOfAccountResponse,
+  DeleteChartOfAccountParams,
 } from "@workspace/api-zod";
-import { and, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import {
   attendanceTable,
   cashTransactionsTable,
@@ -133,6 +140,7 @@ import {
   operatingExpensesTable,
   deletionRequestsTable,
   shiftTemplatesTable,
+  chartOfAccountsTable,
 } from "@workspace/db";
 import { getStaffRole, getStaffSession, type StaffRole } from "../lib/hr-session.js";
 import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment.js";
@@ -199,10 +207,50 @@ function operatingExpenseResponse(row: typeof operatingExpensesTable.$inferSelec
 const inventoryMaterialLabel = (materialType: string) =>
   materialType === "food" ? "Хүнсний бараа материал" : "Хангамжийн материал";
 
+const defaultChartOfAccounts = [
+  { code: "1000", name: "Бэлэн мөнгө (касс)", type: "asset" },
+  { code: "1010", name: "Банкны данс", type: "asset" },
+  { code: "1200", name: "Авлага", type: "asset" },
+  { code: "1500", name: "Бараа материалын үлдэгдэл", type: "asset" },
+  { code: "1800", name: "Үндсэн хөрөнгө", type: "asset" },
+  { code: "1810", name: "Хуримтлагдсан элэгдэл", type: "asset" },
+  { code: "2000", name: "Өглөг", type: "liability" },
+  { code: "2100", name: "Цалингийн өглөг", type: "liability" },
+  { code: "2200", name: "Татварын өглөг", type: "liability" },
+  { code: "2300", name: "Банкны зээл", type: "liability" },
+  { code: "3000", name: "Хувь нийлүүлэгчийн хөрөнгө", type: "equity" },
+  { code: "3900", name: "Хуримтлагдсан ашиг/алдагдал", type: "equity" },
+  { code: "4000", name: "Хоолны үйлчилгээний орлого", type: "revenue" },
+  { code: "4900", name: "Бусад орлого", type: "revenue" },
+  { code: "5000", name: "Бараа материалын зардал (COGS)", type: "expense" },
+  { code: "6000", name: "Цалингийн зардал", type: "expense" },
+  { code: "6010", name: "Нийгмийн даатгалын зардал", type: "expense" },
+  { code: "6100", name: "Түрээсийн зардал", type: "expense" },
+  { code: "6200", name: "Тээврийн зардал", type: "expense" },
+  { code: "6300", name: "Цахилгаан, дулаан, ус", type: "expense" },
+  { code: "6400", name: "Харилцаа холбоо, интернэт", type: "expense" },
+  { code: "6500", name: "Засвар үйлчилгээ", type: "expense" },
+  { code: "6600", name: "Элэгдлийн зардал", type: "expense" },
+  { code: "6900", name: "Бусад үйл ажиллагааны зардал", type: "expense" },
+] as const;
+
+const chartOfAccountResponse = (row: typeof chartOfAccountsTable.$inferSelect) => ({
+  ...row,
+  createdAt: row.createdAt.toISOString(),
+});
+
 router.use(async (req, res, next) => {
   const session = await getStaffSession(req);
   if (!session) {
     res.status(401).json({ error: "Нэвтрэх шаардлагатай" });
+    return;
+  }
+  if (req.path === "/chart-of-accounts" || req.path.startsWith("/chart-of-accounts/")) {
+    if (req.method === "GET" || session.role === "admin") {
+      next();
+      return;
+    }
+    res.status(403).json({ error: "Дансны төлөвлөгөөг зөвхөн админ өөрчилнө" });
     return;
   }
   if (req.method === "POST" && req.path === "/deletion-requests") {
@@ -3573,6 +3621,92 @@ router.delete("/operating-expenses/:id", async (req, res, next) => {
     if (deleted === "closed") { res.status(409).json({ error: "Өндөрлөсөн өдрийн зардлыг устгах боломжгүй" }); return; }
     res.status(204).send();
   } catch (error) { next(error); }
+});
+
+router.get("/chart-of-accounts", async (_req, res, next) => {
+  try {
+    let rows = await db.select().from(chartOfAccountsTable).orderBy(asc(chartOfAccountsTable.code));
+    if (rows.length === 0) {
+      await db.insert(chartOfAccountsTable).values([...defaultChartOfAccounts]).onConflictDoNothing({
+        target: chartOfAccountsTable.code,
+      });
+      rows = await db.select().from(chartOfAccountsTable).orderBy(asc(chartOfAccountsTable.code));
+    }
+    res.json(ListChartOfAccountsResponse.parse(rows.map(chartOfAccountResponse)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/chart-of-accounts", async (req, res, next) => {
+  try {
+    const input = CreateChartOfAccountBody.parse(req.body);
+    const name = input.name.trim();
+    if (!name) {
+      res.status(400).json({ error: "Дансны нэр хоосон байж болохгүй" });
+      return;
+    }
+    const [row] = await db.insert(chartOfAccountsTable).values({
+      code: input.code,
+      name,
+      type: input.type,
+    }).returning();
+    res.status(201).json(CreateChartOfAccountResponse.parse(chartOfAccountResponse(row)));
+  } catch (error) {
+    const code = (error as { code?: string; cause?: { code?: string } }).code
+      ?? (error as { cause?: { code?: string } }).cause?.code;
+    if (code === "23505") {
+      res.status(409).json({ error: "Энэ дансны код бүртгэлтэй байна" });
+      return;
+    }
+    next(error);
+  }
+});
+
+router.put("/chart-of-accounts/:id", async (req, res, next) => {
+  try {
+    const { id } = UpdateChartOfAccountParams.parse(req.params);
+    const input = UpdateChartOfAccountBody.parse(req.body);
+    const name = input.name.trim();
+    if (!name) {
+      res.status(400).json({ error: "Дансны нэр хоосон байж болохгүй" });
+      return;
+    }
+    const [row] = await db.update(chartOfAccountsTable).set({
+      code: input.code,
+      name,
+      type: input.type,
+    }).where(eq(chartOfAccountsTable.id, id)).returning();
+    if (!row) {
+      res.status(404).json({ error: "Данс олдсонгүй" });
+      return;
+    }
+    res.json(UpdateChartOfAccountResponse.parse(chartOfAccountResponse(row)));
+  } catch (error) {
+    const code = (error as { code?: string; cause?: { code?: string } }).code
+      ?? (error as { cause?: { code?: string } }).cause?.code;
+    if (code === "23505") {
+      res.status(409).json({ error: "Энэ дансны код бүртгэлтэй байна" });
+      return;
+    }
+    next(error);
+  }
+});
+
+router.delete("/chart-of-accounts/:id", async (req, res, next) => {
+  try {
+    const { id } = DeleteChartOfAccountParams.parse(req.params);
+    const [row] = await db.delete(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, id)).returning({
+      id: chartOfAccountsTable.id,
+    });
+    if (!row) {
+      res.status(404).json({ error: "Данс олдсонгүй" });
+      return;
+    }
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
 });
 
 export default router;

@@ -78,6 +78,81 @@ export const DeleteUserResponse = zod.void()
 
 
 /**
+ * @summary List the chart of accounts for authenticated users
+ */
+export const ListChartOfAccountsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "code": zod.string(),
+  "name": zod.string(),
+  "type": zod.enum(['asset', 'liability', 'equity', 'revenue', 'expense']),
+  "createdAt": zod.coerce.date()
+})
+export const ListChartOfAccountsResponse = zod.array(ListChartOfAccountsResponseItem)
+
+
+/**
+ * @summary Create a chart of account entry (admin only)
+ */
+
+
+export const createChartOfAccountBodyCodeRegExp = new RegExp('^[0-9]+$');
+
+
+
+export const CreateChartOfAccountBody = zod.object({
+  "code": zod.string().min(1).regex(createChartOfAccountBodyCodeRegExp),
+  "name": zod.string().min(1),
+  "type": zod.enum(['asset', 'liability', 'equity', 'revenue', 'expense'])
+})
+
+export const CreateChartOfAccountResponse = zod.object({
+  "id": zod.number().int(),
+  "code": zod.string(),
+  "name": zod.string(),
+  "type": zod.enum(['asset', 'liability', 'equity', 'revenue', 'expense']),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update a chart of account entry (admin only)
+ */
+export const UpdateChartOfAccountParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+export const updateChartOfAccountBodyCodeRegExp = new RegExp('^[0-9]+$');
+
+
+
+export const UpdateChartOfAccountBody = zod.object({
+  "code": zod.string().min(1).regex(updateChartOfAccountBodyCodeRegExp),
+  "name": zod.string().min(1),
+  "type": zod.enum(['asset', 'liability', 'equity', 'revenue', 'expense'])
+})
+
+export const UpdateChartOfAccountResponse = zod.object({
+  "id": zod.number().int(),
+  "code": zod.string(),
+  "name": zod.string(),
+  "type": zod.enum(['asset', 'liability', 'equity', 'revenue', 'expense']),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a chart of account entry (admin only)
+ */
+export const DeleteChartOfAccountParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteChartOfAccountResponse = zod.void()
+
+
+/**
  * Returns server health status
  * @summary Health check
  */

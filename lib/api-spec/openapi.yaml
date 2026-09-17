@@ -28,6 +28,8 @@ tags:
     description: Bank statement transactions
   - name: users
     description: Admin user management
+  - name: chart-of-accounts
+    description: Accounting chart management
 paths:
   /auth/me:
     get:
@@ -101,6 +103,61 @@ paths:
       responses:
         "204":
           description: User deleted
+  /chart-of-accounts:
+    get:
+      operationId: listChartOfAccounts
+      tags: [chart-of-accounts]
+      summary: List the chart of accounts for authenticated users
+      responses:
+        "200":
+          description: Chart of accounts ordered by code
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ChartOfAccount" }
+    post:
+      operationId: createChartOfAccount
+      tags: [chart-of-accounts]
+      summary: Create a chart of account entry (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChartOfAccountInput" }
+      responses:
+        "201":
+          description: Created account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChartOfAccount" }
+  /chart-of-accounts/{id}:
+    put:
+      operationId: updateChartOfAccount
+      tags: [chart-of-accounts]
+      summary: Update a chart of account entry (admin only)
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChartOfAccountInput" }
+      responses:
+        "200":
+          description: Updated account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChartOfAccount" }
+    delete:
+      operationId: deleteChartOfAccount
+      tags: [chart-of-accounts]
+      summary: Delete a chart of account entry (admin only)
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Account deleted
   /healthz:
     get:
       operationId: healthCheck
@@ -1359,6 +1416,22 @@ components:
         username: { type: string, minLength: 1 }
         role: { type: string, enum: [admin, hr, accountant, warehouse, viewer] }
         newPassword: { type: string, minLength: 1 }
+    ChartOfAccount:
+      type: object
+      required: [id, code, name, type, createdAt]
+      properties:
+        id: { type: integer }
+        code: { type: string }
+        name: { type: string }
+        type: { type: string, enum: [asset, liability, equity, revenue, expense] }
+        createdAt: { type: string, format: date-time }
+    ChartOfAccountInput:
+      type: object
+      required: [code, name, type]
+      properties:
+        code: { type: string, minLength: 1, pattern: '^[0-9]+$' }
+        name: { type: string, minLength: 1 }
+        type: { type: string, enum: [asset, liability, equity, revenue, expense] }
     LoginInput:
       type: object
       required: [username, password]
