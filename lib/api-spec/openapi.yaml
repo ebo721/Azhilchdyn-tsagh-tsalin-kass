@@ -1743,12 +1743,15 @@ components:
         paymentDate: { type: ["string", "null"] }
     CashTransaction:
       type: object
-      required: [id, type, category, subcategory, description, amount, date, incomeMonth, bankTransactionId, bankVerifiedAt, createdAt, editable, transactionKind]
+      required: [id, type, category, subcategory, accountId, accountCode, accountName, description, amount, date, incomeMonth, bankTransactionId, bankVerifiedAt, createdAt, editable, transactionKind]
       properties:
         id: { type: integer }
         type: { type: string, enum: [income, expense] }
         category: { type: string }
         subcategory: { type: ["string", "null"] }
+        accountId: { type: ["integer", "null"] }
+        accountCode: { type: ["string", "null"] }
+        accountName: { type: ["string", "null"] }
         description: { type: string }
         amount: { type: number }
         date: { type: string }

@@ -541,6 +541,12 @@ export interface CashTransaction {
   category: string;
   /** @nullable */
   subcategory: string | null;
+  /** @nullable */
+  accountId: number | null;
+  /** @nullable */
+  accountCode: string | null;
+  /** @nullable */
+  accountName: string | null;
   description: string;
   amount: number;
   date: string;

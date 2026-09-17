@@ -123,6 +123,7 @@ export const cashTransactionsTable = pgTable("cash_transactions", {
   id: serial("id").primaryKey(),
   type: text("type").notNull(),
   category: text("category").notNull(),
+  accountId: integer("account_id").references(() => chartOfAccountsTable.id, { onDelete: "restrict" }),
   description: text("description").notNull(),
   amount: numeric("amount", { precision: 12, scale: 2, mode: "number" }).notNull(),
   date: date("date").notNull(),
@@ -138,6 +139,7 @@ export const cashTransactionsTable = pgTable("cash_transactions", {
 }, (table) => [
   uniqueIndex("cash_transactions_source_idx").on(table.sourceType, table.sourceKey),
   uniqueIndex("cash_transactions_bank_transaction_idx").on(table.bankTransactionId),
+  index("cash_transactions_account_id_idx").on(table.accountId),
 ]);
 
 export const cashClosuresTable = pgTable("cash_closures", {

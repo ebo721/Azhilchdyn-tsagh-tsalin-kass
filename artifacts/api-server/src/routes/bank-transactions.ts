@@ -28,6 +28,7 @@ import { and, desc, eq, gte, isNotNull, isNull, lte } from "drizzle-orm";
 import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, db, deletionRequestsTable } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.js";
+import { cashAccountForCategory } from "../lib/cash-account.js";
 
 const router: IRouter = Router();
 const execFile = promisify(execFileCallback);
@@ -314,9 +315,11 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
       const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, date));
       if (closed) return "closed" as const;
       const verifiedAt = new Date();
+      const account = await cashAccountForCategory(tx, category);
       const [cash] = await tx.insert(cashTransactionsTable).values({
         type: bank.type,
         category,
+        accountId: account?.id ?? null,
         description: bank.description,
         amount: bank.amount,
         date,

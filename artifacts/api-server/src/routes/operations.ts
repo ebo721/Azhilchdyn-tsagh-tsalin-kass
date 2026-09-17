@@ -146,6 +146,7 @@ import { getStaffRole, getStaffSession, type StaffRole } from "../lib/hr-session
 import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment.js";
 import { planShiftPlanCopy } from "../lib/shift-plan-copy.js";
 import { reconcileOperatingExpenses } from "../lib/operating-expense-sync.js";
+import { cashAccountForCategory } from "../lib/cash-account.js";
 
 const router: IRouter = Router();
 
@@ -1562,9 +1563,11 @@ router.put("/payroll-adjustments", async (req, res, next) => {
         .returning();
 
       if (input.paidAmount > 0 && input.paymentDate) {
+        const account = await cashAccountForCategory(tx, "Цалин");
         await tx.insert(cashTransactionsTable).values({
           type: "expense",
           category: "Цалин",
+          accountId: account?.id ?? null,
           description: `${employee.name} · ${input.month} сарын цалин`,
           amount: input.paidAmount,
           date: input.paymentDate,
@@ -1573,6 +1576,7 @@ router.put("/payroll-adjustments", async (req, res, next) => {
         }).onConflictDoUpdate({
           target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
           set: {
+            accountId: account?.id ?? null,
             amount: input.paidAmount,
             date: input.paymentDate,
             description: `${employee.name} · ${input.month} сарын цалин`,
@@ -1587,9 +1591,11 @@ router.put("/payroll-adjustments", async (req, res, next) => {
 
       const secondSourceKey = `${sourceKey}:2`;
       if (input.secondPaidAmount > 0 && input.secondPaymentDate) {
+        const account = await cashAccountForCategory(tx, "Цалин");
         await tx.insert(cashTransactionsTable).values({
           type: "expense",
           category: "Цалин",
+          accountId: account?.id ?? null,
           description: `${employee.name} · ${input.month} сарын цалин · 2-р олголт`,
           amount: input.secondPaidAmount,
           date: input.secondPaymentDate,
@@ -1598,6 +1604,7 @@ router.put("/payroll-adjustments", async (req, res, next) => {
         }).onConflictDoUpdate({
           target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
           set: {
+            accountId: account?.id ?? null,
             amount: input.secondPaidAmount,
             date: input.secondPaymentDate,
             description: `${employee.name} · ${input.month} сарын цалин · 2-р олголт`,
@@ -1800,9 +1807,11 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
         .where(eq(payrollAdvanceApprovalsTable.id, approval.id));
 
       if (cashTransaction) {
+        const account = await cashAccountForCategory(tx, "Урьдчилгаа цалин");
         await tx.insert(cashTransactionsTable).values({
           type: "expense",
           category: "Урьдчилгаа цалин",
+          accountId: account?.id ?? null,
           description: `${employee.name} · ${input.month} сарын урьдчилгаа`,
           amount: cashTransaction.amount,
           date: cashTransaction.date,
@@ -1811,6 +1820,7 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
         }).onConflictDoUpdate({
           target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
           set: {
+            accountId: account?.id ?? null,
             amount: cashTransaction.amount,
             date: cashTransaction.date,
             description: `${employee.name} · ${input.month} сарын урьдчилгаа`,
@@ -1868,7 +1878,14 @@ router.get("/cash/summary", async (_req, res, next) => {
 
 router.get("/cash/transactions", async (_req, res, next) => {
   try {
-    const rows = await db.select().from(cashTransactionsTable).where(isNull(cashTransactionsTable.unclearAt)).orderBy(desc(cashTransactionsTable.date), desc(cashTransactionsTable.id));
+    const rows = await db.select({
+      transaction: cashTransactionsTable,
+      accountCode: chartOfAccountsTable.code,
+      accountName: chartOfAccountsTable.name,
+    }).from(cashTransactionsTable)
+      .leftJoin(chartOfAccountsTable, eq(cashTransactionsTable.accountId, chartOfAccountsTable.id))
+      .where(isNull(cashTransactionsTable.unclearAt))
+      .orderBy(desc(cashTransactionsTable.date), desc(cashTransactionsTable.id));
     const [expenseRows, inventoryPurchases] = await Promise.all([
       db.select({
         cashTransactionId: operatingExpensesTable.cashTransactionId,
@@ -1878,8 +1895,13 @@ router.get("/cash/transactions", async (_req, res, next) => {
     ]);
     const subcategoryByCashId = new Map(expenseRows.map((expense) => [expense.cashTransactionId, expense.category]));
     const inventoryCategoryBySourceKey = new Map(inventoryPurchases.map((purchase) => [`purchase:${purchase.id}`, inventoryMaterialLabel(purchase.materialType)]));
-    res.json(ListCashTransactionsResponse.parse(rows.map((transaction) => ({
+    res.json(ListCashTransactionsResponse.parse(rows.map((row) => {
+      const transaction = row.transaction;
+      return {
       ...transaction,
+      accountId: transaction.accountId,
+      accountCode: row.accountCode,
+      accountName: row.accountName,
       category: transaction.type === "expense"
         ? transaction.sourceType === "payroll" || transaction.sourceType === "payroll_advance"
           ? "Цалин"
@@ -1900,7 +1922,8 @@ router.get("/cash/transactions", async (_req, res, next) => {
       createdAt: String(transaction.createdAt),
       editable: transaction.sourceType === null,
       transactionKind: transaction.sourceType ?? "manual",
-    }))));
+      };
+    })));
   } catch (error) {
     next(error);
   }
@@ -1918,9 +1941,12 @@ router.post("/cash/transactions", async (req, res, next) => {
       return;
     }
     const result = await db.transaction(async (tx) => {
+      const category = input.type === "expense" ? "Үйл ажиллагааны зардал" : input.category.trim();
+      const cashAccount = await cashAccountForCategory(tx, category);
       const [cash] = await tx.insert(cashTransactionsTable).values({
         ...input,
-        category: input.type === "expense" ? "Үйл ажиллагааны зардал" : input.category.trim(),
+        category,
+        accountId: cashAccount?.id ?? null,
         incomeMonth: input.type === "income" ? input.incomeMonth : null,
       }).returning();
       if (input.type === "expense") {
@@ -1934,14 +1960,17 @@ router.post("/cash/transactions", async (req, res, next) => {
           paymentAmount: money(input.amount),
           cashTransactionId: cash.id,
         });
-        return { cash, subcategory: account.name };
+        return { cash, subcategory: account.name, cashAccount };
       }
-      return { cash, subcategory: null };
+      return { cash, subcategory: null, cashAccount };
     });
-    const { cash: transaction, subcategory } = result;
+    const { cash: transaction, subcategory, cashAccount } = result;
     res.status(201).json({
       ...transaction,
       subcategory,
+      accountId: transaction.accountId,
+      accountCode: cashAccount?.code ?? null,
+      accountName: cashAccount?.name ?? null,
       amount: Number(transaction.amount),
       date: String(transaction.date),
       bankTransactionId: transaction.bankTransactionId,
@@ -1977,10 +2006,13 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
       return;
     }
     const result = await db.transaction(async (tx) => {
+      const category = input.type === "expense" ? "Үйл ажиллагааны зардал" : input.category.trim();
+      const cashAccount = await cashAccountForCategory(tx, category);
       const [cash] = await tx.update(cashTransactionsTable)
         .set({
           ...input,
-          category: input.type === "expense" ? "Үйл ажиллагааны зардал" : input.category.trim(),
+          category,
+          accountId: cashAccount?.id ?? null,
           incomeMonth: input.type === "income" ? input.incomeMonth : null,
         })
         .where(eq(cashTransactionsTable.id, id))
@@ -1997,14 +2029,17 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
           paymentAmount: money(input.amount),
           cashTransactionId: id,
         });
-        return { cash, subcategory: account.name };
+        return { cash, subcategory: account.name, cashAccount };
       }
-      return { cash, subcategory: null };
+      return { cash, subcategory: null, cashAccount };
     });
-    const { cash: transaction, subcategory } = result;
+    const { cash: transaction, subcategory, cashAccount } = result;
     res.json({
       ...transaction,
       subcategory,
+      accountId: transaction.accountId,
+      accountCode: cashAccount?.code ?? null,
+      accountName: cashAccount?.name ?? null,
       amount: Number(transaction.amount),
       date: String(transaction.date),
       bankTransactionId: transaction.bankTransactionId,
@@ -2040,9 +2075,13 @@ router.patch("/cash/transactions/:id/income-month", async (req, res, next) => {
       .set({ incomeMonth })
       .where(eq(cashTransactionsTable.id, id))
       .returning();
+    const account = await cashAccountForCategory(db, transaction.category);
     res.json(UpdateBankCashTransactionIncomeMonthResponse.parse({
       ...transaction,
       subcategory: null,
+      accountId: transaction.accountId,
+      accountCode: account?.code ?? null,
+      accountName: account?.name ?? null,
       amount: Number(transaction.amount),
       date: String(transaction.date),
       bankTransactionId: transaction.bankTransactionId,
@@ -2278,9 +2317,11 @@ router.post("/fixed-assets", async (req, res, next) => {
         purchased: input.purchased,
       }).returning();
       if (input.purchased) {
+        const account = await cashAccountForCategory(tx, "Эд хөрөнгө");
         await tx.insert(cashTransactionsTable).values({
           type: "expense",
           category: "Эд хөрөнгө",
+          accountId: account?.id ?? null,
           description: `${name} (${input.quantity} ширхэг)`,
           amount: totalAmount,
           date: input.date,
@@ -2339,9 +2380,11 @@ router.put("/fixed-assets/:id", async (req, res, next) => {
       }).where(eq(fixedAssetsTable.id, id)).returning();
       const sourceKey = `fixed-asset:${id}`;
       if (input.purchased) {
+        const account = await cashAccountForCategory(tx, "Эд хөрөнгө");
         await tx.insert(cashTransactionsTable).values({
           type: "expense",
           category: "Эд хөрөнгө",
+          accountId: account?.id ?? null,
           description: `${name} (${input.quantity} ширхэг)`,
           amount: totalAmount,
           date: input.date,
@@ -2350,6 +2393,7 @@ router.put("/fixed-assets/:id", async (req, res, next) => {
         }).onConflictDoUpdate({
           target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
           set: {
+            accountId: account?.id ?? null,
             description: `${name} (${input.quantity} ширхэг)`,
             amount: totalAmount,
             date: input.date,
@@ -3130,8 +3174,10 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
         totalAmount,
       }).where(eq(inventoryPurchasesTable.id, id)).returning();
       if (existing.paymentDate) {
+        const cashCategory = inventoryMaterialLabel(input.materialType);
+        const cashAccount = await cashAccountForCategory(tx, cashCategory);
         await tx.update(cashTransactionsTable)
-          .set({ category: inventoryMaterialLabel(input.materialType), description: supplier.name })
+          .set({ category: cashCategory, accountId: cashAccount?.id ?? null, description: supplier.name })
           .where(and(
             eq(cashTransactionsTable.sourceType, "inventory_purchase"),
             eq(cashTransactionsTable.sourceKey, `purchase:${id}`),
@@ -3297,9 +3343,12 @@ router.put("/inventory/purchases/:id/payment", async (req, res, next) => {
         .set({ paymentDate: input.date, paymentAmount: money(input.amount) })
         .where(eq(inventoryPurchasesTable.id, id));
       const verifiedAt = bank ? new Date() : null;
+      const cashCategory = inventoryMaterialLabel(currentPurchase.materialType);
+      const cashAccount = await cashAccountForCategory(tx, cashCategory);
       const [cash] = await tx.insert(cashTransactionsTable).values({
         type: "expense",
-        category: inventoryMaterialLabel(currentPurchase.materialType),
+        category: cashCategory,
+        accountId: cashAccount?.id ?? null,
         description: currentPurchase.documentName,
         amount: money(input.amount),
         date: input.date,
@@ -3310,7 +3359,8 @@ router.put("/inventory/purchases/:id/payment", async (req, res, next) => {
       }).onConflictDoUpdate({
         target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
         set: {
-          category: inventoryMaterialLabel(currentPurchase.materialType),
+          category: cashCategory,
+          accountId: cashAccount?.id ?? null,
           description: currentPurchase.documentName,
           amount: money(input.amount),
           date: input.date,
@@ -3526,8 +3576,10 @@ router.post("/inventory/purchases/:id/reclassify-as-expense", async (req, res, n
         eq(cashTransactionsTable.sourceKey, `purchase:${id}`),
       ));
       if (cash) {
+        const cashAccount = await cashAccountForCategory(tx, "Үйл ажиллагааны зардал");
         await tx.update(cashTransactionsTable).set({
           category: "Үйл ажиллагааны зардал",
+          accountId: cashAccount?.id ?? null,
           description: existing.documentName,
           sourceType: "operating_expense",
           sourceKey: `expense:${newExpense.id}`,
@@ -3652,8 +3704,10 @@ router.put("/operating-expenses/:id/payment", async (req, res, next) => {
         const bankDate = calendarDateText(bank.transactionAt);
         if (bank.type !== "expense" || bankDate !== input.date || Number(bank.amount) !== Number(input.amount) || bank.cashTransactionId || bank.transferredAt || bank.unclearAt) return "bank_conflict" as const;
       }
+      const cashAccount = await cashAccountForCategory(tx, "Үйл ажиллагааны зардал");
       const [cash] = await tx.insert(cashTransactionsTable).values({
         type: "expense", category: "Үйл ажиллагааны зардал", description: expense.description,
+        accountId: cashAccount?.id ?? null,
         amount: money(input.amount), date: input.date, sourceType: "operating_expense", sourceKey: `expense:${id}`,
         bankTransactionId: input.bankTransactionId ?? null,
         bankVerifiedAt: input.bankTransactionId ? new Date() : null,

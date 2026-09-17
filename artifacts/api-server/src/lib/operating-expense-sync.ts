@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { bankTransactionsTable, cashTransactionsTable, chartOfAccountsTable, operatingExpensesTable } from "@workspace/db";
+import { cashAccountForCategory } from "./cash-account.js";
 
 const SYSTEM_SOURCES = ["payroll", "payroll_advance", "inventory_purchase", "fixed_asset_purchase"];
 const OPERATING_EXPENSE_CATEGORY = "Үйл ажиллагааны зардал";
@@ -53,7 +54,11 @@ export async function syncOperatingExpenseForBankCash(tx: any, bankId: number, c
     paymentDate: String(cash.date), paymentAmount: Number(cash.amount), bankTransactionId: bankId, cashTransactionId: cashId,
   };
   if (cash.category !== OPERATING_EXPENSE_CATEGORY) {
-    await tx.update(cashTransactionsTable).set({ category: OPERATING_EXPENSE_CATEGORY }).where(eq(cashTransactionsTable.id, cashId));
+    const cashAccount = await cashAccountForCategory(tx, OPERATING_EXPENSE_CATEGORY);
+    await tx.update(cashTransactionsTable).set({
+      category: OPERATING_EXPENSE_CATEGORY,
+      accountId: cashAccount?.id ?? null,
+    }).where(eq(cashTransactionsTable.id, cashId));
   }
   if (byCash) return (await tx.update(operatingExpensesTable).set(values).where(eq(operatingExpensesTable.id, byCash.id)).returning())[0];
   const [created] = await tx.insert(operatingExpensesTable).values(values).onConflictDoNothing().returning();
