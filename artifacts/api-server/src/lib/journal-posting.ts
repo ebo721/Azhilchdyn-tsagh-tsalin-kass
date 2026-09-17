@@ -3,6 +3,8 @@ import { and, eq, inArray } from "drizzle-orm";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+export class JournalValidationError extends Error {}
+
 type JournalLineInput = {
   accountId: number;
   debit: number;
@@ -59,7 +61,7 @@ export async function validateAndNormalizeJournalLines(
   inputLines: JournalLineInput[],
   allowInactiveAccounts = false,
 ) {
-  if (inputLines.length < 2) throw new Error("Journal entry must contain at least two lines");
+  if (inputLines.length < 2) throw new JournalValidationError("Journal entry must contain at least two lines");
   const lines = inputLines.map((line) => ({
     ...line,
     debitCents: Math.round(line.debit * 100),
@@ -69,7 +71,7 @@ export async function validateAndNormalizeJournalLines(
     const safeCents = Number.isSafeInteger(line.debitCents) && Number.isSafeInteger(line.creditCents);
     const debitOnly = safeCents && Number.isFinite(line.debit) && line.debitCents > 0 && line.creditCents === 0;
     const creditOnly = safeCents && Number.isFinite(line.credit) && line.creditCents > 0 && line.debitCents === 0;
-    if (!debitOnly && !creditOnly) throw new Error("Each journal line must contain either a debit or a credit");
+    if (!debitOnly && !creditOnly) throw new JournalValidationError("Each journal line must contain either a debit or a credit");
   }
   const accountIds = [...new Set(lines.map((line) => line.accountId))];
   const accounts = await tx.select({ id: chartOfAccountsTable.id }).from(chartOfAccountsTable).where(
@@ -77,7 +79,7 @@ export async function validateAndNormalizeJournalLines(
   );
   const validAccountIds = new Set(accounts.map((account) => account.id));
   if (accounts.length !== accountIds.length || accountIds.some((id) => !validAccountIds.has(id))) {
-    throw new Error("Every journal line must use an active account");
+    throw new JournalValidationError("Every journal line must use an active account");
   }
   const debitCents = lines.reduce((sum, line) => sum + BigInt(line.debitCents), 0n);
   const creditCents = lines.reduce((sum, line) => sum + BigInt(line.creditCents), 0n);

@@ -5,5 +5,6 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { JournalDate } from './journalDate';
 
-export type JournalDateFromParameter = Date;
+export type JournalDateFromParameter = JournalDate;

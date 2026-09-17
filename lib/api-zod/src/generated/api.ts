@@ -2403,20 +2403,25 @@ export const CancelDeletionRequestResponse = zod.object({
 /**
  * @summary List journal entries
  */
+export const listJournalEntriesQueryDateFromRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const listJournalEntriesQueryDateToRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 
 export const ListJournalEntriesQueryParams = zod.object({
-  "dateFrom": zod.date().optional(),
-  "dateTo": zod.date().optional(),
+  "dateFrom": zod.coerce.string().regex(listJournalEntriesQueryDateFromRegExp).optional(),
+  "dateTo": zod.coerce.string().regex(listJournalEntriesQueryDateToRegExp).optional(),
   "sourceType": zod.coerce.string().optional(),
   "accountId": zod.coerce.number().int().min(1).optional(),
   "status": zod.enum(['draft', 'posted', 'void']).optional()
 })
 
+export const listJournalEntriesResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
 export const ListJournalEntriesResponseItem = zod.object({
   "id": zod.number().int(),
-  "date": zod.coerce.date(),
+  "date": zod.string().regex(listJournalEntriesResponseDateRegExp),
   "description": zod.string(),
   "sourceType": zod.string(),
   "sourceId": zod.number().int().nullable(),
@@ -2430,6 +2435,7 @@ export const ListJournalEntriesResponse = zod.array(ListJournalEntriesResponseIt
 /**
  * @summary Create a manual journal entry
  */
+export const createJournalEntryBodyDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const createJournalEntryBodyLinesItemDebitMin = 0;
@@ -2441,7 +2447,7 @@ export const createJournalEntryBodyLinesMin = 2;
 
 
 export const CreateJournalEntryBody = zod.object({
-  "date": zod.coerce.date(),
+  "date": zod.string().regex(createJournalEntryBodyDateRegExp),
   "description": zod.string().min(1),
   "lines": zod.array(zod.object({
   "accountId": zod.number().int().min(1),
@@ -2451,6 +2457,7 @@ export const CreateJournalEntryBody = zod.object({
 })).min(createJournalEntryBodyLinesMin)
 })
 
+export const createJournalEntryResponseOneDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const createJournalEntryResponseTwoLinesItemDebitMin = 0;
 
 export const createJournalEntryResponseTwoLinesItemCreditMin = 0;
@@ -2459,7 +2466,7 @@ export const createJournalEntryResponseTwoLinesItemCreditMin = 0;
 
 export const CreateJournalEntryResponse = zod.object({
   "id": zod.number().int(),
-  "date": zod.coerce.date(),
+  "date": zod.string().regex(createJournalEntryResponseOneDateRegExp),
   "description": zod.string(),
   "sourceType": zod.string(),
   "sourceId": zod.number().int().nullable(),
@@ -2486,6 +2493,7 @@ export const GetJournalEntryParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+export const getJournalEntryResponseOneDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const getJournalEntryResponseTwoLinesItemDebitMin = 0;
 
 export const getJournalEntryResponseTwoLinesItemCreditMin = 0;
@@ -2494,7 +2502,7 @@ export const getJournalEntryResponseTwoLinesItemCreditMin = 0;
 
 export const GetJournalEntryResponse = zod.object({
   "id": zod.number().int(),
-  "date": zod.coerce.date(),
+  "date": zod.string().regex(getJournalEntryResponseOneDateRegExp),
   "description": zod.string(),
   "sourceType": zod.string(),
   "sourceId": zod.number().int().nullable(),
@@ -2539,6 +2547,7 @@ export const UpdateJournalEntryBody = zod.object({
 })).min(updateJournalEntryBodyLinesMin)
 })
 
+export const updateJournalEntryResponseOneDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const updateJournalEntryResponseTwoLinesItemDebitMin = 0;
 
 export const updateJournalEntryResponseTwoLinesItemCreditMin = 0;
@@ -2547,7 +2556,7 @@ export const updateJournalEntryResponseTwoLinesItemCreditMin = 0;
 
 export const UpdateJournalEntryResponse = zod.object({
   "id": zod.number().int(),
-  "date": zod.coerce.date(),
+  "date": zod.string().regex(updateJournalEntryResponseOneDateRegExp),
   "description": zod.string(),
   "sourceType": zod.string(),
   "sourceId": zod.number().int().nullable(),
@@ -2586,13 +2595,16 @@ export const GetJournalAccountLedgerParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+export const getJournalAccountLedgerResponseEntriesItemDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
 export const GetJournalAccountLedgerResponse = zod.object({
   "accountId": zod.number().int(),
   "code": zod.string(),
   "name": zod.string(),
   "normalBalance": zod.enum(['debit', 'credit']),
   "entries": zod.array(zod.object({
-  "date": zod.coerce.date(),
+  "date": zod.string().regex(getJournalAccountLedgerResponseEntriesItemDateRegExp),
   "journalEntryId": zod.number().int(),
   "debit": zod.number(),
   "credit": zod.number(),

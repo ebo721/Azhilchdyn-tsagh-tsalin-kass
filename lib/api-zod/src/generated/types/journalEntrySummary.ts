@@ -5,11 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { JournalDate } from './journalDate';
 import type { JournalEntrySummaryStatus } from './journalEntrySummaryStatus';
 
 export interface JournalEntrySummary {
   id: number;
-  date: Date;
+  date: JournalDate;
   description: string;
   sourceType: string;
   /** @nullable */

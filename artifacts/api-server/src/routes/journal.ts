@@ -8,11 +8,24 @@ import {
 import { and, asc, desc, eq, gte, lte, inArray } from "drizzle-orm";
 import { db, chartOfAccountsTable, journalEntriesTable, journalLinesTable, type JournalEntry, type JournalLine } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
-import { postJournalEntry, validateAndNormalizeJournalLines, voidJournalEntry } from "../lib/journal-posting.js";
+import {
+  JournalValidationError, postJournalEntry, validateAndNormalizeJournalLines, voidJournalEntry,
+} from "../lib/journal-posting.js";
 
 const router: IRouter = Router();
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : "Invalid journal entry";
-function dateText(value: Date) { return value.toISOString().slice(0, 10); }
+function journalDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) throw new JournalValidationError("Journal date must use YYYY-MM-DD");
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    throw new JournalValidationError("Journal date is not a valid calendar date");
+  }
+  return value;
+}
 type JournalEntryWithLines = JournalEntry & { lines: JournalLine[] };
 function entryWithLines(entry: JournalEntry, lines: JournalLine[]): JournalEntryWithLines {
   return { ...entry, lines };
@@ -26,14 +39,10 @@ async function loadEntry(id: number): Promise<JournalEntryWithLines | null> {
 
 router.get("/journal/entries", async (req, res, next) => {
   try {
-    const raw = ListJournalEntriesQueryParams.parse({
-      ...req.query,
-      dateFrom: req.query.dateFrom ? new Date(String(req.query.dateFrom)) : undefined,
-      dateTo: req.query.dateTo ? new Date(String(req.query.dateTo)) : undefined,
-    });
+    const raw = ListJournalEntriesQueryParams.parse(req.query);
     const filters = [];
-    if (raw.dateFrom) filters.push(gte(journalEntriesTable.date, dateText(raw.dateFrom)));
-    if (raw.dateTo) filters.push(lte(journalEntriesTable.date, dateText(raw.dateTo)));
+    if (raw.dateFrom) filters.push(gte(journalEntriesTable.date, journalDate(raw.dateFrom)));
+    if (raw.dateTo) filters.push(lte(journalEntriesTable.date, journalDate(raw.dateTo)));
     if (raw.sourceType) filters.push(eq(journalEntriesTable.sourceType, raw.sourceType));
     if (raw.status) filters.push(eq(journalEntriesTable.status, raw.status));
     if (raw.accountId) {
@@ -42,7 +51,10 @@ router.get("/journal/entries", async (req, res, next) => {
     }
     const rows = await db.select().from(journalEntriesTable).where(filters.length ? and(...filters) : undefined).orderBy(desc(journalEntriesTable.date), desc(journalEntriesTable.id));
     res.json(ListJournalEntriesResponse.parse(rows));
-  } catch (error) { next(error); }
+  } catch (error) {
+    if (error instanceof JournalValidationError) return res.status(400).json({ error: error.message });
+    return next(error);
+  }
 });
 
 router.get("/journal/entries/:id", async (req, res, next) => {
@@ -59,12 +71,15 @@ router.post("/journal/entries", async (req, res, next) => {
     const body = CreateJournalEntryBody.parse(req.body);
     const session = await getStaffSession(req);
     const result = await db.transaction((tx) => postJournalEntry(tx, {
-      date: dateText(body.date), description: body.description, sourceType: "manual", sourceId: null,
+      date: journalDate(body.date), description: body.description, sourceType: "manual", sourceId: null,
       createdBy: session?.id ?? null, lines: body.lines,
     }));
     const entry = await loadEntry(result.journalEntryId);
     return res.status(201).json(CreateJournalEntryResponse.parse(entry));
-  } catch (error) { return next(error); }
+  } catch (error) {
+    if (error instanceof JournalValidationError) return res.status(400).json({ error: error.message });
+    return next(error);
+  }
 });
 
 router.put("/journal/entries/:id", async (req, res, next) => {
@@ -87,6 +102,7 @@ router.put("/journal/entries/:id", async (req, res, next) => {
     return res.json(UpdateJournalEntryResponse.parse(entry));
   } catch (error) {
     if (error && typeof error === "object" && "status" in error) return res.status(Number(error.status)).json({ error: errorMessage(error) });
+    if (error instanceof JournalValidationError) return res.status(400).json({ error: error.message });
     return next(error);
   }
 });

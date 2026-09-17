@@ -5,10 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { JournalDate } from './journalDate';
 import type { JournalEntryLineInput } from './journalEntryLineInput';
 
 export interface JournalEntryInput {
-  date: Date;
+  date: JournalDate;
   /** @minLength 1 */
   description: string;
   /** @minItems 2 */

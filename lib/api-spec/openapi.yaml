@@ -1572,15 +1572,13 @@ components:
       name: dateFrom
       required: false
       schema:
-        type: string
-        format: date
+        $ref: "#/components/schemas/JournalDate"
     JournalDateTo:
       in: query
       name: dateTo
       required: false
       schema:
-        type: string
-        format: date
+        $ref: "#/components/schemas/JournalDate"
     JournalSourceType:
       in: query
       name: sourceType
@@ -1618,6 +1616,9 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
   schemas:
+    JournalDate:
+      type: string
+      pattern: '^\d{4}-\d{2}-\d{2}$'
     ErrorResponse:
       type: object
       required: [error]
@@ -1644,7 +1645,7 @@ components:
       type: object
       required: [date, description, lines]
       properties:
-        date: { type: string, format: date }
+        date: { $ref: "#/components/schemas/JournalDate" }
         description: { type: string, minLength: 1 }
         lines:
           type: array
@@ -1663,7 +1664,7 @@ components:
       required: [id, date, description, sourceType, sourceId, status, createdBy, createdAt]
       properties:
         id: { type: integer }
-        date: { type: string, format: date }
+        date: { $ref: "#/components/schemas/JournalDate" }
         description: { type: string }
         sourceType: { type: string }
         sourceId: { type: ["integer", "null"] }
@@ -1701,7 +1702,7 @@ components:
       type: object
       required: [date, journalEntryId, debit, credit, balance]
       properties:
-        date: { type: string, format: date }
+        date: { $ref: "#/components/schemas/JournalDate" }
         journalEntryId: { type: integer }
         debit: { type: number }
         credit: { type: number }

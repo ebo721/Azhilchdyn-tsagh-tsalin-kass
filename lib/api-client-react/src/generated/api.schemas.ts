@@ -5,6 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+export type JournalDate = string;
+
 export interface ErrorResponse {
   error: string;
 }
@@ -32,7 +37,7 @@ export interface JournalEntryLineInput {
 }
 
 export interface JournalEntryInput {
-  date: string;
+  date: JournalDate;
   /** @minLength 1 */
   description: string;
   /** @minItems 2 */
@@ -55,7 +60,7 @@ export const JournalEntrySummaryStatus = {
 
 export interface JournalEntrySummary {
   id: number;
-  date: string;
+  date: JournalDate;
   description: string;
   sourceType: string;
   /** @nullable */
@@ -87,7 +92,7 @@ export const JournalLedgerNormalBalance = {
 } as const;
 
 export interface JournalLedgerEntry {
-  date: string;
+  date: JournalDate;
   journalEntryId: number;
   debit: number;
   credit: number;
@@ -1383,9 +1388,9 @@ export type NotFoundResponse = ErrorResponse;
  */
 export type ConflictResponse = ErrorResponse;
 
-export type JournalDateFromParameter = string;
+export type JournalDateFromParameter = JournalDate;
 
-export type JournalDateToParameter = string;
+export type JournalDateToParameter = JournalDate;
 
 export type JournalSourceTypeParameter = string;
 
@@ -1456,7 +1461,13 @@ bankAccountId: number;
 };
 
 export type ListJournalEntriesParams = {
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
 dateFrom?: JournalDateFromParameter;
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
 dateTo?: JournalDateToParameter;
 sourceType?: JournalSourceTypeParameter;
 /**

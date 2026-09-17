@@ -6,13 +6,20 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { JournalAccountIdParameter } from './journalAccountIdParameter';
+import type { JournalDate } from './journalDate';
 import type { JournalDateFromParameter } from './journalDateFromParameter';
 import type { JournalDateToParameter } from './journalDateToParameter';
 import type { JournalSourceTypeParameter } from './journalSourceTypeParameter';
 import type { JournalStatusParameter } from './journalStatusParameter';
 
 export type ListJournalEntriesParams = {
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
 dateFrom?: JournalDateFromParameter;
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
 dateTo?: JournalDateToParameter;
 sourceType?: JournalSourceTypeParameter;
 /**

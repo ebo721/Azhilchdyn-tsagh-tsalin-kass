@@ -5,9 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { JournalDate } from './journalDate';
 
 export interface JournalLedgerEntry {
-  date: Date;
+  date: JournalDate;
   journalEntryId: number;
   debit: number;
   credit: number;

@@ -95,6 +95,7 @@ export * from './inventorySupplier';
 export * from './inventorySupplierItem';
 export * from './inventorySupplierUpdate';
 export * from './journalAccountIdParameter';
+export * from './journalDate';
 export * from './journalDateFromParameter';
 export * from './journalDateToParameter';
 export * from './journalEntry';

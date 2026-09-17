@@ -107,7 +107,8 @@ describe("journal routes", () => {
     const id = await create(10, 10);
     const response = await request(`/journal/entries/${id}`);
     assert.equal(response.status, 200);
-    const value = await response.json() as { sourceType: string; status: string; lines: unknown[]; createdBy: number };
+    const value = await response.json() as { date: string; sourceType: string; status: string; lines: unknown[]; createdBy: number };
+    assert.equal(value.date, "2025-01-15");
     assert.equal(value.sourceType, "manual");
     assert.equal(value.status, "posted");
     assert.equal(value.createdBy, userIds[0]);
@@ -207,5 +208,39 @@ describe("journal routes", () => {
     }, viewerCookie)).status, 403);
     assert.equal((await request("/journalist", undefined, viewerCookie)).status, 403);
     assert.equal((await request("/journalist")).status, 403);
+  });
+
+  it("returns 400 for invalid journal dates, lines, and accounts", async () => {
+    const impossibleDate = await request("/journal/entries", {
+      method: "POST",
+      body: JSON.stringify({ date: "2025-02-30", description: "Invalid date", lines: lines(1, 1) }),
+    });
+    assert.equal(impossibleDate.status, 400);
+
+    const invalidLines = await request("/journal/entries", {
+      method: "POST",
+      body: JSON.stringify({
+        date: "2025-02-28",
+        description: "Invalid lines",
+        lines: [
+          { accountId: debitAccount, debit: 0, credit: 0 },
+          { accountId: creditAccount, debit: 0, credit: 1 },
+        ],
+      }),
+    });
+    assert.equal(invalidLines.status, 400);
+
+    const missingAccount = await request("/journal/entries", {
+      method: "POST",
+      body: JSON.stringify({
+        date: "2025-02-28",
+        description: "Missing account",
+        lines: [
+          { accountId: 2147483647, debit: 1, credit: 0 },
+          { accountId: creditAccount, debit: 0, credit: 1 },
+        ],
+      }),
+    });
+    assert.equal(missingAccount.status, 400);
   });
 });
