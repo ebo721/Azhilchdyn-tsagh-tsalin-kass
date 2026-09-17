@@ -43,6 +43,29 @@ describe("payroll schedule date rules", () => {
     });
   });
 
+  it("places final payment in the next month when its day is before the advance payment day", () => {
+    assert.deepEqual(payrollPeriod("2099-12", {
+      ...defaults,
+      advancePayDay: 20,
+      finalPayDay: 5,
+    }), {
+      periodStart: "2099-12-01",
+      advancePeriodEnd: "2099-12-15",
+      periodEnd: "2099-12-31",
+      advancePaymentDate: "2099-12-20",
+      finalPaymentDate: "2100-01-05",
+    });
+  });
+
+  it("keeps final payment in the same month when its day equals the advance payment day", () => {
+    const result = payrollPeriod("2099-02", {
+      ...defaults,
+      advancePayDay: 20,
+      finalPayDay: 20,
+    });
+    assert.equal(result.finalPaymentDate, "2099-02-20");
+  });
+
   it("selects the latest effective version without changing prior months", () => {
     const versions = [
       { effectiveFromMonth: "0001-01", periodStartDay: 1 },

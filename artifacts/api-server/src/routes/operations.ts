@@ -475,6 +475,12 @@ function previousMonth(month: string) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
+function nextMonth(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const date = new Date(Date.UTC(year, monthNumber, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 function daysInMonth(month: string) {
   const [year, monthNumber] = month.split("-").map(Number);
   return new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
@@ -545,6 +551,7 @@ function scheduleDate(month: string, day: number) {
 
 export function payrollPeriod(month: string, schedule: typeof defaultPayrollSchedule) {
   const startMonth = schedule.periodStartDay > schedule.periodEndDay ? previousMonth(month) : month;
+  const finalPaymentMonth = schedule.finalPayDay < schedule.advancePayDay ? nextMonth(month) : month;
   const periodStart = scheduleDate(startMonth, schedule.periodStartDay);
   const periodEnd = scheduleDate(month, schedule.periodEndDay);
   const advancePeriodEnd = schedule.advanceCutoffDay >= schedule.periodStartDay
@@ -555,7 +562,7 @@ export function payrollPeriod(month: string, schedule: typeof defaultPayrollSche
     advancePeriodEnd,
     periodEnd,
     advancePaymentDate: scheduleDate(month, schedule.advancePayDay),
-    finalPaymentDate: scheduleDate(month, schedule.finalPayDay),
+    finalPaymentDate: scheduleDate(finalPaymentMonth, schedule.finalPayDay),
   };
 }
 

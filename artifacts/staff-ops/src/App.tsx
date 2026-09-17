@@ -832,6 +832,8 @@ function PayrollScheduleSettingsModal({ onClose }: { onClose: () => void }) {
 
   const periodStartDay = form.watch('periodStartDay');
   const periodEndDay = form.watch('periodEndDay');
+  const advancePayDay = form.watch('advancePayDay');
+  const finalPayDay = form.watch('finalPayDay');
 
   return (
     <Modal title="Цалингийн хуваарь" detail="Цалингийн мөчлөг болон олгох өдрүүдийг тохируулна. (31 = сарын сүүлийн өдөр)" onClose={onClose}>
@@ -848,6 +850,11 @@ function PayrollScheduleSettingsModal({ onClose }: { onClose: () => void }) {
             {Number(periodStartDay) > Number(periodEndDay) && (
               <div className="rounded-xl border border-primary/25 bg-primary/5 p-3 text-xs text-muted-foreground">
                 Мөчлөг эхлэх өдөр нь дуусах өдрөөс хойно байгаа тул цалингийн мөчлөг өмнөх сараас эхэлж тухайн сард дуусна гэж тооцогдоно.
+              </div>
+            )}
+            {Number(finalPayDay) < Number(advancePayDay) && (
+              <div className="rounded-xl border border-primary/25 bg-primary/5 p-3 text-xs text-muted-foreground">
+                Сүүл цалин олгох өдөр нь урьдчилгаа олгох өдрөөс өмнө байгаа тул сүүл цалинг дараа сарын {Number(finalPayDay)}-нд олгоно гэж тооцогдоно.
               </div>
             )}
             <div className="flex justify-end gap-2 border-t border-border pt-4">
