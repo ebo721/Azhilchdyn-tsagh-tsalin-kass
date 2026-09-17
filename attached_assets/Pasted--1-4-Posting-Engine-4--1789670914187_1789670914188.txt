@@ -1,0 +1,123 @@
+# Даалгавар: Журналын модуль — Хэсэг 1/4: Схем + Posting Engine
+
+> Энэ бол 4 хэсэгт задалсан Журналын (GL) модулийн эхний хэсэг. Бусад 3 хэсэг (API, автомат posting холболт, банкны таних) энэ хэсгийг PR-аар мержсэний дараа л эхэлнэ. Ажил эхлэхийн өмнө repo-ийн язгуур дахь `AGENTS.md`-г заавал унш.
+
+## Зорилго
+
+Одоогийн `chart_of_accounts` бол зөвхөн зардлын ангилалын жагсаалт (нэг гүйлгээнд нэг account холбогддог). Энэ хэсэгт **жинхэнэ давхар бичилттэй (double-entry) журналын** өгөгдлийн сан болон posting engine-ийг хийнэ. UI/API, автомат холболт хийхгүй — зөвхөн суурь бүтэц.
+
+## ЗААВАЛ дагах хязгаарлалт
+
+- Одоо байгаа функц (кассын гүйлгээ, банкны import, cash-suggestions, unclear-transactions, цалин, бараа материал) **ямар ч байдлаар эвдэхгүй, устгахгүй**. Энэ бол нэмэлт (additive) давхарга.
+- `chart_of_accounts` хүснэгтийг устгаж/дахин зохиохгүй, зөвхөн шаардлагатай багана нэмнэ.
+- Branch: `feature/gl-journal-01-schema` дээр ажилла, `main` руу шууд push бүү хий — PR нээж шалгуулна.
+- Алхам бүрийн дараа `pnpm run typecheck` амжилттай дамжсаны дараа дараагийн алхамд шилж, тусдаа commit хий.
+
+## 1. Өгөгдлийн сангийн загвар (`lib/db/src/schema/index.ts`)
+
+### 1.1. `chart_of_accounts`-г өргөтгөх
+
+```ts
+// нэмэх багана:
+normalBalance: text("normal_balance").notNull(), // "debit" | "credit"
+isActive: boolean("is_active").notNull().default(true),
+```
+
+`type` баганы утгыг стандартчил: `asset`, `liability`, `equity`, `revenue`, `expense`. Одоо байгаа мөрүүдийн `type`-ийг migration-д мап хийх шаардлагатай (одоогийн утгуудыг эхлээд шалгаж, тохирох стандарт төрөл рүү хөрвүүл — эргэлзээтэй тохиолдолд PR-д тэмдэглэж, надад/эзэмшигчид харуулаад шийд).
+
+### 1.2. Шинэ хүснэгт: `journal_entries` (толгой)
+
+```ts
+export const journalEntriesTable = pgTable("journal_entries", {
+  id: serial("id").primaryKey(),
+  date: date("date", { mode: "string" }).notNull(),
+  description: text("description").notNull(),
+  sourceType: text("source_type").notNull(), // "cash" | "bank" | "payroll" | "inventory_purchase" | "fixed_asset" | "manual"
+  sourceId: integer("source_id"), // холбогдох эх гүйлгээний id (cash_transactions.id гэх мэт), manual бол null
+  status: text("status").notNull().default("draft"), // "draft" | "posted" | "void"
+  createdBy: integer("created_by").references(() => usersTable.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidedBy: integer("voided_by").references(() => usersTable.id, { onDelete: "restrict" }),
+}, (table) => [
+  index("journal_entries_source_idx").on(table.sourceType, table.sourceId),
+  index("journal_entries_date_idx").on(table.date),
+]);
+```
+
+**Санамж**: journal entry-г шууд устгахгүй, `status: "void"` болгож, эсрэг тэнцвэртэй "reversal" entry үүсгэдэг байх (audit trail хадгалагдана — санхүүгийн бичилтэд заавал).
+
+**`draft` төлөв**: Гүйлгээг олон мөрөнд ангилах (жишээ нь нэг банкны гүйлгээг хэсэгчлэн өөр өөр данс руу хуваарилах) явцад бичилт түр **тэнцэхгүй** байж болно. Ийм үед entry `status: "draft"` хэвээр байна. Нийт debit=credit тэнцсэн үед л `status: "posted"` болно. (UI-ийн draft/posted тодотгол Хэсэг 2-т орно.)
+
+### 1.3. Шинэ хүснэгт: `journal_lines` (мөр бүрийн дебит/кредит)
+
+```ts
+export const journalLinesTable = pgTable("journal_lines", {
+  id: serial("id").primaryKey(),
+  journalEntryId: integer("journal_entry_id").notNull().references(() => journalEntriesTable.id, { onDelete: "cascade" }),
+  accountId: integer("account_id").notNull().references(() => chartOfAccountsTable.id, { onDelete: "restrict" }),
+  debit: numeric("debit", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
+  credit: numeric("credit", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
+  memo: text("memo"),
+}, (table) => [
+  index("journal_lines_entry_idx").on(table.journalEntryId),
+  index("journal_lines_account_idx").on(table.accountId),
+]);
+```
+
+Дүрэм: мөр бүрд `debit` эсвэл `credit`-ийн зөвхөн нэг нь 0-ээс их байна (хоёул биш, хоёул 0 ч биш). Нэг journal entry дотор **нийт debit = нийт credit** байх ёстой (posted төлөвт) — энэ шалгалтыг posting engine дээр хийнэ.
+
+### 1.4. Гүйлгээний хүснэгтүүдэд холбоос нэмэх
+
+`cash_transactions`, `bank_transactions`, `inventory_purchases`, `payroll_adjustments` (эсвэл цалингийн төлбөр бичигддэг байршил) тус бүрт:
+
+```ts
+journalEntryId: integer("journal_entry_id").references(() => journalEntriesTable.id, { onDelete: "set null" }),
+```
+
+Ингэснээр дараа нь UI дээр "энэ гүйлгээний журналын бичилтийг харах" гэсэн холбоос гаргаж болно (Хэсэг 2, 3-т ашиглагдана).
+
+## 2. Posting Engine (`lib/journal-posting.ts`)
+
+Шинэ lib файл үүсгэ. Гол функц:
+
+```ts
+async function postJournalEntry(tx, {
+  date, description, sourceType, sourceId, createdBy,
+  lines: { accountId, debit, credit, memo }[]
+}): Promise<{ journalEntryId: number; status: "draft" | "posted" }>
+```
+
+**Заавал шалгах**:
+1. `lines.length >= 2`
+2. Мөр бүрд яг нэг талд (debit эсвэл credit) утга байна
+3. `sum(debit) === sum(credit)` тэнцвэл `status: "posted"`, эс тэгвэл `status: "draft"` (алдаа биш — тодорхойлсон дизайны дагуу draft-аар үлдэнэ). Мөнгөн дүнг харьцуулахдаа `Math.round(x * 100)` (centre-рүү хөрвүүлж) харьцуул, floating point алдаанаас зайлсхий.
+4. Бүх `accountId` идэвхтэй (`isActive: true`) байх ёстой — эс тэгвэл алдаа шидэж, rollback хий.
+
+Мөн нэмэлт функц:
+```ts
+async function voidJournalEntry(tx, { journalEntryId, voidedBy }): Promise<{ reversalEntryId: number }>
+```
+Хуучин entry-г `status: "void"` болгож, яг эсрэг дебит/кредиттэй шинэ posted entry (`sourceType: "reversal"`, `sourceId: <хуучин entry id>`) үүсгэнэ.
+
+## Unit test
+
+`lib/journal-posting.test.ts` бичиж дараах кэйсүүдийг шалга:
+- Тэнцсэн бичилт → `status: "posted"`
+- Тэнцээгүй бичилт → алдаа биш, `status: "draft"` буцаана
+- 1 мөртэй бичилт → алдаа шиднэ
+- Идэвхгүй (`isActive: false`) данс ашиглах → алдаа шиднэ
+- `voidJournalEntry` → эсрэг тэнцвэртэй reversal entry үүсгэнэ, эх entry `status: "void"` болно
+
+## Гүйцэтгэх дараалал
+
+1. `git checkout -b feature/gl-journal-01-schema`
+2. Schema өөрчлөлт (1.1–1.4) → migration үүсгэ → typecheck → commit
+3. `lib/journal-posting.ts` бичих → unit test бичих, бүгд PASS → commit
+4. PR нээж, надад/эзэмшигчид шалгуулаад мержил
+
+## Битгий хий
+
+- Route/API энэ хэсэгт хийхгүй (дараагийн хэсэгт)
+- Одоо байгаа гүйлгээний route-уудыг өөрчлөхгүй (дараагийн хэсэгт холбоно)
+- Journal entry-г шууд DELETE хийдэг функц бүү нэм — зөвхөн void/reversal

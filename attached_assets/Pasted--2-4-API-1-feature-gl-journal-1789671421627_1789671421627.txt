@@ -1,0 +1,39 @@
+Даалгавар: Журналын модуль — Хэсэг 2/4: Журналын API
+
+Урьдчилсан нөхцөл: Хэсэг 1 (feature/gl-journal-01-schema — schema + lib/journal-posting.ts) main-д мержигдсэн байх ёстой. Энэ дээр суурилна. Ажил эхлэхийн өмнө repo-ийн язгуур дахь AGENTS.md-г заавал унш.
+
+Зорилго
+
+routes/journal.ts шинээр үүсгэж, журналын бичилтийг харах, гараар үүсгэх, хүчингүй болгох API-г нэмнэ.
+
+ЗААВАЛ дагах хязгаарлалт
+Одоо байгаа функцийг эвдэхгүй.
+Branch: feature/gl-journal-02-api дээр ажилла (feature/gl-journal-01-schema мержигдсэний дараа main-аас branch-ла).
+Одоо байгаа route файлын зохион байгуулалтын дүрмийг дага: routes/journal.ts үүсгэж, routes/index.ts-д холбо, RBAC middleware (middlewares/require-staff-auth.ts)-ийн allowedPrefixes-д /journal нэм.
+Алхам бүрийн дараа pnpm run typecheck → commit.
+API endpoint-ууд (routes/journal.ts)
+GET    /journal/entries              — жагсаалт (шүүлт: огноо, эх сурвалж (sourceType), данс, төлөв draft/posted/void)
+GET    /journal/entries/:id          — дэлгэрэнгүй (мөрүүдтэй)
+POST   /journal/entries              — гар аргаар journal entry үүсгэх (manual). Body: { date, description, lines: [{accountId, debit, credit, memo}] }. lib/journal-posting.ts-ийн postJournalEntry-г дуудна, sourceType: "manual".
+PUT    /journal/entries/:id          — зөвхөн status="draft" entry-ийн мөрүүдийг засах боломжтой (posted/void-г засахгүй, 409 буцаа). Засварласны дараа дахин тэнцэл шалгаж, тэнцвэл автоматаар posted болно.
+POST   /journal/entries/:id/void     — voidJournalEntry дуудна. Зөвхөн posted entry-г void хийж болно (draft entry-г шууд устгаж болно, void биш — учир нь ledger-д хараахан ороогүй).
+GET    /journal/accounts/:id/ledger  — тухайн дансны бичилтийн жагсаалт (огноо, journal entry id, debit/credit, гүйсгэн үлдэгдэл — энгийн T-account харагдац). Зөвхөн posted мөрүүдийг тоол.
+GET    /journal/trial-balance        — туршилтын баланс: данс тус бүрийн нийт debit/credit, үлдэгдэл (зөвхөн posted). Хариунд нийт дебит=нийт кредит эсэхийг тэмдэглэсэн `{ balanced: boolean, accounts: [...] }` бүтэцтэй буцаа.
+OpenAPI + Zod
+
+Одоо байгаа хэв маягийг дага: lib/api-spec-д schema нэмж, lib/api-zod-д Zod validation үүсгэ, Orval codegen ажиллуулж frontend hooks (lib/api-client-react) шинэчил.
+
+Draft entry-ийн харагдац
+
+GET /journal/entries болон /journal/entries/:id-ийн хариунд status талбар байгаа тул frontend үүгээр draft-ыг тодотгож чадна (энэ хэсэгт зөвхөн API — фронтэнд өөрчлөлт хэрэгтэй бол Хэсэг 3, 4-тэй хамт эсвэл тусад нь хийж болно, энд заавал биш).
+
+Гүйцэтгэх дараалал
+git checkout -b feature/gl-journal-02-api (main-аас, Хэсэг 1 мержигдсэний дараа)
+OpenAPI spec + Zod schema → codegen → commit
+routes/journal.ts — entries CRUD + void → typecheck → commit
+routes/journal.ts — ledger + trial-balance → typecheck → commit
+middlewares/require-staff-auth.ts-д /journal prefix нэмэх (аль role уншиж/бичиж болохыг тодорхойл — санал: admin, accountant бүрэн эрх; viewer зөвхөн GET) → commit
+PR нээж шалгуулаад мержил
+Битгий хий
+routes/operations.ts-д route бичихгүй
+Posted/void entry-г шууд DELETE хийдэг endpoint нэмэхгүй
