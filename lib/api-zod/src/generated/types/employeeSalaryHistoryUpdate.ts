@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { EmployeeSalaryHistoryUpdateSalaryType } from './employeeSalaryHistoryUpdateSalaryType';
 
 export interface EmployeeSalaryHistoryUpdate {
   effectiveFrom: Date;
@@ -13,4 +14,10 @@ export interface EmployeeSalaryHistoryUpdate {
   /** @minimum 0 */
   socialInsuranceSalary: number;
   fullSalaryRegardlessAttendance?: boolean;
+  salaryType?: EmployeeSalaryHistoryUpdateSalaryType;
+  /**
+     * @minimum 0
+     * @maximum 31
+     */
+  monthlyExpectedWorkDays?: number;
 }

@@ -6,9 +6,21 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PayrollAdvanceLine } from './payrollAdvanceLine';
+import type { PayrollSchedule } from './payrollSchedule';
 
 export interface PayrollAdvanceSummary {
   month: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  periodStart: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  advancePeriodEnd: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  periodEnd: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  advancePaymentDate: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  finalPaymentDate: string;
+  schedule: PayrollSchedule;
   approved: boolean;
   /** @nullable */
   approvalDate: string | null;

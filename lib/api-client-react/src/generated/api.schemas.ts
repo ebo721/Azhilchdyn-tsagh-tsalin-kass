@@ -131,6 +131,14 @@ export interface Dashboard {
   recentActivity: Activity[];
 }
 
+export type EmployeeSalaryType = typeof EmployeeSalaryType[keyof typeof EmployeeSalaryType];
+
+
+export const EmployeeSalaryType = {
+  daily: 'daily',
+  monthly: 'monthly',
+} as const;
+
 export type EmployeeEmployeeType = typeof EmployeeEmployeeType[keyof typeof EmployeeEmployeeType];
 
 
@@ -152,6 +160,7 @@ export interface Employee {
   name: string;
   role: string;
   phone: string;
+  salaryType: EmployeeSalaryType;
   employeeType: EmployeeEmployeeType;
   baseSalary: number;
   socialInsuranceSalary: number;
@@ -172,17 +181,35 @@ export const EmployeeSalaryHistoryEmployeeType = {
   office: 'office',
 } as const;
 
+export type EmployeeSalaryHistorySalaryType = typeof EmployeeSalaryHistorySalaryType[keyof typeof EmployeeSalaryHistorySalaryType];
+
+
+export const EmployeeSalaryHistorySalaryType = {
+  daily: 'daily',
+  monthly: 'monthly',
+} as const;
+
 export interface EmployeeSalaryHistory {
   id: number;
   employeeId: number;
   effectiveFrom: string;
   employeeType: EmployeeSalaryHistoryEmployeeType;
+  salaryType: EmployeeSalaryHistorySalaryType;
+  monthlyExpectedWorkDays: number;
   baseSalary: number;
   socialInsuranceSalary: number;
   payrollTaxExempt: boolean;
   fullSalaryRegardlessAttendance: boolean;
   createdAt: string;
 }
+
+export type EmployeeSalaryHistoryUpdateSalaryType = typeof EmployeeSalaryHistoryUpdateSalaryType[keyof typeof EmployeeSalaryHistoryUpdateSalaryType];
+
+
+export const EmployeeSalaryHistoryUpdateSalaryType = {
+  daily: 'daily',
+  monthly: 'monthly',
+} as const;
 
 export interface EmployeeSalaryHistoryUpdate {
   effectiveFrom: string;
@@ -191,6 +218,12 @@ export interface EmployeeSalaryHistoryUpdate {
   /** @minimum 0 */
   socialInsuranceSalary: number;
   fullSalaryRegardlessAttendance?: boolean;
+  salaryType?: EmployeeSalaryHistoryUpdateSalaryType;
+  /**
+     * @minimum 0
+     * @maximum 31
+     */
+  monthlyExpectedWorkDays?: number;
 }
 
 export type EmployeeInputEmployeeType = typeof EmployeeInputEmployeeType[keyof typeof EmployeeInputEmployeeType];
@@ -201,6 +234,14 @@ export const EmployeeInputEmployeeType = {
   office: 'office',
 } as const;
 
+export type EmployeeInputSalaryType = typeof EmployeeInputSalaryType[keyof typeof EmployeeInputSalaryType];
+
+
+export const EmployeeInputSalaryType = {
+  daily: 'daily',
+  monthly: 'monthly',
+} as const;
+
 export interface EmployeeInput {
   /** @minLength 1 */
   name: string;
@@ -208,6 +249,7 @@ export interface EmployeeInput {
   role: string;
   phone: string;
   employeeType: EmployeeInputEmployeeType;
+  salaryType?: EmployeeInputSalaryType;
   /** @minimum 0 */
   baseSalary: number;
   /** @minimum 0 */
@@ -230,6 +272,14 @@ export const EmployeeUpdateEmployeeType = {
   office: 'office',
 } as const;
 
+export type EmployeeUpdateSalaryType = typeof EmployeeUpdateSalaryType[keyof typeof EmployeeUpdateSalaryType];
+
+
+export const EmployeeUpdateSalaryType = {
+  daily: 'daily',
+  monthly: 'monthly',
+} as const;
+
 export type EmployeeUpdateStatus = typeof EmployeeUpdateStatus[keyof typeof EmployeeUpdateStatus];
 
 
@@ -245,17 +295,18 @@ export interface EmployeeUpdate {
   role?: string;
   phone?: string;
   employeeType?: EmployeeUpdateEmployeeType;
+  salaryType?: EmployeeUpdateSalaryType;
+  /**
+     * @minimum 0
+     * @maximum 31
+     */
+  monthlyExpectedWorkDays?: number;
   /** @minimum 0 */
   baseSalary?: number;
   /** @minimum 0 */
   socialInsuranceSalary?: number;
   payrollTaxExempt?: boolean;
   fullSalaryRegardlessAttendance?: boolean;
-  /**
-     * @minimum 0
-     * @maximum 31
-     */
-  monthlyExpectedWorkDays?: number;
   status?: EmployeeUpdateStatus;
   joinedAt?: string;
   /** @nullable */
@@ -454,8 +505,50 @@ export interface PayrollAdjustmentInput {
   secondPaymentDate?: string | null;
 }
 
+export interface PayrollSchedule {
+  id: number;
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])$ */
+  effectiveFromMonth: string;
+  /**
+     * @minimum 1
+     * @maximum 31
+     */
+  periodStartDay: number;
+  /**
+     * @minimum 1
+     * @maximum 31
+     */
+  advanceCutoffDay: number;
+  /**
+     * @minimum 1
+     * @maximum 31
+     */
+  periodEndDay: number;
+  /**
+     * @minimum 1
+     * @maximum 31
+     */
+  advancePayDay: number;
+  /**
+     * @minimum 1
+     * @maximum 31
+     */
+  finalPayDay: number;
+}
+
 export interface PayrollSummary {
   month: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  periodStart: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  advancePeriodEnd: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  periodEnd: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  advancePaymentDate: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  finalPaymentDate: string;
+  schedule: PayrollSchedule;
   totalGross: number;
   totalSocialInsurance: number;
   totalIncomeTax: number;
@@ -488,6 +581,17 @@ export interface PayrollAdvanceLine {
 
 export interface PayrollAdvanceSummary {
   month: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  periodStart: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  advancePeriodEnd: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  periodEnd: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  advancePaymentDate: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  finalPaymentDate: string;
+  schedule: PayrollSchedule;
   approved: boolean;
   /** @nullable */
   approvalDate: string | null;
@@ -512,6 +616,34 @@ export interface PayrollAdvancePaymentInput {
   paid: boolean;
   /** @nullable */
   paymentDate?: string | null;
+}
+
+export interface PayrollScheduleInput {
+  /**
+     * @minimum 1
+     * @maximum 31
+     */
+  periodStartDay: number;
+  /**
+     * @minimum 1
+     * @maximum 31
+     */
+  advanceCutoffDay: number;
+  /**
+     * @minimum 1
+     * @maximum 31
+     */
+  periodEndDay: number;
+  /**
+     * @minimum 1
+     * @maximum 31
+     */
+  advancePayDay: number;
+  /**
+     * @minimum 1
+     * @maximum 31
+     */
+  finalPayDay: number;
 }
 
 export type CashTransactionType = typeof CashTransactionType[keyof typeof CashTransactionType];

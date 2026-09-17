@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmployeeInputEmployeeType } from './employeeInputEmployeeType';
+import type { EmployeeInputSalaryType } from './employeeInputSalaryType';
 
 export interface EmployeeInput {
   /** @minLength 1 */
@@ -14,6 +15,7 @@ export interface EmployeeInput {
   role: string;
   phone: string;
   employeeType: EmployeeInputEmployeeType;
+  salaryType?: EmployeeInputSalaryType;
   /** @minimum 0 */
   baseSalary: number;
   /** @minimum 0 */

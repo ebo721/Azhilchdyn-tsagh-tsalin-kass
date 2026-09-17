@@ -35,6 +35,8 @@ export const employeeSalaryHistoryTable = pgTable("employee_salary_history", {
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id, { onDelete: "cascade" }),
   effectiveFrom: date("effective_from", { mode: "string" }).notNull(),
   employeeType: text("employee_type").notNull(),
+  salaryType: text("salary_type").notNull().default("monthly"),
+  monthlyExpectedWorkDays: integer("monthly_expected_work_days").notNull().default(0),
   baseSalary: numeric("base_salary", { precision: 12, scale: 2, mode: "number" }).notNull(),
   socialInsuranceSalary: numeric("social_insurance_salary", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
   payrollTaxExempt: boolean("payroll_tax_exempt").notNull().default(false),
@@ -54,6 +56,19 @@ export const usersTable = pgTable("users", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
+
+export const payrollScheduleSettingsTable = pgTable("payroll_schedule_settings", {
+  id: serial("id").primaryKey(),
+  effectiveFromMonth: text("effective_from_month").notNull().default("0001-01"),
+  periodStartDay: integer("period_start_day").notNull().default(1),
+  advanceCutoffDay: integer("advance_cutoff_day").notNull().default(15),
+  periodEndDay: integer("period_end_day").notNull().default(31),
+  advancePayDay: integer("advance_pay_day").notNull().default(15),
+  finalPayDay: integer("final_pay_day").notNull().default(31),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  uniqueIndex("payroll_schedule_settings_effective_month_idx").on(table.effectiveFromMonth),
+]);
 
 export const chartOfAccountsTable = pgTable("chart_of_accounts", {
   id: serial("id").primaryKey(),
@@ -307,6 +322,7 @@ export const insertCashTransactionSchema = createInsertSchema(cashTransactionsTa
 
 export type Employee = typeof employeesTable.$inferSelect;
 export type EmployeeSalaryHistory = typeof employeeSalaryHistoryTable.$inferSelect;
+export type PayrollScheduleSettings = typeof payrollScheduleSettingsTable.$inferSelect;
 export type User = typeof usersTable.$inferSelect;
 export type ShiftTemplate = typeof shiftTemplatesTable.$inferSelect;
 export type EmployeeShiftPlan = typeof employeeShiftPlansTable.$inferSelect;

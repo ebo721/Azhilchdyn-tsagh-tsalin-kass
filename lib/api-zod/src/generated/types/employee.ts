@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmployeeEmployeeType } from './employeeEmployeeType';
+import type { EmployeeSalaryType } from './employeeSalaryType';
 import type { EmployeeStatus } from './employeeStatus';
 
 export interface Employee {
@@ -13,6 +14,7 @@ export interface Employee {
   name: string;
   role: string;
   phone: string;
+  salaryType: EmployeeSalaryType;
   employeeType: EmployeeEmployeeType;
   baseSalary: number;
   socialInsuranceSalary: number;

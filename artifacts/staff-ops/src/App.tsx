@@ -55,6 +55,7 @@ import {
   getGetAuthSessionQueryKey,
   getGetPayrollAdvanceQueryKey,
   getGetPayrollQueryKey,
+  getGetPayrollScheduleQueryKey,
   getListAttendanceQueryKey,
   getListShiftPlansQueryKey,
   getListShiftsQueryKey,
@@ -91,6 +92,8 @@ import {
   useGetDashboard,
   useGetHourBalance,
   useGetPayroll,
+  useGetPayrollSchedule,
+  useUpdatePayrollSchedule,
   useGetPayrollAdvance,
   useListAttendance,
   useListCashTransactions,
@@ -169,6 +172,7 @@ import {
   type InventoryIssue,
   type FixedAsset,
   type PayrollLine,
+  type PayrollScheduleInput,
   type Shift,
   type User,
   type ChartOfAccount,
@@ -422,7 +426,7 @@ function Dashboard() {
   );
 }
 
-type EmployeeForm = { name: string; role: string; phone: string; employeeType: 'shift' | 'office'; baseSalary: string; socialInsuranceSalary: string; payrollTaxExempt: boolean; fullSalaryRegardlessAttendance: boolean; monthlyExpectedWorkDays: string; joinedAt: string; status?: 'active' | 'inactive'; inactiveAt: string; salaryEffectiveDate: string };
+type EmployeeForm = { name: string; role: string; phone: string; employeeType: 'shift' | 'office'; salaryType: 'daily' | 'monthly'; baseSalary: string; socialInsuranceSalary: string; payrollTaxExempt: boolean; fullSalaryRegardlessAttendance: boolean; monthlyExpectedWorkDays: string; joinedAt: string; status?: 'active' | 'inactive'; inactiveAt: string; salaryEffectiveDate: string };
 
 function SalaryHistoryRowEditor({ employee, row, isBaseline, isCurrent, canChange, deletionPending, onDelete, onSaved }: { employee: Employee; row: EmployeeSalaryHistory; isBaseline: boolean; isCurrent: boolean; canChange: boolean; deletionPending: boolean; onDelete: () => void; onSaved: (row: EmployeeSalaryHistory, isCurrent: boolean) => void }) {
   const update = useUpdateEmployeeSalaryHistory();
@@ -431,18 +435,22 @@ function SalaryHistoryRowEditor({ employee, row, isBaseline, isCurrent, canChang
   const [effectiveFrom, setEffectiveFrom] = useState(row.effectiveFrom);
   const [baseSalary, setBaseSalary] = useState(String(row.baseSalary));
   const [socialInsuranceSalary, setSocialInsuranceSalary] = useState(String(row.socialInsuranceSalary));
+  const [salaryType, setSalaryType] = useState(row.salaryType);
+  const [monthlyExpectedWorkDays, setMonthlyExpectedWorkDays] = useState(String(row.monthlyExpectedWorkDays));
   const save = () => {
     const base = Number(baseSalary);
     const social = Number(socialInsuranceSalary);
-    if (!effectiveFrom || !Number.isFinite(base) || base < 0 || !Number.isFinite(social) || social < 0) {
+    const monthlyExpected = Number(monthlyExpectedWorkDays);
+    if (!effectiveFrom || !Number.isFinite(base) || base < 0 || !Number.isFinite(social) || social < 0 || !Number.isFinite(monthlyExpected) || monthlyExpected < 0) {
       window.alert('Огноо болон цалингийн дүнг зөв оруулна уу.');
       return;
     }
-    update.mutate({ id: employee.id, historyId: row.id, data: { effectiveFrom, baseSalary: base, socialInsuranceSalary: social } }, {
+    update.mutate({ id: employee.id, historyId: row.id, data: { effectiveFrom, baseSalary: base, socialInsuranceSalary: social, salaryType, monthlyExpectedWorkDays: monthlyExpected } }, {
       onSuccess: (saved) => {
         qc.invalidateQueries({ queryKey: getListEmployeeSalaryHistoryQueryKey(employee.id) });
         qc.invalidateQueries({ queryKey: getListEmployeesQueryKey() });
         qc.invalidateQueries({ queryKey: getGetPayrollQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey() });
         onSaved(saved, isCurrent);
         setEditing(false);
       },
@@ -450,9 +458,9 @@ function SalaryHistoryRowEditor({ employee, row, isBaseline, isCurrent, canChang
     });
   };
   if (editing) {
-    return <tr data-testid={`row-salary-history-${row.id}`}><td className="px-2 py-2"><input type="date" value={effectiveFrom} onChange={(event) => setEffectiveFrom(event.target.value)} className="h-8 rounded-lg border border-input bg-background px-2 font-mono text-xs" data-testid={`input-salary-history-date-${row.id}`} /></td><td className="px-4 py-3 text-xs">{row.employeeType === 'office' ? 'Оффис' : 'Ээлжийн'}</td><td className="px-2 py-2 text-right"><input type="number" min="0" value={baseSalary} onChange={(event) => setBaseSalary(event.target.value)} className="h-8 w-32 rounded-lg border border-input bg-background px-2 text-right font-mono text-xs" data-testid={`input-salary-history-base-${row.id}`} /></td><td className="px-2 py-2 text-right"><input type="number" min="0" value={socialInsuranceSalary} onChange={(event) => setSocialInsuranceSalary(event.target.value)} className="h-8 w-32 rounded-lg border border-input bg-background px-2 text-right font-mono text-xs" data-testid={`input-salary-history-social-${row.id}`} /></td><td className="px-4 py-3 text-center text-xs">{row.payrollTaxExempt ? 'Чөлөөлсөн' : 'Тооцно'}</td><td className="px-2 py-2"><div className="flex justify-end gap-1"><Button type="button" size="sm" onClick={save} disabled={update.isPending} data-testid={`button-save-salary-history-${row.id}`}>{update.isPending ? 'Хадгалж байна...' : 'Хадгалах'}</Button><Button type="button" size="sm" variant="outline" onClick={() => setEditing(false)}>Болих</Button></div></td></tr>;
+    return <tr data-testid={`row-salary-history-${row.id}`}><td className="px-2 py-2"><input type="date" value={effectiveFrom} onChange={(event) => setEffectiveFrom(event.target.value)} className="h-8 rounded-lg border border-input bg-background px-2 font-mono text-xs" data-testid={`input-salary-history-date-${row.id}`} /></td><td className="px-2 py-2">{row.employeeType === 'office' ? <span className="px-2 text-xs">Оффис</span> : <div className="flex flex-col gap-1"><select value={salaryType} onChange={(e) => setSalaryType(e.target.value as 'daily' | 'monthly')} className="h-8 rounded-lg border border-input bg-background px-2 text-xs" data-testid={`select-salary-history-type-${row.id}`}><option value="daily">Өдрийн</option><option value="monthly">Сарын</option></select>{salaryType === 'monthly' && <input type="number" min="1" max="31" value={monthlyExpectedWorkDays} onChange={(e) => setMonthlyExpectedWorkDays(e.target.value)} className="h-8 w-24 rounded-lg border border-input bg-background px-2 text-xs" placeholder="Өдөр" data-testid={`input-salary-history-expected-days-${row.id}`} />}</div>}</td><td className="px-2 py-2 text-right"><input type="number" min="0" value={baseSalary} onChange={(event) => setBaseSalary(event.target.value)} className="h-8 w-28 rounded-lg border border-input bg-background px-2 text-right font-mono text-xs" data-testid={`input-salary-history-base-${row.id}`} /></td><td className="px-2 py-2 text-right"><input type="number" min="0" value={socialInsuranceSalary} onChange={(event) => setSocialInsuranceSalary(event.target.value)} className="h-8 w-28 rounded-lg border border-input bg-background px-2 text-right font-mono text-xs" data-testid={`input-salary-history-social-${row.id}`} /></td><td className="px-4 py-3 text-center text-xs">{row.payrollTaxExempt ? 'Чөлөөлсөн' : 'Тооцно'}</td><td className="px-2 py-2"><div className="flex justify-end gap-1"><Button type="button" size="sm" onClick={save} disabled={update.isPending} data-testid={`button-save-salary-history-${row.id}`}>{update.isPending ? 'Хадгалж байна...' : 'Хадгалах'}</Button><Button type="button" size="sm" variant="outline" onClick={() => setEditing(false)}>Болих</Button></div></td></tr>;
   }
-  return <tr data-testid={`row-salary-history-${row.id}`}><td className="px-4 py-3 font-mono text-xs">{row.effectiveFrom}</td><td className="px-4 py-3 text-xs">{row.employeeType === 'office' ? 'Оффис' : 'Ээлжийн'}</td><td className="px-4 py-3 text-right font-mono text-xs">{money(row.baseSalary)}</td><td className="px-4 py-3 text-right font-mono text-xs">{money(row.socialInsuranceSalary)}</td><td className="px-4 py-3 text-center text-xs">{row.payrollTaxExempt ? 'Чөлөөлсөн' : 'Тооцно'}</td><td className="px-4 py-3"><div className="flex justify-end gap-1">{canChange && <><Button type="button" size="icon" variant="outline" onClick={() => setEditing(true)} aria-label="Цалингийн түүх засах" data-testid={`button-edit-salary-history-${row.id}`}><Pencil className="size-3.5" /></Button><Button type="button" size="icon" variant="outline" disabled={isBaseline || deletionPending} title={isBaseline ? 'Анхны цалингийн мөрийг устгах боломжгүй' : 'Буруу цалингийн мөр устгах'} onClick={onDelete} data-testid={`button-delete-salary-history-${row.id}`}><Trash2 className="size-3.5" /></Button></>}</div></td></tr>;
+  return <tr data-testid={`row-salary-history-${row.id}`}><td className="px-4 py-3 font-mono text-xs">{row.effectiveFrom}</td><td className="px-4 py-3 text-xs">{row.employeeType === 'office' ? 'Оффис' : row.salaryType === 'monthly' ? `Ээлж (сарын, ${row.monthlyExpectedWorkDays} өдөр)` : 'Ээлж (өдрийн)'}</td><td className="px-4 py-3 text-right font-mono text-xs">{money(row.baseSalary)}</td><td className="px-4 py-3 text-right font-mono text-xs">{money(row.socialInsuranceSalary)}</td><td className="px-4 py-3 text-center text-xs">{row.payrollTaxExempt ? 'Чөлөөлсөн' : 'Тооцно'}</td><td className="px-4 py-3"><div className="flex justify-end gap-1">{canChange && <><Button type="button" size="icon" variant="outline" onClick={() => setEditing(true)} aria-label="Цалингийн түүх засах" data-testid={`button-edit-salary-history-${row.id}`}><Pencil className="size-3.5" /></Button><Button type="button" size="icon" variant="outline" disabled={isBaseline || deletionPending} title={isBaseline ? 'Анхны цалингийн мөрийг устгах боломжгүй' : 'Буруу цалингийн мөр устгах'} onClick={onDelete} data-testid={`button-delete-salary-history-${row.id}`}><Trash2 className="size-3.5" /></Button></>}</div></td></tr>;
 }
 
 function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: () => void }) {
@@ -467,17 +475,19 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
     query: { enabled: isEdit, queryKey: getListEmployeeSalaryHistoryQueryKey(salaryHistoryEmployeeId) },
   });
   const salaryHistoryDeletion = useQueueDeletion();
-  const form = useForm<EmployeeForm>({ defaultValues: { name: employee?.name ?? '', role: employee?.role ?? '', phone: employee?.phone ?? '', employeeType: employee?.employeeType ?? 'office', baseSalary: String(employee?.baseSalary ?? ''), socialInsuranceSalary: String(employee?.socialInsuranceSalary ?? ''), payrollTaxExempt: employee?.payrollTaxExempt ?? false, fullSalaryRegardlessAttendance: employee?.fullSalaryRegardlessAttendance ?? false, monthlyExpectedWorkDays: String(employee?.monthlyExpectedWorkDays ?? 0), joinedAt: employee?.joinedAt ?? today(), status: employee?.status ?? 'active', inactiveAt: employee?.inactiveAt ?? '', salaryEffectiveDate: '' } });
+  const form = useForm<EmployeeForm>({ defaultValues: { name: employee?.name ?? '', role: employee?.role ?? '', phone: employee?.phone ?? '', employeeType: employee?.employeeType ?? 'office', salaryType: employee?.salaryType ?? 'monthly', baseSalary: String(employee?.baseSalary ?? ''), socialInsuranceSalary: String(employee?.socialInsuranceSalary ?? ''), payrollTaxExempt: employee?.payrollTaxExempt ?? false, fullSalaryRegardlessAttendance: employee?.fullSalaryRegardlessAttendance ?? false, monthlyExpectedWorkDays: String(employee?.monthlyExpectedWorkDays ?? 0), joinedAt: employee?.joinedAt ?? today(), status: employee?.status ?? 'active', inactiveAt: employee?.inactiveAt ?? '', salaryEffectiveDate: '' } });
   const [salaryBaseline, setSalaryBaseline] = useState({
     baseSalary: Number(employee?.baseSalary ?? 0),
     socialInsuranceSalary: employee?.payrollTaxExempt ? 0 : Number(employee?.socialInsuranceSalary ?? 0),
     payrollTaxExempt: employee?.payrollTaxExempt ?? false,
     fullSalaryRegardlessAttendance: employee?.fullSalaryRegardlessAttendance ?? false,
     employeeType: employee?.employeeType ?? 'office',
+    salaryType: employee?.salaryType ?? 'monthly',
+    monthlyExpectedWorkDays: Number(employee?.monthlyExpectedWorkDays ?? 0),
   });
   const submit = (values: EmployeeForm) => {
-    const data = { name: values.name, role: values.role, phone: values.phone, employeeType: values.employeeType, baseSalary: Number(values.baseSalary), socialInsuranceSalary: values.payrollTaxExempt ? 0 : Number(values.socialInsuranceSalary), payrollTaxExempt: values.payrollTaxExempt, ...(isAdmin ? { fullSalaryRegardlessAttendance: values.fullSalaryRegardlessAttendance } : {}), monthlyExpectedWorkDays: values.employeeType === 'shift' ? Number(values.monthlyExpectedWorkDays) : 0, joinedAt: values.joinedAt, ...(isEdit ? { status: values.status, inactiveAt: values.status === 'inactive' ? values.inactiveAt : null, ...(values.salaryEffectiveDate ? { salaryEffectiveDate: values.salaryEffectiveDate } : {}) } : {}) };
-    const done = () => { qc.invalidateQueries({ queryKey: getListEmployeesQueryKey() }); if (employee) qc.invalidateQueries({ queryKey: getListEmployeeSalaryHistoryQueryKey(employee.id) }); qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() }); qc.invalidateQueries({ queryKey: getGetPayrollQueryKey() }); onClose(); };
+    const data = { name: values.name, role: values.role, phone: values.phone, employeeType: values.employeeType, salaryType: values.employeeType === 'shift' ? values.salaryType : 'monthly', baseSalary: Number(values.baseSalary), socialInsuranceSalary: values.payrollTaxExempt ? 0 : Number(values.socialInsuranceSalary), payrollTaxExempt: values.payrollTaxExempt, ...(isAdmin ? { fullSalaryRegardlessAttendance: values.fullSalaryRegardlessAttendance } : {}), monthlyExpectedWorkDays: (values.employeeType === 'shift' && values.salaryType === 'monthly') ? Number(values.monthlyExpectedWorkDays) : 0, joinedAt: values.joinedAt, ...(isEdit ? { status: values.status, inactiveAt: values.status === 'inactive' ? values.inactiveAt : null, ...(values.salaryEffectiveDate ? { salaryEffectiveDate: values.salaryEffectiveDate } : {}) } : {}) };
+    const done = () => { qc.invalidateQueries({ queryKey: getListEmployeesQueryKey() }); if (employee) qc.invalidateQueries({ queryKey: getListEmployeeSalaryHistoryQueryKey(employee.id) }); qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() }); qc.invalidateQueries({ queryKey: getGetPayrollQueryKey() }); qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey() }); onClose(); };
     if (isEdit && employee) update.mutate({ id: employee.id, data }, { onSuccess: done }); else create.mutate({ data }, { onSuccess: done });
   };
   const pending = create.isPending || update.isPending;
@@ -490,13 +500,16 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
       qc.invalidateQueries({ queryKey: getListEmployeeSalaryHistoryQueryKey(employee.id) });
       qc.invalidateQueries({ queryKey: getListEmployeesQueryKey() });
       qc.invalidateQueries({ queryKey: getGetPayrollQueryKey() });
+      qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey() });
     });
   };
   const employeeType = form.watch('employeeType');
+  const salaryType = form.watch('salaryType');
   const baseSalary = form.watch('baseSalary');
   const socialInsuranceSalary = form.watch('socialInsuranceSalary');
   const payrollTaxExempt = form.watch('payrollTaxExempt');
   const fullSalaryRegardlessAttendance = form.watch('fullSalaryRegardlessAttendance');
+  const monthlyExpectedWorkDays = form.watch('monthlyExpectedWorkDays');
   const status = form.watch('status');
   const joinedAt = form.watch('joinedAt');
   const joinedAtChanged = isEdit && !!employee && joinedAt !== employee.joinedAt;
@@ -506,17 +519,24 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
     || payrollTaxExempt !== salaryBaseline.payrollTaxExempt
     || fullSalaryRegardlessAttendance !== salaryBaseline.fullSalaryRegardlessAttendance
     || employeeType !== salaryBaseline.employeeType
+    || salaryType !== salaryBaseline.salaryType
+    || (employeeType === 'shift' && salaryType === 'monthly' && Number(monthlyExpectedWorkDays) !== salaryBaseline.monthlyExpectedWorkDays)
   );
   const syncSavedSalary = (saved: EmployeeSalaryHistory, isCurrent: boolean) => {
     if (!isCurrent) return;
     form.setValue('baseSalary', String(saved.baseSalary));
     form.setValue('socialInsuranceSalary', String(saved.socialInsuranceSalary));
+    form.setValue('employeeType', saved.employeeType);
+    form.setValue('salaryType', saved.salaryType);
+    form.setValue('monthlyExpectedWorkDays', String(saved.monthlyExpectedWorkDays));
     setSalaryBaseline({
       baseSalary: Number(saved.baseSalary),
       socialInsuranceSalary: Number(saved.socialInsuranceSalary),
       payrollTaxExempt: saved.payrollTaxExempt,
       fullSalaryRegardlessAttendance: saved.fullSalaryRegardlessAttendance,
       employeeType: saved.employeeType,
+      salaryType: saved.salaryType,
+      monthlyExpectedWorkDays: Number(saved.monthlyExpectedWorkDays),
     });
   };
   return <Modal title={isEdit ? 'Ажилтны мэдээлэл засах' : 'Шинэ ажилтан бүртгэх'} detail="Ажилтны төрлөөс хамаарч өдрийн эсвэл сарын цалинг оруулна." onClose={onClose}>
@@ -527,11 +547,12 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
         <label className="space-y-2 text-xs font-semibold">Утас<input className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('phone')} data-testid="input-employee-phone" /></label>
         <label className="space-y-2 text-xs font-semibold">Ажилд орсон огноо<input type="date" className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('joinedAt', { required: true })} data-testid="input-employee-joined-at" /></label>
         <label className="space-y-2 text-xs font-semibold">Ажилтны төрөл<select className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('employeeType')} data-testid="select-employee-type"><option value="office">Оффис ажилтан</option><option value="shift">Ээлжийн ажилтан</option></select></label>
-        <label className="space-y-2 text-xs font-semibold">{isEdit ? 'Шинэ цалин' : employeeType === 'shift' ? 'Өдрийн цалингийн хэмжээ' : 'Сарын цалингийн хэмжээ'}<input type="number" min="0" className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('baseSalary', { required: true, min: 0 })} data-testid="input-employee-salary" />{isEdit && <span className="text-[11px] font-normal text-muted-foreground">Одоогийн цалин: {money(employee?.baseSalary)}</span>}</label>
+        {employeeType === 'shift' && <label className="space-y-2 text-xs font-semibold">Цалингийн төрөл<select className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('salaryType')} data-testid="select-employee-salary-type"><option value="daily">Өдрийн цалин</option><option value="monthly">Сарын цалин</option></select></label>}
+        <label className="space-y-2 text-xs font-semibold">{isEdit ? 'Шинэ цалин' : (employeeType === 'office' || salaryType === 'monthly') ? 'Сарын цалингийн хэмжээ' : 'Өдрийн цалингийн хэмжээ'}<input type="number" min="0" className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('baseSalary', { required: true, min: 0 })} data-testid="input-employee-salary" />{isEdit && <span className="text-[11px] font-normal text-muted-foreground">Одоогийн цалин: {money(employee?.baseSalary)}</span>}</label>
         <label className="space-y-2 text-xs font-semibold">НДШ тооцох цалин<input type="number" min="0" disabled={payrollTaxExempt} className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none disabled:cursor-not-allowed disabled:opacity-50 focus:border-primary" {...form.register('socialInsuranceSalary', { required: !payrollTaxExempt, min: 0 })} data-testid="input-employee-social-insurance-salary" /></label>
         <label className="flex items-center gap-3 rounded-xl border border-border bg-secondary/35 px-4 py-3 text-sm font-semibold sm:col-span-2"><input type="checkbox" className="size-4 accent-primary" {...form.register('payrollTaxExempt')} data-testid="checkbox-employee-payroll-tax-exempt" /><span><span className="block">НДШ, ХХОАТ төлөхгүй</span><span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">Цалин бодоход НДШ, ХХОАТ болон татварын хөнгөлөлт 0 байна.</span></span></label>
         {isAdmin && <label className="flex items-center gap-3 rounded-xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm font-semibold sm:col-span-2"><input type="checkbox" className="size-4 accent-primary" {...form.register('fullSalaryRegardlessAttendance')} data-testid="checkbox-employee-full-salary" /><span><span className="block">Ирцээс үл хамааран цалинг бүтэн бодох</span><span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">Ажилласан хугацаанд ирц, таслалт, чөлөөнөөс үл хамааран сарын үндсэн цалинг бүтнээр тооцно. Зөвхөн админ өөрчилнө.</span></span></label>}
-        {employeeType === 'shift' ? <label className="space-y-2 text-xs font-semibold">Сард ажиллах ёстой өдөр<input type="number" min="0" max="31" className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('monthlyExpectedWorkDays', { required: true, min: 0, max: 31 })} data-testid="input-employee-expected-work-days" /><span className="text-[11px] font-normal text-muted-foreground">Цагийн балансад ашиглах ээлжийн сарын төлөвлөгөө.</span></label> : <div className="rounded-xl border border-border bg-secondary/35 p-3 text-xs text-muted-foreground">Ажиллах ёстой өдрийг тухайн сарын Даваа–Баасан гарагаар автоматаар тооцно.</div>}
+        {(employeeType === 'shift' && salaryType === 'monthly') ? <label className="space-y-2 text-xs font-semibold">Сард ажиллах ёстой өдөр<input type="number" min="1" max="31" className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('monthlyExpectedWorkDays', { required: true, min: 1, max: 31 })} data-testid="input-employee-expected-work-days" /><span className="text-[11px] font-normal text-muted-foreground">Ээлжийн ажилтны өдрийн цалинг сарын цалин хуваах нь ажиллах ёстой өдөр гэж бодно.</span></label> : (employeeType === 'office' ? <div className="rounded-xl border border-border bg-secondary/35 p-3 text-xs text-muted-foreground sm:col-span-2">Ажиллах ёстой өдрийг тухайн сарын Даваа–Баасан гарагаар автоматаар тооцно.</div> : null)}
         {isEdit && <label className="space-y-2 text-xs font-semibold">Төлөв<select className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('status')} data-testid="select-employee-status"><option value="active">Идэвхтэй</option><option value="inactive">Идэвхгүй</option></select></label>}
         {isEdit && status === 'inactive' && <label className="space-y-2 text-xs font-semibold">Идэвхгүй болсон огноо<input type="date" min={form.getValues('joinedAt')} className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('inactiveAt', { required: status === 'inactive' })} data-testid="input-employee-inactive-at" /><span className="text-[11px] font-normal text-muted-foreground">Энэ өдрийг цалин бодох сүүлийн өдөрт оруулна.</span></label>}
         {salaryChanged && !joinedAtChanged && <label className="space-y-2 rounded-xl border border-primary/30 bg-primary/5 p-4 text-xs font-semibold sm:col-span-2">Цалин өөрчлөгдөж буй огноо<input type="date" min={form.getValues('joinedAt')} className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('salaryEffectiveDate', { required: salaryChanged && !joinedAtChanged ? 'Цалин өөрчлөгдөж буй огноог сонгоно уу' : false })} data-testid="input-employee-salary-effective-date" />{form.formState.errors.salaryEffectiveDate ? <span className="text-[11px] text-destructive">{form.formState.errors.salaryEffectiveDate.message}</span> : <span className="text-[11px] font-normal text-muted-foreground">Шинэ цалинг энэ өдрөөс эхлэн тооцно. Өмнөх өдрүүд хуучин цалингаар бодогдоно.</span>}</label>}
@@ -556,7 +577,7 @@ function Employees() {
   const [search, setSearch] = useState('');
   const employees = useMemo(() => (query.data ?? []).filter((e) => `${e.name} ${e.role} ${e.phone}`.toLowerCase().includes(search.toLowerCase())), [query.data, search]);
   const del = (employee: Employee) => { if (window.confirm(`${employee.name}-г устгах уу?`)) deletion.request(`/employees/${employee.id}`, `${employee.name} ажилтны бүртгэл`); };
-  return <div className="page-enter"><div className="mb-6 flex justify-end"><Button onClick={() => setModal({ open: true })} data-testid="button-add-employee"><Plus className="size-4" />Ажилтан нэмэх</Button></div><section className="overflow-hidden rounded-2xl border border-border bg-card"><div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm font-bold">Бүх ажилтан <span className="ml-1 font-mono text-xs text-muted-foreground">{query.data?.length ?? 0}</span></p><div className="relative w-full sm:w-64"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" placeholder="Нэрээр хайх" data-testid="input-search-employees" /></div></div>{query.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : employees.length === 0 ? <EmptyState title="Ажилтан олдсонгүй" detail={search ? 'Хайлтын үгээ өөрчлөөд үзнэ үү.' : 'Эхний ажилтнаа бүртгэж эхлээрэй.'} icon={UsersRound} /> : <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3 font-bold">Ажилтан</th><th className="px-5 py-3 font-bold">Утас</th><th className="px-5 py-3 font-bold">Ажилтны төрөл</th><th className="px-5 py-3 font-bold">Цалин</th><th className="px-5 py-3 font-bold">НДШ-ийн цалин</th><th className="px-5 py-3 font-bold">Төлөв</th><th className="px-5 py-3 text-right font-bold">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{employees.map((employee) => <tr className="group transition-colors hover:bg-secondary/35" key={employee.id} data-testid={`row-employee-${employee.id}`}><td className="px-5 py-4"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent/30 text-xs font-bold text-foreground">{employee.name.slice(0, 1)}</span><div><p className="text-sm font-semibold">{employee.name}</p><p className="text-xs text-muted-foreground">{employee.role}</p></div></div></td><td className="px-5 py-4 text-sm text-muted-foreground">{employee.phone || '—'}</td><td className="px-5 py-4 text-sm">{employee.employeeType === EmployeeEmployeeType.office ? 'Оффис' : 'Ээлжийн'}</td><td className="px-5 py-4"><p className="font-mono text-sm">{money(employee.baseSalary)}</p><p className="text-[10px] text-muted-foreground">{employee.employeeType === EmployeeEmployeeType.office ? 'сарын' : 'өдрийн'}</p></td><td className="px-5 py-4 font-mono text-sm">{money(employee.socialInsuranceSalary)}</td><td className="px-5 py-4"><StatusPill value={employee.status} /></td><td className="px-5 py-4"><div className="flex justify-end gap-1"><button className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={() => setModal({ open: true, employee })} aria-label={`${employee.name} засах`} data-testid={`button-edit-employee-${employee.id}`}><Pencil className="size-4" /></button><button className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => del(employee)} aria-label={`${employee.name} устгах хүсэлт`} data-testid={`button-delete-employee-${employee.id}`}><Trash2 className="size-4" /></button></div></td></tr>)}</tbody></table></div>}</section>{modal.open && <EmployeeModal employee={modal.employee} onClose={() => setModal({ open: false })} />}</div>;
+  return <div className="page-enter"><div className="mb-6 flex justify-end"><Button onClick={() => setModal({ open: true })} data-testid="button-add-employee"><Plus className="size-4" />Ажилтан нэмэх</Button></div><section className="overflow-hidden rounded-2xl border border-border bg-card"><div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm font-bold">Бүх ажилтан <span className="ml-1 font-mono text-xs text-muted-foreground">{query.data?.length ?? 0}</span></p><div className="relative w-full sm:w-64"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" placeholder="Нэрээр хайх" data-testid="input-search-employees" /></div></div>{query.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : employees.length === 0 ? <EmptyState title="Ажилтан олдсонгүй" detail={search ? 'Хайлтын үгээ өөрчлөөд үзнэ үү.' : 'Эхний ажилтнаа бүртгэж эхлээрэй.'} icon={UsersRound} /> : <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3 font-bold">Ажилтан</th><th className="px-5 py-3 font-bold">Утас</th><th className="px-5 py-3 font-bold">Ажилтны төрөл</th><th className="px-5 py-3 font-bold">Цалин</th><th className="px-5 py-3 font-bold">НДШ-ийн цалин</th><th className="px-5 py-3 font-bold">Төлөв</th><th className="px-5 py-3 text-right font-bold">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{employees.map((employee) => <tr className="group transition-colors hover:bg-secondary/35" key={employee.id} data-testid={`row-employee-${employee.id}`}><td className="px-5 py-4"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent/30 text-xs font-bold text-foreground">{employee.name.slice(0, 1)}</span><div><p className="text-sm font-semibold">{employee.name}</p><p className="text-xs text-muted-foreground">{employee.role}</p></div></div></td><td className="px-5 py-4 text-sm text-muted-foreground">{employee.phone || '—'}</td><td className="px-5 py-4 text-sm">{employee.employeeType === EmployeeEmployeeType.office ? 'Оффис' : employee.salaryType === 'monthly' ? 'Ээлж (сарын)' : 'Ээлж (өдрийн)'}</td><td className="px-5 py-4"><p className="font-mono text-sm">{money(employee.baseSalary)}</p><p className="text-[10px] text-muted-foreground">{employee.salaryType === 'monthly' ? 'сарын' : 'өдрийн'}</p></td><td className="px-5 py-4 font-mono text-sm">{money(employee.socialInsuranceSalary)}</td><td className="px-5 py-4"><StatusPill value={employee.status} /></td><td className="px-5 py-4"><div className="flex justify-end gap-1"><button className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={() => setModal({ open: true, employee })} aria-label={`${employee.name} засах`} data-testid={`button-edit-employee-${employee.id}`}><Pencil className="size-4" /></button><button className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => del(employee)} aria-label={`${employee.name} устгах хүсэлт`} data-testid={`button-delete-employee-${employee.id}`}><Trash2 className="size-4" /></button></div></td></tr>)}</tbody></table></div>}</section>{modal.open && <EmployeeModal employee={modal.employee} onClose={() => setModal({ open: false })} />}</div>;
 }
 
 type ShiftForm = { name: string; startTime: string; endTime: string };
@@ -778,10 +799,73 @@ function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; m
   </Modal>;
 }
 
+function PayrollScheduleSettingsModal({ onClose }: { onClose: () => void }) {
+  const query = useGetPayrollSchedule();
+  const update = useUpdatePayrollSchedule();
+  const qc = useQueryClient();
+  const form = useForm<PayrollScheduleInput>({ defaultValues: { periodStartDay: 26, advanceCutoffDay: 10, periodEndDay: 25, advancePayDay: 10, finalPayDay: 25 } });
+
+  const initRef = useRef(false);
+  useEffect(() => {
+    if (query.data && !initRef.current) {
+      initRef.current = true;
+      form.reset({
+        periodStartDay: query.data.periodStartDay,
+        advanceCutoffDay: query.data.advanceCutoffDay,
+        periodEndDay: query.data.periodEndDay,
+        advancePayDay: query.data.advancePayDay,
+        finalPayDay: query.data.finalPayDay,
+      });
+    }
+  }, [query.data, form]);
+
+  const submit = (data: PayrollScheduleInput) => {
+    update.mutate({ data }, {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetPayrollScheduleQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetPayrollQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey() });
+        onClose();
+      }
+    });
+  };
+
+  const periodStartDay = form.watch('periodStartDay');
+  const periodEndDay = form.watch('periodEndDay');
+
+  return (
+    <Modal title="Цалингийн хуваарь" detail="Цалингийн мөчлөг болон олгох өдрүүдийг тохируулна. (31 = сарын сүүлийн өдөр)" onClose={onClose}>
+      {query.isLoading ? <LoadingBlock className="h-40" /> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : (
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(submit)} className="space-y-4" data-testid="form-payroll-schedule">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="space-y-1.5 text-xs font-semibold">Мөчлөг эхлэх өдөр<input type="number" min="1" max="31" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('periodStartDay', { valueAsNumber: true, required: true, min: 1, max: 31 })} data-testid="input-schedule-period-start" /></label>
+              <label className="space-y-1.5 text-xs font-semibold">Мөчлөг дуусах өдөр<input type="number" min="1" max="31" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('periodEndDay', { valueAsNumber: true, required: true, min: 1, max: 31 })} data-testid="input-schedule-period-end" /></label>
+              <label className="space-y-1.5 text-xs font-semibold">Урьдчилгаа таслах өдөр<input type="number" min="1" max="31" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('advanceCutoffDay', { valueAsNumber: true, required: true, min: 1, max: 31 })} data-testid="input-schedule-advance-cutoff" /></label>
+              <label className="space-y-1.5 text-xs font-semibold">Урьдчилгаа олгох өдөр<input type="number" min="1" max="31" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('advancePayDay', { valueAsNumber: true, required: true, min: 1, max: 31 })} data-testid="input-schedule-advance-pay" /></label>
+              <label className="space-y-1.5 text-xs font-semibold">Сүүл цалин олгох өдөр<input type="number" min="1" max="31" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('finalPayDay', { valueAsNumber: true, required: true, min: 1, max: 31 })} data-testid="input-schedule-final-pay" /></label>
+            </div>
+            {Number(periodStartDay) > Number(periodEndDay) && (
+              <div className="rounded-xl border border-primary/25 bg-primary/5 p-3 text-xs text-muted-foreground">
+                Мөчлөг эхлэх өдөр нь дуусах өдрөөс хойно байгаа тул цалингийн мөчлөг өмнөх сараас эхэлж тухайн сард дуусна гэж тооцогдоно.
+              </div>
+            )}
+            <div className="flex justify-end gap-2 border-t border-border pt-4">
+              <Button type="button" variant="outline" onClick={onClose} data-testid="button-cancel-schedule">Болих</Button>
+              <Button type="submit" disabled={update.isPending} data-testid="button-save-schedule">{update.isPending ? 'Хадгалж байна...' : 'Хадгалах'}</Button>
+            </div>
+          </form>
+        </Form>
+      )}
+    </Modal>
+  );
+}
+
 function Payroll() {
   const [month, setMonth] = useState(currentMonth());
   const [selectedLine, setSelectedLine] = useState<PayrollLine | null>(null);
   const [showAdvance, setShowAdvance] = useState(false);
+  const [showScheduleSettings, setShowScheduleSettings] = useState(false);
   const [refreshingAdvanceEmployeeId, setRefreshingAdvanceEmployeeId] = useState<number | null>(null);
   const [advanceApprovalDate, setAdvanceApprovalDate] = useState(today());
   const [advanceDates, setAdvanceDates] = useState<Record<number, string>>({});
@@ -858,7 +942,25 @@ function Payroll() {
     });
   };
   return <div className="page-enter">
-    <div className="mb-6 flex flex-wrap items-center justify-end gap-2"><Button onClick={pullLatestAttendance} variant="outline" disabled={query.isFetching || advanceQuery.isFetching} data-testid="button-pull-payroll-attendance"><RefreshCw className={cn('size-4', (query.isFetching || advanceQuery.isFetching) && 'animate-spin')} />{query.isFetching || advanceQuery.isFetching ? 'Татаж байна...' : 'Цаг татах'}</Button><Button onClick={() => setShowAdvance((value) => !value)} variant={showAdvance ? 'default' : 'outline'} data-testid="button-payroll-advance"><Coins className="size-4" />Урьдчилгаа цалин</Button><div className="flex items-center overflow-hidden rounded-xl border border-border bg-card"><button type="button" onClick={() => setMonth((value) => shiftMonth(value, -1))} className="grid size-10 place-items-center border-r border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Өмнөх сар" data-testid="button-payroll-previous-month"><ChevronRight className="size-4 rotate-180" /></button><div className="flex items-center gap-2 px-3"><CalendarDays className="size-4 text-primary" /><label className="relative flex h-10 min-w-28 cursor-pointer items-center text-sm font-medium"><span>{mongolianMonthLabel(month)}</span><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="Цалингийн сар сонгох" data-testid="input-payroll-month" /></label></div><button type="button" onClick={() => setMonth((value) => shiftMonth(value, 1))} className="grid size-10 place-items-center border-l border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Дараагийн сар" data-testid="button-payroll-next-month"><ChevronRight className="size-4" /></button></div></div>
+    <div className="mb-6 flex flex-wrap items-center justify-end gap-2">
+      <Button onClick={() => setShowScheduleSettings(true)} variant="outline" data-testid="button-payroll-schedule-settings"><CalendarDays className="size-4" />Цалингийн хуваарь</Button>
+      <Button onClick={pullLatestAttendance} variant="outline" disabled={query.isFetching || advanceQuery.isFetching} data-testid="button-pull-payroll-attendance"><RefreshCw className={cn('size-4', (query.isFetching || advanceQuery.isFetching) && 'animate-spin')} />{query.isFetching || advanceQuery.isFetching ? 'Татаж байна...' : 'Цаг татах'}</Button>
+      <Button onClick={() => setShowAdvance((value) => !value)} variant={showAdvance ? 'default' : 'outline'} data-testid="button-payroll-advance"><Coins className="size-4" />Урьдчилгаа цалин</Button>
+      <div className="flex items-center overflow-hidden rounded-xl border border-border bg-card"><button type="button" onClick={() => setMonth((value) => shiftMonth(value, -1))} className="grid size-10 place-items-center border-r border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Өмнөх сар" data-testid="button-payroll-previous-month"><ChevronRight className="size-4 rotate-180" /></button><div className="flex items-center gap-2 px-3"><CalendarDays className="size-4 text-primary" /><label className="relative flex h-10 min-w-28 cursor-pointer items-center text-sm font-medium"><span>{mongolianMonthLabel(month)}</span><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="Цалингийн сар сонгох" data-testid="input-payroll-month" /></label></div><button type="button" onClick={() => setMonth((value) => shiftMonth(value, 1))} className="grid size-10 place-items-center border-l border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Дараагийн сар" data-testid="button-payroll-next-month"><ChevronRight className="size-4" /></button></div>
+    </div>
+
+    {!query.isLoading && !query.isError && query.data && (
+      <div className="mb-6 rounded-2xl border border-border bg-card p-4 shadow-sm" data-testid="panel-payroll-schedule-info">
+        <h3 className="mb-3 text-sm font-bold">Цалингийн мөчлөг ({month})</h3>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Бүтэн мөчлөг</p><p className="mt-1 font-mono text-xs">{query.data.periodStart} — {query.data.periodEnd}</p></div>
+          <div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Урьдчилгаа хүртэлх</p><p className="mt-1 font-mono text-xs">{query.data.periodStart} — {query.data.advancePeriodEnd}</p></div>
+          <div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Урьдчилгаа олгох</p><p className="mt-1 font-mono text-xs">{query.data.advancePaymentDate}</p></div>
+          <div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Сүүл цалин олгох</p><p className="mt-1 font-mono text-xs">{query.data.finalPaymentDate}</p></div>
+        </div>
+      </div>
+    )}
+
     {showAdvance && <section className="mb-6 overflow-hidden rounded-2xl border border-accent/60 bg-card shadow-sm" data-testid="section-payroll-advance">
       <div className="flex flex-col justify-between gap-4 border-b border-border bg-accent/10 px-5 py-4 sm:flex-row sm:items-center">
         <h2 className="text-lg font-bold">{month.replace('-', ' оны ')} сарын урьдчилгаа цалин</h2>
@@ -879,6 +981,7 @@ function Payroll() {
       </section>
     </>}
     {selectedLine && <PayrollAdjustmentModal line={selectedLine} month={month} onClose={() => setSelectedLine(null)} />}
+    {showScheduleSettings && <PayrollScheduleSettingsModal onClose={() => setShowScheduleSettings(false)} />}
   </div>;
 }
 

@@ -6,12 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmployeeSalaryHistoryEmployeeType } from './employeeSalaryHistoryEmployeeType';
+import type { EmployeeSalaryHistorySalaryType } from './employeeSalaryHistorySalaryType';
 
 export interface EmployeeSalaryHistory {
   id: number;
   employeeId: number;
   effectiveFrom: string;
   employeeType: EmployeeSalaryHistoryEmployeeType;
+  salaryType: EmployeeSalaryHistorySalaryType;
+  monthlyExpectedWorkDays: number;
   baseSalary: number;
   socialInsuranceSalary: number;
   payrollTaxExempt: boolean;

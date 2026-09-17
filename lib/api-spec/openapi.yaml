@@ -511,6 +511,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PayrollSummary"
+  /payroll-schedule:
+    get:
+      operationId: getPayrollSchedule
+      tags: [payroll]
+      summary: Get the global payroll cycle and payment schedule
+      responses:
+        "200":
+          description: Payroll schedule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayrollSchedule" }
+    put:
+      operationId: updatePayrollSchedule
+      tags: [payroll]
+      summary: Update the global payroll cycle and payment schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PayrollScheduleInput" }
+      responses:
+        "200":
+          description: Updated payroll schedule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayrollSchedule" }
   /payroll-adjustments:
     put:
       operationId: upsertPayrollAdjustment
@@ -1493,12 +1519,13 @@ components:
         createdAt: { type: string }
     Employee:
       type: object
-      required: [id, name, role, phone, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, fullSalaryRegardlessAttendance, monthlyExpectedWorkDays, status, joinedAt, inactiveAt]
+      required: [id, name, role, phone, salaryType, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, fullSalaryRegardlessAttendance, monthlyExpectedWorkDays, status, joinedAt, inactiveAt]
       properties:
         id: { type: integer }
         name: { type: string }
         role: { type: string }
         phone: { type: string }
+        salaryType: { type: string, enum: [daily, monthly] }
         employeeType: { type: string, enum: [shift, office] }
         baseSalary: { type: number }
         socialInsuranceSalary: { type: number }
@@ -1510,12 +1537,14 @@ components:
         inactiveAt: { type: [string, "null"] }
     EmployeeSalaryHistory:
       type: object
-      required: [id, employeeId, effectiveFrom, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, fullSalaryRegardlessAttendance, createdAt]
+      required: [id, employeeId, effectiveFrom, employeeType, salaryType, monthlyExpectedWorkDays, baseSalary, socialInsuranceSalary, payrollTaxExempt, fullSalaryRegardlessAttendance, createdAt]
       properties:
         id: { type: integer }
         employeeId: { type: integer }
         effectiveFrom: { type: string }
         employeeType: { type: string, enum: [shift, office] }
+        salaryType: { type: string, enum: [daily, monthly] }
+        monthlyExpectedWorkDays: { type: integer }
         baseSalary: { type: number }
         socialInsuranceSalary: { type: number }
         payrollTaxExempt: { type: boolean }
@@ -1529,6 +1558,8 @@ components:
         baseSalary: { type: number, minimum: 0 }
         socialInsuranceSalary: { type: number, minimum: 0 }
         fullSalaryRegardlessAttendance: { type: boolean }
+        salaryType: { type: string, enum: [daily, monthly] }
+        monthlyExpectedWorkDays: { type: integer, minimum: 0, maximum: 31 }
     EmployeeInput:
       type: object
       required: [name, role, phone, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, monthlyExpectedWorkDays, joinedAt]
@@ -1537,6 +1568,7 @@ components:
         role: { type: string, minLength: 1 }
         phone: { type: string }
         employeeType: { type: string, enum: [shift, office] }
+        salaryType: { type: string, enum: [daily, monthly] }
         baseSalary: { type: number, minimum: 0 }
         socialInsuranceSalary: { type: number, minimum: 0 }
         payrollTaxExempt: { type: boolean }
@@ -1550,11 +1582,12 @@ components:
         role: { type: string, minLength: 1 }
         phone: { type: string }
         employeeType: { type: string, enum: [shift, office] }
+        salaryType: { type: string, enum: [daily, monthly] }
+        monthlyExpectedWorkDays: { type: integer, minimum: 0, maximum: 31 }
         baseSalary: { type: number, minimum: 0 }
         socialInsuranceSalary: { type: number, minimum: 0 }
         payrollTaxExempt: { type: boolean }
         fullSalaryRegardlessAttendance: { type: boolean }
-        monthlyExpectedWorkDays: { type: integer, minimum: 0, maximum: 31 }
         status: { type: string, enum: [active, inactive] }
         joinedAt: { type: string, format: date }
         inactiveAt: { type: [string, "null"] }
@@ -1712,9 +1745,15 @@ components:
         secondPaymentDate: { type: ["string", "null"] }
     PayrollSummary:
       type: object
-      required: [month, totalGross, totalSocialInsurance, totalIncomeTax, totalDeductions, totalNet, lines]
+      required: [month, periodStart, advancePeriodEnd, periodEnd, advancePaymentDate, finalPaymentDate, schedule, totalGross, totalSocialInsurance, totalIncomeTax, totalDeductions, totalNet, lines]
       properties:
         month: { type: string }
+        periodStart: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        advancePeriodEnd: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        periodEnd: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        advancePaymentDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        finalPaymentDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        schedule: { $ref: "#/components/schemas/PayrollSchedule" }
         totalGross: { type: number }
         totalSocialInsurance: { type: number }
         totalIncomeTax: { type: number }
@@ -1740,9 +1779,15 @@ components:
         paymentDate: { type: ["string", "null"] }
     PayrollAdvanceSummary:
       type: object
-      required: [month, approved, approvalDate, totalAmount, lines]
+      required: [month, periodStart, advancePeriodEnd, periodEnd, advancePaymentDate, finalPaymentDate, schedule, approved, approvalDate, totalAmount, lines]
       properties:
         month: { type: string }
+        periodStart: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        advancePeriodEnd: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        periodEnd: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        advancePaymentDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        finalPaymentDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        schedule: { $ref: "#/components/schemas/PayrollSchedule" }
         approved: { type: boolean }
         approvalDate: { type: ["string", "null"] }
         approvedAt: { type: string }
@@ -1766,6 +1811,26 @@ components:
         advanceAmount: { type: number, minimum: 0 }
         paid: { type: boolean }
         paymentDate: { type: ["string", "null"] }
+    PayrollSchedule:
+      type: object
+      required: [id, effectiveFromMonth, periodStartDay, advanceCutoffDay, periodEndDay, advancePayDay, finalPayDay]
+      properties:
+        id: { type: integer }
+        effectiveFromMonth: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+        periodStartDay: { type: integer, minimum: 1, maximum: 31 }
+        advanceCutoffDay: { type: integer, minimum: 1, maximum: 31 }
+        periodEndDay: { type: integer, minimum: 1, maximum: 31 }
+        advancePayDay: { type: integer, minimum: 1, maximum: 31 }
+        finalPayDay: { type: integer, minimum: 1, maximum: 31 }
+    PayrollScheduleInput:
+      type: object
+      required: [periodStartDay, advanceCutoffDay, periodEndDay, advancePayDay, finalPayDay]
+      properties:
+        periodStartDay: { type: integer, minimum: 1, maximum: 31 }
+        advanceCutoffDay: { type: integer, minimum: 1, maximum: 31 }
+        periodEndDay: { type: integer, minimum: 1, maximum: 31 }
+        advancePayDay: { type: integer, minimum: 1, maximum: 31 }
+        finalPayDay: { type: integer, minimum: 1, maximum: 31 }
     CashTransaction:
       type: object
       required: [id, type, category, subcategory, accountId, accountCode, accountName, description, amount, date, incomeMonth, bankTransactionId, bankVerifiedAt, createdAt, editable, transactionKind]

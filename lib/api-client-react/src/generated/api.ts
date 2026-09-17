@@ -79,6 +79,8 @@ import type {
   PayrollAdvanceApprovalInput,
   PayrollAdvancePaymentInput,
   PayrollAdvanceSummary,
+  PayrollSchedule,
+  PayrollScheduleInput,
   PayrollSummary,
   ReclassifyInventoryPurchaseAsExpenseInput,
   RevertPayrollAdvanceApprovalParams,
@@ -2406,6 +2408,154 @@ export function useGetPayroll<TData = Awaited<ReturnType<typeof getPayroll>>, TE
 
 
 
+
+export const getGetPayrollScheduleUrl = () => {
+
+
+
+
+  return `/api/payroll-schedule`
+}
+
+/**
+ * @summary Get the global payroll cycle and payment schedule
+ */
+export const getPayrollSchedule = async ( options?: Parameters<typeof customFetch>[1]): Promise<PayrollSchedule> => {
+
+  return customFetch<PayrollSchedule>(getGetPayrollScheduleUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPayrollScheduleQueryKey = () => {
+    return [
+    `/api/payroll-schedule`
+    ] as const;
+    }
+
+
+export const getGetPayrollScheduleQueryOptions = <TData = Awaited<ReturnType<typeof getPayrollSchedule>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPayrollSchedule>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPayrollScheduleQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPayrollSchedule>>> = ({ signal }) => getPayrollSchedule({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPayrollSchedule>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPayrollScheduleQueryResult = NonNullable<Awaited<ReturnType<typeof getPayrollSchedule>>>
+export type GetPayrollScheduleQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the global payroll cycle and payment schedule
+ */
+
+export function useGetPayrollSchedule<TData = Awaited<ReturnType<typeof getPayrollSchedule>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPayrollSchedule>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPayrollScheduleQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdatePayrollScheduleUrl = () => {
+
+
+
+
+  return `/api/payroll-schedule`
+}
+
+/**
+ * @summary Update the global payroll cycle and payment schedule
+ */
+export const updatePayrollSchedule = async (payrollScheduleInput: PayrollScheduleInput, options?: Parameters<typeof customFetch>[1]): Promise<PayrollSchedule> => {
+
+  return customFetch<PayrollSchedule>(getUpdatePayrollScheduleUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(payrollScheduleInput)
+  }
+);}
+
+
+
+
+
+export const getUpdatePayrollScheduleMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePayrollSchedule>>, TError,{data: BodyType<PayrollScheduleInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePayrollSchedule>>, TError,{data: BodyType<PayrollScheduleInput>}, TContext> => {
+
+const mutationKey = ['updatePayrollSchedule'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePayrollSchedule>>, {data: BodyType<PayrollScheduleInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updatePayrollSchedule(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePayrollScheduleMutationResult = NonNullable<Awaited<ReturnType<typeof updatePayrollSchedule>>>
+    export type UpdatePayrollScheduleMutationBody = BodyType<PayrollScheduleInput>
+    export type UpdatePayrollScheduleMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update the global payroll cycle and payment schedule
+ */
+export const useUpdatePayrollSchedule = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePayrollSchedule>>, TError,{data: BodyType<PayrollScheduleInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updatePayrollSchedule>>,
+        TError,
+        {data: BodyType<PayrollScheduleInput>},
+        TContext
+      > => {
+      return useMutation(getUpdatePayrollScheduleMutationOptions(options));
+    }
 
 export const getUpsertPayrollAdjustmentUrl = () => {
 

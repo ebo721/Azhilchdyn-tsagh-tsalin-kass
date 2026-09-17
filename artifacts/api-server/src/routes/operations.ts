@@ -111,6 +111,9 @@ import {
   UpdateEmployeeBody,
   UpdateEmployeeParams,
   ListChartOfAccountsResponse,
+  GetPayrollScheduleResponse,
+  UpdatePayrollScheduleBody,
+  UpdatePayrollScheduleResponse,
   CreateChartOfAccountBody,
   CreateChartOfAccountResponse,
   UpdateChartOfAccountBody,
@@ -141,6 +144,7 @@ import {
   deletionRequestsTable,
   shiftTemplatesTable,
   chartOfAccountsTable,
+  payrollScheduleSettingsTable,
 } from "@workspace/db";
 import { getStaffRole, getStaffSession, type StaffRole } from "../lib/hr-session.js";
 import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment.js";
@@ -386,7 +390,7 @@ router.use(async (req, res, next) => {
   const allowedPrefixes = role === "hr"
     ? ["/employees", "/attendance", "/hour-balance"]
       : role === "accountant"
-        ? ["/hour-balance", "/payroll", "/cash", "/bank-transactions"]
+        ? ["/hour-balance", "/payroll", "/payroll-schedule", "/cash", "/bank-transactions"]
       : role === "warehouse"
         ? ["/inventory", "/fixed-assets", "/operating-expenses"]
         : [];
@@ -509,6 +513,84 @@ function monthWeekdays(month: string) {
   return dates;
 }
 
+const defaultPayrollSchedule = {
+  periodStartDay: 1,
+  advanceCutoffDay: 15,
+  periodEndDay: 31,
+  advancePayDay: 15,
+  finalPayDay: 31,
+};
+
+async function getPayrollSchedule(month = currentMonth()) {
+  let [row] = await db.select().from(payrollScheduleSettingsTable)
+    .where(lte(payrollScheduleSettingsTable.effectiveFromMonth, month))
+    .orderBy(desc(payrollScheduleSettingsTable.effectiveFromMonth))
+    .limit(1);
+  if (!row) {
+    [row] = await db.insert(payrollScheduleSettingsTable)
+      .values({ ...defaultPayrollSchedule, effectiveFromMonth: "0001-01" })
+      .onConflictDoNothing({ target: payrollScheduleSettingsTable.effectiveFromMonth })
+      .returning();
+    if (!row) {
+      [row] = await db.select().from(payrollScheduleSettingsTable)
+        .where(eq(payrollScheduleSettingsTable.effectiveFromMonth, "0001-01")).limit(1);
+    }
+  }
+  return row;
+}
+
+function scheduleDate(month: string, day: number) {
+  return `${month}-${String(Math.min(day, daysInMonth(month))).padStart(2, "0")}`;
+}
+
+export function payrollPeriod(month: string, schedule: typeof defaultPayrollSchedule) {
+  const startMonth = schedule.periodStartDay > schedule.periodEndDay ? previousMonth(month) : month;
+  const periodStart = scheduleDate(startMonth, schedule.periodStartDay);
+  const periodEnd = scheduleDate(month, schedule.periodEndDay);
+  const advancePeriodEnd = schedule.advanceCutoffDay >= schedule.periodStartDay
+    ? scheduleDate(startMonth, schedule.advanceCutoffDay)
+    : scheduleDate(month, schedule.advanceCutoffDay);
+  return {
+    periodStart,
+    advancePeriodEnd,
+    periodEnd,
+    advancePaymentDate: scheduleDate(month, schedule.advancePayDay),
+    finalPaymentDate: scheduleDate(month, schedule.finalPayDay),
+  };
+}
+
+export function selectPayrollScheduleVersion<T extends { effectiveFromMonth: string }>(
+  versions: T[],
+  month: string,
+) {
+  return versions
+    .filter((version) => version.effectiveFromMonth <= month)
+    .sort((a, b) => b.effectiveFromMonth.localeCompare(a.effectiveFromMonth))[0];
+}
+
+export function scheduleVersionAffectsMonth(
+  month: string,
+  effectiveFromMonth: string,
+  nextEffectiveFromMonth?: string,
+) {
+  return month >= effectiveFromMonth
+    && (!nextEffectiveFromMonth || month < nextEffectiveFromMonth);
+}
+
+export function shiftDailyRate(salary: Pick<SalaryHistoryRow, "salaryType" | "baseSalary" | "monthlyExpectedWorkDays">) {
+  return salary.salaryType === "monthly"
+    ? Number(salary.baseSalary) / Math.max(1, salary.monthlyExpectedWorkDays)
+    : Number(salary.baseSalary);
+}
+
+function weekdayDatesBetween(start: string, end: string) {
+  const dates: string[] = [];
+  for (let value = new Date(`${start}T00:00:00.000Z`); value <= new Date(`${end}T00:00:00.000Z`); value.setUTCDate(value.getUTCDate() + 1)) {
+    if (value.getUTCDay() >= 1 && value.getUTCDay() <= 5) dates.push(value.toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
 type SalaryHistoryRow = typeof employeeSalaryHistoryTable.$inferSelect;
 
 function salaryAt(employee: typeof employeesTable.$inferSelect, history: SalaryHistoryRow[], date: string) {
@@ -518,6 +600,8 @@ function salaryAt(employee: typeof employeesTable.$inferSelect, history: SalaryH
       employeeId: employee.id,
       effectiveFrom: employee.joinedAt,
       employeeType: employee.employeeType,
+      salaryType: employee.salaryType === "hourly" ? "daily" : employee.salaryType,
+      monthlyExpectedWorkDays: employee.monthlyExpectedWorkDays,
       baseSalary: Number(employee.baseSalary),
       socialInsuranceSalary: Number(employee.socialInsuranceSalary),
       payrollTaxExempt: employee.payrollTaxExempt,
@@ -545,10 +629,21 @@ async function getPayrollSummary(month: string, existingData?: PayrollCalculatio
     return { allEmployees, salaryHistory, records, allAdjustments, allAdvanceApprovals };
   })();
   const { allEmployees, salaryHistory, records } = data;
+  const rawSchedule = await getPayrollSchedule(month);
+  const schedule = {
+    effectiveFromMonth: rawSchedule.effectiveFromMonth,
+    id: rawSchedule.id,
+    periodStartDay: rawSchedule.periodStartDay,
+    advanceCutoffDay: rawSchedule.advanceCutoffDay,
+    periodEndDay: rawSchedule.periodEndDay,
+    advancePayDay: rawSchedule.advancePayDay,
+    finalPayDay: rawSchedule.finalPayDay,
+  };
+  const period = payrollPeriod(month, schedule);
   const adjustments = data.allAdjustments.filter((row) => row.month === month);
   const advanceApprovals = data.allAdvanceApprovals.filter((row) => row.month === month);
-  const monthStart = `${month}-01`;
-  const monthEnd = `${month}-${String(daysInMonth(month)).padStart(2, "0")}`;
+  const monthStart = period.periodStart;
+  const monthEnd = period.periodEnd;
   const employees = allEmployees.filter((employee) =>
     employee.joinedAt <= monthEnd && (!employee.inactiveAt || employee.inactiveAt >= monthStart)
   );
@@ -558,8 +653,8 @@ async function getPayrollSummary(month: string, existingData?: PayrollCalculatio
     ? await getPayrollSummary(previousMonthValue, data)
     : null;
   const previousLineMap = new Map(previousPayroll?.lines.map((line) => [line.employeeId, line]) ?? []);
-  const weekdays = monthWeekdays(month);
-  const monthRecords = records.filter((record) => String(record.date).startsWith(month));
+  const weekdays = weekdayDatesBetween(period.periodStart, period.periodEnd);
+  const monthRecords = records.filter((record) => String(record.date) >= period.periodStart && String(record.date) <= period.periodEnd);
   const adjustmentMap = new Map(adjustments.map((adjustment) => [adjustment.employeeId, adjustment]));
   const approvedAdvanceLines = Array.isArray(advanceApprovals[0]?.lines)
     ? advanceApprovals[0].lines as Array<{ employeeId: number; advanceAmount: number; paid?: boolean }>
@@ -608,15 +703,19 @@ async function getPayrollSummary(month: string, existingData?: PayrollCalculatio
     }, 0);
     const fullShiftGross = eligibleWeekdays.reduce((total, date) => {
       const salary = salaryAt(employee, salaryHistory, date);
-      return total + (salary.employeeType === "shift" && salary.fullSalaryRegardlessAttendance
-        ? Number(salary.baseSalary) * employee.monthlyExpectedWorkDays / weekdays.length
+        return total + (salary.employeeType === "shift" && salary.fullSalaryRegardlessAttendance
+          ? (salary.salaryType === "monthly" ? Number(salary.baseSalary) : Number(salary.baseSalary) * salary.monthlyExpectedWorkDays) / weekdays.length
         : 0);
     }, 0);
     const attendedShiftGross = employeeRecords
       .filter((record) => ["present", "late"].includes(record.status))
       .reduce((total, record) => {
         const salary = salaryAt(employee, salaryHistory, String(record.date));
-        return total + (salary.employeeType === "shift" && !salary.fullSalaryRegardlessAttendance ? Number(salary.baseSalary) : 0);
+        return total + (salary.employeeType === "shift" && !salary.fullSalaryRegardlessAttendance
+          ? salary.salaryType === "monthly"
+            ? Number(salary.baseSalary) / Math.max(1, salary.monthlyExpectedWorkDays)
+            : Number(salary.baseSalary)
+          : 0);
       }, 0);
     const gross = money(officeGross + fullShiftGross + attendedShiftGross);
     const insuredSalaryDates = eligibleWeekdays.filter((date) => {
@@ -682,6 +781,12 @@ async function getPayrollSummary(month: string, existingData?: PayrollCalculatio
 
   return {
     month,
+    periodStart: period.periodStart,
+    advancePeriodEnd: period.advancePeriodEnd,
+    periodEnd: period.periodEnd,
+    advancePaymentDate: period.advancePaymentDate,
+    finalPaymentDate: period.finalPaymentDate,
+    schedule,
     totalGross: money(lines.reduce((total, line) => total + line.gross, 0)),
     totalSocialInsurance: money(lines.reduce((total, line) => total + line.socialInsurance, 0)),
     totalIncomeTax: money(lines.reduce((total, line) => total + line.incomeTax, 0)),
@@ -692,6 +797,17 @@ async function getPayrollSummary(month: string, existingData?: PayrollCalculatio
 }
 
 async function getPayrollAdvanceSummary(month: string) {
+  const rawSchedule = await getPayrollSchedule(month);
+  const schedule = {
+    effectiveFromMonth: rawSchedule.effectiveFromMonth,
+    id: rawSchedule.id,
+    periodStartDay: rawSchedule.periodStartDay,
+    advanceCutoffDay: rawSchedule.advanceCutoffDay,
+    periodEndDay: rawSchedule.periodEndDay,
+    advancePayDay: rawSchedule.advancePayDay,
+    finalPayDay: rawSchedule.finalPayDay,
+  };
+  const period = payrollPeriod(month, schedule);
   const [approval] = await db
     .select()
     .from(payrollAdvanceApprovalsTable)
@@ -706,6 +822,12 @@ async function getPayrollAdvanceSummary(month: string) {
       : [];
     return {
       month,
+      periodStart: period.periodStart,
+      advancePeriodEnd: period.advancePeriodEnd,
+      periodEnd: period.periodEnd,
+      advancePaymentDate: period.advancePaymentDate,
+      finalPaymentDate: period.finalPaymentDate,
+      schedule,
       approved: true,
       approvalDate: approval.approvalDate,
       approvedAt: approval.approvedAt.toISOString(),
@@ -713,16 +835,34 @@ async function getPayrollAdvanceSummary(month: string) {
       lines,
     };
   }
-  const [employees, records] = await Promise.all([
-    db.select().from(employeesTable).where(eq(employeesTable.status, "active")),
+  const [allEmployees, records, salaryHistory] = await Promise.all([
+    db.select().from(employeesTable),
     db.select().from(attendanceTable),
+    db.select().from(employeeSalaryHistoryTable),
   ]);
-  const firstHalfRecords = records.filter((record) =>
-    String(record.date).startsWith(month) && Number(String(record.date).slice(8, 10)) <= 15
+  const employees = allEmployees.filter((employee) =>
+    employee.joinedAt <= period.advancePeriodEnd
+    && (!employee.inactiveAt || employee.inactiveAt >= period.periodStart),
   );
-  const lines = employees.map((employee) => calculatePayrollAdvanceLine(employee, firstHalfRecords));
+  const firstHalfRecords = records.filter((record) =>
+    String(record.date) >= period.periodStart && String(record.date) <= period.advancePeriodEnd
+  );
+  const lines = employees.map((employee) => calculatePayrollAdvanceLine(
+    employee,
+    firstHalfRecords,
+    salaryHistory,
+    period.periodStart,
+    period.periodEnd,
+    period.advancePeriodEnd,
+  ));
   return {
     month,
+    periodStart: period.periodStart,
+    advancePeriodEnd: period.advancePeriodEnd,
+    periodEnd: period.periodEnd,
+    advancePaymentDate: period.advancePaymentDate,
+    finalPaymentDate: period.finalPaymentDate,
+    schedule,
     approved: false,
     approvalDate: null,
     totalAmount: money(lines.reduce((total, line) => total + line.advanceAmount, 0)),
@@ -733,24 +873,42 @@ async function getPayrollAdvanceSummary(month: string) {
 function calculatePayrollAdvanceLine(
   employee: typeof employeesTable.$inferSelect,
   records: Array<typeof attendanceTable.$inferSelect>,
+  salaryHistory: SalaryHistoryRow[] = [],
+  periodStart?: string,
+  periodEnd?: string,
+  advancePeriodEnd?: string,
 ) {
   const daysWorked = records.filter((record) =>
     record.employeeId === employee.id && ["present", "late"].includes(record.status)
   ).length;
-  const dailySalary = employee.employeeType === "shift" ? money(Number(employee.baseSalary)) : 0;
-  const baseSalary = employee.employeeType === "office" ? money(Number(employee.baseSalary)) : 0;
-  const totalSalary = employee.employeeType === "shift"
-    ? money(daysWorked * dailySalary)
-    : baseSalary;
+  const attendedRecords = records.filter((record) =>
+    record.employeeId === employee.id && ["present", "late"].includes(record.status),
+  );
+  const salaryFor = (date: string) => salaryAt(employee, salaryHistory, date);
+  const firstSalary = salaryFor(
+    attendedRecords[0] ? String(attendedRecords[0].date) : (advancePeriodEnd ?? employee.joinedAt),
+  );
+  const officeSalary = salaryFor(advancePeriodEnd ?? employee.joinedAt);
+  const effectiveEmployeeType = officeSalary.employeeType;
+  const dailySalary = effectiveEmployeeType === "shift"
+      ? money(shiftDailyRate(firstSalary))
+    : 0;
+  const totalSalary = effectiveEmployeeType === "shift"
+    ? money(attendedRecords.reduce((total, record) => {
+      const salary = salaryFor(String(record.date));
+      const rate = shiftDailyRate(salary);
+      return total + rate;
+    }, 0))
+    : money(Number(officeSalary.baseSalary));
   return {
     employeeId: employee.id,
     employeeName: employee.name,
-    employeeType: employee.employeeType,
-    baseSalary,
+    employeeType: effectiveEmployeeType,
+    baseSalary: money(Number(officeSalary.baseSalary)),
     daysWorked,
     dailySalary,
     totalSalary,
-    advanceAmount: employee.employeeType === "shift" ? totalSalary : money(totalSalary * 0.5),
+    advanceAmount: effectiveEmployeeType === "shift" ? totalSalary : money(totalSalary * 0.5),
     paid: false,
     paymentDate: null,
   };
@@ -819,6 +977,7 @@ router.get("/employees", async (_req, res, next) => {
     const rows = await db.select().from(employeesTable).orderBy(desc(employeesTable.id));
     res.json(ListEmployeesResponse.parse(rows.map((employee) => ({
       ...employee,
+      salaryType: employee.salaryType === "hourly" ? "daily" : employee.salaryType,
       baseSalary: Number(employee.baseSalary),
       socialInsuranceSalary: Number(employee.socialInsuranceSalary),
       joinedAt: String(employee.joinedAt),
@@ -841,16 +1000,23 @@ router.post("/employees", async (req, res, next) => {
       res.status(400).json({ error: "Ажилд орсон огноо буруу байна" });
       return;
     }
+    const salaryType = input.employeeType === "office" ? "monthly" : input.salaryType;
+    if (input.employeeType === "shift" && salaryType === "monthly" && input.monthlyExpectedWorkDays <= 0) {
+      res.status(400).json({ error: "Сарын цалинтай ээлжийн ажилтны сард ажиллах ёстой хоногийг 1-ээс ихээр оруулна уу" });
+      return;
+    }
     const employee = await db.transaction(async (tx) => {
       const [created] = await tx.insert(employeesTable).values({
         ...input,
         joinedAt,
-        salaryType: input.employeeType === "shift" ? "hourly" : "monthly",
+         salaryType,
       }).returning();
       await tx.insert(employeeSalaryHistoryTable).values({
         employeeId: created.id,
         effectiveFrom: joinedAt,
         employeeType: input.employeeType,
+         salaryType,
+         monthlyExpectedWorkDays: input.monthlyExpectedWorkDays,
         baseSalary: input.baseSalary,
         socialInsuranceSalary: input.socialInsuranceSalary,
         payrollTaxExempt: input.payrollTaxExempt,
@@ -860,6 +1026,7 @@ router.post("/employees", async (req, res, next) => {
     });
     res.status(201).json({
       ...employee,
+      salaryType: employee.salaryType === "hourly" ? "daily" : employee.salaryType,
       baseSalary: Number(employee.baseSalary),
       socialInsuranceSalary: Number(employee.socialInsuranceSalary),
     });
@@ -903,7 +1070,15 @@ router.patch("/employees/:id", async (req, res, next) => {
       res.status(400).json({ error: "Идэвхгүй болсон огноо ажилд орсон огнооноос өмнө байж болохгүй" });
       return;
     }
+    const currentSalaryType = current.salaryType === "hourly" ? "daily" : current.salaryType;
+    const requestedEmployeeType = input.employeeType ?? current.employeeType;
+    const requestedSalaryType = requestedEmployeeType === "office"
+      ? "monthly"
+      : (input.salaryType ?? currentSalaryType);
     const salaryChanged = (input.employeeType !== undefined && input.employeeType !== current.employeeType)
+      || (requestedSalaryType !== currentSalaryType)
+      || (input.monthlyExpectedWorkDays !== undefined
+        && input.monthlyExpectedWorkDays !== current.monthlyExpectedWorkDays)
       || (input.baseSalary !== undefined && Number(input.baseSalary) !== Number(current.baseSalary))
       || (input.socialInsuranceSalary !== undefined
         && Number(input.socialInsuranceSalary) !== (current.payrollTaxExempt ? 0 : Number(current.socialInsuranceSalary)))
@@ -939,13 +1114,22 @@ router.patch("/employees/:id", async (req, res, next) => {
       }
     }
     const { salaryEffectiveDate: _salaryEffectiveDate, joinedAt: _joinedAt, ...employeeInput } = input;
+    const normalizedSalaryType = (employeeInput.employeeType ?? current.employeeType) === "office"
+      ? "monthly"
+      : (employeeInput.salaryType ?? (current.salaryType === "hourly" ? "daily" : current.salaryType));
+    if ((employeeInput.employeeType ?? current.employeeType) === "shift"
+      && normalizedSalaryType === "monthly"
+      && (employeeInput.monthlyExpectedWorkDays ?? current.monthlyExpectedWorkDays) <= 0) {
+      res.status(400).json({ error: "Сарын цалинтай ээлжийн ажилтны сард ажиллах ёстой хоногийг 1-ээс ихээр оруулна уу" });
+      return;
+    }
     const employee = await db.transaction(async (tx) => {
       const [updated] = await tx.update(employeesTable)
         .set({
           ...employeeInput,
           ...(joinedAt ? { joinedAt } : {}),
           ...(employeeInput.status === "active" ? { inactiveAt: null } : {}),
-          ...(employeeInput.employeeType ? { salaryType: employeeInput.employeeType === "shift" ? "hourly" : "monthly" } : {}),
+           salaryType: normalizedSalaryType,
         })
         .where(eq(employeesTable.id, id))
         .returning();
@@ -954,6 +1138,8 @@ router.patch("/employees/:id", async (req, res, next) => {
           await tx.update(employeeSalaryHistoryTable).set({
             effectiveFrom: joinedAt!,
             employeeType: employeeInput.employeeType ?? current.employeeType,
+            salaryType: normalizedSalaryType,
+            monthlyExpectedWorkDays: employeeInput.monthlyExpectedWorkDays ?? current.monthlyExpectedWorkDays,
             baseSalary: employeeInput.baseSalary ?? Number(current.baseSalary),
             socialInsuranceSalary: employeeInput.socialInsuranceSalary ?? Number(current.socialInsuranceSalary),
             payrollTaxExempt: employeeInput.payrollTaxExempt ?? current.payrollTaxExempt,
@@ -964,6 +1150,8 @@ router.patch("/employees/:id", async (req, res, next) => {
             employeeId: id,
             effectiveFrom: salaryEffectiveDate!,
             employeeType: employeeInput.employeeType ?? current.employeeType,
+            salaryType: normalizedSalaryType,
+            monthlyExpectedWorkDays: employeeInput.monthlyExpectedWorkDays ?? current.monthlyExpectedWorkDays,
             baseSalary: employeeInput.baseSalary ?? Number(current.baseSalary),
             socialInsuranceSalary: employeeInput.socialInsuranceSalary ?? Number(current.socialInsuranceSalary),
             payrollTaxExempt: employeeInput.payrollTaxExempt ?? current.payrollTaxExempt,
@@ -1001,6 +1189,7 @@ router.get("/employees/:id/salary-history", async (req, res, next) => {
       .orderBy(desc(employeeSalaryHistoryTable.effectiveFrom));
     res.json(ListEmployeeSalaryHistoryResponse.parse(rows.map((row) => ({
       ...row,
+      salaryType: row.salaryType === "hourly" ? "daily" : row.salaryType,
       baseSalary: Number(row.baseSalary),
       socialInsuranceSalary: Number(row.socialInsuranceSalary),
       effectiveFrom: String(row.effectiveFrom),
@@ -1038,6 +1227,15 @@ router.patch("/employees/:id/salary-history/:historyId", async (req, res, next) 
       res.status(404).json({ error: "Цалингийн түүх олдсонгүй" });
       return;
     }
+    const target = history[index];
+    const targetSalaryType = target.employeeType === "office"
+      ? "monthly"
+      : (input.salaryType ?? (target.salaryType === "hourly" ? "daily" : target.salaryType));
+    const targetDays = input.monthlyExpectedWorkDays ?? target.monthlyExpectedWorkDays;
+    if (target.employeeType === "shift" && targetSalaryType === "monthly" && targetDays <= 0) {
+      res.status(400).json({ error: "Сарын цалинтай ээлжийн ажилтны сард ажиллах ёстой хоногийг 1-ээс ихээр оруулна уу" });
+      return;
+    }
     if (index > 0 && effectiveFrom < String(employee.joinedAt)) {
       res.status(400).json({ error: "Цалингийн огноо ажилд орсон огнооноос өмнө байж болохгүй" });
       return;
@@ -1057,6 +1255,12 @@ router.patch("/employees/:id/salary-history/:historyId", async (req, res, next) 
         effectiveFrom,
         baseSalary: input.baseSalary,
         socialInsuranceSalary: input.socialInsuranceSalary,
+        ...(input.salaryType === undefined ? {} : {
+          salaryType: targetSalaryType,
+        }),
+        ...(input.monthlyExpectedWorkDays === undefined ? {} : {
+          monthlyExpectedWorkDays: input.monthlyExpectedWorkDays,
+        }),
         ...(input.fullSalaryRegardlessAttendance === undefined ? {} : {
           fullSalaryRegardlessAttendance: input.fullSalaryRegardlessAttendance,
         }),
@@ -1065,6 +1269,12 @@ router.patch("/employees/:id/salary-history/:historyId", async (req, res, next) 
         await tx.update(employeesTable).set({
           baseSalary: input.baseSalary,
           socialInsuranceSalary: input.socialInsuranceSalary,
+          ...(input.salaryType === undefined ? {} : {
+            salaryType: employee.employeeType === "office" ? "monthly" : input.salaryType,
+          }),
+          ...(input.monthlyExpectedWorkDays === undefined ? {} : {
+            monthlyExpectedWorkDays: input.monthlyExpectedWorkDays,
+          }),
           ...(input.fullSalaryRegardlessAttendance === undefined ? {} : {
             fullSalaryRegardlessAttendance: input.fullSalaryRegardlessAttendance,
           }),
@@ -1121,7 +1331,8 @@ router.delete("/employees/:id/salary-history/:historyId", async (req, res, next)
         const previous = history[index - 1];
         await tx.update(employeesTable).set({
           employeeType: previous.employeeType,
-          salaryType: previous.employeeType === "shift" ? "hourly" : "monthly",
+          salaryType: previous.employeeType === "shift" ? previous.salaryType : "monthly",
+          monthlyExpectedWorkDays: previous.monthlyExpectedWorkDays,
           baseSalary: previous.baseSalary,
           socialInsuranceSalary: previous.socialInsuranceSalary,
           payrollTaxExempt: previous.payrollTaxExempt,
@@ -1516,6 +1727,73 @@ router.get("/hour-balance", async (req, res, next) => {
   }
 });
 
+router.get("/payroll-schedule", async (_req, res, next) => {
+  try {
+    const schedule = await getPayrollSchedule();
+    res.json(GetPayrollScheduleResponse.parse(schedule));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/payroll-schedule", async (req, res, next) => {
+  try {
+    const input = UpdatePayrollScheduleBody.parse(req.body);
+    const effectiveFromMonth = currentMonth();
+    const spansPreviousMonth = input.periodStartDay > input.periodEndDay;
+    if (!spansPreviousMonth
+      && (input.advanceCutoffDay < input.periodStartDay || input.advanceCutoffDay > input.periodEndDay)) {
+      res.status(400).json({ error: "Урьдчилгааны таслах өдөр цалингийн хугацааны дотор байх ёстой" });
+      return;
+    }
+    if (spansPreviousMonth && input.advanceCutoffDay > input.periodEndDay && input.advanceCutoffDay < input.periodStartDay) {
+      res.status(400).json({ error: "Урьдчилгааны таслах өдөр цалингийн хугацааны дотор байх ёстой" });
+      return;
+    }
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
+      const [nextVersion] = await tx.select({
+        effectiveFromMonth: payrollScheduleSettingsTable.effectiveFromMonth,
+      }).from(payrollScheduleSettingsTable)
+        .where(gt(payrollScheduleSettingsTable.effectiveFromMonth, effectiveFromMonth))
+        .orderBy(asc(payrollScheduleSettingsTable.effectiveFromMonth))
+        .limit(1);
+      const [approvedMonths, paidMonths] = await Promise.all([
+        tx.select({ month: payrollAdvanceApprovalsTable.month })
+          .from(payrollAdvanceApprovalsTable)
+          .where(gte(payrollAdvanceApprovalsTable.month, effectiveFromMonth)),
+        tx.select({ month: payrollAdjustmentsTable.month })
+          .from(payrollAdjustmentsTable).where(and(
+          gte(payrollAdjustmentsTable.month, effectiveFromMonth),
+          sql`(${payrollAdjustmentsTable.paidAmount} > 0 OR ${payrollAdjustmentsTable.secondPaidAmount} > 0)`,
+        )),
+      ]);
+      const protectedMonth = [...approvedMonths, ...paidMonths].find((row) =>
+        scheduleVersionAffectsMonth(
+          row.month,
+          effectiveFromMonth,
+          nextVersion?.effectiveFromMonth,
+        )
+      );
+      if (protectedMonth) return { protectedMonth: protectedMonth.month, saved: null };
+      const [saved] = await tx.insert(payrollScheduleSettingsTable)
+        .values({ ...input, effectiveFromMonth })
+        .onConflictDoUpdate({
+          target: payrollScheduleSettingsTable.effectiveFromMonth,
+          set: { ...input, updatedAt: new Date() },
+        }).returning();
+      return { protectedMonth: null, saved };
+    });
+    if (result.protectedMonth) {
+      res.status(409).json({ error: `${result.protectedMonth} сарын цалин батлагдсан эсвэл олгогдсон тул энэ үечлэлийн тохиргоог өөрчлөх боломжгүй` });
+      return;
+    }
+    res.json(UpdatePayrollScheduleResponse.parse(result.saved));
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/payroll", async (req, res, next) => {
   try {
     const { month } = GetPayrollQueryParams.parse(req.query);
@@ -1563,6 +1841,7 @@ router.put("/payroll-adjustments", async (req, res, next) => {
     const sourceType = "payroll";
     const sourceKey = `${input.month}:${input.employeeId}`;
     const adjustment = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
       const [savedAdjustment] = await tx
         .insert(payrollAdjustmentsTable)
         .values(input)
@@ -1715,15 +1994,18 @@ router.post("/payroll-advance/approve", async (req, res, next) => {
       res.status(400).json({ error: "Урьдчилгаа цалин батлах огноог зөв оруулна уу" });
       return;
     }
-    const existing = await getPayrollAdvanceSummary(month);
-    if (!existing.approved) {
-      await db.insert(payrollAdvanceApprovalsTable).values({
-        month,
-        lines: existing.lines,
-        totalAmount: existing.totalAmount,
-        approvalDate,
-      }).onConflictDoNothing();
-    }
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
+      const existing = await getPayrollAdvanceSummary(month);
+      if (!existing.approved) {
+        await tx.insert(payrollAdvanceApprovalsTable).values({
+          month,
+          lines: existing.lines,
+          totalAmount: existing.totalAmount,
+          approvalDate,
+        }).onConflictDoNothing();
+      }
+    });
     res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month)));
   } catch (error) {
     next(error);
@@ -1806,11 +2088,26 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
           .select()
           .from(attendanceTable)
           .where(eq(attendanceTable.employeeId, input.employeeId));
+        const [scheduleRow] = await tx.select().from(payrollScheduleSettingsTable)
+          .where(lte(payrollScheduleSettingsTable.effectiveFromMonth, input.month))
+          .orderBy(desc(payrollScheduleSettingsTable.effectiveFromMonth))
+          .limit(1);
+        const schedule = scheduleRow ?? { ...defaultPayrollSchedule };
+        const period = payrollPeriod(input.month, schedule);
         const firstHalfRecords = attendanceRecords.filter((record) =>
-          String(record.date).startsWith(input.month)
-          && Number(String(record.date).slice(8, 10)) <= 15
+          String(record.date) >= period.periodStart
+          && String(record.date) <= period.advancePeriodEnd
         );
-        const refreshedLine = calculatePayrollAdvanceLine(employee, firstHalfRecords);
+        const history = await tx.select().from(employeeSalaryHistoryTable)
+          .where(eq(employeeSalaryHistoryTable.employeeId, input.employeeId));
+        const refreshedLine = calculatePayrollAdvanceLine(
+          employee,
+          firstHalfRecords,
+          history,
+          period.periodStart,
+          period.periodEnd,
+          period.advancePeriodEnd,
+        );
         paymentSourceLines = sourceLines.map((line) =>
           Number(line.employeeId) === input.employeeId ? refreshedLine : line
         );

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmployeeUpdateEmployeeType } from './employeeUpdateEmployeeType';
+import type { EmployeeUpdateSalaryType } from './employeeUpdateSalaryType';
 import type { EmployeeUpdateStatus } from './employeeUpdateStatus';
 
 export interface EmployeeUpdate {
@@ -15,17 +16,18 @@ export interface EmployeeUpdate {
   role?: string;
   phone?: string;
   employeeType?: EmployeeUpdateEmployeeType;
+  salaryType?: EmployeeUpdateSalaryType;
+  /**
+     * @minimum 0
+     * @maximum 31
+     */
+  monthlyExpectedWorkDays?: number;
   /** @minimum 0 */
   baseSalary?: number;
   /** @minimum 0 */
   socialInsuranceSalary?: number;
   payrollTaxExempt?: boolean;
   fullSalaryRegardlessAttendance?: boolean;
-  /**
-     * @minimum 0
-     * @maximum 31
-     */
-  monthlyExpectedWorkDays?: number;
   status?: EmployeeUpdateStatus;
   joinedAt?: Date;
   /** @nullable */

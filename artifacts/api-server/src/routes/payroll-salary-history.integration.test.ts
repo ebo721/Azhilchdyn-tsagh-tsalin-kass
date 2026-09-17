@@ -523,4 +523,56 @@ describe("effective-dated payroll salary", () => {
       await db.delete(employeesTable).where(eq(employeesTable.id, employee.id));
     }
   });
+
+  it("restores the previous monthly divisor when the latest salary row is deleted", async () => {
+    const [employee] = await db.insert(employeesTable).values({
+      name: `Divisor restore test ${process.pid}`,
+      role: "Test",
+      phone: "",
+      employeeType: "shift",
+      salaryType: "monthly",
+      baseSalary: 3_100_000,
+      socialInsuranceSalary: 0,
+      payrollTaxExempt: true,
+      monthlyExpectedWorkDays: 31,
+      status: "active",
+      joinedAt: "2099-10-01",
+    }).returning({ id: employeesTable.id });
+    const history = await db.insert(employeeSalaryHistoryTable).values([
+      {
+        employeeId: employee.id,
+        effectiveFrom: "2099-10-01",
+        employeeType: "shift",
+        salaryType: "monthly",
+        monthlyExpectedWorkDays: 20,
+        baseSalary: 2_000_000,
+        socialInsuranceSalary: 0,
+        payrollTaxExempt: true,
+      },
+      {
+        employeeId: employee.id,
+        effectiveFrom: "2099-11-01",
+        employeeType: "shift",
+        salaryType: "monthly",
+        monthlyExpectedWorkDays: 31,
+        baseSalary: 3_100_000,
+        socialInsuranceSalary: 0,
+        payrollTaxExempt: true,
+      },
+    ]).returning({ id: employeeSalaryHistoryTable.id });
+    try {
+      const response = await fetch(
+        `${baseUrl}/api/employees/${employee.id}/salary-history/${history[1].id}`,
+        { method: "DELETE", headers: { cookie: adminCookie } },
+      );
+      assert.equal(response.status, 204);
+      const [restored] = await db.select().from(employeesTable)
+        .where(eq(employeesTable.id, employee.id));
+      assert.equal(restored.salaryType, "monthly");
+      assert.equal(restored.monthlyExpectedWorkDays, 20);
+      assert.equal(Number(restored.baseSalary), 2_000_000);
+    } finally {
+      await db.delete(employeesTable).where(eq(employeesTable.id, employee.id));
+    }
+  });
 });

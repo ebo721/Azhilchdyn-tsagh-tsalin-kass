@@ -6,3 +6,4 @@
 - [Vercel TypeScript emit](vercel-typescript-emit.md) — Keep the API tsconfig emit-compatible; Vercel may hide TS5096 behind “src/app.ts: Emit skipped.”
 - [Vercel workspace runtime packages](vercel-workspace-runtime-packages.md) — Internal TS libraries need declarations plus default runtime JS before Function tracing.
 - [Git and hosting boundaries](git-hosting-boundaries.md) — Never push database dumps; keep Replit runtime configuration separate from Vercel deployment settings.
+- [Payroll schedule immutability](payroll-schedule-immutability.md) — Version schedules by effective month and serialize schedule edits with payroll freezing/payment writes.
