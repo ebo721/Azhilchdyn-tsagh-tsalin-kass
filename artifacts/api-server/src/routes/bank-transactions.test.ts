@@ -25,27 +25,30 @@ describe("bank transaction route", () => {
   let server: Server;
   let baseUrl: string;
   let hrSessionCookie: string;
-  let testUserId: number;
+  let accountantSessionCookie: string;
+  let viewerSessionCookie: string;
+  const testUserIds: number[] = [];
 
   before(async () => {
     process.env.SESSION_SECRET = "bank-route-scope-regression-test";
     const username = `bank-route-hr-${process.pid}-${randomUUID()}`;
-    const [testUser] = await db.insert(usersTable).values({
-      username,
-      normalizedUsername: username,
-      role: "hr",
-      passwordHash: "not-used-by-session-tests",
-    }).returning();
-    assert.ok(testUser);
-    testUserId = testUser.id;
-    hrSessionCookie = `${hrCookie.name}=${createStaffSession(testUser)}`;
+    const testUsers = await db.insert(usersTable).values([
+      { username, normalizedUsername: username, role: "hr", passwordHash: "not-used-by-session-tests" },
+      { username: `${username}-accountant`, normalizedUsername: `${username}-accountant`, role: "accountant", passwordHash: "not-used-by-session-tests" },
+      { username: `${username}-viewer`, normalizedUsername: `${username}-viewer`, role: "viewer", passwordHash: "not-used-by-session-tests" },
+    ]).returning();
+    assert.equal(testUsers.length, 3);
+    testUserIds.push(...testUsers.map(({ id }) => id));
+    hrSessionCookie = `${hrCookie.name}=${createStaffSession(testUsers[0])}`;
+    accountantSessionCookie = `${hrCookie.name}=${createStaffSession(testUsers[1])}`;
+    viewerSessionCookie = `${hrCookie.name}=${createStaffSession(testUsers[2])}`;
     server = app.listen(0);
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   });
 
   after(async () => {
     server.close();
-    await db.delete(usersTable).where(eq(usersTable.id, testUserId));
+    for (const id of testUserIds) await db.delete(usersTable).where(eq(usersTable.id, id));
   });
 
   it("requires a staff session for statements, cash matching, transfers, and XLSX imports", async () => {
@@ -82,5 +85,16 @@ describe("bank transaction route", () => {
     ]);
     assert.equal(employees.status, 200);
     assert.equal(bankTransactions.status, 403);
+  });
+
+  it("preserves accountant and viewer access to bank data while unclear transactions remain admin-only", async () => {
+    for (const cookie of [accountantSessionCookie, viewerSessionCookie]) {
+      const responses = await Promise.all([
+        fetch(`${baseUrl}/api/bank-transactions`, { headers: { cookie } }),
+        fetch(`${baseUrl}/api/bank-accounts`, { headers: { cookie } }),
+        fetch(`${baseUrl}/api/unclear-transactions`, { headers: { cookie } }),
+      ]);
+      assert.deepEqual(responses.map(({ status }) => status), [200, 200, 403]);
+    }
   });
 });
