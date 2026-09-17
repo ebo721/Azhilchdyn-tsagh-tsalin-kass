@@ -189,6 +189,7 @@ import { EmptyState, ErrorBlock, LoadingBlock, Modal, PageHeading, StatCard, Sta
 import { AppShell } from '@/components/AppShell';
 import { HourBalance } from '@/pages/HourBalance';
 import { Dashboard } from '@/pages/Dashboard';
+import { Employees } from '@/pages/Employees';
 
 const queryClient = new QueryClient();
 
@@ -277,7 +278,7 @@ export const nav = [
 
 type EmployeeForm = { name: string; role: string; phone: string; employeeType: 'shift' | 'office'; salaryType: 'daily' | 'monthly'; payFrequency: 'once' | 'twice'; baseSalary: string; socialInsuranceSalary: string; payrollTaxExempt: boolean; fullSalaryRegardlessAttendance: boolean; monthlyExpectedWorkDays: string; joinedAt: string; status?: 'active' | 'inactive'; inactiveAt: string; salaryEffectiveDate: string };
 
-function SalaryHistoryRowEditor({ employee, row, isBaseline, isCurrent, canChange, deletionPending, onDelete, onSaved }: { employee: Employee; row: EmployeeSalaryHistory; isBaseline: boolean; isCurrent: boolean; canChange: boolean; deletionPending: boolean; onDelete: () => void; onSaved: (row: EmployeeSalaryHistory, isCurrent: boolean) => void }) {
+export function SalaryHistoryRowEditor({ employee, row, isBaseline, isCurrent, canChange, deletionPending, onDelete, onSaved }: { employee: Employee; row: EmployeeSalaryHistory; isBaseline: boolean; isCurrent: boolean; canChange: boolean; deletionPending: boolean; onDelete: () => void; onSaved: (row: EmployeeSalaryHistory, isCurrent: boolean) => void }) {
   const update = useUpdateEmployeeSalaryHistory();
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
@@ -313,7 +314,7 @@ function SalaryHistoryRowEditor({ employee, row, isBaseline, isCurrent, canChang
   return <tr data-testid={`row-salary-history-${row.id}`}><td className="px-4 py-3 font-mono text-xs">{row.effectiveFrom}</td><td className="px-4 py-3 text-xs">{row.employeeType === 'office' ? 'Оффис' : row.salaryType === 'monthly' ? `Ээлж (сарын, ${row.monthlyExpectedWorkDays} өдөр)` : 'Ээлж (өдрийн)'}<span className="mt-1 block text-[10px] text-muted-foreground">{row.payFrequency === 'once' ? 'Сард 1 удаа' : 'Сард 2 удаа'}</span></td><td className="px-4 py-3 text-right font-mono text-xs">{money(row.baseSalary)}</td><td className="px-4 py-3 text-right font-mono text-xs">{money(row.socialInsuranceSalary)}</td><td className="px-4 py-3 text-center text-xs">{row.payrollTaxExempt ? 'Чөлөөлсөн' : 'Тооцно'}</td><td className="px-4 py-3"><div className="flex justify-end gap-1">{canChange && <><Button type="button" size="icon" variant="outline" onClick={() => setEditing(true)} aria-label="Цалингийн түүх засах" data-testid={`button-edit-salary-history-${row.id}`}><Pencil className="size-3.5" /></Button><Button type="button" size="icon" variant="outline" disabled={isBaseline || deletionPending} title={isBaseline ? 'Анхны цалингийн мөрийг устгах боломжгүй' : 'Буруу цалингийн мөр устгах'} onClick={onDelete} data-testid={`button-delete-salary-history-${row.id}`}><Trash2 className="size-3.5" /></Button></>}</div></td></tr>;
 }
 
-function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: () => void }) {
+export function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: () => void }) {
   const isEdit = !!employee;
   const create = useCreateEmployee();
   const update = useUpdateEmployee();
@@ -424,7 +425,7 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
   </Modal>;
 }
 
-function Employees() {
+export function EmployeesImpl() {
   const query = useListEmployees();
   const shifts = useListShifts();
   const [shiftMonth, setShiftMonth] = useState(currentMonth());
