@@ -150,6 +150,7 @@ import { getStaffRole, getStaffSession, type StaffRole } from "../lib/hr-session
 import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment.js";
 import { planShiftPlanCopy } from "../lib/shift-plan-copy.js";
 import { reconcileOperatingExpenses } from "../lib/operating-expense-sync.js";
+import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
 import {
   cashAccountForCategory,
   isCanonicalCashCategory,
@@ -1141,6 +1142,41 @@ router.put("/inventory/purchases/:id/payment", async (req, res, next) => {
           .returning({ id: bankTransactionsTable.id });
         if (!updatedBank) throw new InventoryBankPaymentConflictError();
       }
+      if (currentPurchase.accountId === null) {
+        throw new Error("Inventory purchase account is missing");
+      }
+      const [inventoryAccount] = await tx.select().from(chartOfAccountsTable).where(and(
+        eq(chartOfAccountsTable.id, currentPurchase.accountId),
+        eq(chartOfAccountsTable.isActive, true),
+      ));
+      if (!inventoryAccount) {
+        throw new Error("Inventory purchase account is missing or inactive");
+      }
+      const creditCode = bank ? "1010" : "1000";
+      const [creditAccount] = await tx.select().from(chartOfAccountsTable).where(and(
+        eq(chartOfAccountsTable.code, creditCode),
+        eq(chartOfAccountsTable.isActive, true),
+      ));
+      if (!creditAccount) {
+        throw new Error(`Settlement account ${creditCode} is missing or inactive`);
+      }
+      const posting = await postJournalEntry(tx, {
+        date: input.date,
+        description: currentPurchase.documentName,
+        sourceType: "inventory_purchase",
+        sourceId: currentPurchase.id,
+        createdBy: null,
+        lines: [
+          { accountId: inventoryAccount.id, debit: input.amount, credit: 0 },
+          { accountId: creditAccount.id, debit: 0, credit: input.amount },
+        ],
+      });
+      if (posting.status !== "posted") {
+        throw new Error("Inventory purchase journal entry must be balanced");
+      }
+      await tx.update(cashTransactionsTable)
+        .set({ journalEntryId: posting.journalEntryId })
+        .where(eq(cashTransactionsTable.id, cash!.id));
       return "paid" as const;
     });
     if (result === "purchase_missing") {
@@ -1213,6 +1249,9 @@ router.delete("/inventory/purchases/:id/payment", async (req, res, next) => {
             eq(bankTransactionsTable.id, cash.bankTransactionId),
             eq(bankTransactionsTable.cashTransactionId, cash.id),
           ));
+      }
+      if (cash?.journalEntryId) {
+        await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
       }
       await tx.update(inventoryPurchasesTable)
         .set({ paymentDate: null, paymentAmount: null })
