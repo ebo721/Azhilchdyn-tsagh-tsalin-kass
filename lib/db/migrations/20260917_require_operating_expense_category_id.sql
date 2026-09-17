@@ -2,8 +2,28 @@ BEGIN;
 
 LOCK TABLE operating_expenses IN SHARE ROW EXCLUSIVE MODE;
 
+CREATE TABLE IF NOT EXISTS operating_expenses_category_backup_20260917 AS
+SELECT id, category
+FROM operating_expenses
+WITH NO DATA;
+CREATE UNIQUE INDEX IF NOT EXISTS operating_expenses_category_backup_20260917_id_idx
+  ON operating_expenses_category_backup_20260917(id);
+INSERT INTO operating_expenses_category_backup_20260917 (id, category)
+SELECT id, category
+FROM operating_expenses
+ON CONFLICT (id) DO NOTHING;
+
 DO $$
 BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_attribute
+    WHERE attrelid = 'operating_expenses'::regclass
+      AND attname = 'account_id'
+      AND NOT attisdropped
+  ) THEN
+    RAISE EXCEPTION 'Legacy operating_expenses.account_id still exists';
+  END IF;
+
   IF EXISTS (
     SELECT 1
     FROM operating_expenses expense
