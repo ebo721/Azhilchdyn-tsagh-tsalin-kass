@@ -61,6 +61,7 @@ export async function syncOperatingExpenseForBankCash(tx: any, bankId: number, c
       code: accountCode,
       name: defaults[accountCode],
       type: "expense",
+      normalBalance: "debit",
     }).onConflictDoNothing({ target: chartOfAccountsTable.code });
   }
   const [fallbackAccount] = byCash ? [null] : await tx.select().from(chartOfAccountsTable).where(and(

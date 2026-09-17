@@ -20,7 +20,7 @@ describe("operating expenses", () => {
     const [admin] = await db.select().from(usersTable).where(eq(usersTable.role, "admin")).limit(1);
     assert.ok(admin);
     adminCookie = `${hrCookie.name}=${createStaffSession(admin)}`;
-    await db.insert(chartOfAccountsTable).values({ code: "6900", name: "Бусад үйл ажиллагааны зардал", type: "expense" }).onConflictDoNothing({ target: chartOfAccountsTable.code });
+    await db.insert(chartOfAccountsTable).values({ code: "6900", name: "Бусад үйл ажиллагааны зардал", type: "expense", normalBalance: "debit" }).onConflictDoNothing({ target: chartOfAccountsTable.code });
     const [expenseAccount] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "6900"));
     expenseAccountId = expenseAccount.id;
     const [expense] = await db.insert(operatingExpensesTable).values({ description: `test expense ${process.pid}`, accountId: expenseAccountId, date: "2099-03-10", amount: 1200 }).returning({ id: operatingExpensesTable.id });
@@ -211,6 +211,7 @@ describe("operating expenses", () => {
       code,
       name: `Concurrent expense ${process.pid}`,
       type: "expense",
+      normalBalance: "debit",
     }).returning();
     let createdExpenseId: number | undefined;
     try {

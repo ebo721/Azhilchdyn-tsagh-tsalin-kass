@@ -193,6 +193,9 @@ router.post("/chart-of-accounts", async (req, res, next) => {
       code: input.code,
       name,
       type: input.type,
+      normalBalance: input.code === "1810" && input.type === "asset"
+        ? "credit"
+        : input.type === "asset" || input.type === "expense" ? "debit" : "credit",
     }).returning();
     res.status(201).json(CreateChartOfAccountResponse.parse(chartOfAccountResponse(row)));
   } catch (error) {
@@ -238,6 +241,9 @@ router.put("/chart-of-accounts/:id", async (req, res, next) => {
         code: input.code,
         name,
         type: input.type,
+        normalBalance: input.code === "1810" && input.type === "asset"
+          ? "credit"
+          : input.type === "asset" || input.type === "expense" ? "debit" : "credit",
       }).where(eq(chartOfAccountsTable.id, id)).returning();
       return { kind: "updated" as const, row };
     });

@@ -77,8 +77,38 @@ export const chartOfAccountsTable = pgTable("chart_of_accounts", {
   code: text("code").notNull().unique(),
   name: text("name").notNull(),
   type: text("type").notNull(),
+  normalBalance: text("normal_balance").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const journalEntriesTable = pgTable("journal_entries", {
+  id: serial("id").primaryKey(),
+  date: date("date", { mode: "string" }).notNull(),
+  description: text("description").notNull(),
+  sourceType: text("source_type").notNull(),
+  sourceId: integer("source_id"),
+  status: text("status").notNull().default("draft"),
+  createdBy: integer("created_by").references(() => usersTable.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidedBy: integer("voided_by").references(() => usersTable.id, { onDelete: "restrict" }),
+}, (table) => [
+  index("journal_entries_source_idx").on(table.sourceType, table.sourceId),
+  index("journal_entries_date_idx").on(table.date),
+]);
+
+export const journalLinesTable = pgTable("journal_lines", {
+  id: serial("id").primaryKey(),
+  journalEntryId: integer("journal_entry_id").notNull().references(() => journalEntriesTable.id, { onDelete: "cascade" }),
+  accountId: integer("account_id").notNull().references(() => chartOfAccountsTable.id, { onDelete: "restrict" }),
+  debit: numeric("debit", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
+  credit: numeric("credit", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
+  memo: text("memo"),
+}, (table) => [
+  index("journal_lines_entry_idx").on(table.journalEntryId),
+  index("journal_lines_account_idx").on(table.accountId),
+]);
 
 export const shiftTemplatesTable = pgTable("shift_templates", {
   id: serial("id").primaryKey(),
@@ -122,6 +152,7 @@ export const payrollAdjustmentsTable = pgTable("payroll_adjustments", {
   paymentDate: date("payment_date", { mode: "string" }),
   secondPaidAmount: numeric("second_paid_amount", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
   secondPaymentDate: date("second_payment_date", { mode: "string" }),
+  journalEntryId: integer("journal_entry_id").references(() => journalEntriesTable.id, { onDelete: "set null" }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
   uniqueIndex("payroll_adjustments_employee_month_idx").on(table.employeeId, table.month),
@@ -152,6 +183,7 @@ export const cashTransactionsTable = pgTable("cash_transactions", {
   bankTransactionId: integer("bank_transaction_id"),
   bankVerifiedAt: timestamp("bank_verified_at", { withTimezone: true }),
   unclearAt: timestamp("unclear_at", { withTimezone: true }),
+  journalEntryId: integer("journal_entry_id").references(() => journalEntriesTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("cash_transactions_source_idx").on(table.sourceType, table.sourceKey),
@@ -192,6 +224,7 @@ export const bankTransactionsTable = pgTable("bank_transactions", {
   transferredAt: timestamp("transferred_at", { withTimezone: true, precision: 0 }),
   cashTransactionId: integer("cash_transaction_id").references(() => cashTransactionsTable.id, { onDelete: "restrict" }),
   unclearAt: timestamp("unclear_at", { withTimezone: true }),
+  journalEntryId: integer("journal_entry_id").references(() => journalEntriesTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("bank_transactions_fingerprint_idx").on(table.fingerprint),
@@ -209,6 +242,7 @@ export const inventoryPurchasesTable = pgTable("inventory_purchases", {
   totalAmount: numeric("total_amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
   paymentDate: date("payment_date", { mode: "string" }),
   paymentAmount: numeric("payment_amount", { precision: 14, scale: 2, mode: "number" }),
+  journalEntryId: integer("journal_entry_id").references(() => journalEntriesTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("inventory_purchases_account_id_idx").on(table.accountId),
@@ -326,6 +360,9 @@ export type Employee = typeof employeesTable.$inferSelect;
 export type EmployeeSalaryHistory = typeof employeeSalaryHistoryTable.$inferSelect;
 export type PayrollScheduleSettings = typeof payrollScheduleSettingsTable.$inferSelect;
 export type User = typeof usersTable.$inferSelect;
+export type ChartOfAccount = typeof chartOfAccountsTable.$inferSelect;
+export type JournalEntry = typeof journalEntriesTable.$inferSelect;
+export type JournalLine = typeof journalLinesTable.$inferSelect;
 export type ShiftTemplate = typeof shiftTemplatesTable.$inferSelect;
 export type EmployeeShiftPlan = typeof employeeShiftPlansTable.$inferSelect;
 export type Attendance = typeof attendanceTable.$inferSelect;
