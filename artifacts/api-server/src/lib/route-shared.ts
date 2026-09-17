@@ -975,4 +975,3 @@ export async function inventoryPurchaseResponse(id: number) {
     })),
   };
 }
-
