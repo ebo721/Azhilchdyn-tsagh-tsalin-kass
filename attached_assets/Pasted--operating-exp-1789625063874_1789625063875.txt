@@ -1,0 +1,26 @@
+Даалгавар: Касс, банк, барааны худалдан авалтыг дансны төлөвлөгөөтэй холбох
+
+Контекст: operating_expenses-г chart_of_accounts-тай холбосон ажил (Task #44) дуусан. Одоо ижил загвараар гурван хүснэгтийг холбоно: cash_transactions, bank_transactions, inventory_purchases. Эдгээрийн category/ангиллын талбар одоогоор чөлөөт текст, GL данстай холбогдоогүй.
+
+Task #44-ээс сурсан хичээлүүд — ЗААВАЛ дагах:
+
+Нэршлийн зөрчлөөс сэргийл — шинэ баганын нэрийг зөвхөн нэг л удаа, тодорхой тохироорой (жишээ нь account_id). Development, production хоёуланд яг ижил нэртэй байх ёстой. Ажил эхлэхийн өмнө хоёр орчны schema яг ижил эсэхийг (git pull, schema diff) баталгаажуул.
+chart_of_accounts.type enum-ийн утгыг ажил эхлэхийн өмнө шалга — asset|liability|equity|revenue|expense эсэхийг (income гэх мэт хуучирсан утга байхгүй эсэхийг) production, development хоёуланд баталгаажуул.
+Legacy category баганыг ЭНЭ ажилд бүү устга — зөвхөн нэмэлт (account_id, nullable) багана нэм. Хуучин баганыг устгах бол тусад нь, хожим хийнэ.
+
+Хийх дараалал:
+
+Preflight: Гурван хүснэгтийн category-ийн бүх өвөрмөц утгыг (distinct values) жагсааж надад харуул — аль нь аль дансанд тохирохыг би зөвлөнө.
+Schema: cash_transactions, bank_transactions, inventory_purchases-д account_id (nullable, FK → chart_of_accounts.id) нэм. Хуучин category баганыг хэвээр үлдээ.
+Backfill: Preflight-д баталгаажсан mapping-аар account_id-г бөглө (dry-run first, надад тоо харуулаад, зөвшөөрлийн дараа commit).
+API: GET response-үүдэд account код/нэрийг нэм (хуучин category-г устгахгүй, зэрэгцээ байлгана).
+NOT NULL болгохгүй — энэ ажлын хүрээнд зөвхөн nullable FK хүртэл л хий. NOT NULL хийх шийдвэрийг тусад нь асууна.
+
+Аюулгүй байдлын дүрэм (өмнөх шигээ):
+
+Production дээр ямар ч ALTER TABLE/UPDATE ажиллуулахын өмнө SQL-ийг бүтнээр нь надад харуулж, тодорхой "тийм, ажиллуул" гэсэн зөвшөөрлийг хүлээ
+GitHub push зөвхөн force:false, нэмэлт commit
+Migration idempotent байх ёстой
+Ямар ч DROP COLUMN энэ ажилд хамаарахгүй — хэрэв Agent ийм санал гаргавал, зогсоож надад мэдэгд, өөрөө бүү ажиллуул
+
+Тэргүүлэх дараалал: Эхлээд cash_transactions дангаар нь (хамгийн олон мөртэй тул хамгийн их эрсдэлтэй) бус, харин inventory_purchases-с эхэл (харьцангуй цөөн мөртэй, эрсдэл бага) — амжилттай болсны дараа л cash_transactions, bank_transactions руу шилжинэ.
