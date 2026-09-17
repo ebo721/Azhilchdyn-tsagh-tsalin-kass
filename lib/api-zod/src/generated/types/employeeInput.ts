@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmployeeInputEmployeeType } from './employeeInputEmployeeType';
+import type { EmployeeInputPayFrequency } from './employeeInputPayFrequency';
 import type { EmployeeInputSalaryType } from './employeeInputSalaryType';
 
 export interface EmployeeInput {
@@ -22,6 +23,7 @@ export interface EmployeeInput {
   socialInsuranceSalary: number;
   payrollTaxExempt: boolean;
   fullSalaryRegardlessAttendance?: boolean;
+  payFrequency: EmployeeInputPayFrequency;
   /**
      * @minimum 0
      * @maximum 31

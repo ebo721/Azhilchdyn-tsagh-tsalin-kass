@@ -426,7 +426,7 @@ function Dashboard() {
   );
 }
 
-type EmployeeForm = { name: string; role: string; phone: string; employeeType: 'shift' | 'office'; salaryType: 'daily' | 'monthly'; baseSalary: string; socialInsuranceSalary: string; payrollTaxExempt: boolean; fullSalaryRegardlessAttendance: boolean; monthlyExpectedWorkDays: string; joinedAt: string; status?: 'active' | 'inactive'; inactiveAt: string; salaryEffectiveDate: string };
+type EmployeeForm = { name: string; role: string; phone: string; employeeType: 'shift' | 'office'; salaryType: 'daily' | 'monthly'; payFrequency: 'once' | 'twice'; baseSalary: string; socialInsuranceSalary: string; payrollTaxExempt: boolean; fullSalaryRegardlessAttendance: boolean; monthlyExpectedWorkDays: string; joinedAt: string; status?: 'active' | 'inactive'; inactiveAt: string; salaryEffectiveDate: string };
 
 function SalaryHistoryRowEditor({ employee, row, isBaseline, isCurrent, canChange, deletionPending, onDelete, onSaved }: { employee: Employee; row: EmployeeSalaryHistory; isBaseline: boolean; isCurrent: boolean; canChange: boolean; deletionPending: boolean; onDelete: () => void; onSaved: (row: EmployeeSalaryHistory, isCurrent: boolean) => void }) {
   const update = useUpdateEmployeeSalaryHistory();
@@ -436,6 +436,7 @@ function SalaryHistoryRowEditor({ employee, row, isBaseline, isCurrent, canChang
   const [baseSalary, setBaseSalary] = useState(String(row.baseSalary));
   const [socialInsuranceSalary, setSocialInsuranceSalary] = useState(String(row.socialInsuranceSalary));
   const [salaryType, setSalaryType] = useState(row.salaryType);
+  const [payFrequency, setPayFrequency] = useState(row.payFrequency);
   const [monthlyExpectedWorkDays, setMonthlyExpectedWorkDays] = useState(String(row.monthlyExpectedWorkDays));
   const save = () => {
     const base = Number(baseSalary);
@@ -445,7 +446,7 @@ function SalaryHistoryRowEditor({ employee, row, isBaseline, isCurrent, canChang
       window.alert('Огноо болон цалингийн дүнг зөв оруулна уу.');
       return;
     }
-    update.mutate({ id: employee.id, historyId: row.id, data: { effectiveFrom, baseSalary: base, socialInsuranceSalary: social, salaryType, monthlyExpectedWorkDays: monthlyExpected } }, {
+    update.mutate({ id: employee.id, historyId: row.id, data: { effectiveFrom, baseSalary: base, socialInsuranceSalary: social, salaryType, payFrequency, monthlyExpectedWorkDays: monthlyExpected } }, {
       onSuccess: (saved) => {
         qc.invalidateQueries({ queryKey: getListEmployeeSalaryHistoryQueryKey(employee.id) });
         qc.invalidateQueries({ queryKey: getListEmployeesQueryKey() });
@@ -458,9 +459,9 @@ function SalaryHistoryRowEditor({ employee, row, isBaseline, isCurrent, canChang
     });
   };
   if (editing) {
-    return <tr data-testid={`row-salary-history-${row.id}`}><td className="px-2 py-2"><input type="date" value={effectiveFrom} onChange={(event) => setEffectiveFrom(event.target.value)} className="h-8 rounded-lg border border-input bg-background px-2 font-mono text-xs" data-testid={`input-salary-history-date-${row.id}`} /></td><td className="px-2 py-2">{row.employeeType === 'office' ? <span className="px-2 text-xs">Оффис</span> : <div className="flex flex-col gap-1"><select value={salaryType} onChange={(e) => setSalaryType(e.target.value as 'daily' | 'monthly')} className="h-8 rounded-lg border border-input bg-background px-2 text-xs" data-testid={`select-salary-history-type-${row.id}`}><option value="daily">Өдрийн</option><option value="monthly">Сарын</option></select>{salaryType === 'monthly' && <input type="number" min="1" max="31" value={monthlyExpectedWorkDays} onChange={(e) => setMonthlyExpectedWorkDays(e.target.value)} className="h-8 w-24 rounded-lg border border-input bg-background px-2 text-xs" placeholder="Өдөр" data-testid={`input-salary-history-expected-days-${row.id}`} />}</div>}</td><td className="px-2 py-2 text-right"><input type="number" min="0" value={baseSalary} onChange={(event) => setBaseSalary(event.target.value)} className="h-8 w-28 rounded-lg border border-input bg-background px-2 text-right font-mono text-xs" data-testid={`input-salary-history-base-${row.id}`} /></td><td className="px-2 py-2 text-right"><input type="number" min="0" value={socialInsuranceSalary} onChange={(event) => setSocialInsuranceSalary(event.target.value)} className="h-8 w-28 rounded-lg border border-input bg-background px-2 text-right font-mono text-xs" data-testid={`input-salary-history-social-${row.id}`} /></td><td className="px-4 py-3 text-center text-xs">{row.payrollTaxExempt ? 'Чөлөөлсөн' : 'Тооцно'}</td><td className="px-2 py-2"><div className="flex justify-end gap-1"><Button type="button" size="sm" onClick={save} disabled={update.isPending} data-testid={`button-save-salary-history-${row.id}`}>{update.isPending ? 'Хадгалж байна...' : 'Хадгалах'}</Button><Button type="button" size="sm" variant="outline" onClick={() => setEditing(false)}>Болих</Button></div></td></tr>;
+    return <tr data-testid={`row-salary-history-${row.id}`}><td className="px-2 py-2"><input type="date" value={effectiveFrom} onChange={(event) => setEffectiveFrom(event.target.value)} className="h-8 rounded-lg border border-input bg-background px-2 font-mono text-xs" data-testid={`input-salary-history-date-${row.id}`} /></td><td className="px-2 py-2"><div className="flex flex-col gap-1">{row.employeeType === 'office' ? <span className="px-2 text-xs">Оффис</span> : <><select value={salaryType} onChange={(e) => setSalaryType(e.target.value as 'daily' | 'monthly')} className="h-8 rounded-lg border border-input bg-background px-2 text-xs" data-testid={`select-salary-history-type-${row.id}`}><option value="daily">Өдрийн</option><option value="monthly">Сарын</option></select>{salaryType === 'monthly' && <input type="number" min="1" max="31" value={monthlyExpectedWorkDays} onChange={(e) => setMonthlyExpectedWorkDays(e.target.value)} className="h-8 w-24 rounded-lg border border-input bg-background px-2 text-xs" placeholder="Өдөр" data-testid={`input-salary-history-expected-days-${row.id}`} />}</>}<select value={payFrequency} onChange={(event) => setPayFrequency(event.target.value as 'once' | 'twice')} className="h-8 rounded-lg border border-input bg-background px-2 text-xs" data-testid={`select-salary-history-pay-frequency-${row.id}`}><option value="once">Сард 1 удаа</option><option value="twice">Сард 2 удаа</option></select></div></td><td className="px-2 py-2 text-right"><input type="number" min="0" value={baseSalary} onChange={(event) => setBaseSalary(event.target.value)} className="h-8 w-28 rounded-lg border border-input bg-background px-2 text-right font-mono text-xs" data-testid={`input-salary-history-base-${row.id}`} /></td><td className="px-2 py-2 text-right"><input type="number" min="0" value={socialInsuranceSalary} onChange={(event) => setSocialInsuranceSalary(event.target.value)} className="h-8 w-28 rounded-lg border border-input bg-background px-2 text-right font-mono text-xs" data-testid={`input-salary-history-social-${row.id}`} /></td><td className="px-4 py-3 text-center text-xs">{row.payrollTaxExempt ? 'Чөлөөлсөн' : 'Тооцно'}</td><td className="px-2 py-2"><div className="flex justify-end gap-1"><Button type="button" size="sm" onClick={save} disabled={update.isPending} data-testid={`button-save-salary-history-${row.id}`}>{update.isPending ? 'Хадгалж байна...' : 'Хадгалах'}</Button><Button type="button" size="sm" variant="outline" onClick={() => setEditing(false)}>Болих</Button></div></td></tr>;
   }
-  return <tr data-testid={`row-salary-history-${row.id}`}><td className="px-4 py-3 font-mono text-xs">{row.effectiveFrom}</td><td className="px-4 py-3 text-xs">{row.employeeType === 'office' ? 'Оффис' : row.salaryType === 'monthly' ? `Ээлж (сарын, ${row.monthlyExpectedWorkDays} өдөр)` : 'Ээлж (өдрийн)'}</td><td className="px-4 py-3 text-right font-mono text-xs">{money(row.baseSalary)}</td><td className="px-4 py-3 text-right font-mono text-xs">{money(row.socialInsuranceSalary)}</td><td className="px-4 py-3 text-center text-xs">{row.payrollTaxExempt ? 'Чөлөөлсөн' : 'Тооцно'}</td><td className="px-4 py-3"><div className="flex justify-end gap-1">{canChange && <><Button type="button" size="icon" variant="outline" onClick={() => setEditing(true)} aria-label="Цалингийн түүх засах" data-testid={`button-edit-salary-history-${row.id}`}><Pencil className="size-3.5" /></Button><Button type="button" size="icon" variant="outline" disabled={isBaseline || deletionPending} title={isBaseline ? 'Анхны цалингийн мөрийг устгах боломжгүй' : 'Буруу цалингийн мөр устгах'} onClick={onDelete} data-testid={`button-delete-salary-history-${row.id}`}><Trash2 className="size-3.5" /></Button></>}</div></td></tr>;
+  return <tr data-testid={`row-salary-history-${row.id}`}><td className="px-4 py-3 font-mono text-xs">{row.effectiveFrom}</td><td className="px-4 py-3 text-xs">{row.employeeType === 'office' ? 'Оффис' : row.salaryType === 'monthly' ? `Ээлж (сарын, ${row.monthlyExpectedWorkDays} өдөр)` : 'Ээлж (өдрийн)'}<span className="mt-1 block text-[10px] text-muted-foreground">{row.payFrequency === 'once' ? 'Сард 1 удаа' : 'Сард 2 удаа'}</span></td><td className="px-4 py-3 text-right font-mono text-xs">{money(row.baseSalary)}</td><td className="px-4 py-3 text-right font-mono text-xs">{money(row.socialInsuranceSalary)}</td><td className="px-4 py-3 text-center text-xs">{row.payrollTaxExempt ? 'Чөлөөлсөн' : 'Тооцно'}</td><td className="px-4 py-3"><div className="flex justify-end gap-1">{canChange && <><Button type="button" size="icon" variant="outline" onClick={() => setEditing(true)} aria-label="Цалингийн түүх засах" data-testid={`button-edit-salary-history-${row.id}`}><Pencil className="size-3.5" /></Button><Button type="button" size="icon" variant="outline" disabled={isBaseline || deletionPending} title={isBaseline ? 'Анхны цалингийн мөрийг устгах боломжгүй' : 'Буруу цалингийн мөр устгах'} onClick={onDelete} data-testid={`button-delete-salary-history-${row.id}`}><Trash2 className="size-3.5" /></Button></>}</div></td></tr>;
 }
 
 function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: () => void }) {
@@ -475,7 +476,7 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
     query: { enabled: isEdit, queryKey: getListEmployeeSalaryHistoryQueryKey(salaryHistoryEmployeeId) },
   });
   const salaryHistoryDeletion = useQueueDeletion();
-  const form = useForm<EmployeeForm>({ defaultValues: { name: employee?.name ?? '', role: employee?.role ?? '', phone: employee?.phone ?? '', employeeType: employee?.employeeType ?? 'office', salaryType: employee?.salaryType ?? 'monthly', baseSalary: String(employee?.baseSalary ?? ''), socialInsuranceSalary: String(employee?.socialInsuranceSalary ?? ''), payrollTaxExempt: employee?.payrollTaxExempt ?? false, fullSalaryRegardlessAttendance: employee?.fullSalaryRegardlessAttendance ?? false, monthlyExpectedWorkDays: String(employee?.monthlyExpectedWorkDays ?? 0), joinedAt: employee?.joinedAt ?? today(), status: employee?.status ?? 'active', inactiveAt: employee?.inactiveAt ?? '', salaryEffectiveDate: '' } });
+  const form = useForm<EmployeeForm>({ defaultValues: { name: employee?.name ?? '', role: employee?.role ?? '', phone: employee?.phone ?? '', employeeType: employee?.employeeType ?? 'office', salaryType: employee?.salaryType ?? 'monthly', payFrequency: employee?.payFrequency ?? 'twice', baseSalary: String(employee?.baseSalary ?? ''), socialInsuranceSalary: String(employee?.socialInsuranceSalary ?? ''), payrollTaxExempt: employee?.payrollTaxExempt ?? false, fullSalaryRegardlessAttendance: employee?.fullSalaryRegardlessAttendance ?? false, monthlyExpectedWorkDays: String(employee?.monthlyExpectedWorkDays ?? 0), joinedAt: employee?.joinedAt ?? today(), status: employee?.status ?? 'active', inactiveAt: employee?.inactiveAt ?? '', salaryEffectiveDate: '' } });
   const [salaryBaseline, setSalaryBaseline] = useState({
     baseSalary: Number(employee?.baseSalary ?? 0),
     socialInsuranceSalary: employee?.payrollTaxExempt ? 0 : Number(employee?.socialInsuranceSalary ?? 0),
@@ -483,10 +484,11 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
     fullSalaryRegardlessAttendance: employee?.fullSalaryRegardlessAttendance ?? false,
     employeeType: employee?.employeeType ?? 'office',
     salaryType: employee?.salaryType ?? 'monthly',
+    payFrequency: employee?.payFrequency ?? 'twice',
     monthlyExpectedWorkDays: Number(employee?.monthlyExpectedWorkDays ?? 0),
   });
   const submit = (values: EmployeeForm) => {
-    const data = { name: values.name, role: values.role, phone: values.phone, employeeType: values.employeeType, salaryType: values.employeeType === 'shift' ? values.salaryType : 'monthly', baseSalary: Number(values.baseSalary), socialInsuranceSalary: values.payrollTaxExempt ? 0 : Number(values.socialInsuranceSalary), payrollTaxExempt: values.payrollTaxExempt, ...(isAdmin ? { fullSalaryRegardlessAttendance: values.fullSalaryRegardlessAttendance } : {}), monthlyExpectedWorkDays: (values.employeeType === 'shift' && values.salaryType === 'monthly') ? Number(values.monthlyExpectedWorkDays) : 0, joinedAt: values.joinedAt, ...(isEdit ? { status: values.status, inactiveAt: values.status === 'inactive' ? values.inactiveAt : null, ...(values.salaryEffectiveDate ? { salaryEffectiveDate: values.salaryEffectiveDate } : {}) } : {}) };
+    const data = { name: values.name, role: values.role, phone: values.phone, employeeType: values.employeeType, salaryType: values.employeeType === 'shift' ? values.salaryType : 'monthly', payFrequency: values.payFrequency, baseSalary: Number(values.baseSalary), socialInsuranceSalary: values.payrollTaxExempt ? 0 : Number(values.socialInsuranceSalary), payrollTaxExempt: values.payrollTaxExempt, ...(isAdmin ? { fullSalaryRegardlessAttendance: values.fullSalaryRegardlessAttendance } : {}), monthlyExpectedWorkDays: (values.employeeType === 'shift' && values.salaryType === 'monthly') ? Number(values.monthlyExpectedWorkDays) : 0, joinedAt: values.joinedAt, ...(isEdit ? { status: values.status, inactiveAt: values.status === 'inactive' ? values.inactiveAt : null, ...(values.salaryEffectiveDate ? { salaryEffectiveDate: values.salaryEffectiveDate } : {}) } : {}) };
     const done = () => { qc.invalidateQueries({ queryKey: getListEmployeesQueryKey() }); if (employee) qc.invalidateQueries({ queryKey: getListEmployeeSalaryHistoryQueryKey(employee.id) }); qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() }); qc.invalidateQueries({ queryKey: getGetPayrollQueryKey() }); qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey() }); onClose(); };
     if (isEdit && employee) update.mutate({ id: employee.id, data }, { onSuccess: done }); else create.mutate({ data }, { onSuccess: done });
   };
@@ -505,6 +507,7 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
   };
   const employeeType = form.watch('employeeType');
   const salaryType = form.watch('salaryType');
+  const payFrequency = form.watch('payFrequency');
   const baseSalary = form.watch('baseSalary');
   const socialInsuranceSalary = form.watch('socialInsuranceSalary');
   const payrollTaxExempt = form.watch('payrollTaxExempt');
@@ -520,6 +523,7 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
     || fullSalaryRegardlessAttendance !== salaryBaseline.fullSalaryRegardlessAttendance
     || employeeType !== salaryBaseline.employeeType
     || salaryType !== salaryBaseline.salaryType
+    || payFrequency !== salaryBaseline.payFrequency
     || (employeeType === 'shift' && salaryType === 'monthly' && Number(monthlyExpectedWorkDays) !== salaryBaseline.monthlyExpectedWorkDays)
   );
   const syncSavedSalary = (saved: EmployeeSalaryHistory, isCurrent: boolean) => {
@@ -528,6 +532,7 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
     form.setValue('socialInsuranceSalary', String(saved.socialInsuranceSalary));
     form.setValue('employeeType', saved.employeeType);
     form.setValue('salaryType', saved.salaryType);
+    form.setValue('payFrequency', saved.payFrequency);
     form.setValue('monthlyExpectedWorkDays', String(saved.monthlyExpectedWorkDays));
     setSalaryBaseline({
       baseSalary: Number(saved.baseSalary),
@@ -536,6 +541,7 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
       fullSalaryRegardlessAttendance: saved.fullSalaryRegardlessAttendance,
       employeeType: saved.employeeType,
       salaryType: saved.salaryType,
+      payFrequency: saved.payFrequency,
       monthlyExpectedWorkDays: Number(saved.monthlyExpectedWorkDays),
     });
   };
@@ -547,6 +553,7 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
         <label className="space-y-2 text-xs font-semibold">Утас<input className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('phone')} data-testid="input-employee-phone" /></label>
         <label className="space-y-2 text-xs font-semibold">Ажилд орсон огноо<input type="date" className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('joinedAt', { required: true })} data-testid="input-employee-joined-at" /></label>
         <label className="space-y-2 text-xs font-semibold">Ажилтны төрөл<select className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('employeeType')} data-testid="select-employee-type"><option value="office">Оффис ажилтан</option><option value="shift">Ээлжийн ажилтан</option></select></label>
+        <label className="space-y-2 text-xs font-semibold">Цалин авах давтамж<select className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('payFrequency')} data-testid="select-employee-pay-frequency"><option value="once">Сард 1 удаа · зөвхөн сүүл цалин</option><option value="twice">Сард 2 удаа · урьдчилгаа, сүүл цалин</option></select></label>
         {employeeType === 'shift' && <label className="space-y-2 text-xs font-semibold">Цалингийн төрөл<select className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('salaryType')} data-testid="select-employee-salary-type"><option value="daily">Өдрийн цалин</option><option value="monthly">Сарын цалин</option></select></label>}
         <label className="space-y-2 text-xs font-semibold">{isEdit ? 'Шинэ цалин' : (employeeType === 'office' || salaryType === 'monthly') ? 'Сарын цалингийн хэмжээ' : 'Өдрийн цалингийн хэмжээ'}<input type="number" min="0" className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('baseSalary', { required: true, min: 0 })} data-testid="input-employee-salary" />{isEdit && <span className="text-[11px] font-normal text-muted-foreground">Одоогийн цалин: {money(employee?.baseSalary)}</span>}</label>
         <label className="space-y-2 text-xs font-semibold">НДШ тооцох цалин<input type="number" min="0" disabled={payrollTaxExempt} className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none disabled:cursor-not-allowed disabled:opacity-50 focus:border-primary" {...form.register('socialInsuranceSalary', { required: !payrollTaxExempt, min: 0 })} data-testid="input-employee-social-insurance-salary" /></label>

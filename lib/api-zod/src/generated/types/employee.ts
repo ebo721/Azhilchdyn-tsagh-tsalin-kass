@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmployeeEmployeeType } from './employeeEmployeeType';
+import type { EmployeePayFrequency } from './employeePayFrequency';
 import type { EmployeeSalaryType } from './employeeSalaryType';
 import type { EmployeeStatus } from './employeeStatus';
 
@@ -20,6 +21,7 @@ export interface Employee {
   socialInsuranceSalary: number;
   payrollTaxExempt: boolean;
   fullSalaryRegardlessAttendance: boolean;
+  payFrequency: EmployeePayFrequency;
   monthlyExpectedWorkDays: number;
   status: EmployeeStatus;
   joinedAt: string;

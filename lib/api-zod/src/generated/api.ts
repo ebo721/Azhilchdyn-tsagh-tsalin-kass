@@ -193,6 +193,7 @@ export const ListEmployeesResponseItem = zod.object({
   "socialInsuranceSalary": zod.number(),
   "payrollTaxExempt": zod.boolean(),
   "fullSalaryRegardlessAttendance": zod.boolean(),
+  "payFrequency": zod.enum(['once', 'twice']),
   "monthlyExpectedWorkDays": zod.number().int(),
   "status": zod.enum(['active', 'inactive']),
   "joinedAt": zod.string(),
@@ -225,6 +226,7 @@ export const CreateEmployeeBody = zod.object({
   "socialInsuranceSalary": zod.number().min(createEmployeeBodySocialInsuranceSalaryMin),
   "payrollTaxExempt": zod.boolean(),
   "fullSalaryRegardlessAttendance": zod.boolean().optional(),
+  "payFrequency": zod.enum(['once', 'twice']),
   "monthlyExpectedWorkDays": zod.number().int().min(createEmployeeBodyMonthlyExpectedWorkDaysMin).max(createEmployeeBodyMonthlyExpectedWorkDaysMax),
   "joinedAt": zod.coerce.date()
 })
@@ -240,6 +242,7 @@ export const CreateEmployeeResponse = zod.object({
   "socialInsuranceSalary": zod.number(),
   "payrollTaxExempt": zod.boolean(),
   "fullSalaryRegardlessAttendance": zod.boolean(),
+  "payFrequency": zod.enum(['once', 'twice']),
   "monthlyExpectedWorkDays": zod.number().int(),
   "status": zod.enum(['active', 'inactive']),
   "joinedAt": zod.string(),
@@ -276,6 +279,7 @@ export const UpdateEmployeeBody = zod.object({
   "socialInsuranceSalary": zod.number().min(updateEmployeeBodySocialInsuranceSalaryMin).optional(),
   "payrollTaxExempt": zod.boolean().optional(),
   "fullSalaryRegardlessAttendance": zod.boolean().optional(),
+  "payFrequency": zod.enum(['once', 'twice']).optional(),
   "status": zod.enum(['active', 'inactive']).optional(),
   "joinedAt": zod.coerce.date().optional(),
   "inactiveAt": zod.string().nullish(),
@@ -293,6 +297,7 @@ export const UpdateEmployeeResponse = zod.object({
   "socialInsuranceSalary": zod.number(),
   "payrollTaxExempt": zod.boolean(),
   "fullSalaryRegardlessAttendance": zod.boolean(),
+  "payFrequency": zod.enum(['once', 'twice']),
   "monthlyExpectedWorkDays": zod.number().int(),
   "status": zod.enum(['active', 'inactive']),
   "joinedAt": zod.string(),
@@ -328,6 +333,7 @@ export const ListEmployeeSalaryHistoryResponseItem = zod.object({
   "socialInsuranceSalary": zod.number(),
   "payrollTaxExempt": zod.boolean(),
   "fullSalaryRegardlessAttendance": zod.boolean(),
+  "payFrequency": zod.enum(['once', 'twice']),
   "createdAt": zod.string()
 })
 export const ListEmployeeSalaryHistoryResponse = zod.array(ListEmployeeSalaryHistoryResponseItem)
@@ -355,6 +361,7 @@ export const UpdateEmployeeSalaryHistoryBody = zod.object({
   "baseSalary": zod.number().min(updateEmployeeSalaryHistoryBodyBaseSalaryMin),
   "socialInsuranceSalary": zod.number().min(updateEmployeeSalaryHistoryBodySocialInsuranceSalaryMin),
   "fullSalaryRegardlessAttendance": zod.boolean().optional(),
+  "payFrequency": zod.enum(['once', 'twice']).optional(),
   "salaryType": zod.enum(['daily', 'monthly']).optional(),
   "monthlyExpectedWorkDays": zod.number().int().min(updateEmployeeSalaryHistoryBodyMonthlyExpectedWorkDaysMin).max(updateEmployeeSalaryHistoryBodyMonthlyExpectedWorkDaysMax).optional()
 })
@@ -370,6 +377,7 @@ export const UpdateEmployeeSalaryHistoryResponse = zod.object({
   "socialInsuranceSalary": zod.number(),
   "payrollTaxExempt": zod.boolean(),
   "fullSalaryRegardlessAttendance": zod.boolean(),
+  "payFrequency": zod.enum(['once', 'twice']),
   "createdAt": zod.string()
 })
 

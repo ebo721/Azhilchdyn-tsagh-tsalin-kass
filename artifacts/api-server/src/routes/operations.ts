@@ -613,6 +613,7 @@ function salaryAt(employee: typeof employeesTable.$inferSelect, history: SalaryH
       socialInsuranceSalary: Number(employee.socialInsuranceSalary),
       payrollTaxExempt: employee.payrollTaxExempt,
       fullSalaryRegardlessAttendance: employee.fullSalaryRegardlessAttendance,
+      payFrequency: employee.payFrequency,
     };
 }
 
@@ -849,7 +850,8 @@ async function getPayrollAdvanceSummary(month: string) {
   ]);
   const employees = allEmployees.filter((employee) =>
     employee.joinedAt <= period.advancePeriodEnd
-    && (!employee.inactiveAt || employee.inactiveAt >= period.periodStart),
+    && (!employee.inactiveAt || employee.inactiveAt >= period.periodStart)
+    && salaryAt(employee, salaryHistory, period.advancePeriodEnd).payFrequency === "twice",
   );
   const firstHalfRecords = records.filter((record) =>
     String(record.date) >= period.periodStart && String(record.date) <= period.advancePeriodEnd
@@ -1029,6 +1031,7 @@ router.post("/employees", async (req, res, next) => {
         socialInsuranceSalary: input.socialInsuranceSalary,
         payrollTaxExempt: input.payrollTaxExempt,
         fullSalaryRegardlessAttendance: input.fullSalaryRegardlessAttendance ?? false,
+        payFrequency: input.payFrequency,
       });
       return created;
     });
@@ -1091,7 +1094,8 @@ router.patch("/employees/:id", async (req, res, next) => {
       || (input.socialInsuranceSalary !== undefined
         && Number(input.socialInsuranceSalary) !== (current.payrollTaxExempt ? 0 : Number(current.socialInsuranceSalary)))
       || (input.payrollTaxExempt !== undefined && input.payrollTaxExempt !== current.payrollTaxExempt)
-      || (input.fullSalaryRegardlessAttendance !== undefined && input.fullSalaryRegardlessAttendance !== current.fullSalaryRegardlessAttendance);
+      || (input.fullSalaryRegardlessAttendance !== undefined && input.fullSalaryRegardlessAttendance !== current.fullSalaryRegardlessAttendance)
+      || (input.payFrequency !== undefined && input.payFrequency !== current.payFrequency);
     const correctingInitialEmployment = joinedAtChanged
       && baselineSalary
       && String(baselineSalary.effectiveFrom) === String(current.joinedAt)
@@ -1152,6 +1156,7 @@ router.patch("/employees/:id", async (req, res, next) => {
             socialInsuranceSalary: employeeInput.socialInsuranceSalary ?? Number(current.socialInsuranceSalary),
             payrollTaxExempt: employeeInput.payrollTaxExempt ?? current.payrollTaxExempt,
             fullSalaryRegardlessAttendance: employeeInput.fullSalaryRegardlessAttendance ?? current.fullSalaryRegardlessAttendance,
+            payFrequency: employeeInput.payFrequency ?? current.payFrequency,
           }).where(eq(employeeSalaryHistoryTable.id, baselineSalary.id));
         } else {
           await tx.insert(employeeSalaryHistoryTable).values({
@@ -1164,6 +1169,7 @@ router.patch("/employees/:id", async (req, res, next) => {
             socialInsuranceSalary: employeeInput.socialInsuranceSalary ?? Number(current.socialInsuranceSalary),
             payrollTaxExempt: employeeInput.payrollTaxExempt ?? current.payrollTaxExempt,
             fullSalaryRegardlessAttendance: employeeInput.fullSalaryRegardlessAttendance ?? current.fullSalaryRegardlessAttendance,
+            payFrequency: employeeInput.payFrequency ?? current.payFrequency,
           });
         }
       } else if (joinedAtChanged && baselineSalary) {
@@ -1272,6 +1278,9 @@ router.patch("/employees/:id/salary-history/:historyId", async (req, res, next) 
         ...(input.fullSalaryRegardlessAttendance === undefined ? {} : {
           fullSalaryRegardlessAttendance: input.fullSalaryRegardlessAttendance,
         }),
+        ...(input.payFrequency === undefined ? {} : {
+          payFrequency: input.payFrequency,
+        }),
       }).where(eq(employeeSalaryHistoryTable.id, historyId)).returning();
       if (index === history.length - 1) {
         await tx.update(employeesTable).set({
@@ -1285,6 +1294,9 @@ router.patch("/employees/:id/salary-history/:historyId", async (req, res, next) 
           }),
           ...(input.fullSalaryRegardlessAttendance === undefined ? {} : {
             fullSalaryRegardlessAttendance: input.fullSalaryRegardlessAttendance,
+          }),
+          ...(input.payFrequency === undefined ? {} : {
+            payFrequency: input.payFrequency,
           }),
         }).where(eq(employeesTable.id, id));
       }
@@ -1345,6 +1357,7 @@ router.delete("/employees/:id/salary-history/:historyId", async (req, res, next)
           socialInsuranceSalary: previous.socialInsuranceSalary,
           payrollTaxExempt: previous.payrollTaxExempt,
           fullSalaryRegardlessAttendance: previous.fullSalaryRegardlessAttendance,
+          payFrequency: previous.payFrequency,
         }).where(eq(employeesTable.id, id));
       }
     });

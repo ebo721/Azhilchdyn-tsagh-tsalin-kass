@@ -24,6 +24,7 @@ export const employeesTable = pgTable("employees", {
   socialInsuranceSalary: numeric("social_insurance_salary", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
   payrollTaxExempt: boolean("payroll_tax_exempt").notNull().default(false),
   fullSalaryRegardlessAttendance: boolean("full_salary_regardless_attendance").notNull().default(false),
+  payFrequency: text("pay_frequency").notNull().default("twice"),
   monthlyExpectedWorkDays: integer("monthly_expected_work_days").notNull().default(0),
   status: text("status").notNull().default("active"),
   joinedAt: date("joined_at", { mode: "string" }).notNull().defaultNow(),
@@ -41,6 +42,7 @@ export const employeeSalaryHistoryTable = pgTable("employee_salary_history", {
   socialInsuranceSalary: numeric("social_insurance_salary", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
   payrollTaxExempt: boolean("payroll_tax_exempt").notNull().default(false),
   fullSalaryRegardlessAttendance: boolean("full_salary_regardless_attendance").notNull().default(false),
+  payFrequency: text("pay_frequency").notNull().default("twice"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("employee_salary_history_employee_effective_idx").on(table.employeeId, table.effectiveFrom),

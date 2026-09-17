@@ -147,6 +147,14 @@ export const EmployeeEmployeeType = {
   office: 'office',
 } as const;
 
+export type EmployeePayFrequency = typeof EmployeePayFrequency[keyof typeof EmployeePayFrequency];
+
+
+export const EmployeePayFrequency = {
+  once: 'once',
+  twice: 'twice',
+} as const;
+
 export type EmployeeStatus = typeof EmployeeStatus[keyof typeof EmployeeStatus];
 
 
@@ -166,6 +174,7 @@ export interface Employee {
   socialInsuranceSalary: number;
   payrollTaxExempt: boolean;
   fullSalaryRegardlessAttendance: boolean;
+  payFrequency: EmployeePayFrequency;
   monthlyExpectedWorkDays: number;
   status: EmployeeStatus;
   joinedAt: string;
@@ -189,6 +198,14 @@ export const EmployeeSalaryHistorySalaryType = {
   monthly: 'monthly',
 } as const;
 
+export type EmployeeSalaryHistoryPayFrequency = typeof EmployeeSalaryHistoryPayFrequency[keyof typeof EmployeeSalaryHistoryPayFrequency];
+
+
+export const EmployeeSalaryHistoryPayFrequency = {
+  once: 'once',
+  twice: 'twice',
+} as const;
+
 export interface EmployeeSalaryHistory {
   id: number;
   employeeId: number;
@@ -200,8 +217,17 @@ export interface EmployeeSalaryHistory {
   socialInsuranceSalary: number;
   payrollTaxExempt: boolean;
   fullSalaryRegardlessAttendance: boolean;
+  payFrequency: EmployeeSalaryHistoryPayFrequency;
   createdAt: string;
 }
+
+export type EmployeeSalaryHistoryUpdatePayFrequency = typeof EmployeeSalaryHistoryUpdatePayFrequency[keyof typeof EmployeeSalaryHistoryUpdatePayFrequency];
+
+
+export const EmployeeSalaryHistoryUpdatePayFrequency = {
+  once: 'once',
+  twice: 'twice',
+} as const;
 
 export type EmployeeSalaryHistoryUpdateSalaryType = typeof EmployeeSalaryHistoryUpdateSalaryType[keyof typeof EmployeeSalaryHistoryUpdateSalaryType];
 
@@ -218,6 +244,7 @@ export interface EmployeeSalaryHistoryUpdate {
   /** @minimum 0 */
   socialInsuranceSalary: number;
   fullSalaryRegardlessAttendance?: boolean;
+  payFrequency?: EmployeeSalaryHistoryUpdatePayFrequency;
   salaryType?: EmployeeSalaryHistoryUpdateSalaryType;
   /**
      * @minimum 0
@@ -242,6 +269,14 @@ export const EmployeeInputSalaryType = {
   monthly: 'monthly',
 } as const;
 
+export type EmployeeInputPayFrequency = typeof EmployeeInputPayFrequency[keyof typeof EmployeeInputPayFrequency];
+
+
+export const EmployeeInputPayFrequency = {
+  once: 'once',
+  twice: 'twice',
+} as const;
+
 export interface EmployeeInput {
   /** @minLength 1 */
   name: string;
@@ -256,6 +291,7 @@ export interface EmployeeInput {
   socialInsuranceSalary: number;
   payrollTaxExempt: boolean;
   fullSalaryRegardlessAttendance?: boolean;
+  payFrequency: EmployeeInputPayFrequency;
   /**
      * @minimum 0
      * @maximum 31
@@ -278,6 +314,14 @@ export type EmployeeUpdateSalaryType = typeof EmployeeUpdateSalaryType[keyof typ
 export const EmployeeUpdateSalaryType = {
   daily: 'daily',
   monthly: 'monthly',
+} as const;
+
+export type EmployeeUpdatePayFrequency = typeof EmployeeUpdatePayFrequency[keyof typeof EmployeeUpdatePayFrequency];
+
+
+export const EmployeeUpdatePayFrequency = {
+  once: 'once',
+  twice: 'twice',
 } as const;
 
 export type EmployeeUpdateStatus = typeof EmployeeUpdateStatus[keyof typeof EmployeeUpdateStatus];
@@ -307,6 +351,7 @@ export interface EmployeeUpdate {
   socialInsuranceSalary?: number;
   payrollTaxExempt?: boolean;
   fullSalaryRegardlessAttendance?: boolean;
+  payFrequency?: EmployeeUpdatePayFrequency;
   status?: EmployeeUpdateStatus;
   joinedAt?: string;
   /** @nullable */

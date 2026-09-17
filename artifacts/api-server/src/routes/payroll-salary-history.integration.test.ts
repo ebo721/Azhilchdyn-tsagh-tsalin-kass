@@ -41,6 +41,7 @@ describe("effective-dated payroll salary", () => {
       joinedAt: "2099-01-08",
       inactiveAt: "2099-01-23",
     }).returning({ id: employeesTable.id });
+    assert.ok(employee);
     employeeId = employee.id;
     await db.insert(employeeSalaryHistoryTable).values([
       {
@@ -167,6 +168,129 @@ describe("effective-dated payroll salary", () => {
       assert.equal(history.length, 1);
       assert.equal(history[0].effectiveFrom, "2099-08-15");
       assert.equal(Number(history[0].baseSalary), 2_700_000);
+    } finally {
+      await db.delete(employeesTable).where(eq(employeesTable.id, employee.id));
+    }
+  });
+
+  it("includes only twice-monthly employees in payroll advance", async () => {
+    const month = "2098-12";
+    const created = await db.insert(employeesTable).values([
+      {
+        name: `Once monthly ${process.pid}`,
+        role: "Test",
+        employeeType: "shift",
+        salaryType: "daily",
+        payFrequency: "once",
+        baseSalary: 100_000,
+        socialInsuranceSalary: 0,
+        payrollTaxExempt: true,
+        joinedAt: `${month}-01`,
+      },
+      {
+        name: `Twice monthly ${process.pid}`,
+        role: "Test",
+        employeeType: "shift",
+        salaryType: "daily",
+        payFrequency: "twice",
+        baseSalary: 100_000,
+        socialInsuranceSalary: 0,
+        payrollTaxExempt: true,
+        joinedAt: `${month}-01`,
+      },
+    ]).returning({ id: employeesTable.id, payFrequency: employeesTable.payFrequency });
+    await db.insert(employeeSalaryHistoryTable).values(created.map((employee) => ({
+      employeeId: employee.id,
+      effectiveFrom: `${month}-01`,
+      employeeType: "shift",
+      salaryType: "daily",
+      payFrequency: employee.payFrequency,
+      baseSalary: 100_000,
+      socialInsuranceSalary: 0,
+      payrollTaxExempt: true,
+    })));
+    await db.insert(attendanceTable).values(created.map((employee) => ({
+      employeeId: employee.id,
+      date: `${month}-10`,
+      clockIn: "09:00",
+      clockOut: "18:00",
+      hours: 8,
+      status: "present",
+    })));
+    try {
+      const response = await fetch(`${baseUrl}/api/payroll-advance?month=${month}`, {
+        headers: { cookie: adminCookie },
+      });
+      assert.equal(response.status, 200);
+      const result = await response.json() as { lines: Array<{ employeeId: number; advanceAmount: number }> };
+      const once = created.find((employee) => employee.payFrequency === "once")!;
+      const twice = created.find((employee) => employee.payFrequency === "twice")!;
+      assert.equal(result.lines.some((line) => line.employeeId === once.id), false);
+      assert.equal(result.lines.find((line) => line.employeeId === twice.id)?.advanceAmount, 100_000);
+
+      const payrollResponse = await fetch(`${baseUrl}/api/payroll?month=${month}`, {
+        headers: { cookie: adminCookie },
+      });
+      assert.equal(payrollResponse.status, 200);
+      const payroll = await payrollResponse.json() as {
+        lines: Array<{ employeeId: number; gross: number; advanceAmount: number; payable: number }>;
+      };
+      const onceFinal = payroll.lines.find((line) => line.employeeId === once.id);
+      assert.ok(onceFinal);
+      assert.equal(onceFinal.gross, 100_000);
+      assert.equal(onceFinal.advanceAmount, 0);
+      assert.equal(onceFinal.payable, 100_000);
+    } finally {
+      for (const employee of created) await db.delete(employeesTable).where(eq(employeesTable.id, employee.id));
+    }
+  });
+
+  it("applies pay frequency from its effective salary-history date", async () => {
+    const [employee] = await db.insert(employeesTable).values({
+      name: `Frequency history ${process.pid}`,
+      role: "Test",
+      employeeType: "shift",
+      salaryType: "daily",
+      payFrequency: "twice",
+      baseSalary: 100_000,
+      socialInsuranceSalary: 0,
+      payrollTaxExempt: true,
+      joinedAt: "2098-10-01",
+    }).returning({ id: employeesTable.id });
+    assert.ok(employee);
+    await db.insert(employeeSalaryHistoryTable).values([
+      {
+        employeeId: employee.id,
+        effectiveFrom: "2098-10-01",
+        employeeType: "shift",
+        salaryType: "daily",
+        payFrequency: "once",
+        baseSalary: 100_000,
+        socialInsuranceSalary: 0,
+        payrollTaxExempt: true,
+      },
+      {
+        employeeId: employee.id,
+        effectiveFrom: "2098-11-01",
+        employeeType: "shift",
+        salaryType: "daily",
+        payFrequency: "twice",
+        baseSalary: 100_000,
+        socialInsuranceSalary: 0,
+        payrollTaxExempt: true,
+      },
+    ]);
+    try {
+      const [octoberResponse, novemberResponse] = await Promise.all([
+        fetch(`${baseUrl}/api/payroll-advance?month=2098-10`, { headers: { cookie: adminCookie } }),
+        fetch(`${baseUrl}/api/payroll-advance?month=2098-11`, { headers: { cookie: adminCookie } }),
+      ]);
+      assert.equal(octoberResponse.status, 200);
+      assert.equal(novemberResponse.status, 200);
+      const october = await octoberResponse.json() as { lines: Array<{ employeeId: number }> };
+      const november = await novemberResponse.json() as { lines: Array<{ employeeId: number }> };
+      assert.equal(october.lines.some((line) => line.employeeId === employee.id), false);
+      assert.equal(november.lines.some((line) => line.employeeId === employee.id), true);
     } finally {
       await db.delete(employeesTable).where(eq(employeesTable.id, employee.id));
     }

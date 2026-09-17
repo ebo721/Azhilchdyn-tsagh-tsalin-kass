@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmployeeUpdateEmployeeType } from './employeeUpdateEmployeeType';
+import type { EmployeeUpdatePayFrequency } from './employeeUpdatePayFrequency';
 import type { EmployeeUpdateSalaryType } from './employeeUpdateSalaryType';
 import type { EmployeeUpdateStatus } from './employeeUpdateStatus';
 
@@ -28,6 +29,7 @@ export interface EmployeeUpdate {
   socialInsuranceSalary?: number;
   payrollTaxExempt?: boolean;
   fullSalaryRegardlessAttendance?: boolean;
+  payFrequency?: EmployeeUpdatePayFrequency;
   status?: EmployeeUpdateStatus;
   joinedAt?: Date;
   /** @nullable */

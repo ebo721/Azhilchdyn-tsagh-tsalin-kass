@@ -1519,7 +1519,7 @@ components:
         createdAt: { type: string }
     Employee:
       type: object
-      required: [id, name, role, phone, salaryType, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, fullSalaryRegardlessAttendance, monthlyExpectedWorkDays, status, joinedAt, inactiveAt]
+      required: [id, name, role, phone, salaryType, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, fullSalaryRegardlessAttendance, payFrequency, monthlyExpectedWorkDays, status, joinedAt, inactiveAt]
       properties:
         id: { type: integer }
         name: { type: string }
@@ -1531,13 +1531,14 @@ components:
         socialInsuranceSalary: { type: number }
         payrollTaxExempt: { type: boolean }
         fullSalaryRegardlessAttendance: { type: boolean }
+        payFrequency: { type: string, enum: [once, twice] }
         monthlyExpectedWorkDays: { type: integer }
         status: { type: string, enum: [active, inactive] }
         joinedAt: { type: string }
         inactiveAt: { type: [string, "null"] }
     EmployeeSalaryHistory:
       type: object
-      required: [id, employeeId, effectiveFrom, employeeType, salaryType, monthlyExpectedWorkDays, baseSalary, socialInsuranceSalary, payrollTaxExempt, fullSalaryRegardlessAttendance, createdAt]
+      required: [id, employeeId, effectiveFrom, employeeType, salaryType, monthlyExpectedWorkDays, baseSalary, socialInsuranceSalary, payrollTaxExempt, fullSalaryRegardlessAttendance, payFrequency, createdAt]
       properties:
         id: { type: integer }
         employeeId: { type: integer }
@@ -1549,6 +1550,7 @@ components:
         socialInsuranceSalary: { type: number }
         payrollTaxExempt: { type: boolean }
         fullSalaryRegardlessAttendance: { type: boolean }
+        payFrequency: { type: string, enum: [once, twice] }
         createdAt: { type: string }
     EmployeeSalaryHistoryUpdate:
       type: object
@@ -1558,11 +1560,12 @@ components:
         baseSalary: { type: number, minimum: 0 }
         socialInsuranceSalary: { type: number, minimum: 0 }
         fullSalaryRegardlessAttendance: { type: boolean }
+        payFrequency: { type: string, enum: [once, twice] }
         salaryType: { type: string, enum: [daily, monthly] }
         monthlyExpectedWorkDays: { type: integer, minimum: 0, maximum: 31 }
     EmployeeInput:
       type: object
-      required: [name, role, phone, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, monthlyExpectedWorkDays, joinedAt]
+      required: [name, role, phone, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, payFrequency, monthlyExpectedWorkDays, joinedAt]
       properties:
         name: { type: string, minLength: 1 }
         role: { type: string, minLength: 1 }
@@ -1573,6 +1576,7 @@ components:
         socialInsuranceSalary: { type: number, minimum: 0 }
         payrollTaxExempt: { type: boolean }
         fullSalaryRegardlessAttendance: { type: boolean }
+        payFrequency: { type: string, enum: [once, twice] }
         monthlyExpectedWorkDays: { type: integer, minimum: 0, maximum: 31 }
         joinedAt: { type: string, format: date }
     EmployeeUpdate:
@@ -1588,6 +1592,7 @@ components:
         socialInsuranceSalary: { type: number, minimum: 0 }
         payrollTaxExempt: { type: boolean }
         fullSalaryRegardlessAttendance: { type: boolean }
+        payFrequency: { type: string, enum: [once, twice] }
         status: { type: string, enum: [active, inactive] }
         joinedAt: { type: string, format: date }
         inactiveAt: { type: [string, "null"] }

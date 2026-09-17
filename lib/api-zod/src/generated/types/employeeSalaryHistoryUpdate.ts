@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { EmployeeSalaryHistoryUpdatePayFrequency } from './employeeSalaryHistoryUpdatePayFrequency';
 import type { EmployeeSalaryHistoryUpdateSalaryType } from './employeeSalaryHistoryUpdateSalaryType';
 
 export interface EmployeeSalaryHistoryUpdate {
@@ -14,6 +15,7 @@ export interface EmployeeSalaryHistoryUpdate {
   /** @minimum 0 */
   socialInsuranceSalary: number;
   fullSalaryRegardlessAttendance?: boolean;
+  payFrequency?: EmployeeSalaryHistoryUpdatePayFrequency;
   salaryType?: EmployeeSalaryHistoryUpdateSalaryType;
   /**
      * @minimum 0

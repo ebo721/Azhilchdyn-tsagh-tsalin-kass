@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EmployeeSalaryHistoryEmployeeType } from './employeeSalaryHistoryEmployeeType';
+import type { EmployeeSalaryHistoryPayFrequency } from './employeeSalaryHistoryPayFrequency';
 import type { EmployeeSalaryHistorySalaryType } from './employeeSalaryHistorySalaryType';
 
 export interface EmployeeSalaryHistory {
@@ -19,5 +20,6 @@ export interface EmployeeSalaryHistory {
   socialInsuranceSalary: number;
   payrollTaxExempt: boolean;
   fullSalaryRegardlessAttendance: boolean;
+  payFrequency: EmployeeSalaryHistoryPayFrequency;
   createdAt: string;
 }
