@@ -7,28 +7,43 @@ import express from "express";
 import { db, chartOfAccountsTable, journalEntriesTable, usersTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 import { createStaffSession, hrCookie } from "../lib/hr-session.js";
+import requireStaffAuth from "../middlewares/require-staff-auth.js";
 import journalRouter from "./journal.js";
 
 describe("journal routes", () => {
   let server: Server;
   let baseUrl: string;
   let cookie: string;
+  let viewerCookie: string;
+  let adminCookie: string;
   let debitAccount: number;
   let creditAccount: number;
   let reportDebitAccount: number;
   let reportCreditAccount: number;
   const entryIds: number[] = [];
-  let userId: number;
+  const userIds: number[] = [];
 
   before(async () => {
     process.env.SESSION_SECRET = "journal-route-test-secret";
     const suffix = `${process.pid}-${randomUUID()}`;
-    const [user] = await db.insert(usersTable).values({
-      username: `journal-route-${suffix}`, normalizedUsername: `journal-route-${suffix}`,
-      role: "accountant", passwordHash: "not-used-by-session-tests",
-    }).returning({ id: usersTable.id, username: usersTable.username, role: usersTable.role, tokenVersion: usersTable.tokenVersion });
-    userId = user.id;
-    cookie = `${hrCookie.name}=${createStaffSession(user)}`;
+    const users = await db.insert(usersTable).values([
+      {
+        username: `journal-route-${suffix}`, normalizedUsername: `journal-route-${suffix}`,
+        role: "accountant", passwordHash: "not-used-by-session-tests",
+      },
+      {
+        username: `journal-viewer-${suffix}`, normalizedUsername: `journal-viewer-${suffix}`,
+        role: "viewer", passwordHash: "not-used-by-session-tests",
+      },
+      {
+        username: `journal-admin-${suffix}`, normalizedUsername: `journal-admin-${suffix}`,
+        role: "admin", passwordHash: "not-used-by-session-tests",
+      },
+    ]).returning({ id: usersTable.id, username: usersTable.username, role: usersTable.role, tokenVersion: usersTable.tokenVersion });
+    userIds.push(...users.map((user) => user.id));
+    cookie = `${hrCookie.name}=${createStaffSession(users[0])}`;
+    viewerCookie = `${hrCookie.name}=${createStaffSession(users[1])}`;
+    adminCookie = `${hrCookie.name}=${createStaffSession(users[2])}`;
     const accounts = await db.insert(chartOfAccountsTable).values([
       { code: `journal-test-debit-${suffix}`, name: "Journal test debit", type: "asset", normalBalance: "debit" },
       { code: `journal-test-credit-${suffix}`, name: "Journal test credit", type: "liability", normalBalance: "credit" },
@@ -41,7 +56,7 @@ describe("journal routes", () => {
     reportCreditAccount = accounts[3].id;
     const testApp = express();
     testApp.use(express.json());
-    testApp.use("/api", journalRouter);
+    testApp.use("/api", requireStaffAuth, journalRouter);
     server = testApp.listen(0);
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   });
@@ -50,12 +65,12 @@ describe("journal routes", () => {
     server.close();
     if (entryIds.length) await db.delete(journalEntriesTable).where(inArray(journalEntriesTable.id, entryIds));
     await db.delete(chartOfAccountsTable).where(inArray(chartOfAccountsTable.id, [debitAccount, creditAccount, reportDebitAccount, reportCreditAccount]));
-    await db.delete(usersTable).where(eq(usersTable.id, userId));
+    await db.delete(usersTable).where(inArray(usersTable.id, userIds));
   });
 
-  async function request(path: string, init?: RequestInit) {
+  async function request(path: string, init?: RequestInit, requestCookie = cookie) {
     return fetch(`${baseUrl}/api${path}`, {
-      ...init, headers: { cookie, "content-type": "application/json", ...init?.headers },
+      ...init, headers: { cookie: requestCookie, "content-type": "application/json", ...init?.headers },
     });
   }
   function lines(debit: number, credit: number) {
@@ -95,7 +110,7 @@ describe("journal routes", () => {
     const value = await response.json() as { sourceType: string; status: string; lines: unknown[]; createdBy: number };
     assert.equal(value.sourceType, "manual");
     assert.equal(value.status, "posted");
-    assert.equal(value.createdBy, userId);
+    assert.equal(value.createdBy, userIds[0]);
     assert.equal(value.lines.length, 2);
   });
 
@@ -136,7 +151,7 @@ describe("journal routes", () => {
   });
 
   it("does not expose DELETE", async () => {
-    const response = await request("/journal/entries/1", { method: "DELETE" });
+    const response = await request("/journal/entries/1", { method: "DELETE" }, adminCookie);
     assert.equal(response.status, 404);
   });
 
@@ -181,5 +196,16 @@ describe("journal routes", () => {
   it("returns 404 for a missing ledger account", async () => {
     const response = await request("/journal/accounts/2147483647/ledger");
     assert.equal(response.status, 404);
+  });
+
+  it("allows viewer reads but rejects viewer writes and prefix collisions", async () => {
+    assert.equal((await request("/journal/entries", undefined, viewerCookie)).status, 200);
+    assert.equal((await request("/journal/trial-balance", undefined, viewerCookie)).status, 200);
+    assert.equal((await request("/journal/entries", {
+      method: "POST",
+      body: JSON.stringify({ date: "2025-01-15", description: "Forbidden", lines: lines(1, 1) }),
+    }, viewerCookie)).status, 403);
+    assert.equal((await request("/journalist", undefined, viewerCookie)).status, 403);
+    assert.equal((await request("/journalist")).status, 403);
   });
 });
