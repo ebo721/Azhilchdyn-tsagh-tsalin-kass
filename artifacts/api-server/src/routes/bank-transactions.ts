@@ -1,10 +1,6 @@
 import { Router, raw, type IRouter } from "express";
 import { createHash } from "node:crypto";
-import { execFile as execFileCallback } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { promisify } from "node:util";
+import { inflateRawSync } from "node:zlib";
 import {
   DeleteBankTransactionParams,
   CreateBankAccountBody,
@@ -48,7 +44,6 @@ import { loadBankRecognitionContext, recognizeBankTransaction } from "../lib/ban
 import { linkBankPurchase, linkBankExpense } from "../lib/bank-document-linking.js";
 
 const router: IRouter = Router();
-const execFile = promisify(execFileCallback);
 const maxUploadBytes = 10 * 1024 * 1024;
 const maxXmlBytes = 8 * 1024 * 1024;
 const maxRows = 20_000;
@@ -126,6 +121,63 @@ export function findKapitronHeaderRow(rows: Map<number, string>[]) {
     [...cells.values()].some((value) => value.trim() === name)));
 }
 
+function readZipEntries(buffer: Buffer) {
+  const endRecordStart = Math.max(0, buffer.length - 65_557);
+  let endRecordOffset = -1;
+  for (let offset = buffer.length - 22; offset >= endRecordStart; offset -= 1) {
+    if (buffer.readUInt32LE(offset) === 0x06054b50) {
+      endRecordOffset = offset;
+      break;
+    }
+  }
+  if (endRecordOffset < 0 || endRecordOffset + 22 > buffer.length) throw new Error("Kapitron XLSX бүтэц буруу байна");
+
+  const entryCount = buffer.readUInt16LE(endRecordOffset + 10);
+  const directorySize = buffer.readUInt32LE(endRecordOffset + 12);
+  const directoryOffset = buffer.readUInt32LE(endRecordOffset + 16);
+  if (entryCount > 1_000 || directorySize > 1024 * 1024 || directoryOffset + directorySize > buffer.length) {
+    throw new Error("Kapitron XLSX бүтэц буруу байна");
+  }
+
+  const entries = new Map<string, { compression: number; compressedSize: number; size: number; offset: number }>();
+  let offset = directoryOffset;
+  for (let index = 0; index < entryCount; index += 1) {
+    if (offset + 46 > buffer.length || buffer.readUInt32LE(offset) !== 0x02014b50) throw new Error("Kapitron XLSX бүтэц буруу байна");
+    const flags = buffer.readUInt16LE(offset + 8);
+    const compression = buffer.readUInt16LE(offset + 10);
+    const compressedSize = buffer.readUInt32LE(offset + 20);
+    const size = buffer.readUInt32LE(offset + 24);
+    const nameLength = buffer.readUInt16LE(offset + 28);
+    const extraLength = buffer.readUInt16LE(offset + 30);
+    const commentLength = buffer.readUInt16LE(offset + 32);
+    const nextOffset = offset + 46 + nameLength + extraLength + commentLength;
+    if ((flags & 1) !== 0 || nextOffset > buffer.length) throw new Error("Kapitron XLSX бүтэц буруу байна");
+    const name = buffer.subarray(offset + 46, offset + 46 + nameLength).toString("utf8");
+    entries.set(name, { compression, compressedSize, size, offset: buffer.readUInt32LE(offset + 42) });
+    offset = nextOffset;
+  }
+
+  const read = (name: string) => {
+    const entry = entries.get(name);
+    if (!entry || entry.size > maxXmlBytes || entry.offset + 30 > buffer.length || buffer.readUInt32LE(entry.offset) !== 0x04034b50) {
+      throw new Error("Kapitron XLSX бүтэц буруу байна");
+    }
+    const nameLength = buffer.readUInt16LE(entry.offset + 26);
+    const extraLength = buffer.readUInt16LE(entry.offset + 28);
+    const dataOffset = entry.offset + 30 + nameLength + extraLength;
+    if (dataOffset + entry.compressedSize > buffer.length) throw new Error("Kapitron XLSX бүтэц буруу байна");
+    const compressed = buffer.subarray(dataOffset, dataOffset + entry.compressedSize);
+    const value = entry.compression === 0
+      ? compressed
+      : entry.compression === 8
+        ? inflateRawSync(compressed, { maxOutputLength: maxXmlBytes })
+        : null;
+    if (!value || value.length !== entry.size) throw new Error("Kapitron XLSX бүтэц буруу байна");
+    return value.toString("utf8");
+  };
+  return { names: [...entries.keys()], read };
+}
+
 function parseDate(value: string): Date | null {
   const text = value.trim();
   const serial = Number(text);
@@ -200,34 +252,24 @@ function cashSuggestionResponse(row: typeof cashTransactionsTable.$inferSelect, 
 }
 
 export async function readKapitronXlsx(buffer: Buffer) {
-  const directory = await mkdtemp(join(tmpdir(), "kapitron-"));
-  try {
-    const input = join(directory, "statement.xlsx");
-    await writeFile(input, buffer, { mode: 0o600 });
-    const { stdout: listing } = await execFile("unzip", ["-Z", "-1", input], { maxBuffer: 256 * 1024 });
-    const names = listing.split(/\r?\n/);
-    const sheet = names.find((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name));
-    if (!sheet || !names.includes("xl/sharedStrings.xml")) throw new Error("Kapitron XLSX бүтэц буруу байна");
-    const [strings, worksheet] = await Promise.all(["xl/sharedStrings.xml", sheet].map(async (name) => {
-      const { stdout } = await execFile("unzip", ["-p", input, name], { encoding: "utf8", maxBuffer: maxXmlBytes });
-      return stdout;
-    }));
-    const shared = [...strings.matchAll(/<si[^>]*>([\s\S]*?)<\/si>/g)].map((match) =>
-      [...match[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((part) => decodeXml(part[1])).join(""));
-    const rows = [...worksheet.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)];
-    if (rows.length > maxRows + 1) throw new Error("XLSX мөрийн тоо хэт их байна");
-    const parsedRows = rows.map((row) => cellsFromRow(row[1], shared));
-    const headerRowIndex = findKapitronHeaderRow(parsedRows);
-    if (headerRowIndex < 0) throw new Error("Kapitron баганын толгой буруу байна");
-    const header = parsedRows[headerRowIndex];
-    const indexes = new Map(requiredHeaders.map((name) => [name, [...header].find(([, value]) => value.trim() === name)?.[0]]));
-    if ([...indexes.values()].some((index) => index === undefined)) throw new Error("Kapitron баганын толгой буруу байна");
-    return parsedRows.slice(headerRowIndex + 1).map((cells) => Object.fromEntries(
-      requiredHeaders.map((name) => [name, cells.get(indexes.get(name)!)?.trim() ?? ""]),
-    ));
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
+  const zip = readZipEntries(buffer);
+  const sheet = zip.names.find((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name));
+  if (!sheet) throw new Error("Kapitron XLSX бүтэц буруу байна");
+  const strings = zip.read("xl/sharedStrings.xml");
+  const worksheet = zip.read(sheet);
+  const shared = [...strings.matchAll(/<si[^>]*>([\s\S]*?)<\/si>/g)].map((match) =>
+    [...match[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((part) => decodeXml(part[1])).join(""));
+  const rows = [...worksheet.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)];
+  if (rows.length > maxRows + 1) throw new Error("XLSX мөрийн тоо хэт их байна");
+  const parsedRows = rows.map((row) => cellsFromRow(row[1], shared));
+  const headerRowIndex = findKapitronHeaderRow(parsedRows);
+  if (headerRowIndex < 0) throw new Error("Kapitron баганын толгой буруу байна");
+  const header = parsedRows[headerRowIndex];
+  const indexes = new Map(requiredHeaders.map((name) => [name, [...header].find(([, value]) => value.trim() === name)?.[0]]));
+  if ([...indexes.values()].some((index) => index === undefined)) throw new Error("Kapitron баганын толгой буруу байна");
+  return parsedRows.slice(headerRowIndex + 1).map((cells) => Object.fromEntries(
+    requiredHeaders.map((name) => [name, cells.get(indexes.get(name)!)?.trim() ?? ""]),
+  ));
 }
 
 const response = (
