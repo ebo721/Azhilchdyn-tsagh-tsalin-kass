@@ -414,12 +414,8 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
       const mirrorAccount = input.type === "expense" && shouldMirrorCashAsOperatingExpense(category)
         ? await fallbackExpenseAccount(tx, category)
         : null;
-      const ledgerAccount = existing.journalEntryId
-        ? await cashLedgerAccount(tx, existing.bankTransactionId)
-        : null;
-      const counterAccount = existing.journalEntryId
-        ? await journalCounterAccount(tx, input.type, category, cashAccount)
-        : mirrorAccount;
+      const ledgerAccount = await cashLedgerAccount(tx, existing.bankTransactionId);
+      const counterAccount = await journalCounterAccount(tx, input.type, category, cashAccount);
       const replacement = existing.journalEntryId
         ? await journalNeedsReplacement(tx, existing, input, counterAccount, ledgerAccount!.id)
         : false;
@@ -445,9 +441,11 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
         });
       }
       let journalEntryId = existing.journalEntryId;
-      if (existing.journalEntryId && replacement) {
-        await voidJournalEntry(tx, { journalEntryId: existing.journalEntryId, voidedBy: null });
-        journalEntryId = await postCashJournal(tx, cash, counterAccount, ledgerAccount!);
+      if (!existing.journalEntryId || replacement) {
+        if (existing.journalEntryId) {
+          await voidJournalEntry(tx, { journalEntryId: existing.journalEntryId, voidedBy: null });
+        }
+        journalEntryId = await postCashJournal(tx, cash, counterAccount, ledgerAccount);
         const [linkedCash] = await tx.update(cashTransactionsTable)
           .set({ journalEntryId })
           .where(eq(cashTransactionsTable.id, id))

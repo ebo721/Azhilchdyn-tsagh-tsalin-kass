@@ -348,25 +348,37 @@ describe("cash journal posting", () => {
     assert.equal(lines.some((line) => line.accountId === bankAccountId && line.credit === 22), true);
   });
 
-  it("does not backfill a historical cash row with a null journal link", async () => {
+  it("posts a journal when an edited historical payroll cash row has no journal link", async () => {
     const [cash] = await db.insert(cashTransactionsTable).values({
       type: "expense",
-      category: "Historical",
+      category: "Цалин",
       accountId: null,
-      description: "Historical null journal",
+      description: "Historical payroll null journal",
       amount: 9,
       date: "2025-01-28",
       incomeMonth: null,
+      sourceType: "payroll",
+      sourceKey: `2025-01:${randomUUID()}`,
       journalEntryId: null,
     }).returning();
     cashIds.push(cash.id);
     const response = await requestPath(`/api/cash/transactions/${cash.id}`, {
       method: "PUT",
-      body: JSON.stringify({ type: "expense", category: "Historical changed", description: "Historical changed", amount: 10, date: "2025-01-29", incomeMonth: null }),
+      body: JSON.stringify({ type: "expense", category: "Цалин", description: "Historical payroll changed", amount: 10, date: "2025-01-29", incomeMonth: null }),
     });
     assert.equal(response.status, 200);
-    const value = await response.json() as { journalEntryId: number | null };
-    assert.equal(value.journalEntryId, null);
+    const value = await response.json() as { journalEntryId: number | null; transactionKind: string };
+    assert.ok(value.journalEntryId);
+    assert.equal(value.transactionKind, "payroll");
+    journalIds.push(value.journalEntryId);
+    const [entry] = await db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, value.journalEntryId));
+    assert.equal(entry.status, "posted");
+    assert.equal(entry.sourceType, "cash");
+    assert.equal(entry.sourceId, cash.id);
+    const lines = await db.select().from(journalLinesTable).where(eq(journalLinesTable.journalEntryId, value.journalEntryId));
+    assert.equal(lines.length, 2);
+    assert.equal(lines.reduce((sum, line) => sum + line.debit, 0), 10);
+    assert.equal(lines.reduce((sum, line) => sum + line.credit, 0), 10);
   });
 
   it("rolls back the cash row when the cash posting account is unavailable", async () => {
