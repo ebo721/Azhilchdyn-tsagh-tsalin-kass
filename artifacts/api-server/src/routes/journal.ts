@@ -9,7 +9,7 @@ import { and, asc, desc, eq, gte, lte, inArray } from "drizzle-orm";
 import { db, chartOfAccountsTable, journalEntriesTable, journalLinesTable, type JournalEntry, type JournalLine } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import {
-  JournalValidationError, postJournalEntry, validateAndNormalizeJournalLines, voidJournalEntry,
+  JournalValidationError, postJournalEntry, voidJournalEntry,
 } from "../lib/journal-posting.js";
 
 const router: IRouter = Router();
@@ -86,17 +86,19 @@ router.put("/journal/entries/:id", async (req, res, next) => {
   try {
     const { id } = UpdateJournalEntryParams.parse(req.params);
     const body = UpdateJournalEntryBody.parse(req.body);
-    const result = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const [entry] = await tx.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, id)).for("update");
       if (!entry) throw Object.assign(new Error("Journal entry not found"), { status: 404 });
       if (entry.status !== "draft") throw Object.assign(new Error("Only draft journal entries can be updated"), { status: 409 });
-      const normalized = await validateAndNormalizeJournalLines(tx, body.lines);
-      await tx.delete(journalLinesTable).where(eq(journalLinesTable.journalEntryId, id));
-      await tx.insert(journalLinesTable).values(normalized.lines.map((line) => ({
-        journalEntryId: id, accountId: line.accountId, debit: line.debitCents / 100, credit: line.creditCents / 100, memo: line.memo ?? null,
-      })));
-      await tx.update(journalEntriesTable).set({ status: normalized.status }).where(eq(journalEntriesTable.id, id));
-      return normalized.status;
+      return postJournalEntry(tx, {
+        journalEntryId: id,
+        date: entry.date,
+        description: entry.description,
+        sourceType: entry.sourceType,
+        sourceId: entry.sourceId,
+        createdBy: entry.createdBy,
+        lines: body.lines,
+      });
     });
     const entry = await loadEntry(id);
     return res.json(UpdateJournalEntryResponse.parse(entry));
