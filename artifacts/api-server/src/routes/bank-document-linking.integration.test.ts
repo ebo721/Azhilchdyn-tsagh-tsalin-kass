@@ -61,6 +61,41 @@ describe("bank document linking", () => {
     return row.id;
   }
 
+  it("posts a journal when linking a legacy cash row that has no journal", async () => {
+    const bankId = await bank("2099-08-05", 63_000, "legacy-cash-without-journal");
+    const [cash] = await db.insert(cashTransactionsTable).values({
+      type: "expense",
+      category: "Legacy expense",
+      description: "Legacy cash without journal",
+      amount: 63_000,
+      date: "2099-08-05",
+      accountId,
+      sourceType: "manual",
+    }).returning();
+    cashIds.push(cash.id);
+    assert.equal(cash.journalEntryId, null);
+
+    const response = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-cash`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ cashTransactionId: cash.id }),
+    });
+    assert.equal(response.status, 200);
+
+    const [operatingExpense] = await db.select().from(operatingExpensesTable)
+      .where(eq(operatingExpensesTable.cashTransactionId, cash.id));
+    assert.ok(operatingExpense);
+    expenseIds.push(operatingExpense.id);
+    const [linkedCash] = await db.select().from(cashTransactionsTable)
+      .where(eq(cashTransactionsTable.id, cash.id));
+    assert.ok(linkedCash.journalEntryId);
+    journalIds.push(linkedCash.journalEntryId);
+    const lines = await db.select().from(journalLinesTable)
+      .where(eq(journalLinesTable.journalEntryId, linkedCash.journalEntryId));
+    assert.equal(lines.reduce((sum, line) => sum + Number(line.debit), 0), 63_000);
+    assert.equal(lines.reduce((sum, line) => sum + Number(line.credit), 0), 63_000);
+  });
+
   it("links an existing unpaid purchase, posts a balanced journal, and removes review row", async () => {
     const [purchase] = await db.insert(inventoryPurchasesTable).values({
       materialType: "food", accountId: (await db.select({ id: chartOfAccountsTable.id }).from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1500")))[0].id,

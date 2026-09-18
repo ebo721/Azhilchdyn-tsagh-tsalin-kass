@@ -763,13 +763,13 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
       if (!linkedBank) throw new BankCashLinkConflictError();
        if (cash.journalEntryId) {
          await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
-         const mapped = cash.accountId
-           ? (await tx.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, cash.accountId)))[0]
-           : null;
-         const counter = await counterAccount(tx, cash.type, cash.category, mapped);
-         const journalEntryId = await postBankCashJournal(tx, { ...cash, bankTransactionId: id }, counter);
-         await tx.update(cashTransactionsTable).set({ journalEntryId }).where(eq(cashTransactionsTable.id, cashTransactionId));
        }
+       const mapped = cash.accountId
+         ? (await tx.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, cash.accountId)))[0]
+         : null;
+       const counter = await counterAccount(tx, cash.type, cash.category, mapped);
+       const journalEntryId = await postBankCashJournal(tx, { ...cash, bankTransactionId: id }, counter);
+       await tx.update(cashTransactionsTable).set({ journalEntryId }).where(eq(cashTransactionsTable.id, cashTransactionId));
        await syncOperatingExpenseForBankCash(tx, id, cash.id);
       return linkedBank;
     });
