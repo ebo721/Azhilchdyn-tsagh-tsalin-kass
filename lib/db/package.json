@@ -16,6 +16,9 @@
     }
   },
   "scripts": {
+    "migrate:production": "node ./scripts/run-production-migrations.mjs",
+    "vercel-build": "node ./scripts/run-production-migrations.mjs -- pnpm --filter @workspace/api-server run build",
+    "test:migrations": "node --test ./scripts/run-production-migrations.test.mjs",
     "push": "drizzle-kit push --config ./drizzle.config.ts",
     "push-force": "drizzle-kit push --force --config ./drizzle.config.ts",
     "seed-journal-accounts": "tsx ./src/seed-journal-accounts.ts"

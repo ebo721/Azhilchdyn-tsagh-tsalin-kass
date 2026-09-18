@@ -1,0 +1,18 @@
+{
+  "managedStart": "20260921_gl_journal_schema.sql",
+  "migrations": [
+    {
+      "filename": "20260921_gl_journal_schema.sql",
+      "releaseMode": "expand"
+    },
+    {
+      "filename": "20260922_harden_journal_lines_one_sided.sql",
+      "releaseMode": "expand"
+    },
+    {
+      "filename": "20260923_bank_transaction_rejected_accounts.sql",
+      "releaseMode": "expand"
+    }
+  ],
+  "schemaFingerprint": "dc575b5481abad27a27e1fa1b23c30c72d18f0e8fad3578a687eb6172c358fc1"
+}

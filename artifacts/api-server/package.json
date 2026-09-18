@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
     "build": "pnpm --dir ../.. exec tsc --build --force && node ./build.mjs",
+    "vercel-build": "pnpm --filter @workspace/db run vercel-build",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "test:e2e": "playwright test --config playwright.config.ts",
     "test": "tsx --test src/**/*.test.ts",
