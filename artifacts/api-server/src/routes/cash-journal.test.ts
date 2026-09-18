@@ -317,7 +317,11 @@ describe("cash journal posting", () => {
     const original = await create.json() as { id: number; journalEntryId: number };
     cashIds.push(original.id);
     journalIds.push(original.journalEntryId);
-    await db.update(cashTransactionsTable).set({ bankTransactionId: 987654321 }).where(eq(cashTransactionsTable.id, original.id));
+    await db.update(cashTransactionsTable).set({
+      bankTransactionId: 987654321,
+      sourceType: "bank_transaction",
+      sourceKey: `bank:${original.id}`,
+    }).where(eq(cashTransactionsTable.id, original.id));
     await db.update(journalLinesTable)
       .set({ accountId: bankAccountId })
       .where(and(eq(journalLinesTable.journalEntryId, original.journalEntryId), eq(journalLinesTable.accountId, cashAccountId)));
@@ -327,8 +331,10 @@ describe("cash journal posting", () => {
       body: JSON.stringify({ type: "expense", category, description: "Bank linked original", amount: 21, date: "2025-01-28", incomeMonth: null }),
     });
     assert.equal(unchanged.status, 200);
-    const unchangedValue = await unchanged.json() as { journalEntryId: number };
+    const unchangedValue = await unchanged.json() as { journalEntryId: number; transactionKind: string; editable: boolean };
     assert.equal(unchangedValue.journalEntryId, original.journalEntryId);
+    assert.equal(unchangedValue.transactionKind, "bank_transaction");
+    assert.equal(unchangedValue.editable, false);
 
     const changed = await requestPath(`/api/cash/transactions/${original.id}`, {
       method: "PUT",

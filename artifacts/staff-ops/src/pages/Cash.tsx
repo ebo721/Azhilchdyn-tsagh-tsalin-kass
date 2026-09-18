@@ -72,7 +72,6 @@ import {
   getListUnclearTransactionsQueryKey,
   useCreateCashTransaction,
   useUpdateCashTransaction,
-  useUpdateBankCashTransactionIncomeMonth,
   useDeleteCashTransaction,
   useCloseCashDay,
   useCreateEmployee,
@@ -219,7 +218,6 @@ export function Cash() {
   const closures = useListCashClosures();
   const create = useCreateCashTransaction();
   const update = useUpdateCashTransaction();
-  const updateBankIncomeMonth = useUpdateBankCashTransactionIncomeMonth();
   const deletion = useQueueDeletion();
   const remove = deletion;
   const qc = useQueryClient();
@@ -259,10 +257,6 @@ export function Cash() {
   };
   const submit = (values: CashForm) => {
     const options = { onSuccess: () => { refresh(); setOpen(false); setEditing(null); } };
-    if (editing?.transactionKind === 'bank_transaction') {
-      updateBankIncomeMonth.mutate({ id: editing.id, data: { incomeMonth: values.incomeMonth } }, options);
-      return;
-    }
     const data = { type: values.type, category: values.category, description: values.description, amount: Number(values.amount), date: values.date, incomeMonth: values.type === 'income' ? values.incomeMonth : null };
     if (editing) update.mutate({ id: editing.id, data }, options);
     else create.mutate({ data }, options);
@@ -287,7 +281,7 @@ export function Cash() {
         return <div className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-secondary/35" key={row.id} data-testid={`row-cash-${row.id}`}>
           <span className={cn('grid size-9 shrink-0 place-items-center rounded-xl', row.type === CashTransactionType.income ? 'bg-primary/10 text-primary' : 'bg-orange-100 text-orange-800')}>{row.type === CashTransactionType.income ? <ArrowDownLeft className="size-4" /> : <ArrowUpRight className="size-4" />}</span>
           <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold">{row.description}</p><span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-800">{row.category}</span>{(row.bankVerifiedAt || row.bankTransactionId) && <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">Банкны хуулгаар баталгаажсан</span>}</div><p className="mt-0.5 text-xs text-muted-foreground">{dateLabel(row.date)}{row.type === CashTransactionType.income && row.incomeMonth ? ` · ${mongolianMonthLabel(row.incomeMonth)}-ийн орлого` : ''}{closed ? ' · Өндөрлөсөн' : ''}</p><AccountLabel code={row.accountCode} name={row.accountName} className="mt-1" /></div>
-          {(row.editable || (session.data?.role === 'admin' && row.transactionKind === 'bank_transaction' && row.type === CashTransactionType.income)) && <div className="flex gap-1">{session.data?.role === 'admin' && <Button size="icon" variant="ghost" disabled={closed} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : row.editable ? 'Засах' : 'Хамаарах сар засах'} onClick={() => startEdit(row)} data-testid={`button-edit-cash-${row.id}`}><Pencil className="size-4" /></Button>}{row.editable && <Button size="icon" variant="ghost" disabled={closed || deletion.isPending} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Устгах хүсэлт'} onClick={() => deleteRow(row)} data-testid={`button-delete-cash-${row.id}`}><Trash2 className="size-4" /></Button>}</div>}
+          {(session.data?.role === 'admin' || row.editable) && <div className="flex gap-1">{session.data?.role === 'admin' && <Button size="icon" variant="ghost" disabled={closed} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Засах'} onClick={() => startEdit(row)} data-testid={`button-edit-cash-${row.id}`}><Pencil className="size-4" /></Button>}{row.editable && <Button size="icon" variant="ghost" disabled={closed || deletion.isPending} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Устгах хүсэлт'} onClick={() => deleteRow(row)} data-testid={`button-delete-cash-${row.id}`}><Trash2 className="size-4" /></Button>}</div>}
           <p className={cn('font-mono text-sm font-bold', row.type === CashTransactionType.income ? 'text-primary' : 'text-orange-800')}>{row.type === CashTransactionType.income ? '+' : '−'}{money(row.amount)}</p>
         </div>;
       })}</div>}
@@ -297,15 +291,15 @@ export function Cash() {
         <div className="bg-secondary/40 px-5 py-4"><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Цэвэр дүн</p><p className={cn('mt-1 font-mono text-base font-bold', filteredIncome - filteredExpense >= 0 ? 'text-primary' : 'text-orange-800')} data-testid="value-filtered-cash-net">{money(filteredIncome - filteredExpense)}</p></div>
       </div>}
     </section>
-    {open && <Modal title={editing?.transactionKind === 'bank_transaction' ? 'Орлогын хамаарах сар засах' : editing ? 'Кассын гүйлгээ засах' : 'Кассын гүйлгээ'} detail={editing?.transactionKind === 'bank_transaction' ? 'Банкны автомат мэдээлэл өөрчлөгдөхгүй.' : 'Гүйлгээний төрөл, дүн болон огноог оруулна.'} onClose={() => setOpen(false)}>
+    {open && <Modal title={editing ? 'Кассын гүйлгээ засах' : 'Кассын гүйлгээ'} detail="Гүйлгээний төрөл, дүн болон огноог оруулна." onClose={() => setOpen(false)}>
       <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-5" data-testid="form-cash">
         {editing && <div className="rounded-xl border border-border bg-secondary/35 px-4 py-3"><AccountLabel code={editing.accountCode} name={editing.accountName} /></div>}
-        {editing?.transactionKind !== 'bank_transaction' && <><div className="grid grid-cols-2 gap-2 rounded-xl bg-secondary p-1"><button type="button" className={cn('rounded-lg py-2.5 text-sm font-bold', form.watch('type') === 'income' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => form.setValue('type', 'income')}>Орлого</button><button type="button" className={cn('rounded-lg py-2.5 text-sm font-bold', form.watch('type') === 'expense' ? 'bg-card text-orange-800 shadow-sm' : 'text-muted-foreground')} onClick={() => form.setValue('type', 'expense')}>Зарлага</button></div>
+        <div className="grid grid-cols-2 gap-2 rounded-xl bg-secondary p-1"><button type="button" className={cn('rounded-lg py-2.5 text-sm font-bold', form.watch('type') === 'income' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => form.setValue('type', 'income')}>Орлого</button><button type="button" className={cn('rounded-lg py-2.5 text-sm font-bold', form.watch('type') === 'expense' ? 'bg-card text-orange-800 shadow-sm' : 'text-muted-foreground')} onClick={() => form.setValue('type', 'expense')}>Зарлага</button></div>
         <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-xs font-semibold">{form.watch('type') === 'expense' ? 'Үйл ажиллагааны зардлын дэд ангилал' : 'Ангилал'}<input className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('category', { required: true })} placeholder={form.watch('type') === 'expense' ? 'Жишээ: Түрээс' : 'Жишээ: Борлуулалт'} /></label><label className="space-y-2 text-xs font-semibold">Дүн<input type="number" min="0" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('amount', { required: true, min: 0 })} /></label></div>
         <label className="block space-y-2 text-xs font-semibold">Тайлбар<input className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('description', { required: true })} /></label>
-        <label className="block space-y-2 text-xs font-semibold">Огноо<input type="date" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('date', { required: true })} /></label></>}
+        <label className="block space-y-2 text-xs font-semibold">Огноо<input type="date" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('date', { required: true })} /></label>
         {form.watch('type') === 'income' && <label className="block space-y-2 text-xs font-semibold">Хамаарах сар<input type="month" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('incomeMonth', { required: true })} data-testid="input-cash-income-month" /></label>}
-        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Болих</Button><Button type="submit" disabled={create.isPending || update.isPending || updateBankIncomeMonth.isPending}>{create.isPending || update.isPending || updateBankIncomeMonth.isPending ? 'Хадгалж байна...' : 'Хадгалах'}</Button></div>
+        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Болих</Button><Button type="submit" disabled={create.isPending || update.isPending}>{create.isPending || update.isPending ? 'Хадгалж байна...' : 'Хадгалах'}</Button></div>
       </form></Form>
     </Modal>}
   </div>;
