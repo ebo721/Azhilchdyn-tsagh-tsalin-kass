@@ -465,13 +465,13 @@ export function BankTransactions() {
   };
   return <div className="page-enter">
     <PageHeading eyebrow="Kapitron / bank statement" title="Банкны гүйлгээ" detail="Банкны гүйлгээг ижил төстэй кассын мөртэй холбох эсвэл шинээр касст үүсгэнэ." action={canManage ? <><Button variant="outline" onClick={() => setAccountSettingsOpen(true)} data-testid="button-bank-account-settings"><Landmark className="size-4" />Дансны тохиргоо</Button><select value={selectedAccountId ?? ''} onChange={(event) => setSelectedAccountId(Number(event.target.value) || null)} className="h-10 min-w-56 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" aria-label="Хуулга уншуулах банкны данс" data-testid="select-bank-account"><option value="">Данс сонгох</option>{bankAccounts.data?.map((account) => <option key={account.id} value={account.id}>{account.bankName} · {account.accountNumber}</option>)}</select><input ref={fileInput} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={importFile} className="sr-only" aria-label="Kapitron банкны хуулга сонгох" data-testid="input-bank-transactions-import" /><Button onClick={() => fileInput.current?.click()} disabled={importStatement.isPending || !selectedAccountId} data-testid="button-import-bank-transactions"><Upload className="size-4" />{importStatement.isPending ? 'Хуулга уншиж байна...' : 'Капитрон банкны хуулга уншуулах'}</Button></> : undefined} />
-    {canManage && (importResult || journalReview.isLoading || pendingJournalReviewCount > 0) && <div className="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground" role="status" data-testid="bank-import-result">
+    {canManage && <div className="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground" role="status" data-testid="bank-import-result">
       <div className="flex flex-wrap gap-x-4 gap-y-1">
         {importResult ? <>
           <span><strong>{importResult.totalRead}</strong> гүйлгээ уншсанаас: </span>
           <span><strong>{importResult.recognized}</strong> танигдсан, </span>
           <span><strong>{importResult.unrecognized}</strong> тодорхойгүй байна.</span>
-        </> : <span>{journalReview.isLoading ? 'Журналд шивэх гүйлгээг шалгаж байна...' : <><strong>{pendingJournalReviewCount}</strong> гүйлгээ журналд шивэхээр хүлээгдэж байна.</>}</span>}
+        </> : <span>{journalReview.isLoading ? 'Журналд шивэх гүйлгээг шалгаж байна...' : journalReview.data ? <><strong>{pendingJournalReviewCount}</strong> гүйлгээ журналд шивэхээр хүлээгдэж байна.</> : 'Журналд шивэх гүйлгээнүүдийг шалгана уу.'}</span>}
       </div>
       <Link href="/bank-transactions/journal-review" className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90" data-testid="link-journal-review">
         Журналд шивэх
