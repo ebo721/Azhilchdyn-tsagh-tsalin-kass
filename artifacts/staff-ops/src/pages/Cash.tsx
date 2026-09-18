@@ -57,6 +57,7 @@ import {
   getListBankTransactionsQueryKey,
   getListBankAccountsQueryKey,
   getListBankTransactionCashSuggestionsQueryKey,
+  getListBankTransactionJournalReviewQueryKey,
   getListCashClosuresQueryKey,
   getListEmployeesQueryKey,
   getListEmployeeSalaryHistoryQueryKey,
@@ -89,6 +90,7 @@ import {
   useListCashTransactions,
   useListBankTransactions,
   useListBankAccounts,
+  useListBankTransactionJournalReview,
   useCreateBankAccount,
   useUpdateBankTransactionAccount,
   useListCashClosures,
@@ -339,6 +341,14 @@ export function BankTransactions() {
   const deletion = useQueueDeletion();
   const markUnclear = useMarkTransactionUnclear();
   const session = useGetAuthSession();
+  const canManage = session.data?.role === 'admin' || session.data?.role === 'accountant';
+  const journalReview = useListBankTransactionJournalReview({
+    query: {
+      queryKey: getListBankTransactionJournalReviewQueryKey(),
+      enabled: canManage,
+      refetchOnMount: 'always',
+    },
+  });
   const qc = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
   const [importResult, setImportResult] = useState<BankTransactionImportResult | null>(null);
@@ -351,7 +361,7 @@ export function BankTransactions() {
   const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const suggestions = useListBankTransactionCashSuggestions(selectedBank?.id ?? 0, { query: { queryKey: getListBankTransactionCashSuggestionsQueryKey(selectedBank?.id ?? 0), enabled: Boolean(selectedBank) } });
-  const canManage = session.data?.role === 'admin' || session.data?.role === 'accountant';
+  const pendingJournalReviewCount = journalReview.data?.length ?? 0;
   const filteredBankTransactions = list.data?.filter((transaction) => transaction.transactionAt.slice(0, 7) === filterMonth) ?? [];
   useEffect(() => {
     if (selectedAccountId === null && bankAccounts.data?.length) setSelectedAccountId(bankAccounts.data[0].id);
@@ -360,7 +370,10 @@ export function BankTransactions() {
     .map((transaction) => transaction.type === CashTransactionType.expense ? transaction.subcategory : transaction.category)
     .filter((value): value is string => Boolean(value?.trim()))
     .map((value) => value.trim()))].sort((a, b) => a.localeCompare(b, 'mn')), [cashTransactions.data]);
-  const refreshBankTransactions = () => qc.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
+  const refreshBankTransactions = () => {
+    qc.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
+    qc.invalidateQueries({ queryKey: getListBankTransactionJournalReviewQueryKey() });
+  };
   const refreshAfterTransfer = () => {
     refreshBankTransactions();
     qc.invalidateQueries({ queryKey: getListCashTransactionsQueryKey() });
@@ -451,7 +464,7 @@ export function BankTransactions() {
     });
   };
   return <div className="page-enter">
-    <PageHeading eyebrow="Kapitron / bank statement" title="Банкны гүйлгээ" detail="Банкны гүйлгээг ижил төстэй кассын мөртэй холбох эсвэл шинээр касст үүсгэнэ." action={canManage ? <><Button variant="outline" onClick={() => setAccountSettingsOpen(true)} data-testid="button-bank-account-settings"><Landmark className="size-4" />Дансны тохиргоо</Button><select value={selectedAccountId ?? ''} onChange={(event) => setSelectedAccountId(Number(event.target.value) || null)} className="h-10 min-w-56 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" aria-label="Хуулга уншуулах банкны данс" data-testid="select-bank-account"><option value="">Данс сонгох</option>{bankAccounts.data?.map((account) => <option key={account.id} value={account.id}>{account.bankName} · {account.accountNumber}</option>)}</select><input ref={fileInput} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={importFile} className="sr-only" aria-label="Kapitron банкны хуулга сонгох" data-testid="input-bank-transactions-import" /><Button onClick={() => fileInput.current?.click()} disabled={importStatement.isPending || !selectedAccountId} data-testid="button-import-bank-transactions"><Upload className="size-4" />{importStatement.isPending ? 'Хуулга уншиж байна...' : 'Капитрон банкны хуулга уншуулах'}</Button></> : undefined} />
+    <PageHeading eyebrow="Kapitron / bank statement" title="Банкны гүйлгээ" detail="Банкны гүйлгээг ижил төстэй кассын мөртэй холбох эсвэл шинээр касст үүсгэнэ." action={canManage ? <>{pendingJournalReviewCount > 0 && <Link href="/bank-transactions/journal-review" className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90" data-testid="link-pending-journal-review">Гүйлгээнүүдийг холбох ({pendingJournalReviewCount})</Link>}<Button variant="outline" onClick={() => setAccountSettingsOpen(true)} data-testid="button-bank-account-settings"><Landmark className="size-4" />Дансны тохиргоо</Button><select value={selectedAccountId ?? ''} onChange={(event) => setSelectedAccountId(Number(event.target.value) || null)} className="h-10 min-w-56 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" aria-label="Хуулга уншуулах банкны данс" data-testid="select-bank-account"><option value="">Данс сонгох</option>{bankAccounts.data?.map((account) => <option key={account.id} value={account.id}>{account.bankName} · {account.accountNumber}</option>)}</select><input ref={fileInput} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={importFile} className="sr-only" aria-label="Kapitron банкны хуулга сонгох" data-testid="input-bank-transactions-import" /><Button onClick={() => fileInput.current?.click()} disabled={importStatement.isPending || !selectedAccountId} data-testid="button-import-bank-transactions"><Upload className="size-4" />{importStatement.isPending ? 'Хуулга уншиж байна...' : 'Капитрон банкны хуулга уншуулах'}</Button></> : undefined} />
     {importResult && <div className="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground" role="status" data-testid="bank-import-result">
       <div className="flex flex-wrap gap-x-4 gap-y-1">
         <span><strong>{importResult.totalRead}</strong> гүйлгээ уншсанаас: </span>
