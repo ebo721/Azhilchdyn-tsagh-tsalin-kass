@@ -85,6 +85,7 @@ export const ListChartOfAccountsResponseItem = zod.object({
   "code": zod.string(),
   "name": zod.string(),
   "type": zod.enum(['asset', 'liability', 'equity', 'revenue', 'expense']),
+  "isActive": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
 export const ListChartOfAccountsResponse = zod.array(ListChartOfAccountsResponseItem)
@@ -110,6 +111,7 @@ export const CreateChartOfAccountResponse = zod.object({
   "code": zod.string(),
   "name": zod.string(),
   "type": zod.enum(['asset', 'liability', 'equity', 'revenue', 'expense']),
+  "isActive": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
 
@@ -138,6 +140,7 @@ export const UpdateChartOfAccountResponse = zod.object({
   "code": zod.string(),
   "name": zod.string(),
   "type": zod.enum(['asset', 'liability', 'equity', 'revenue', 'expense']),
+  "isActive": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1336,6 +1339,52 @@ export const ListBankTransactionsResponse = zod.array(ListBankTransactionsRespon
 
 
 /**
+ * @summary List pending bank transactions with journal account suggestions
+ */
+export const ListBankTransactionJournalReviewResponseItem = zod.object({
+  "id": zod.number().int(),
+  "transactionAt": zod.coerce.date(),
+  "type": zod.enum(['income', 'expense']),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "counterparty": zod.string(),
+  "suggestedAccountId": zod.number().int().nullable(),
+  "suggestedAccountName": zod.string().nullable()
+})
+export const ListBankTransactionJournalReviewResponse = zod.array(ListBankTransactionJournalReviewResponseItem)
+
+
+/**
+ * @summary Post a reviewed bank transaction to the journal
+ */
+export const PostBankTransactionJournalParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+
+export const PostBankTransactionJournalBody = zod.object({
+  "accountId": zod.number().int().min(1)
+})
+
+export const PostBankTransactionJournalResponse = zod.object({
+  "id": zod.number().int(),
+  "journalEntryId": zod.number().int()
+})
+
+
+/**
+ * @summary Reject a journal suggestion and move the transaction to unclear review
+ */
+export const RejectBankTransactionSuggestionParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const RejectBankTransactionSuggestionResponse = zod.void()
+
+
+/**
  * @summary Assign or clear a chart account on a bank transaction
  */
 
@@ -1424,12 +1473,21 @@ export const importKapitronBankTransactionsResponseSkippedDuplicateMin = 0;
 
 export const importKapitronBankTransactionsResponseSkippedZeroMin = 0;
 
+export const importKapitronBankTransactionsResponseTotalReadMin = 0;
+
+export const importKapitronBankTransactionsResponseRecognizedMin = 0;
+
+export const importKapitronBankTransactionsResponseUnrecognizedMin = 0;
+
 
 
 export const ImportKapitronBankTransactionsResponse = zod.object({
   "imported": zod.number().int().min(importKapitronBankTransactionsResponseImportedMin),
   "skippedDuplicate": zod.number().int().min(importKapitronBankTransactionsResponseSkippedDuplicateMin),
-  "skippedZero": zod.number().int().min(importKapitronBankTransactionsResponseSkippedZeroMin)
+  "skippedZero": zod.number().int().min(importKapitronBankTransactionsResponseSkippedZeroMin),
+  "totalRead": zod.number().int().min(importKapitronBankTransactionsResponseTotalReadMin),
+  "recognized": zod.number().int().min(importKapitronBankTransactionsResponseRecognizedMin),
+  "unrecognized": zod.number().int().min(importKapitronBankTransactionsResponseUnrecognizedMin)
 })
 
 

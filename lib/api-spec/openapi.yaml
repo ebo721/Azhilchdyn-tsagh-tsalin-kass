@@ -811,6 +811,57 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/BankTransaction" }
+  /bank-transactions/journal-review:
+    get:
+      operationId: listBankTransactionJournalReview
+      tags: [bank-transactions]
+      summary: List pending bank transactions with journal account suggestions
+      responses:
+        "200":
+          description: Pending bank transaction journal review rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BankTransactionJournalReviewItem" }
+  /bank-transactions/{id}/post-journal:
+    post:
+      operationId: postBankTransactionJournal
+      tags: [bank-transactions]
+      summary: Post a reviewed bank transaction to the journal
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankTransactionJournalPostInput" }
+      responses:
+        "200":
+          description: Posted bank transaction journal result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankTransactionJournalPostResult" }
+        "400":
+          description: Invalid chart account for the transaction type
+        "404":
+          description: Bank transaction not found
+        "409":
+          description: Bank transaction was already resolved
+  /bank-transactions/{id}/reject-suggestion:
+    post:
+      operationId: rejectBankTransactionSuggestion
+      tags: [bank-transactions]
+      summary: Reject a journal suggestion and move the transaction to unclear review
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Suggestion rejected
+        "404":
+          description: Bank transaction not found
+        "409":
+          description: Bank transaction was already resolved
   /bank-transactions/{id}/account:
     patch:
       operationId: updateBankTransactionAccount
@@ -1752,12 +1803,13 @@ components:
         newPassword: { type: string, minLength: 1 }
     ChartOfAccount:
       type: object
-      required: [id, code, name, type, createdAt]
+      required: [id, code, name, type, isActive, createdAt]
       properties:
         id: { type: integer }
         code: { type: string }
         name: { type: string }
         type: { type: string, enum: [asset, liability, equity, revenue, expense] }
+        isActive: { type: boolean }
         createdAt: { type: string, format: date-time }
     ChartOfAccountInput:
       type: object
@@ -2262,13 +2314,39 @@ components:
       required: [accountId]
       properties:
         accountId: { type: ["integer", "null"], minimum: 1 }
+    BankTransactionJournalReviewItem:
+      type: object
+      required: [id, transactionAt, type, description, amount, counterparty, suggestedAccountId, suggestedAccountName]
+      properties:
+        id: { type: integer }
+        transactionAt: { type: string, format: date-time }
+        type: { type: string, enum: [income, expense] }
+        description: { type: string }
+        amount: { type: number }
+        counterparty: { type: string }
+        suggestedAccountId: { type: ["integer", "null"] }
+        suggestedAccountName: { type: ["string", "null"] }
+    BankTransactionJournalPostInput:
+      type: object
+      required: [accountId]
+      properties:
+        accountId: { type: integer, minimum: 1 }
+    BankTransactionJournalPostResult:
+      type: object
+      required: [id, journalEntryId]
+      properties:
+        id: { type: integer }
+        journalEntryId: { type: integer }
     BankTransactionImportResult:
       type: object
-      required: [imported, skippedDuplicate, skippedZero]
+      required: [imported, skippedDuplicate, skippedZero, totalRead, recognized, unrecognized]
       properties:
         imported: { type: integer, minimum: 0 }
         skippedDuplicate: { type: integer, minimum: 0 }
         skippedZero: { type: integer, minimum: 0 }
+        totalRead: { type: integer, minimum: 0 }
+        recognized: { type: integer, minimum: 0 }
+        unrecognized: { type: integer, minimum: 0 }
     InventoryPurchaseItem:
       type: object
       required: [id, inventoryItemId, name, category, unit, quantity, unitPrice, totalAmount]

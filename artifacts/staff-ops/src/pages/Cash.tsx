@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { Link } from 'wouter';
 import {
   Activity,
   ArrowDownLeft,
@@ -148,6 +149,7 @@ import {
   useListBankTransactionCashSuggestions,
   useTransferBankTransactionToCash,
   useMarkTransactionUnclear,
+  type BankTransactionImportResult,
   type Employee,
   type EmployeeSalaryHistory,
   type CashTransaction,
@@ -344,7 +346,7 @@ export function BankTransactions() {
   const session = useGetAuthSession();
   const qc = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
-  const [importResult, setImportResult] = useState<{ imported: number; skippedDuplicate: number; skippedZero: number } | null>(null);
+  const [importResult, setImportResult] = useState<BankTransactionImportResult | null>(null);
   const [selectedBank, setSelectedBank] = useState<BankTransaction | null>(null);
   const [category, setCategory] = useState('');
   const [incomeMonth, setIncomeMonth] = useState(currentMonth());
@@ -455,7 +457,16 @@ export function BankTransactions() {
   };
   return <div className="page-enter">
     <PageHeading eyebrow="Kapitron / bank statement" title="Банкны гүйлгээ" detail="Банкны гүйлгээг ижил төстэй кассын мөртэй холбох эсвэл шинээр касст үүсгэнэ." action={canManage ? <><Button variant="outline" onClick={() => setAccountSettingsOpen(true)} data-testid="button-bank-account-settings"><Landmark className="size-4" />Дансны тохиргоо</Button><select value={selectedAccountId ?? ''} onChange={(event) => setSelectedAccountId(Number(event.target.value) || null)} className="h-10 min-w-56 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" aria-label="Хуулга уншуулах банкны данс" data-testid="select-bank-account"><option value="">Данс сонгох</option>{bankAccounts.data?.map((account) => <option key={account.id} value={account.id}>{account.bankName} · {account.accountNumber}</option>)}</select><input ref={fileInput} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={importFile} className="sr-only" aria-label="Kapitron банкны хуулга сонгох" data-testid="input-bank-transactions-import" /><Button onClick={() => fileInput.current?.click()} disabled={importStatement.isPending || !selectedAccountId} data-testid="button-import-bank-transactions"><Upload className="size-4" />{importStatement.isPending ? 'Хуулга уншиж байна...' : 'Капитрон банкны хуулга уншуулах'}</Button></> : undefined} />
-    {importResult && <div className="mb-5 flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-xs text-foreground" role="status" data-testid="bank-import-result"><span><strong>{importResult.imported}</strong> гүйлгээ импортлогдлоо</span><span><strong>{importResult.skippedDuplicate}</strong> давхардал алгасагдлаа</span><span><strong>{importResult.skippedZero}</strong> тэг дүн алгасагдлаа</span></div>}
+    {importResult && <div className="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground" role="status" data-testid="bank-import-result">
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        <span><strong>{importResult.totalRead}</strong> гүйлгээ уншсанаас: </span>
+        <span><strong>{importResult.recognized}</strong> танигдсан, </span>
+        <span><strong>{importResult.unrecognized}</strong> тодорхойгүй байна.</span>
+      </div>
+      <Link href="/bank-transactions/journal-review" className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90" data-testid="link-journal-review">
+        Журналд шивэх
+      </Link>
+    </div>}
     <section className="overflow-hidden rounded-2xl border border-border bg-card" data-testid="panel-bank-transactions">
       <div className="flex flex-col gap-3 border-b border-border px-5 py-4 lg:flex-row lg:items-center lg:justify-between"><div><h2 className="text-base font-bold">Импортлосон банкны гүйлгээ</h2><p className="mt-1 text-xs text-muted-foreground">Банкны гүйлгээг ижил төстэй кассын мөртэй холбох эсвэл шинээр касст үүсгэж болно. Холбогдсон мөр жагсаалтаас алга болж, кассын мөр банкны хуулгаар баталгаажсан гэж тэмдэглэгдэнэ.</p></div><div className="flex shrink-0 items-center overflow-hidden rounded-xl border border-border bg-card"><button type="button" onClick={() => setFilterMonth((value) => shiftMonth(value, -1))} className="grid size-10 place-items-center border-r border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Өмнөх сар" data-testid="button-bank-previous-month"><ChevronRight className="size-4 rotate-180" /></button><div className="flex items-center gap-2 px-3"><CalendarDays className="size-4 text-primary" /><label className="relative flex h-10 min-w-28 cursor-pointer items-center text-sm font-medium"><span>{mongolianMonthLabel(filterMonth)}</span><input type="month" value={filterMonth} onChange={(event) => setFilterMonth(event.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="Банкны гүйлгээний сар сонгох" data-testid="input-bank-filter-month" /></label></div><button type="button" onClick={() => setFilterMonth((value) => shiftMonth(value, 1))} className="grid size-10 place-items-center border-l border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Дараагийн сар" data-testid="button-bank-next-month"><ChevronRight className="size-4" /></button></div></div>
       {list.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : list.isError ? <ErrorBlock onRetry={() => list.refetch()} /> : !filteredBankTransactions.length ? <EmptyState title="Сонгосон сард банкны гүйлгээ алга" detail="Өмнөх эсвэл дараагийн сар руу шилжих, эсвэл Kapitron банкны .xlsx хуулгыг уншуулна уу." icon={Landmark} /> : <div className="overflow-x-auto"><table className="w-full min-w-[1360px] text-left" data-testid="table-bank-transactions"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Гүйлгээний огноо</th><th className="px-5 py-3">Төрөл</th><th className="px-5 py-3">Банк</th><th className="px-5 py-3">Өөрийн данс</th><th className="px-5 py-3">Харьцсан данс</th><th className="px-5 py-3">Гүйлгээний утга</th><th className="px-5 py-3">GL данс</th><th className="px-5 py-3 text-right">Дүн</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{filteredBankTransactions.map((row) => {

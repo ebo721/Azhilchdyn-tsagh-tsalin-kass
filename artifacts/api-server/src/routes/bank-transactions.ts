@@ -11,6 +11,7 @@ import {
   CreateBankAccountResponse,
   ImportKapitronBankTransactionsResponse,
   ImportKapitronBankTransactionsQueryParams,
+  ListBankTransactionJournalReviewResponse,
   LinkBankTransactionToCashBody,
   LinkBankTransactionToCashParams,
   LinkBankTransactionToCashResponse,
@@ -20,6 +21,10 @@ import {
   ListBankAccountsResponse,
   ListUnclearTransactionsResponse,
   MarkTransactionUnclearParams,
+  PostBankTransactionJournalBody,
+  PostBankTransactionJournalParams,
+  PostBankTransactionJournalResponse,
+  RejectBankTransactionSuggestionParams,
   TransferBankTransactionToCashBody,
   TransferBankTransactionToCashParams,
   TransferBankTransactionToCashResponse,
@@ -27,7 +32,7 @@ import {
   UpdateBankTransactionAccountParams,
   UpdateBankTransactionAccountResponse,
 } from "@workspace/api-zod";
-import { and, desc, eq, gte, isNotNull, isNull, lte } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, lte, or } from "drizzle-orm";
 import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.js";
@@ -71,6 +76,34 @@ async function postBankCashJournal(tx: any, cash: any, counter: any) {
   });
   if (result.status !== "posted") throw new Error("Bank cash journal entry must be balanced");
   return result.journalEntryId;
+}
+
+function journalSuggestionKey(type: string, counterparty: string) {
+  const normalized = counterparty.trim().toLocaleLowerCase("mn-MN").replace(/\s+/g, " ");
+  return normalized ? `${type}:${normalized}` : null;
+}
+
+async function bankJournalAccountSuggestions() {
+  const historical = await db.select({
+    type: bankTransactionsTable.type,
+    counterparty: bankTransactionsTable.counterparty,
+    accountId: bankTransactionsTable.accountId,
+  }).from(bankTransactionsTable)
+    .where(and(
+      isNotNull(bankTransactionsTable.accountId),
+      or(
+        isNotNull(bankTransactionsTable.journalEntryId),
+        isNotNull(bankTransactionsTable.transferredAt),
+        isNotNull(bankTransactionsTable.cashTransactionId),
+      ),
+    ))
+    .orderBy(desc(bankTransactionsTable.transactionAt), desc(bankTransactionsTable.id));
+  const suggestions = new Map<string, number>();
+  for (const row of historical) {
+    const key = journalSuggestionKey(row.type, row.counterparty);
+    if (key && row.accountId !== null && !suggestions.has(key)) suggestions.set(key, row.accountId);
+  }
+  return suggestions;
 }
 
 router.use(async (req, res, next) => {
@@ -271,10 +304,127 @@ router.get("/bank-transactions", async (_req, res, next) => {
       accountName: chartOfAccountsTable.name,
     }).from(bankTransactionsTable)
       .leftJoin(chartOfAccountsTable, eq(bankTransactionsTable.accountId, chartOfAccountsTable.id))
-      .where(and(isNull(bankTransactionsTable.cashTransactionId), isNull(bankTransactionsTable.transferredAt), isNull(bankTransactionsTable.unclearAt)))
+      .where(and(
+        isNull(bankTransactionsTable.cashTransactionId),
+        isNull(bankTransactionsTable.transferredAt),
+        isNull(bankTransactionsTable.unclearAt),
+        isNull(bankTransactionsTable.journalEntryId),
+      ))
       .orderBy(desc(bankTransactionsTable.transactionAt), desc(bankTransactionsTable.id));
     res.json(ListBankTransactionsResponse.parse(rows.map((row) =>
       response(row.transaction, row.accountCode, row.accountName))));
+  } catch (error) { next(error); }
+});
+
+router.get("/bank-transactions/journal-review", async (_req, res, next) => {
+  try {
+    const rows = await db.select({
+      transaction: bankTransactionsTable,
+      suggestedAccountName: chartOfAccountsTable.name,
+    }).from(bankTransactionsTable)
+      .leftJoin(chartOfAccountsTable, eq(bankTransactionsTable.accountId, chartOfAccountsTable.id))
+      .where(and(
+        isNull(bankTransactionsTable.cashTransactionId),
+        isNull(bankTransactionsTable.transferredAt),
+        isNull(bankTransactionsTable.unclearAt),
+        isNull(bankTransactionsTable.journalEntryId),
+      ))
+      .orderBy(desc(bankTransactionsTable.transactionAt), desc(bankTransactionsTable.id));
+    res.json(ListBankTransactionJournalReviewResponse.parse(rows.map(({ transaction, suggestedAccountName }) => ({
+      id: transaction.id,
+      transactionAt: transaction.transactionAt.toISOString(),
+      type: transaction.type,
+      description: transaction.description,
+      amount: Number(transaction.amount),
+      counterparty: transaction.counterparty,
+      suggestedAccountId: transaction.accountId,
+      suggestedAccountName,
+    }))));
+  } catch (error) { next(error); }
+});
+
+router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
+  try {
+    const { id } = PostBankTransactionJournalParams.parse(req.params);
+    const { accountId } = PostBankTransactionJournalBody.parse(req.body);
+    const result = await db.transaction(async (tx) => {
+      const [bank] = await tx.select().from(bankTransactionsTable)
+        .where(eq(bankTransactionsTable.id, id))
+        .for("update");
+      if (!bank) return "missing" as const;
+      if (bank.journalEntryId !== null) return { id: bank.id, journalEntryId: bank.journalEntryId };
+      if (bank.cashTransactionId !== null || bank.transferredAt !== null || bank.unclearAt !== null) {
+        return "resolved" as const;
+      }
+      const [account] = await tx.select().from(chartOfAccountsTable).where(and(
+        eq(chartOfAccountsTable.id, accountId),
+        eq(chartOfAccountsTable.isActive, true),
+      ));
+      const allowed = bank.type === "income"
+        ? account?.type === "revenue"
+        : account !== undefined && ["expense", "asset"].includes(account.type);
+      if (!allowed) return "invalid_account" as const;
+      const bankAccount = await accountByCode(tx, "1010", "asset");
+      const amount = Number(bank.amount);
+      const posting = await postJournalEntry(tx, {
+        date: bank.transactionAt.toISOString().slice(0, 10),
+        description: bank.description.trim() || bank.counterparty.trim() || "Банкны гүйлгээ",
+        sourceType: "bank",
+        sourceId: bank.id,
+        createdBy: null,
+        lines: bank.type === "income"
+          ? [{ accountId: bankAccount.id, debit: amount, credit: 0 }, { accountId: account.id, debit: 0, credit: amount }]
+          : [{ accountId: account.id, debit: amount, credit: 0 }, { accountId: bankAccount.id, debit: 0, credit: amount }],
+      });
+      if (posting.status !== "posted") throw new Error("Bank journal entry must be balanced");
+      await tx.update(bankTransactionsTable).set({
+        accountId: account.id,
+        journalEntryId: posting.journalEntryId,
+      }).where(eq(bankTransactionsTable.id, bank.id));
+      return { id: bank.id, journalEntryId: posting.journalEntryId };
+    });
+    if (result === "missing") {
+      res.status(404).json({ error: "Банкны гүйлгээ олдсонгүй" });
+      return;
+    }
+    if (result === "resolved") {
+      res.status(409).json({ error: "Банкны гүйлгээ аль хэдийн шийдвэрлэгдсэн байна" });
+      return;
+    }
+    if (result === "invalid_account") {
+      res.status(400).json({ error: "Гүйлгээний төрөлд тохирох идэвхтэй GL данс сонгоно уу" });
+      return;
+    }
+    res.json(PostBankTransactionJournalResponse.parse(result));
+  } catch (error) { next(error); }
+});
+
+router.post("/bank-transactions/:id/reject-suggestion", async (req, res, next) => {
+  try {
+    const { id } = RejectBankTransactionSuggestionParams.parse(req.params);
+    const result = await db.transaction(async (tx) => {
+      const [bank] = await tx.select().from(bankTransactionsTable)
+        .where(eq(bankTransactionsTable.id, id))
+        .for("update");
+      if (!bank) return "missing" as const;
+      if (bank.cashTransactionId !== null || bank.transferredAt !== null || bank.unclearAt !== null || bank.journalEntryId !== null) {
+        return "resolved" as const;
+      }
+      await tx.update(bankTransactionsTable).set({
+        accountId: null,
+        unclearAt: new Date(),
+      }).where(eq(bankTransactionsTable.id, id));
+      return "rejected" as const;
+    });
+    if (result === "missing") {
+      res.status(404).json({ error: "Банкны гүйлгээ олдсонгүй" });
+      return;
+    }
+    if (result === "resolved") {
+      res.status(409).json({ error: "Банкны гүйлгээ аль хэдийн шийдвэрлэгдсэн байна" });
+      return;
+    }
+    res.status(204).end();
   } catch (error) { next(error); }
 });
 
@@ -356,6 +506,7 @@ router.post("/bank-transactions/import", raw({ type: "application/octet-stream",
       .from(bankTransactionsTable)
       .where(isNull(bankTransactionsTable.bankAccountId));
     const legacyByFingerprint = new Map(legacyRows.map((row) => [row.fingerprint, row.id]));
+    const suggestions = await bankJournalAccountSuggestions();
     const inserted = await db.transaction(async (tx) => {
       const pending = [];
       for (const { legacyFingerprint, ...value } of values) {
@@ -369,17 +520,27 @@ router.post("/bank-transactions/import", raw({ type: "application/octet-stream",
           }).where(eq(bankTransactionsTable.id, legacyId));
           legacyByFingerprint.delete(legacyFingerprint);
         } else {
-          pending.push(value);
+          const key = journalSuggestionKey(value.type, value.counterparty);
+          pending.push({
+            ...value,
+            accountId: key ? suggestions.get(key) ?? null : null,
+          });
         }
       }
       return pending.length
-        ? await tx.insert(bankTransactionsTable).values(pending).onConflictDoNothing().returning({ id: bankTransactionsTable.id })
+        ? await tx.insert(bankTransactionsTable).values(pending).onConflictDoNothing().returning({
+          id: bankTransactionsTable.id,
+          accountId: bankTransactionsTable.accountId,
+        })
         : [];
     });
     res.status(201).json(ImportKapitronBankTransactionsResponse.parse({
       imported: inserted.length,
       skippedDuplicate: values.length - inserted.length,
       skippedZero,
+      totalRead: inserted.length,
+      recognized: inserted.filter((row) => row.accountId !== null).length,
+      unrecognized: inserted.filter((row) => row.accountId === null).length,
     }));
   } catch (error) { next(error); }
 });

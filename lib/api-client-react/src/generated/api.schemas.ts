@@ -208,6 +208,7 @@ export interface ChartOfAccount {
   code: string;
   name: string;
   type: ChartOfAccountType;
+  isActive: boolean;
   createdAt: string;
 }
 
@@ -1073,6 +1074,37 @@ export interface BankTransactionAccountInput {
   accountId: number | null;
 }
 
+export type BankTransactionJournalReviewItemType = typeof BankTransactionJournalReviewItemType[keyof typeof BankTransactionJournalReviewItemType];
+
+
+export const BankTransactionJournalReviewItemType = {
+  income: 'income',
+  expense: 'expense',
+} as const;
+
+export interface BankTransactionJournalReviewItem {
+  id: number;
+  transactionAt: string;
+  type: BankTransactionJournalReviewItemType;
+  description: string;
+  amount: number;
+  counterparty: string;
+  /** @nullable */
+  suggestedAccountId: number | null;
+  /** @nullable */
+  suggestedAccountName: string | null;
+}
+
+export interface BankTransactionJournalPostInput {
+  /** @minimum 1 */
+  accountId: number;
+}
+
+export interface BankTransactionJournalPostResult {
+  id: number;
+  journalEntryId: number;
+}
+
 export interface BankTransactionImportResult {
   /** @minimum 0 */
   imported: number;
@@ -1080,6 +1112,12 @@ export interface BankTransactionImportResult {
   skippedDuplicate: number;
   /** @minimum 0 */
   skippedZero: number;
+  /** @minimum 0 */
+  totalRead: number;
+  /** @minimum 0 */
+  recognized: number;
+  /** @minimum 0 */
+  unrecognized: number;
 }
 
 export interface InventoryPurchaseItem {

@@ -31,7 +31,7 @@ export function AppShell({ children, role, onLogout }: { children: ReactNode; ro
         : role === 'viewer'
           ? nav.filter((item) => ['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/inventory', '/fixed-assets'].includes(item.href))
           : nav;
-  const active = visibleNav.find((item) => item.href === location)?.label ?? 'Статистик';
+  const active = visibleNav.find((item) => item.href === location || (item.href !== '/' && location.startsWith(`${item.href}/`)))?.label ?? 'Статистик';
   return (
     <div className="min-h-[100dvh] bg-background app-grid" data-role={role}>
       <aside className={cn('fixed inset-y-0 left-0 z-40 flex w-[248px] flex-col bg-sidebar px-4 py-5 text-sidebar-foreground transition-transform duration-200 lg:translate-x-0', mobileOpen ? 'translate-x-0' : '-translate-x-full')} data-testid="navigation-sidebar">
