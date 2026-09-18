@@ -21,6 +21,7 @@ import {
   getListBankTransactionsQueryKey,
   getListCashTransactionsQueryKey,
   getListInventoryPurchasesQueryKey,
+  getListJournalEntriesQueryKey,
   getListOperatingExpensesQueryKey,
   BankTransactionJournalReviewItemType,
   BankTransactionJournalReviewItem
@@ -51,6 +52,7 @@ export function BankTransactionJournalReview() {
       getListBankTransactionsQueryKey(),
       getListCashTransactionsQueryKey(),
       getListInventoryPurchasesQueryKey(),
+      getListJournalEntriesQueryKey(),
       getListOperatingExpensesQueryKey(),
     ].forEach((queryKey) => qc.invalidateQueries({ queryKey }));
   };
@@ -78,6 +80,7 @@ export function BankTransactionJournalReview() {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getListBankTransactionJournalReviewQueryKey() });
         qc.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
+        qc.invalidateQueries({ queryKey: getListJournalEntriesQueryKey() });
       },
       onError: mutationError,
     });
@@ -90,6 +93,7 @@ export function BankTransactionJournalReview() {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getListBankTransactionJournalReviewQueryKey() });
         qc.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
+        qc.invalidateQueries({ queryKey: getListJournalEntriesQueryKey() });
       },
       onError: mutationError,
     });
@@ -100,6 +104,7 @@ export function BankTransactionJournalReview() {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getListBankTransactionJournalReviewQueryKey() });
         qc.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
+        qc.invalidateQueries({ queryKey: getListJournalEntriesQueryKey() });
       },
       onError: mutationError,
     });

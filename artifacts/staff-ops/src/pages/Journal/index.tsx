@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useListJournalEntries, useGetAuthSession, type JournalEntry } from '@workspace/api-client-react';
+import { getListJournalEntriesQueryKey, useListJournalEntries, useGetAuthSession, type JournalEntry } from '@workspace/api-client-react';
 import { PageHeading, EmptyState, LoadingBlock, ErrorBlock, StatCard } from '@/components/ui-primitives';
 import { formatMoney, formatDate } from './utils';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,14 @@ export function Journal() {
   const { data: entries, isLoading, isError, refetch } = useListJournalEntries({
     dateFrom: dateFrom || undefined,
     dateTo: dateTo || undefined,
+  }, {
+    query: {
+      queryKey: getListJournalEntriesQueryKey({
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+      }),
+      refetchOnMount: 'always',
+    },
   });
 
   const [detailId, setDetailId] = useState<number | null>(null);
