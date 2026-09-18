@@ -32,12 +32,13 @@ import {
   UpdateBankTransactionAccountParams,
   UpdateBankTransactionAccountResponse,
 } from "@workspace/api-zod";
-import { and, desc, eq, gte, isNotNull, isNull, lte, or } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, lte } from "drizzle-orm";
 import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.js";
 import { cashAccountForCategory } from "../lib/cash-account.js";
 import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
+import { loadBankRecognitionContext, recognizeBankTransaction } from "../lib/bank-recognition.js";
 
 const router: IRouter = Router();
 const execFile = promisify(execFileCallback);
@@ -76,34 +77,6 @@ async function postBankCashJournal(tx: any, cash: any, counter: any) {
   });
   if (result.status !== "posted") throw new Error("Bank cash journal entry must be balanced");
   return result.journalEntryId;
-}
-
-function journalSuggestionKey(type: string, counterparty: string) {
-  const normalized = counterparty.trim().toLocaleLowerCase("mn-MN").replace(/\s+/g, " ");
-  return normalized ? `${type}:${normalized}` : null;
-}
-
-async function bankJournalAccountSuggestions() {
-  const historical = await db.select({
-    type: bankTransactionsTable.type,
-    counterparty: bankTransactionsTable.counterparty,
-    accountId: bankTransactionsTable.accountId,
-  }).from(bankTransactionsTable)
-    .where(and(
-      isNotNull(bankTransactionsTable.accountId),
-      or(
-        isNotNull(bankTransactionsTable.journalEntryId),
-        isNotNull(bankTransactionsTable.transferredAt),
-        isNotNull(bankTransactionsTable.cashTransactionId),
-      ),
-    ))
-    .orderBy(desc(bankTransactionsTable.transactionAt), desc(bankTransactionsTable.id));
-  const suggestions = new Map<string, number>();
-  for (const row of historical) {
-    const key = journalSuggestionKey(row.type, row.counterparty);
-    if (key && row.accountId !== null && !suggestions.has(key)) suggestions.set(key, row.accountId);
-  }
-  return suggestions;
 }
 
 router.use(async (req, res, next) => {
@@ -362,7 +335,7 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
       ));
       const allowed = bank.type === "income"
         ? account?.type === "revenue"
-        : account !== undefined && ["expense", "asset"].includes(account.type);
+        : account !== undefined && ["expense", "asset", "liability"].includes(account.type);
       if (!allowed) return "invalid_account" as const;
       const bankAccount = await accountByCode(tx, "1010", "asset");
       const amount = Number(bank.amount);
@@ -506,7 +479,7 @@ router.post("/bank-transactions/import", raw({ type: "application/octet-stream",
       .from(bankTransactionsTable)
       .where(isNull(bankTransactionsTable.bankAccountId));
     const legacyByFingerprint = new Map(legacyRows.map((row) => [row.fingerprint, row.id]));
-    const suggestions = await bankJournalAccountSuggestions();
+    const recognitionContext = await loadBankRecognitionContext();
     const inserted = await db.transaction(async (tx) => {
       const pending = [];
       for (const { legacyFingerprint, ...value } of values) {
@@ -520,10 +493,9 @@ router.post("/bank-transactions/import", raw({ type: "application/octet-stream",
           }).where(eq(bankTransactionsTable.id, legacyId));
           legacyByFingerprint.delete(legacyFingerprint);
         } else {
-          const key = journalSuggestionKey(value.type, value.counterparty);
           pending.push({
             ...value,
-            accountId: key ? suggestions.get(key) ?? null : null,
+            accountId: recognizeBankTransaction(value, recognitionContext).accountId,
           });
         }
       }

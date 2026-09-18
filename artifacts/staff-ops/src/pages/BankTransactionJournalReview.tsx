@@ -202,7 +202,9 @@ export function BankTransactionJournalReview() {
                             <option value="" disabled>Өөр данс сонгох...</option>
                             {accounts.data?.filter((account) =>
                               account.isActive
-                              && (isIncome ? account.type === 'revenue' : account.type === 'expense' || account.type === 'asset')
+                              && (isIncome
+                                ? account.type === 'revenue'
+                                : account.type === 'expense' || account.type === 'asset' || account.type === 'liability')
                             ).map(a => (
                               <option key={a.id} value={a.id}>{a.code} - {a.name}</option>
                             ))}
