@@ -7,7 +7,7 @@ import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import app from "../app";
 import { createStaffSession, hrCookie } from "../lib/hr-session";
-import { isExcludedBankFee } from "./bank-transactions";
+import { findKapitronHeaderRow, isExcludedBankFee } from "./bank-transactions";
 
 describe("bank statement fee filtering", () => {
   it("excludes 50₮ message notification fees", () => {
@@ -18,6 +18,23 @@ describe("bank statement fee filtering", () => {
   it("keeps unrelated 50₮ transactions", () => {
     assert.equal(isExcludedBankFee(50, "Данс хооронд шилжүүлэг"), false);
     assert.equal(isExcludedBankFee(50, "Мессэж мэдэгдэл"), false);
+  });
+});
+
+describe("Kapitron statement header detection", () => {
+  it("finds the transaction header after account metadata rows", () => {
+    const rows = [
+      new Map([[0, "Дансны дугаар"], [1, "MN650030005000015555"]]),
+      new Map([[0, "Дансны нэр"], [1, "Test account"]]),
+      new Map([[0, "Огноо"], [1, "Зарлага"], [2, "Орлого"], [3, "Exchange"], [4, "Харьцсан данс / Нэр"], [5, "Үлдэгдэл"], [6, "Гүйлгээний утга"], [7, "Гүйлгээ хийсэн огноо"]]),
+    ];
+    assert.equal(findKapitronHeaderRow(rows), 2);
+  });
+
+  it("rejects rows that do not contain the complete transaction header", () => {
+    assert.equal(findKapitronHeaderRow([
+      new Map([[0, "Огноо"], [1, "Зарлага"], [2, "Орлого"]]),
+    ]), -1);
   });
 });
 

@@ -10,3 +10,4 @@
 - [Neon production migration sessions](neon-production-migration-sessions.md) — Set public search_path inside pooled sessions; do not rely on startup options or an older pg_dump client.
 - [Automatic posting lifecycle reviews](automatic-posting-lifecycle-reviews.md) — Review edits, cancellations, deletion, and cash-vs-bank provenance, not only the initial posting hook.
 - [Bank recognition settlement boundary](bank-recognition-settlement-boundary.md) — Recognition suggests only a GL account; generic journal approval must not settle a source document.
+- [Kapitron XLSX headers](kapitron-xlsx-headers.md) — Statement exports may prepend account metadata; find the complete transaction header instead of assuming row one.
