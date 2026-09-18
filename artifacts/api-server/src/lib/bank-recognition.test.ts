@@ -21,9 +21,14 @@ const context = (overrides: Partial<BankRecognitionContext> = {}): BankRecogniti
   unpaidTargets: [],
   historical: [],
   keywordAccounts: new Map([
+    ["1000", 1000],
+    ["1500", 1500],
+    ["1510", 1510],
     ["6000", 6000],
     ["6010", 6010],
     ["6100", 6100],
+    ["6200", 6200],
+    ["6400", 6400],
     ["2200", 2200],
   ]),
   ...overrides,
@@ -85,6 +90,28 @@ describe("ordered bank recognition", () => {
     assert.equal(recognizeBankTransaction(transaction({ description: "9 сарын НДШ" }), context()).accountId, 6010);
     assert.equal(recognizeBankTransaction(transaction({ description: "Оффисын түрээс" }), context()).accountId, 6100);
     assert.equal(recognizeBankTransaction(transaction({ description: "НӨАТ төлбөр" }), context()).accountId, 2200);
+  });
+
+  it("recognizes common imported statement descriptions", () => {
+    assert.equal(recognizeBankTransaction(transaction({
+      type: "income",
+      description: "Касс зузаатгал",
+    }), context()).accountId, 1000);
+    assert.equal(recognizeBankTransaction(transaction({ description: "ТТТ үхэр, хонь, ямаа мах" }), context()).accountId, 1500);
+    assert.equal(recognizeBankTransaction(transaction({ description: "ТТТ ахуйн бараа" }), context()).accountId, 1510);
+    assert.equal(recognizeBankTransaction(transaction({ description: "Самасаа ХХК Velfire бинзен" }), context()).accountId, 6200);
+    assert.equal(recognizeBankTransaction(transaction({ description: "Хостинг төлбөр" }), context()).accountId, 6400);
+  });
+
+  it("uses a specific expense rule before the broad TTT inventory rule", () => {
+    assert.equal(
+      recognizeBankTransaction(transaction({ description: "ТТТ тээврийн хөлс" }), context()).accountId,
+      6200,
+    );
+    assert.equal(
+      recognizeBankTransaction(transaction({ description: "ТТТ агуулах сангийн материал" }), context()).accountId,
+      1510,
+    );
   });
 
   it("does not match on the company's bank account number alone", () => {
