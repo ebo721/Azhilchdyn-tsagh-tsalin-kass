@@ -50,6 +50,13 @@ const normalize = (value: string | null | undefined) =>
 const tokens = (value: string) =>
   new Set(normalize(value).match(/[\p{L}\p{N}]+/gu) ?? []);
 
+const normalizedTokenText = (value: string) =>
+  [...tokens(value)].join(" ");
+
+const relatedTokens = (left: string, right: string) =>
+  left === right
+  || (Math.min(left.length, right.length) >= 4 && (left.startsWith(right) || right.startsWith(left)));
+
 const daysBetween = (left: string, right: string) =>
   Math.abs((Date.parse(`${left}T00:00:00Z`) - Date.parse(`${right}T00:00:00Z`)) / 86_400_000);
 
@@ -65,11 +72,17 @@ function unpaidTargetAccount(
     const distance = daysBetween(target.date, bankDate);
     if (distance > 7) return [];
     const targetTokens = tokens(target.text);
-    const overlap = [...targetTokens].filter((token) => bankTokens.has(token)).length;
+    const overlap = [...targetTokens]
+      .filter((targetToken) => [...bankTokens].some((bankToken) => relatedTokens(targetToken, bankToken)))
+      .length;
+    if (overlap === 0) return [];
     const score = 100 - distance * 5 + overlap * 10;
     return [{ ...target, score }];
   }).sort((left, right) => right.score - left.score || right.id - left.id);
-  return candidates[0]?.accountId ?? null;
+  const [best, runnerUp] = candidates;
+  if (!best) return null;
+  if (runnerUp && runnerUp.score === best.score && runnerUp.accountId !== best.accountId) return null;
+  return best.accountId;
 }
 
 function historicalIdentityAccount(
@@ -103,7 +116,10 @@ function keywordAccount(
   const description = normalize(transaction.description);
   const rule = bankKeywordRecognitionRules.find((candidate) =>
     candidate.direction === transaction.type
-    && candidate.keywords.some((keyword) => description.includes(normalize(keyword))));
+    && candidate.keywords.some((keyword) => {
+      const keywordText = normalizedTokenText(keyword);
+      return keywordText && ` ${normalizedTokenText(description)} `.includes(` ${keywordText} `);
+    }));
   return rule ? keywordAccounts.get(rule.accountCode) ?? null : null;
 }
 
@@ -130,7 +146,12 @@ export async function loadBankRecognitionContext(): Promise<BankRecognitionConte
       amount: inventoryPurchasesTable.totalAmount,
       text: inventoryPurchasesTable.documentName,
     }).from(inventoryPurchasesTable)
-      .where(and(isNull(inventoryPurchasesTable.paymentDate), isNotNull(inventoryPurchasesTable.accountId)))
+      .innerJoin(chartOfAccountsTable, eq(inventoryPurchasesTable.accountId, chartOfAccountsTable.id))
+      .where(and(
+        isNull(inventoryPurchasesTable.paymentDate),
+        isNotNull(inventoryPurchasesTable.accountId),
+        eq(chartOfAccountsTable.isActive, true),
+      ))
       .orderBy(desc(inventoryPurchasesTable.date), desc(inventoryPurchasesTable.id)),
     db.select({
       id: operatingExpensesTable.id,
@@ -145,6 +166,7 @@ export async function loadBankRecognitionContext(): Promise<BankRecognitionConte
         isNull(operatingExpensesTable.paymentDate),
         isNull(operatingExpensesTable.bankTransactionId),
         isNull(operatingExpensesTable.cashTransactionId),
+        eq(chartOfAccountsTable.isActive, true),
       ))
       .orderBy(desc(operatingExpensesTable.date), desc(operatingExpensesTable.id)),
     db.select({

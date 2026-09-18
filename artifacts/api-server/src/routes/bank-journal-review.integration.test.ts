@@ -20,8 +20,10 @@ describe("bank journal review routes", () => {
   let baseUrl: string;
   let cookie: string;
   let expenseAccountId: number;
+  let liabilityAccountId: number;
   let suggestedBankId: number;
   let unknownBankId: number;
+  let vatBankId: number;
   const userIds: number[] = [];
   const accountIds: number[] = [];
   const bankIds: number[] = [];
@@ -39,14 +41,23 @@ describe("bank journal review routes", () => {
     userIds.push(user.id);
     cookie = `${hrCookie.name}=${createStaffSession(user)}`;
 
-    const [expenseAccount] = await db.insert(chartOfAccountsTable).values({
-      code: `review-expense-${suffix}`,
-      name: "Review expense account",
-      type: "expense",
-      normalBalance: "debit",
-    }).returning();
+    const [expenseAccount, liabilityAccount] = await db.insert(chartOfAccountsTable).values([
+      {
+        code: `review-expense-${suffix}`,
+        name: "Review expense account",
+        type: "expense",
+        normalBalance: "debit",
+      },
+      {
+        code: `review-liability-${suffix}`,
+        name: "Review VAT liability account",
+        type: "liability",
+        normalBalance: "credit",
+      },
+    ]).returning();
     expenseAccountId = expenseAccount.id;
-    accountIds.push(expenseAccount.id);
+    liabilityAccountId = liabilityAccount.id;
+    accountIds.push(expenseAccount.id, liabilityAccount.id);
 
     const transactions = await db.insert(bankTransactionsTable).values([
       {
@@ -68,8 +79,18 @@ describe("bank journal review routes", () => {
         description: "Тодорхойгүй гүйлгээ",
         fingerprint: `review-unknown-${suffix}`,
       },
+      {
+        transactionAt: new Date("2099-03-03T11:00:00.000Z"),
+        type: "expense",
+        amount: 50_000,
+        accountId: liabilityAccountId,
+        account: "1122334455",
+        counterparty: "Татварын газар",
+        description: "НӨАТ төлбөр",
+        fingerprint: `review-vat-${suffix}`,
+      },
     ]).returning();
-    [suggestedBankId, unknownBankId] = transactions.map(({ id }) => id);
+    [suggestedBankId, unknownBankId, vatBankId] = transactions.map(({ id }) => id);
     bankIds.push(...transactions.map(({ id }) => id));
 
     server = app.listen(0);
@@ -143,5 +164,24 @@ describe("bank journal review routes", () => {
     const review = await fetch(`${baseUrl}/api/bank-transactions/journal-review`, { headers: { cookie } });
     const rows = await review.json() as Array<{ id: number }>;
     assert.equal(rows.some(({ id }) => id === unknownBankId), false);
+  });
+
+  it("posts a VAT payment by debiting the liability account and crediting bank", async () => {
+    const response = await fetch(`${baseUrl}/api/bank-transactions/${vatBankId}/post-journal`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ accountId: liabilityAccountId }),
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json() as { journalEntryId: number };
+    journalEntryIds.push(result.journalEntryId);
+    const lines = await db.select().from(journalLinesTable)
+      .where(eq(journalLinesTable.journalEntryId, result.journalEntryId));
+    const liabilityLine = lines.find((line) => line.accountId === liabilityAccountId);
+    assert.equal(Number(liabilityLine?.debit), 50_000);
+    assert.equal(Number(liabilityLine?.credit), 0);
+    const bankLine = lines.find((line) => line.accountId !== liabilityAccountId);
+    assert.equal(Number(bankLine?.debit), 0);
+    assert.equal(Number(bankLine?.credit), 50_000);
   });
 });

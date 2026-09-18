@@ -54,14 +54,24 @@ describe("ordered bank recognition", () => {
 
   it("uses the latest matching historical identity before a keyword", () => {
     const result = recognizeBankTransaction(transaction(), context({
-      historical: [{
-        id: 2,
-        type: "expense",
-        accountId: 6500,
-        account: "99112233 / Нийлүүлэгч",
-        counterparty: "99112233 / Нийлүүлэгч",
-        bankAccountNumber: "1234567890",
-      }],
+      historical: [
+        {
+          id: 2,
+          type: "expense",
+          accountId: 6500,
+          account: "99112233 / Нийлүүлэгч",
+          counterparty: "99112233 / Нийлүүлэгч",
+          bankAccountNumber: "1234567890",
+        },
+        {
+          id: 1,
+          type: "expense",
+          accountId: 6900,
+          account: "99112233 / Нийлүүлэгч",
+          counterparty: "99112233 / Нийлүүлэгч",
+          bankAccountNumber: "1234567890",
+        },
+      ],
     }));
     assert.deepEqual(result, { accountId: 6500, rule: "historical_identity" });
   });
@@ -89,5 +99,62 @@ describe("ordered bank recognition", () => {
       }],
     }));
     assert.deepEqual(result, { accountId: null, rule: "none" });
+  });
+
+  it("does not match an unpaid target without identity overlap", () => {
+    const result = recognizeBankTransaction(transaction({
+      description: "Тайлбаргүй",
+      account: "Өөр данс",
+      counterparty: "Өөр харилцагч",
+    }), context({
+      unpaidTargets: [{
+        id: 1,
+        kind: "inventory_purchase",
+        accountId: 1500,
+        date: "2026-09-18",
+        amount: 100_000,
+        text: "Хүнсний нийлүүлэгч",
+      }],
+    }));
+    assert.deepEqual(result, { accountId: null, rule: "none" });
+  });
+
+  it("leaves ambiguous equal-score unpaid targets unrecognized", () => {
+    const result = recognizeBankTransaction(transaction({
+      description: "Нийлүүлэгч төлбөр",
+    }), context({
+      unpaidTargets: [
+        {
+          id: 2,
+          kind: "inventory_purchase",
+          accountId: 1500,
+          date: "2026-09-18",
+          amount: 100_000,
+          text: "Нийлүүлэгч",
+        },
+        {
+          id: 1,
+          kind: "operating_expense",
+          accountId: 6900,
+          date: "2026-09-18",
+          amount: 100_000,
+          text: "Нийлүүлэгч",
+        },
+      ],
+    }));
+    assert.deepEqual(result, { accountId: null, rule: "none" });
+  });
+
+  it("matches keywords on token boundaries only", () => {
+    assert.deepEqual(
+      recognizeBankTransaction(transaction({ description: "preventative үйлчилгээ" }), context()),
+      { accountId: null, rule: "none" },
+    );
+    assert.equal(
+      recognizeBankTransaction(transaction({ description: "Засвар үйлчилгээ" }), context({
+        keywordAccounts: new Map([["6500", 6500]]),
+      })).accountId,
+      6500,
+    );
   });
 });
