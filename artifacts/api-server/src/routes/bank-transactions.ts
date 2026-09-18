@@ -1,55 +1,3 @@
-import { Router, raw, type IRouter } from "express";
-import { createHash } from "node:crypto";
-import { inflateRawSync } from "node:zlib";
-import {
-  DeleteBankTransactionParams,
-  CreateBankAccountBody,
-  CreateBankAccountResponse,
-  ImportKapitronBankTransactionsResponse,
-  ImportKapitronBankTransactionsQueryParams,
-  ListBankTransactionJournalReviewResponse,
-  LinkBankTransactionToCashBody,
-  LinkBankTransactionToCashParams,
-  LinkBankTransactionToCashResponse,
-  ListBankTransactionCashSuggestionsParams,
-  ListBankTransactionCashSuggestionsResponse,
-  ListBankTransactionsResponse,
-  ListBankAccountsResponse,
-  ListUnclearTransactionsResponse,
-  MarkTransactionUnclearParams,
-  PostBankTransactionJournalBody,
-  PostBankTransactionJournalParams,
-  PostBankTransactionJournalResponse,
-  RejectBankTransactionSuggestionParams,
-  LinkBankTransactionPurchaseBody,
-  LinkBankTransactionPurchaseParams,
-  LinkBankTransactionPurchaseResponse,
-  LinkBankTransactionExpenseBody,
-  LinkBankTransactionExpenseParams,
-  LinkBankTransactionExpenseResponse,
-  TransferBankTransactionToCashBody,
-  TransferBankTransactionToCashParams,
-  TransferBankTransactionToCashResponse,
-  UpdateBankTransactionAccountBody,
-  UpdateBankTransactionAccountParams,
-  UpdateBankTransactionAccountResponse,
-} from "@workspace/api-zod";
-import { and, desc, eq, gte, isNotNull, isNull, lte } from "drizzle-orm";
-import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable } from "@workspace/db";
-import { getStaffSession } from "../lib/hr-session.js";
-import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.js";
-import { cashAccountForCategory } from "../lib/cash-account.js";
-import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
-import { loadBankRecognitionContext, recognizeBankTransaction } from "../lib/bank-recognition.js";
-import { linkBankPurchase, linkBankExpense } from "../lib/bank-document-linking.js";
-
-const router: IRouter = Router();
-const maxUploadBytes = 10 * 1024 * 1024;
-const maxXmlBytes = 8 * 1024 * 1024;
-const maxRows = 20_000;
-const requiredHeaders = ["Огноо", "Зарлага", "Орлого", "Exchange", "Харьцсан данс / Нэр", "Үлдэгдэл", "Гүйлгээний утга", "Гүйлгээ хийсэн огноо"];
-
-class BankCashLinkConflictError extends Error {}
 
 async function accountByCode(tx: any, code: string, type: string) {
   const [account] = await tx.select().from(chartOfAccountsTable).where(and(
@@ -413,6 +361,29 @@ router.post("/bank-transactions/:id/link-expense", async (req, res, next) => {
   } catch (error) {
     const code = (error as { code?: string; cause?: { code?: string } }).code ?? (error as { cause?: { code?: string } }).cause?.code;
     if (code === "23505" || (error instanceof Error && error.message.includes("claimed concurrently"))) return res.status(409).json({ error: "Банкны гүйлгээ аль хэдийн холбогдсон байна" });
+    return next(error);
+  }
+});
+
+router.post("/bank-transactions/:id/link-fixed-asset", async (req, res, next) => {
+  try {
+    const { id } = LinkBankTransactionFixedAssetParams.parse(req.params);
+    const result = await linkBankFixedAsset(id, LinkBankTransactionFixedAssetBody.parse(req.body));
+    if (typeof result === "string") {
+      const status = result === "missing_bank" || result === "missing_fixed_asset"
+        ? 404
+        : result === "bank_resolved" || result === "fixed_asset_conflict" || result === "closed"
+          ? 409
+          : 400;
+      return res.status(status).json({ error: result });
+    }
+    return res.json(LinkBankTransactionFixedAssetResponse.parse(result));
+  } catch (error) {
+    const code = (error as { code?: string; cause?: { code?: string } }).code
+      ?? (error as { cause?: { code?: string } }).cause?.code;
+    if (code === "23505" || (error instanceof Error && error.message.includes("claimed concurrently"))) {
+      return res.status(409).json({ error: "Банкны гүйлгээ аль хэдийн холбогдсон байна" });
+    }
     return next(error);
   }
 });

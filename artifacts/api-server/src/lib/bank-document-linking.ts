@@ -1,12 +1,12 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import {
   bankTransactionsTable, cashClosuresTable, cashTransactionsTable,
-  chartOfAccountsTable, db, inventoryItemsTable, inventoryPurchaseItemsTable,
+  chartOfAccountsTable, db, fixedAssetsTable, inventoryItemsTable, inventoryPurchaseItemsTable,
   inventoryPurchasesTable, inventorySuppliersTable, operatingExpensesTable,
 } from "@workspace/db";
 import { cashAccountForCategory } from "./cash-account.js";
 import { inventoryMaterialLabel, inventoryPurchaseAccount, money } from "./route-shared.js";
-import { postJournalEntry } from "./journal-posting.js";
+import { postJournalEntry, voidJournalEntry } from "./journal-posting.js";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type PurchaseInput = { inventoryPurchaseId: number } | {
@@ -14,8 +14,10 @@ type PurchaseInput = { inventoryPurchaseId: number } | {
   items: Array<{ inventoryItemId?: number; name: string; category: string; unit: string; quantity: number; unitPrice: number }>;
 };
 type ExpenseInput = { operatingExpenseId: number } | { description: string; accountId: number; date: string; amount: number };
+type FixedAssetInput = { fixedAssetId: number } | { name: string; unitPrice: number; quantity: number; date: string };
 export type LinkResult = { bankTransactionId: number; inventoryPurchaseId: number; cashTransactionId: number; journalEntryId: number }
-  | { bankTransactionId: number; operatingExpenseId: number; cashTransactionId: number; journalEntryId: number };
+  | { bankTransactionId: number; operatingExpenseId: number; cashTransactionId: number; journalEntryId: number }
+  | { bankTransactionId: number; fixedAssetId: number; cashTransactionId: number; journalEntryId: number };
 
 export async function linkBankPurchase(id: number, input: PurchaseInput): Promise<LinkResult | string> {
   return db.transaction(async (tx) => {
@@ -121,5 +123,131 @@ export async function linkBankExpense(id: number, input: ExpenseInput): Promise<
     await tx.update(cashTransactionsTable).set({ journalEntryId: posting.journalEntryId }).where(eq(cashTransactionsTable.id, cash.id));
     await tx.update(operatingExpensesTable).set({ paymentDate: date, paymentAmount: amount, bankTransactionId: id, cashTransactionId: cash.id }).where(eq(operatingExpensesTable.id, expense.id));
     return { bankTransactionId: id, operatingExpenseId: expense.id, cashTransactionId: cash.id, journalEntryId: posting.journalEntryId };
+  });
+}
+
+export async function linkBankFixedAsset(id: number, input: FixedAssetInput): Promise<LinkResult | string> {
+  return db.transaction(async (tx) => {
+    const [bank] = await tx.select().from(bankTransactionsTable)
+      .where(eq(bankTransactionsTable.id, id))
+      .for("update");
+    if (!bank) return "missing_bank";
+    if (bank.type !== "expense" || bank.cashTransactionId !== null || bank.transferredAt !== null || bank.unclearAt !== null || bank.journalEntryId !== null) {
+      return "bank_resolved";
+    }
+    const date = bank.transactionAt.toISOString().slice(0, 10);
+    const amount = money(Number(bank.amount));
+    const [closed] = await tx.select({ id: cashClosuresTable.id })
+      .from(cashClosuresTable)
+      .where(eq(cashClosuresTable.date, date));
+    if (closed) return "closed";
+
+    let asset: any;
+    if ("fixedAssetId" in input) {
+      [asset] = await tx.select().from(fixedAssetsTable)
+        .where(eq(fixedAssetsTable.id, input.fixedAssetId))
+        .for("update");
+      if (!asset) return "missing_fixed_asset";
+      if (asset.date !== date || money(Number(asset.unitPrice) * asset.quantity) !== amount) {
+        return "fixed_asset_conflict";
+      }
+    } else {
+      const name = input.name.trim();
+      const total = money(input.unitPrice * input.quantity);
+      if (!name || input.date !== date || total !== amount) return "bank_mismatch";
+      [asset] = await tx.insert(fixedAssetsTable).values({
+        name,
+        unitPrice: money(input.unitPrice),
+        quantity: input.quantity,
+        date,
+        purchased: true,
+      }).returning();
+    }
+
+    const sourceKey = `fixed-asset:${asset.id}`;
+    const [existingCash] = await tx.select().from(cashTransactionsTable).where(and(
+      eq(cashTransactionsTable.sourceType, "fixed_asset_purchase"),
+      eq(cashTransactionsTable.sourceKey, sourceKey),
+    )).for("update");
+    if (existingCash?.bankTransactionId && existingCash.bankTransactionId !== id) return "fixed_asset_conflict";
+
+    const [fixedAssetAccount] = await tx.select().from(chartOfAccountsTable).where(and(
+      eq(chartOfAccountsTable.code, "1800"),
+      eq(chartOfAccountsTable.type, "asset"),
+      eq(chartOfAccountsTable.isActive, true),
+    ));
+    const [bankAccount] = await tx.select().from(chartOfAccountsTable).where(and(
+      eq(chartOfAccountsTable.code, "1010"),
+      eq(chartOfAccountsTable.type, "asset"),
+      eq(chartOfAccountsTable.isActive, true),
+    ));
+    if (!fixedAssetAccount || !bankAccount) throw new Error("Fixed asset or bank account is missing or inactive");
+
+    const description = `${asset.name} (${asset.quantity} ширхэг)`;
+    const categoryAccount = await cashAccountForCategory(tx, "Эд хөрөнгө");
+    let cash = existingCash;
+    const verifiedAt = new Date();
+    if (cash) {
+      if (cash.journalEntryId) {
+        await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
+      }
+      [cash] = await tx.update(cashTransactionsTable).set({
+        category: "Эд хөрөнгө",
+        accountId: categoryAccount?.id ?? null,
+        description,
+        amount,
+        date,
+        bankTransactionId: id,
+        bankVerifiedAt: verifiedAt,
+      }).where(eq(cashTransactionsTable.id, cash.id)).returning();
+    } else {
+      [cash] = await tx.insert(cashTransactionsTable).values({
+        type: "expense",
+        category: "Эд хөрөнгө",
+        accountId: categoryAccount?.id ?? null,
+        description,
+        amount,
+        date,
+        sourceType: "fixed_asset_purchase",
+        sourceKey,
+        bankTransactionId: id,
+        bankVerifiedAt: verifiedAt,
+      }).returning();
+    }
+
+    const [claimed] = await tx.update(bankTransactionsTable)
+      .set({ cashTransactionId: cash.id, transferredAt: verifiedAt })
+      .where(and(
+        eq(bankTransactionsTable.id, id),
+        isNull(bankTransactionsTable.cashTransactionId),
+        isNull(bankTransactionsTable.transferredAt),
+      ))
+      .returning();
+    if (!claimed) throw new Error("Bank transaction was claimed concurrently");
+
+    const posting = await postJournalEntry(tx, {
+      date,
+      description,
+      sourceType: "fixed_asset",
+      sourceId: asset.id,
+      createdBy: null,
+      lines: [
+        { accountId: fixedAssetAccount.id, debit: amount, credit: 0 },
+        { accountId: bankAccount.id, debit: 0, credit: amount },
+      ],
+    });
+    if (posting.status !== "posted") throw new Error("Fixed asset bank journal entry must be balanced");
+    await tx.update(cashTransactionsTable)
+      .set({ journalEntryId: posting.journalEntryId })
+      .where(eq(cashTransactionsTable.id, cash.id));
+    if (!asset.purchased) {
+      await tx.update(fixedAssetsTable).set({ purchased: true }).where(eq(fixedAssetsTable.id, asset.id));
+    }
+    return {
+      bankTransactionId: id,
+      fixedAssetId: asset.id,
+      cashTransactionId: cash.id,
+      journalEntryId: posting.journalEntryId,
+    };
   });
 }

@@ -11,3 +11,4 @@
 - [Automatic posting lifecycle reviews](automatic-posting-lifecycle-reviews.md) — Review edits, cancellations, deletion, and cash-vs-bank provenance, not only the initial posting hook.
 - [Bank recognition settlement boundary](bank-recognition-settlement-boundary.md) — Recognition suggests only a GL account; generic journal approval must not settle a source document.
 - [Kapitron XLSX headers](kapitron-xlsx-headers.md) — Statement exports may prepend account metadata; find the complete transaction header instead of assuming row one.
+- [Bank-settled fixed assets](bank-settled-fixed-assets.md) — Bank-linked assets are immutable in ordinary edit/delete flows; any later change must reconcile bank, cash, and journal together.
