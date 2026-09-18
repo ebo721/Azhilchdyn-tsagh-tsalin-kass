@@ -14,6 +14,7 @@ type JournalLineInput = {
 export type JournalEntryLineInput = JournalLineInput;
 
 type PostJournalEntryInput = {
+  journalEntryId?: number;
   date: string;
   description: string;
   sourceType: string;
@@ -29,6 +30,9 @@ export async function postJournalEntry(
   return postJournalEntryInternal(tx, input, false);
 }
 
+// Keep every transition into "posted" inside this module. Direct SQL must not
+// create or promote posted entries because entry-level debit/credit balance
+// cannot be expressed as a journal_lines row CHECK constraint.
 async function postJournalEntryInternal(
   tx: Tx,
   input: PostJournalEntryInput,
@@ -36,24 +40,49 @@ async function postJournalEntryInternal(
 ): Promise<{ journalEntryId: number; status: "draft" | "posted" }> {
   const { lines, status } = await validateAndNormalizeJournalLines(tx, input.lines, allowInactiveAccounts);
 
-  const [entry] = await tx.insert(journalEntriesTable).values({
-    date: input.date,
-    description: input.description,
-    sourceType: input.sourceType,
-    sourceId: input.sourceId,
-    createdBy: input.createdBy,
-    status,
-  }).returning({ id: journalEntriesTable.id });
+  let journalEntryId: number;
+  if (input.journalEntryId === undefined) {
+    const [entry] = await tx.insert(journalEntriesTable).values({
+      date: input.date,
+      description: input.description,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      createdBy: input.createdBy,
+      status,
+    }).returning({ id: journalEntriesTable.id });
+    journalEntryId = entry.id;
+  } else {
+    const [entry] = await tx.select({
+      id: journalEntriesTable.id,
+      status: journalEntriesTable.status,
+    }).from(journalEntriesTable)
+      .where(eq(journalEntriesTable.id, input.journalEntryId))
+      .for("update");
+    if (!entry) throw Object.assign(new Error("Journal entry not found"), { status: 404 });
+    if (entry.status !== "draft") {
+      throw Object.assign(new Error("Only draft journal entries can be updated"), { status: 409 });
+    }
+    journalEntryId = entry.id;
+    await tx.delete(journalLinesTable).where(eq(journalLinesTable.journalEntryId, journalEntryId));
+    await tx.update(journalEntriesTable).set({
+      date: input.date,
+      description: input.description,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      createdBy: input.createdBy,
+      status,
+    }).where(eq(journalEntriesTable.id, journalEntryId));
+  }
 
   await tx.insert(journalLinesTable).values(lines.map((line) => ({
-    journalEntryId: entry.id,
+    journalEntryId,
     accountId: line.accountId,
     debit: line.debitCents / 100,
     credit: line.creditCents / 100,
     memo: line.memo ?? null,
   })));
 
-  return { journalEntryId: entry.id, status };
+  return { journalEntryId, status };
 }
 
 export async function validateAndNormalizeJournalLines(

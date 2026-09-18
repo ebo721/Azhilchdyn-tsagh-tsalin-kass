@@ -30,6 +30,7 @@
 
 ## Architecture decisions
 
+- `journal_entries.status = 'posted'` төлөвийг шууд SQL/Drizzle mutation-аар үүсгэхгүй. Entry түвшний debit=credit тэнцвэрийг баталгаажуулдаг `postJournalEntry`/`voidJournalEntry` posting engine-ээр бүх posted transition-ийг хийнэ; `journal_lines` мөр бүрийг DB CHECK constraint давхар хамгаална.
 - Цалингийн сарын дүнг тусдаа хадгалах хүснэгтгүйгээр ирц ба ажилтны үндсэн цалингаас тухайн сарын байдлаар тооцно.
 - Эхний хувилбар нь сарын болон цагийн цалингийн хоёр төрлийг дэмжиж, нийт дүнгийн 10%-ийг үндсэн суутгал гэж тооцно.
 - API contract нь OpenAPI-оор эхэлж, frontend нь Orval-оор үүсгэсэн React Query hook-уудыг ашиглана.

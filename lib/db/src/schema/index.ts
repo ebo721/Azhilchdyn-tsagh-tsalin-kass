@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   date,
   index,
   integer,
@@ -108,6 +110,10 @@ export const journalLinesTable = pgTable("journal_lines", {
 }, (table) => [
   index("journal_lines_entry_idx").on(table.journalEntryId),
   index("journal_lines_account_idx").on(table.accountId),
+  check(
+    "journal_lines_one_sided_check",
+    sql`(${table.debit} > 0 AND ${table.credit} = 0) OR (${table.credit} > 0 AND ${table.debit} = 0)`,
+  ),
 ]);
 
 export const shiftTemplatesTable = pgTable("shift_templates", {

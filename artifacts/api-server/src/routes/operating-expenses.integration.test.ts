@@ -136,7 +136,7 @@ describe("operating expenses", () => {
     });
     assert.equal(create.status, 201);
     const created = await create.json() as { id: number; category: string; subcategory: string | null };
-    assert.equal(created.category, "Үйл ажиллагааны зардал");
+    assert.equal(created.category, "Түрээс");
     assert.equal(created.subcategory, "Түрээсийн зардал");
 
     const list = await fetch(`${baseUrl}/api/cash/transactions`, { headers: { cookie: adminCookie } });

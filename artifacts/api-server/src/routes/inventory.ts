@@ -150,6 +150,7 @@ import { getStaffRole, getStaffSession, type StaffRole } from "../lib/hr-session
 import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment.js";
 import { planShiftPlanCopy } from "../lib/shift-plan-copy.js";
 import { reconcileOperatingExpenses } from "../lib/operating-expense-sync.js";
+import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
 import {
   cashAccountForCategory,
   isCanonicalCashCategory,
@@ -160,6 +161,39 @@ import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-
 
 const router: IRouter = Router();
 const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, operatingExpenseAccountName, inventoryMaterialLabel, defaultChartOfAccounts, operatingExpenseAccountCodes, inventoryPurchaseAccountCodes, reservedAccountTypes, chartOfAccountResponse, ensureDefaultChartOfAccounts, inventoryPurchaseAccount, lockedExpenseAccount, fallbackExpenseAccount, today, currentMonth, money, InventoryBankPaymentConflictError, OperatingExpenseBankPaymentConflictError, calendarDateOffset, descriptionTokens, inventoryBankSuggestionScore, deletionTargetPatterns, roleCanRequestDeletion, deletionRequestResponse, monthlyIncomeTaxRelief, hoursBetween, previousMonth, nextMonth, daysInMonth, isValidCalendarDate, calendarDateText, weekdayCount, monthWeekdays, defaultPayrollSchedule, getPayrollSchedule, scheduleDate, payrollPeriod, selectPayrollScheduleVersion, scheduleVersionAffectsMonth, shiftDailyRate, weekdayDatesBetween, salaryAt, getPayrollSummary, getPayrollAdvanceSummary, calculatePayrollAdvanceLine, InventoryInsufficientStockError, planInventoryFifoConsumption, applyInventoryFifoConsumption, reverseInventoryFifoConsumption, inventoryPurchaseResponse } = shared;
+
+async function postFixedAssetJournal(
+  tx: Tx,
+  input: { assetId: number; date: string; description: string; amount: number; },
+) {
+  const [fixedAssetAccount] = await tx.select().from(chartOfAccountsTable).where(and(
+    eq(chartOfAccountsTable.code, "1800"),
+    eq(chartOfAccountsTable.type, "asset"),
+    eq(chartOfAccountsTable.normalBalance, "debit"),
+    eq(chartOfAccountsTable.isActive, true),
+  ));
+  const [cashAccount] = await tx.select().from(chartOfAccountsTable).where(and(
+    eq(chartOfAccountsTable.code, "1000"),
+    eq(chartOfAccountsTable.type, "asset"),
+    eq(chartOfAccountsTable.normalBalance, "debit"),
+    eq(chartOfAccountsTable.isActive, true),
+  ));
+  if (!fixedAssetAccount) throw new Error("Fixed asset account 1800 is missing or inactive");
+  if (!cashAccount) throw new Error("Cash account 1000 is missing or inactive");
+  const result = await postJournalEntry(tx, {
+    date: input.date,
+    description: input.description,
+    sourceType: "fixed_asset",
+    sourceId: input.assetId,
+    createdBy: null,
+    lines: [
+      { accountId: fixedAssetAccount.id, debit: input.amount, credit: 0 },
+      { accountId: cashAccount.id, debit: 0, credit: input.amount },
+    ],
+  });
+  if (result.status !== "posted") throw new Error("Fixed asset journal entry must be balanced");
+  return result.journalEntryId;
+}
 
 
 
@@ -205,7 +239,7 @@ router.post("/fixed-assets", async (req, res, next) => {
       }).returning();
       if (input.purchased) {
         const account = await cashAccountForCategory(tx, "Эд хөрөнгө");
-        await tx.insert(cashTransactionsTable).values({
+        const [cash] = await tx.insert(cashTransactionsTable).values({
           type: "expense",
           category: "Эд хөрөнгө",
           accountId: account?.id ?? null,
@@ -214,7 +248,16 @@ router.post("/fixed-assets", async (req, res, next) => {
           date: input.date,
           sourceType: "fixed_asset_purchase",
           sourceKey: `fixed-asset:${created.id}`,
+        }).returning({ id: cashTransactionsTable.id });
+        const journalEntryId = await postFixedAssetJournal(tx, {
+          assetId: created.id,
+          date: input.date,
+          description: `${name} (${input.quantity} ширхэг)`,
+          amount: totalAmount,
         });
+        await tx.update(cashTransactionsTable)
+          .set({ journalEntryId })
+          .where(eq(cashTransactionsTable.id, cash.id));
       }
       return created;
     });
@@ -250,14 +293,26 @@ router.put("/fixed-assets/:id", async (req, res, next) => {
     }
     const totalAmount = money(input.unitPrice * input.quantity);
     const result = await db.transaction(async (tx) => {
+      const [lockedExisting] = await tx.select().from(fixedAssetsTable)
+        .where(eq(fixedAssetsTable.id, id))
+        .for("update");
+      if (!lockedExisting) return { kind: "missing" as const };
       const affectedDates = new Set<string>();
-      if (existing.purchased) affectedDates.add(existing.date);
+      if (lockedExisting.purchased) affectedDates.add(lockedExisting.date);
       if (input.purchased) affectedDates.add(input.date);
       if (affectedDates.size) {
         const closures = await tx.select({ date: cashClosuresTable.date }).from(cashClosuresTable);
         if (closures.some(({ date }) => affectedDates.has(date))) return { kind: "cash_closed" as const };
       }
 
+      const sourceKey = `fixed-asset:${id}`;
+      const [oldCash] = await tx.select().from(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "fixed_asset_purchase"),
+        eq(cashTransactionsTable.sourceKey, sourceKey),
+      )).for("update");
+      const oldDescription = oldCash?.description;
+      const oldAmount = oldCash ? Number(oldCash.amount) : null;
+      const oldDate = oldCash?.date;
       const [updated] = await tx.update(fixedAssetsTable).set({
         name,
         unitPrice: input.unitPrice,
@@ -265,10 +320,9 @@ router.put("/fixed-assets/:id", async (req, res, next) => {
         date: input.date,
         purchased: input.purchased,
       }).where(eq(fixedAssetsTable.id, id)).returning();
-      const sourceKey = `fixed-asset:${id}`;
       if (input.purchased) {
         const account = await cashAccountForCategory(tx, "Эд хөрөнгө");
-        await tx.insert(cashTransactionsTable).values({
+        const [cash] = await tx.insert(cashTransactionsTable).values({
           type: "expense",
           category: "Эд хөрөнгө",
           accountId: account?.id ?? null,
@@ -285,8 +339,29 @@ router.put("/fixed-assets/:id", async (req, res, next) => {
             amount: totalAmount,
             date: input.date,
           },
-        });
+        }).returning();
+        const description = `${name} (${input.quantity} ширхэг)`;
+        const changed = !oldCash
+          || oldAmount !== totalAmount
+          || oldDate !== input.date
+          || oldDescription !== description;
+        if (!lockedExisting.purchased || (cash.journalEntryId !== null && changed)) {
+          if (cash.journalEntryId !== null && changed) {
+            await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
+          }
+          const journalEntryId = await postFixedAssetJournal(tx, {
+            assetId: id,
+            date: input.date,
+            description,
+            amount: totalAmount,
+          });
+          await tx.update(cashTransactionsTable).set({ journalEntryId })
+            .where(eq(cashTransactionsTable.id, cash.id));
+        }
       } else {
+        if (oldCash?.journalEntryId !== null && oldCash?.journalEntryId !== undefined) {
+          await voidJournalEntry(tx, { journalEntryId: oldCash.journalEntryId, voidedBy: null });
+        }
         await tx.delete(cashTransactionsTable).where(and(
           eq(cashTransactionsTable.sourceType, "fixed_asset_purchase"),
           eq(cashTransactionsTable.sourceKey, sourceKey),
@@ -294,6 +369,10 @@ router.put("/fixed-assets/:id", async (req, res, next) => {
       }
       return { kind: "updated" as const, asset: updated };
     });
+    if (result.kind === "missing") {
+      res.status(404).json({ error: "Эд хөрөнгө олдсонгүй" });
+      return;
+    }
     if (result.kind === "cash_closed") {
       res.status(409).json({ error: "Өндөрлөсөн өдрийн худалдан авсан хөрөнгийг засах боломжгүй" });
       return;
@@ -319,11 +398,22 @@ router.delete("/fixed-assets/:id", async (req, res, next) => {
       return;
     }
     const result = await db.transaction(async (tx) => {
-      if (existing.purchased) {
+      const [lockedExisting] = await tx.select().from(fixedAssetsTable)
+        .where(eq(fixedAssetsTable.id, id))
+        .for("update");
+      if (!lockedExisting) return "missing" as const;
+      if (lockedExisting.purchased) {
         const [closure] = await tx.select({ id: cashClosuresTable.id })
           .from(cashClosuresTable)
-          .where(eq(cashClosuresTable.date, existing.date));
+          .where(eq(cashClosuresTable.date, lockedExisting.date));
         if (closure) return "cash_closed" as const;
+      }
+      const [cash] = await tx.select().from(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "fixed_asset_purchase"),
+        eq(cashTransactionsTable.sourceKey, `fixed-asset:${id}`),
+      )).for("update");
+      if (cash?.journalEntryId !== null && cash?.journalEntryId !== undefined) {
+        await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
       }
       await tx.delete(cashTransactionsTable).where(and(
         eq(cashTransactionsTable.sourceType, "fixed_asset_purchase"),
@@ -332,6 +422,10 @@ router.delete("/fixed-assets/:id", async (req, res, next) => {
       await tx.delete(fixedAssetsTable).where(eq(fixedAssetsTable.id, id));
       return "deleted" as const;
     });
+    if (result === "missing") {
+      res.status(404).json({ error: "Эд хөрөнгө олдсонгүй" });
+      return;
+    }
     if (result === "cash_closed") {
       res.status(409).json({ error: "Өндөрлөсөн өдрийн худалдан авсан хөрөнгийг устгах боломжгүй" });
       return;
@@ -1141,6 +1235,41 @@ router.put("/inventory/purchases/:id/payment", async (req, res, next) => {
           .returning({ id: bankTransactionsTable.id });
         if (!updatedBank) throw new InventoryBankPaymentConflictError();
       }
+      if (currentPurchase.accountId === null) {
+        throw new Error("Inventory purchase account is missing");
+      }
+      const [inventoryAccount] = await tx.select().from(chartOfAccountsTable).where(and(
+        eq(chartOfAccountsTable.id, currentPurchase.accountId),
+        eq(chartOfAccountsTable.isActive, true),
+      ));
+      if (!inventoryAccount) {
+        throw new Error("Inventory purchase account is missing or inactive");
+      }
+      const creditCode = bank ? "1010" : "1000";
+      const [creditAccount] = await tx.select().from(chartOfAccountsTable).where(and(
+        eq(chartOfAccountsTable.code, creditCode),
+        eq(chartOfAccountsTable.isActive, true),
+      ));
+      if (!creditAccount) {
+        throw new Error(`Settlement account ${creditCode} is missing or inactive`);
+      }
+      const posting = await postJournalEntry(tx, {
+        date: input.date,
+        description: currentPurchase.documentName,
+        sourceType: "inventory_purchase",
+        sourceId: currentPurchase.id,
+        createdBy: null,
+        lines: [
+          { accountId: inventoryAccount.id, debit: input.amount, credit: 0 },
+          { accountId: creditAccount.id, debit: 0, credit: input.amount },
+        ],
+      });
+      if (posting.status !== "posted") {
+        throw new Error("Inventory purchase journal entry must be balanced");
+      }
+      await tx.update(cashTransactionsTable)
+        .set({ journalEntryId: posting.journalEntryId })
+        .where(eq(cashTransactionsTable.id, cash!.id));
       return "paid" as const;
     });
     if (result === "purchase_missing") {
@@ -1213,6 +1342,9 @@ router.delete("/inventory/purchases/:id/payment", async (req, res, next) => {
             eq(bankTransactionsTable.id, cash.bankTransactionId),
             eq(bankTransactionsTable.cashTransactionId, cash.id),
           ));
+      }
+      if (cash?.journalEntryId) {
+        await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
       }
       await tx.update(inventoryPurchasesTable)
         .set({ paymentDate: null, paymentAmount: null })

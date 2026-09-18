@@ -144,11 +144,14 @@ import {
   deletionRequestsTable,
   shiftTemplatesTable,
   chartOfAccountsTable,
+  journalEntriesTable,
+  journalLinesTable,
   payrollScheduleSettingsTable,
 } from "@workspace/db";
 import { getStaffRole, getStaffSession, type StaffRole } from "../lib/hr-session.js";
 import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment.js";
 import { planShiftPlanCopy } from "../lib/shift-plan-copy.js";
+import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
 import { reconcileOperatingExpenses } from "../lib/operating-expense-sync.js";
 import {
   cashAccountForCategory,
@@ -160,6 +163,85 @@ import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-
 
 const router: IRouter = Router();
 const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, operatingExpenseAccountName, inventoryMaterialLabel, defaultChartOfAccounts, operatingExpenseAccountCodes, inventoryPurchaseAccountCodes, reservedAccountTypes, chartOfAccountResponse, ensureDefaultChartOfAccounts, inventoryPurchaseAccount, lockedExpenseAccount, fallbackExpenseAccount, today, currentMonth, money, InventoryBankPaymentConflictError, OperatingExpenseBankPaymentConflictError, calendarDateOffset, descriptionTokens, inventoryBankSuggestionScore, deletionTargetPatterns, roleCanRequestDeletion, deletionRequestResponse, monthlyIncomeTaxRelief, hoursBetween, previousMonth, nextMonth, daysInMonth, isValidCalendarDate, calendarDateText, weekdayCount, monthWeekdays, defaultPayrollSchedule, getPayrollSchedule, scheduleDate, payrollPeriod, selectPayrollScheduleVersion, scheduleVersionAffectsMonth, shiftDailyRate, weekdayDatesBetween, salaryAt, getPayrollSummary, getPayrollAdvanceSummary, calculatePayrollAdvanceLine, InventoryInsufficientStockError, planInventoryFifoConsumption, applyInventoryFifoConsumption, reverseInventoryFifoConsumption, inventoryPurchaseResponse } = shared;
+
+async function safeCashAccount(tx: any, category: string) {
+  try {
+    return await cashAccountForCategory(tx, category);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("is missing or has an invalid type")) return null;
+    throw error;
+  }
+}
+
+async function activeAccountByCode(tx: any, code: string, type: string) {
+  const [account] = await tx.select().from(chartOfAccountsTable).where(and(
+    eq(chartOfAccountsTable.code, code),
+    eq(chartOfAccountsTable.type, type),
+    eq(chartOfAccountsTable.isActive, true),
+  ));
+  return account;
+}
+
+async function cashLedgerAccount(tx: any, bankTransactionId: number | null = null) {
+  const code = bankTransactionId === null ? "1000" : "1010";
+  const account = await activeAccountByCode(tx, code, "asset");
+  if (!account || account.normalBalance !== "debit") {
+    throw new Error(`Settlement account ${code} is missing or inactive`);
+  }
+  return account;
+}
+
+async function journalCounterAccount(tx: any, type: string, category: string, mappedAccount: any) {
+  if (type === "income" && mappedAccount?.isActive && mappedAccount.type === "revenue") {
+    return mappedAccount;
+  }
+  if (type === "expense" && mappedAccount?.isActive && ["expense", "asset"].includes(mappedAccount.type)) {
+    return mappedAccount;
+  }
+  if (type === "income") {
+    const account = await activeAccountByCode(tx, "4900", "revenue");
+    if (!account) throw new Error("Other revenue account 4900 is missing or inactive");
+    return account;
+  }
+  const fallback = await fallbackExpenseAccount(tx, category);
+  if (fallback.isActive) return fallback;
+  const canonicalFallback = await activeAccountByCode(tx, "6900", "expense");
+  if (!canonicalFallback) throw new Error("Expense account 6900 is missing or inactive");
+  return canonicalFallback;
+}
+
+async function postCashJournal(tx: any, cash: any, counterAccount: any, cashAccount: any) {
+  const posting = await postJournalEntry(tx, {
+    date: String(cash.date),
+    description: cash.description.trim(),
+    sourceType: "cash",
+    sourceId: cash.id,
+    createdBy: null,
+    lines: cash.type === "income"
+      ? [
+        { accountId: cashAccount.id, debit: Number(cash.amount), credit: 0 },
+        { accountId: counterAccount.id, debit: 0, credit: Number(cash.amount) },
+      ]
+      : [
+        { accountId: counterAccount.id, debit: Number(cash.amount), credit: 0 },
+        { accountId: cashAccount.id, debit: 0, credit: Number(cash.amount) },
+      ],
+  });
+  if (posting.status !== "posted") throw new Error("Cash journal entry must be balanced");
+  return posting.journalEntryId;
+}
+
+async function journalNeedsReplacement(tx: any, existing: any, input: any, counterAccount: any, settlementAccountId: number) {
+  if (existing.type !== input.type
+    || existing.category !== input.category.trim()
+    || Number(existing.amount) !== Number(input.amount)
+    || String(existing.date) !== input.date
+    || existing.description !== input.description) return true;
+  if (!existing.journalEntryId) return false;
+  const lines = await tx.select().from(journalLinesTable).where(eq(journalLinesTable.journalEntryId, existing.journalEntryId));
+  const counterLines = lines.filter((line: any) => line.accountId !== settlementAccountId);
+  return counterLines.length !== 1 || counterLines[0].accountId !== counterAccount.id;
+}
 
 
 
@@ -256,7 +338,8 @@ router.post("/cash/transactions", async (req, res, next) => {
     }
     const result = await db.transaction(async (tx) => {
       const category = input.category.trim();
-      const cashAccount = await cashAccountForCategory(tx, category);
+      const cashAccount = await safeCashAccount(tx, category);
+      const linkedAccount = await journalCounterAccount(tx, input.type, category, cashAccount);
       const [cash] = await tx.insert(cashTransactionsTable).values({
         ...input,
         category,
@@ -264,23 +347,32 @@ router.post("/cash/transactions", async (req, res, next) => {
         incomeMonth: input.type === "income" ? input.incomeMonth : null,
       }).returning();
       if (input.type === "expense" && shouldMirrorCashAsOperatingExpense(category)) {
-        const account = await fallbackExpenseAccount(tx, input.category);
         await tx.insert(operatingExpensesTable).values({
           description: input.description.trim(),
-          accountId: account.id,
+          accountId: linkedAccount.id,
           date: input.date,
           amount: money(input.amount),
           paymentDate: input.date,
           paymentAmount: money(input.amount),
           cashTransactionId: cash.id,
         });
-        return { cash, subcategory: account.name, cashAccount };
       }
-      return { cash, subcategory: null, cashAccount };
+      const ledgerAccount = await cashLedgerAccount(tx, cash.bankTransactionId);
+      const journalEntryId = await postCashJournal(tx, cash, linkedAccount, ledgerAccount);
+      const [linkedCash] = await tx.update(cashTransactionsTable)
+        .set({ journalEntryId })
+        .where(eq(cashTransactionsTable.id, cash.id))
+        .returning();
+      return {
+        cash: linkedCash,
+        subcategory: input.type === "expense" && shouldMirrorCashAsOperatingExpense(category) ? linkedAccount.name : null,
+        cashAccount,
+      };
     });
     const { cash: transaction, subcategory, cashAccount } = result;
     res.status(201).json({
       ...transaction,
+      category: transaction.category,
       subcategory,
       accountId: transaction.accountId,
       accountCode: cashAccount?.code ?? null,
@@ -306,22 +398,27 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
       res.status(400).json({ error: "Орлогын хамаарах сар шаардлагатай" });
       return;
     }
-    const [existing] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, id));
-    if (!existing) {
-      res.status(404).json({ error: "Кассын гүйлгээ олдсонгүй" });
-      return;
-    }
-    if (existing.sourceType !== null) {
-      res.status(409).json({ error: "Автомат гүйлгээг эх үүсвэр цэснээс засна уу" });
-      return;
-    }
-    if (await isCashDateClosed(String(existing.date)) || await isCashDateClosed(input.date)) {
-      res.status(409).json({ error: "Өндөрлөсөн өдрийн гүйлгээг засах боломжгүй" });
-      return;
-    }
     const result = await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, id)).for("update");
+      if (!existing) throw Object.assign(new Error("Кассын гүйлгээ олдсонгүй"), { status: 404 });
+      if (existing.sourceType !== null) throw Object.assign(new Error("Автомат гүйлгээг эх үүсвэр цэснээс засна уу"), { status: 409 });
+      if (await isCashDateClosed(String(existing.date)) || await isCashDateClosed(input.date)) {
+        throw Object.assign(new Error("Өндөрлөсөн өдрийн гүйлгээг засах боломжгүй"), { status: 409 });
+      }
       const category = input.category.trim();
-      const cashAccount = await cashAccountForCategory(tx, category);
+      const cashAccount = await safeCashAccount(tx, category);
+      const mirrorAccount = input.type === "expense" && shouldMirrorCashAsOperatingExpense(category)
+        ? await fallbackExpenseAccount(tx, category)
+        : null;
+      const ledgerAccount = existing.journalEntryId
+        ? await cashLedgerAccount(tx, existing.bankTransactionId)
+        : null;
+      const counterAccount = existing.journalEntryId
+        ? await journalCounterAccount(tx, input.type, category, cashAccount)
+        : mirrorAccount;
+      const replacement = existing.journalEntryId
+        ? await journalNeedsReplacement(tx, existing, input, counterAccount, ledgerAccount!.id)
+        : false;
       const [cash] = await tx.update(cashTransactionsTable)
         .set({
           ...input,
@@ -333,19 +430,27 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
         .returning();
       await tx.delete(operatingExpensesTable).where(eq(operatingExpensesTable.cashTransactionId, id));
       if (input.type === "expense" && shouldMirrorCashAsOperatingExpense(category)) {
-        const account = await fallbackExpenseAccount(tx, input.category);
         await tx.insert(operatingExpensesTable).values({
           description: input.description.trim(),
-          accountId: account.id,
+          accountId: mirrorAccount!.id,
           date: input.date,
           amount: money(input.amount),
           paymentDate: input.date,
           paymentAmount: money(input.amount),
           cashTransactionId: id,
         });
-        return { cash, subcategory: account.name, cashAccount };
       }
-      return { cash, subcategory: null, cashAccount };
+      let journalEntryId = existing.journalEntryId;
+      if (existing.journalEntryId && replacement) {
+        await voidJournalEntry(tx, { journalEntryId: existing.journalEntryId, voidedBy: null });
+        journalEntryId = await postCashJournal(tx, cash, counterAccount, ledgerAccount!);
+        const [linkedCash] = await tx.update(cashTransactionsTable)
+          .set({ journalEntryId })
+          .where(eq(cashTransactionsTable.id, id))
+          .returning();
+        return { cash: linkedCash, subcategory: mirrorAccount?.name ?? null, cashAccount };
+      }
+      return { cash: { ...cash, journalEntryId }, subcategory: mirrorAccount?.name ?? null, cashAccount };
     });
     const { cash: transaction, subcategory, cashAccount } = result;
     res.json({
@@ -363,6 +468,10 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
       transactionKind: "manual",
     });
   } catch (error) {
+    if (error && typeof error === "object" && "status" in error) {
+      res.status(Number(error.status)).json({ error: error instanceof Error ? error.message : "Кассын гүйлгээ шинэчлэгдэхгүй байна" });
+      return;
+    }
     next(error);
   }
 });
@@ -412,25 +521,25 @@ router.patch("/cash/transactions/:id/income-month", async (req, res, next) => {
 router.delete("/cash/transactions/:id", async (req, res, next) => {
   try {
     const { id } = DeleteCashTransactionParams.parse(req.params);
-    const [existing] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, id));
-    if (!existing) {
-      res.status(404).json({ error: "Кассын гүйлгээ олдсонгүй" });
-      return;
-    }
-    if (existing.sourceType !== null) {
-      res.status(409).json({ error: "Автомат гүйлгээг эх үүсвэр цэснээс өөрчилнө үү" });
-      return;
-    }
-    if (await isCashDateClosed(String(existing.date))) {
-      res.status(409).json({ error: "Өндөрлөсөн өдрийн гүйлгээг устгах боломжгүй" });
-      return;
-    }
     await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, id)).for("update");
+      if (!existing) throw Object.assign(new Error("Кассын гүйлгээ олдсонгүй"), { status: 404 });
+      if (existing.sourceType !== null) throw Object.assign(new Error("Автомат гүйлгээг эх үүсвэр цэснээс өөрчилнө үү"), { status: 409 });
+      if (await isCashDateClosed(String(existing.date))) {
+        throw Object.assign(new Error("Өндөрлөсөн өдрийн гүйлгээг устгах боломжгүй"), { status: 409 });
+      }
+      if (existing.journalEntryId) {
+        await voidJournalEntry(tx, { journalEntryId: existing.journalEntryId, voidedBy: null });
+      }
       await tx.delete(operatingExpensesTable).where(eq(operatingExpensesTable.cashTransactionId, id));
       await tx.delete(cashTransactionsTable).where(eq(cashTransactionsTable.id, id));
     });
     res.status(204).send();
   } catch (error) {
+    if (error && typeof error === "object" && "status" in error) {
+      res.status(Number(error.status)).json({ error: error instanceof Error ? error.message : "Кассын гүйлгээ устгагдсангүй" });
+      return;
+    }
     next(error);
   }
 });
