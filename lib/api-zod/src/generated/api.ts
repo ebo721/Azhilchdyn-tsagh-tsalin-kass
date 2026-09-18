@@ -85,6 +85,7 @@ export const ListChartOfAccountsResponseItem = zod.object({
   "code": zod.string(),
   "name": zod.string(),
   "type": zod.enum(['asset', 'liability', 'equity', 'revenue', 'expense']),
+  "isActive": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
 export const ListChartOfAccountsResponse = zod.array(ListChartOfAccountsResponseItem)
@@ -110,6 +111,7 @@ export const CreateChartOfAccountResponse = zod.object({
   "code": zod.string(),
   "name": zod.string(),
   "type": zod.enum(['asset', 'liability', 'equity', 'revenue', 'expense']),
+  "isActive": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
 
@@ -138,6 +140,7 @@ export const UpdateChartOfAccountResponse = zod.object({
   "code": zod.string(),
   "name": zod.string(),
   "type": zod.enum(['asset', 'liability', 'equity', 'revenue', 'expense']),
+  "isActive": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1336,6 +1339,149 @@ export const ListBankTransactionsResponse = zod.array(ListBankTransactionsRespon
 
 
 /**
+ * @summary List pending bank transactions with journal account suggestions
+ */
+export const listBankTransactionJournalReviewResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+
+export const ListBankTransactionJournalReviewResponseItem = zod.object({
+  "id": zod.number().int(),
+  "date": zod.string().regex(listBankTransactionJournalReviewResponseDateRegExp),
+  "transactionAt": zod.coerce.date(),
+  "type": zod.enum(['income', 'expense']),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "counterparty": zod.string(),
+  "suggestedAccountId": zod.number().int().nullable(),
+  "suggestedAccountName": zod.string().nullable(),
+  "existingPurchaseMatch": zod.object({
+  "type": zod.enum(['inventory_purchase', 'operating_expense']),
+  "id": zod.number().int().min(1)
+}).optional()
+})
+export const ListBankTransactionJournalReviewResponse = zod.array(ListBankTransactionJournalReviewResponseItem)
+
+
+/**
+ * @summary Post a reviewed bank transaction to the journal
+ */
+export const PostBankTransactionJournalParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+
+export const PostBankTransactionJournalBody = zod.object({
+  "accountId": zod.number().int().min(1)
+})
+
+export const PostBankTransactionJournalResponse = zod.object({
+  "id": zod.number().int(),
+  "journalEntryId": zod.number().int()
+})
+
+
+/**
+ * @summary Reject the current journal suggestion while keeping the transaction pending
+ */
+export const RejectBankTransactionSuggestionParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const RejectBankTransactionSuggestionResponse = zod.void()
+
+
+/**
+ * @summary Link a pending bank expense to an existing or newly created inventory purchase
+ */
+export const LinkBankTransactionPurchaseParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+export const linkBankTransactionPurchaseBodyTwoDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+export const linkBankTransactionPurchaseBodyTwoItemsItemQuantityExclusiveMin = 0;
+
+export const linkBankTransactionPurchaseBodyTwoItemsItemUnitPriceMin = 0;
+
+
+
+
+export const LinkBankTransactionPurchaseBody = zod.union([zod.object({
+  "inventoryPurchaseId": zod.number().int().min(1)
+}),zod.object({
+  "materialType": zod.enum(['food', 'supply']),
+  "supplierName": zod.string().min(1),
+  "hasReceipt": zod.boolean(),
+  "date": zod.string().regex(linkBankTransactionPurchaseBodyTwoDateRegExp),
+  "items": zod.array(zod.object({
+  "inventoryItemId": zod.number().int().optional(),
+  "name": zod.string().min(1),
+  "category": zod.string().min(1),
+  "unit": zod.enum(['ширхэг', 'кг', 'грамм', 'литр', 'мл', 'метр', 'багц', 'хайрцаг']),
+  "quantity": zod.number().gt(linkBankTransactionPurchaseBodyTwoItemsItemQuantityExclusiveMin),
+  "unitPrice": zod.number().min(linkBankTransactionPurchaseBodyTwoItemsItemUnitPriceMin)
+})).min(1)
+})])
+
+
+
+
+
+
+
+export const LinkBankTransactionPurchaseResponse = zod.object({
+  "bankTransactionId": zod.number().int().min(1),
+  "inventoryPurchaseId": zod.number().int().min(1),
+  "cashTransactionId": zod.number().int().min(1),
+  "journalEntryId": zod.number().int().min(1)
+})
+
+
+/**
+ * @summary Link a pending bank expense to an existing or newly created operating expense
+ */
+export const LinkBankTransactionExpenseParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+
+export const linkBankTransactionExpenseBodyTwoDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const linkBankTransactionExpenseBodyTwoAmountExclusiveMin = 0;
+
+
+
+export const LinkBankTransactionExpenseBody = zod.union([zod.object({
+  "operatingExpenseId": zod.number().int().min(1)
+}),zod.object({
+  "description": zod.string().min(1),
+  "accountId": zod.number().int().min(1),
+  "date": zod.string().regex(linkBankTransactionExpenseBodyTwoDateRegExp),
+  "amount": zod.number().gt(linkBankTransactionExpenseBodyTwoAmountExclusiveMin)
+})])
+
+
+
+
+
+
+
+export const LinkBankTransactionExpenseResponse = zod.object({
+  "bankTransactionId": zod.number().int().min(1),
+  "operatingExpenseId": zod.number().int().min(1),
+  "cashTransactionId": zod.number().int().min(1),
+  "journalEntryId": zod.number().int().min(1)
+})
+
+
+/**
  * @summary Assign or clear a chart account on a bank transaction
  */
 
@@ -1424,12 +1570,23 @@ export const importKapitronBankTransactionsResponseSkippedDuplicateMin = 0;
 
 export const importKapitronBankTransactionsResponseSkippedZeroMin = 0;
 
+export const importKapitronBankTransactionsResponseTotalReadMin = 0;
+
+export const importKapitronBankTransactionsResponseRecognizedMin = 0;
+
+export const importKapitronBankTransactionsResponseUnrecognizedMin = 0;
+
+
 
 
 export const ImportKapitronBankTransactionsResponse = zod.object({
   "imported": zod.number().int().min(importKapitronBankTransactionsResponseImportedMin),
   "skippedDuplicate": zod.number().int().min(importKapitronBankTransactionsResponseSkippedDuplicateMin),
-  "skippedZero": zod.number().int().min(importKapitronBankTransactionsResponseSkippedZeroMin)
+  "skippedZero": zod.number().int().min(importKapitronBankTransactionsResponseSkippedZeroMin),
+  "totalRead": zod.number().int().min(importKapitronBankTransactionsResponseTotalReadMin),
+  "recognized": zod.number().int().min(importKapitronBankTransactionsResponseRecognizedMin),
+  "unrecognized": zod.number().int().min(importKapitronBankTransactionsResponseUnrecognizedMin),
+  "transactionIds": zod.array(zod.number().int().min(1))
 })
 
 
@@ -2427,7 +2584,9 @@ export const ListJournalEntriesResponseItem = zod.object({
   "sourceId": zod.number().int().nullable(),
   "status": zod.enum(['draft', 'posted', 'void']),
   "createdBy": zod.number().int().nullable(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "totalDebit": zod.number(),
+  "totalCredit": zod.number()
 })
 export const ListJournalEntriesResponse = zod.array(ListJournalEntriesResponseItem)
 
@@ -2472,7 +2631,9 @@ export const CreateJournalEntryResponse = zod.object({
   "sourceId": zod.number().int().nullable(),
   "status": zod.enum(['draft', 'posted', 'void']),
   "createdBy": zod.number().int().nullable(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "totalDebit": zod.number(),
+  "totalCredit": zod.number()
 }).and(zod.object({
   "lines": zod.array(zod.object({
   "id": zod.number().int(),
@@ -2508,7 +2669,9 @@ export const GetJournalEntryResponse = zod.object({
   "sourceId": zod.number().int().nullable(),
   "status": zod.enum(['draft', 'posted', 'void']),
   "createdBy": zod.number().int().nullable(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "totalDebit": zod.number(),
+  "totalCredit": zod.number()
 }).and(zod.object({
   "lines": zod.array(zod.object({
   "id": zod.number().int(),
@@ -2562,7 +2725,9 @@ export const UpdateJournalEntryResponse = zod.object({
   "sourceId": zod.number().int().nullable(),
   "status": zod.enum(['draft', 'posted', 'void']),
   "createdBy": zod.number().int().nullable(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "totalDebit": zod.number(),
+  "totalCredit": zod.number()
 }).and(zod.object({
   "lines": zod.array(zod.object({
   "id": zod.number().int(),

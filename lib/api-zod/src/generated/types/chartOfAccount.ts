@@ -12,5 +12,6 @@ export interface ChartOfAccount {
   code: string;
   name: string;
   type: ChartOfAccountType;
+  isActive: boolean;
   createdAt: Date;
 }

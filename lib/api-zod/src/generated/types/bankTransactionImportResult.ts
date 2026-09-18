@@ -13,4 +13,12 @@ export interface BankTransactionImportResult {
   skippedDuplicate: number;
   /** @minimum 0 */
   skippedZero: number;
+  /** @minimum 0 */
+  totalRead: number;
+  /** @minimum 0 */
+  recognized: number;
+  /** @minimum 0 */
+  unrecognized: number;
+  /** @items.minimum 1 */
+  transactionIds: number[];
 }

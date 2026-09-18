@@ -811,6 +811,105 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/BankTransaction" }
+  /bank-transactions/journal-review:
+    get:
+      operationId: listBankTransactionJournalReview
+      tags: [bank-transactions]
+      summary: List pending bank transactions with journal account suggestions
+      responses:
+        "200":
+          description: Pending bank transaction journal review rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BankTransactionJournalReviewItem" }
+  /bank-transactions/{id}/post-journal:
+    post:
+      operationId: postBankTransactionJournal
+      tags: [bank-transactions]
+      summary: Post a reviewed bank transaction to the journal
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankTransactionJournalPostInput" }
+      responses:
+        "200":
+          description: Posted bank transaction journal result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankTransactionJournalPostResult" }
+        "400":
+          description: Invalid chart account for the transaction type
+        "404":
+          description: Bank transaction not found
+        "409":
+          description: Bank transaction was already resolved
+  /bank-transactions/{id}/reject-suggestion:
+    post:
+      operationId: rejectBankTransactionSuggestion
+      tags: [bank-transactions]
+      summary: Reject the current journal suggestion while keeping the transaction pending
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Suggestion rejected
+        "404":
+          description: Bank transaction not found
+        "409":
+          description: Bank transaction was already resolved
+  /bank-transactions/{id}/link-purchase:
+    post:
+      operationId: linkBankTransactionPurchase
+      tags: [bank-transactions]
+      summary: Link a pending bank expense to an existing or newly created inventory purchase
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankPurchaseLinkInput" }
+      responses:
+        "200":
+          description: Bank transaction linked and journal posted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankPurchaseLinkResult" }
+        "400":
+          description: Invalid purchase input
+        "404":
+          description: Bank transaction or purchase not found
+        "409":
+          description: Bank transaction or purchase is incompatible or already resolved
+  /bank-transactions/{id}/link-expense:
+    post:
+      operationId: linkBankTransactionExpense
+      tags: [bank-transactions]
+      summary: Link a pending bank expense to an existing or newly created operating expense
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankExpenseLinkInput" }
+      responses:
+        "200":
+          description: Bank transaction linked and journal posted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankExpenseLinkResult" }
+        "400":
+          description: Invalid expense input
+        "404":
+          description: Bank transaction or expense not found
+        "409":
+          description: Bank transaction or expense is incompatible or already resolved
   /bank-transactions/{id}/account:
     patch:
       operationId: updateBankTransactionAccount
@@ -836,6 +935,8 @@ paths:
           description: Invalid chart account
         "404":
           description: Bank transaction not found
+        "409":
+          description: Bank transaction was already resolved
   /bank-accounts:
     get:
       operationId: listBankAccounts
@@ -1661,7 +1762,7 @@ components:
           items: { $ref: "#/components/schemas/JournalEntryLineInput" }
     JournalEntrySummary:
       type: object
-      required: [id, date, description, sourceType, sourceId, status, createdBy, createdAt]
+      required: [id, date, description, sourceType, sourceId, status, createdBy, createdAt, totalDebit, totalCredit]
       properties:
         id: { type: integer }
         date: { $ref: "#/components/schemas/JournalDate" }
@@ -1671,6 +1772,8 @@ components:
         status: { type: string, enum: [draft, posted, void] }
         createdBy: { type: ["integer", "null"] }
         createdAt: { type: string, format: date-time }
+        totalDebit: { type: number }
+        totalCredit: { type: number }
     JournalEntry:
       allOf:
         - $ref: "#/components/schemas/JournalEntrySummary"
@@ -1752,12 +1855,13 @@ components:
         newPassword: { type: string, minLength: 1 }
     ChartOfAccount:
       type: object
-      required: [id, code, name, type, createdAt]
+      required: [id, code, name, type, isActive, createdAt]
       properties:
         id: { type: integer }
         code: { type: string }
         name: { type: string }
         type: { type: string, enum: [asset, liability, equity, revenue, expense] }
+        isActive: { type: boolean }
         createdAt: { type: string, format: date-time }
     ChartOfAccountInput:
       type: object
@@ -2262,13 +2366,85 @@ components:
       required: [accountId]
       properties:
         accountId: { type: ["integer", "null"], minimum: 1 }
+    BankTransactionJournalReviewItem:
+      type: object
+      required: [id, date, transactionAt, type, description, amount, counterparty, suggestedAccountId, suggestedAccountName]
+      properties:
+        id: { type: integer }
+        date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        transactionAt: { type: string, format: date-time }
+        type: { type: string, enum: [income, expense] }
+        description: { type: string }
+        amount: { type: number }
+        counterparty: { type: string }
+        suggestedAccountId: { type: ["integer", "null"] }
+        suggestedAccountName: { type: ["string", "null"] }
+        existingPurchaseMatch:
+          $ref: "#/components/schemas/BankTransactionPurchaseMatch"
+    BankTransactionPurchaseMatch:
+      type: object
+      required: [type, id]
+      properties:
+        type: { type: string, enum: [inventory_purchase, operating_expense] }
+        id: { type: integer, minimum: 1 }
+    ExistingInventoryPurchaseLink:
+      type: object
+      required: [inventoryPurchaseId]
+      properties:
+        inventoryPurchaseId: { type: integer, minimum: 1 }
+    BankPurchaseLinkInput:
+      anyOf:
+        - $ref: "#/components/schemas/ExistingInventoryPurchaseLink"
+        - $ref: "#/components/schemas/InventoryPurchaseInput"
+    BankPurchaseLinkResult:
+      type: object
+      required: [bankTransactionId, inventoryPurchaseId, cashTransactionId, journalEntryId]
+      properties:
+        bankTransactionId: { type: integer, minimum: 1 }
+        inventoryPurchaseId: { type: integer, minimum: 1 }
+        cashTransactionId: { type: integer, minimum: 1 }
+        journalEntryId: { type: integer, minimum: 1 }
+    ExistingOperatingExpenseLink:
+      type: object
+      required: [operatingExpenseId]
+      properties:
+        operatingExpenseId: { type: integer, minimum: 1 }
+    BankExpenseLinkInput:
+      anyOf:
+        - $ref: "#/components/schemas/ExistingOperatingExpenseLink"
+        - $ref: "#/components/schemas/OperatingExpenseInput"
+    BankExpenseLinkResult:
+      type: object
+      required: [bankTransactionId, operatingExpenseId, cashTransactionId, journalEntryId]
+      properties:
+        bankTransactionId: { type: integer, minimum: 1 }
+        operatingExpenseId: { type: integer, minimum: 1 }
+        cashTransactionId: { type: integer, minimum: 1 }
+        journalEntryId: { type: integer, minimum: 1 }
+    BankTransactionJournalPostInput:
+      type: object
+      required: [accountId]
+      properties:
+        accountId: { type: integer, minimum: 1 }
+    BankTransactionJournalPostResult:
+      type: object
+      required: [id, journalEntryId]
+      properties:
+        id: { type: integer }
+        journalEntryId: { type: integer }
     BankTransactionImportResult:
       type: object
-      required: [imported, skippedDuplicate, skippedZero]
+      required: [imported, skippedDuplicate, skippedZero, totalRead, recognized, unrecognized, transactionIds]
       properties:
         imported: { type: integer, minimum: 0 }
         skippedDuplicate: { type: integer, minimum: 0 }
         skippedZero: { type: integer, minimum: 0 }
+        totalRead: { type: integer, minimum: 0 }
+        recognized: { type: integer, minimum: 0 }
+        unrecognized: { type: integer, minimum: 0 }
+        transactionIds:
+          type: array
+          items: { type: integer, minimum: 1 }
     InventoryPurchaseItem:
       type: object
       required: [id, inventoryItemId, name, category, unit, quantity, unitPrice, totalAmount]

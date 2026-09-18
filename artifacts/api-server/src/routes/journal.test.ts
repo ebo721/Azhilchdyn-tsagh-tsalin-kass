@@ -107,12 +107,14 @@ describe("journal routes", () => {
     const id = await create(10, 10);
     const response = await request(`/journal/entries/${id}`);
     assert.equal(response.status, 200);
-    const value = await response.json() as { date: string; sourceType: string; status: string; lines: unknown[]; createdBy: number };
+    const value = await response.json() as { date: string; sourceType: string; status: string; lines: unknown[]; createdBy: number; totalDebit: number; totalCredit: number };
     assert.equal(value.date, "2025-01-15");
     assert.equal(value.sourceType, "manual");
     assert.equal(value.status, "posted");
     assert.equal(value.createdBy, userIds[0]);
     assert.equal(value.lines.length, 2);
+    assert.equal(value.totalDebit, 10);
+    assert.equal(value.totalCredit, 10);
   });
 
   it("keeps an unbalanced create as draft and transitions it when updated", async () => {
@@ -142,7 +144,12 @@ describe("journal routes", () => {
     const id = await create(10, 10);
     const list = await request(`/journal/entries?sourceType=manual&status=posted&accountId=${debitAccount}&dateFrom=2025-01-01&dateTo=2025-12-31`);
     assert.equal(list.status, 200);
-    assert.ok((await list.json() as unknown[]).length >= 1);
+    const listed = await list.json() as { id: number; totalDebit: number; totalCredit: number }[];
+    assert.ok(listed.length >= 1);
+    const listedEntry = listed.find((entry) => entry.id === id);
+    assert.ok(listedEntry);
+    assert.equal(listedEntry.totalDebit, 10);
+    assert.equal(listedEntry.totalCredit, 10);
     const response = await request(`/journal/entries/${id}/void`, { method: "POST", body: "{}" });
     assert.equal(response.status, 200);
     const reversal = await response.json() as { reversalEntryId: number };
