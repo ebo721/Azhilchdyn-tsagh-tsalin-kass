@@ -392,6 +392,11 @@ router.post("/cash/transactions", async (req, res, next) => {
 
 router.put("/cash/transactions/:id", async (req, res, next) => {
   try {
+    const session = await getStaffSession(req);
+    if (session?.role !== "admin") {
+      res.status(403).json({ error: "Кассын гүйлгээг зөвхөн админ засах эрхтэй" });
+      return;
+    }
     const { id } = UpdateCashTransactionParams.parse(req.params);
     const input = UpdateCashTransactionBody.parse(req.body);
     if (input.type === "income" && input.incomeMonth === null) {
@@ -401,9 +406,7 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
     const result = await db.transaction(async (tx) => {
       const [existing] = await tx.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, id)).for("update");
       if (!existing) throw Object.assign(new Error("Кассын гүйлгээ олдсонгүй"), { status: 404 });
-      if (existing.sourceType !== null || existing.bankTransactionId !== null) {
-        throw Object.assign(new Error("Банктай холбосон эсвэл автомат гүйлгээг эх үүсвэр цэснээс засна уу"), { status: 409 });
-      }
+      if (existing.sourceType !== null) throw Object.assign(new Error("Автомат гүйлгээг эх үүсвэр цэснээс засна уу"), { status: 409 });
       if (await isCashDateClosed(String(existing.date)) || await isCashDateClosed(input.date)) {
         throw Object.assign(new Error("Өндөрлөсөн өдрийн гүйлгээг засах боломжгүй"), { status: 409 });
       }
@@ -480,6 +483,11 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
 
 router.patch("/cash/transactions/:id/income-month", async (req, res, next) => {
   try {
+    const session = await getStaffSession(req);
+    if (session?.role !== "admin") {
+      res.status(403).json({ error: "Кассын гүйлгээг зөвхөн админ засах эрхтэй" });
+      return;
+    }
     const { id } = UpdateBankCashTransactionIncomeMonthParams.parse(req.params);
     const { incomeMonth } = UpdateBankCashTransactionIncomeMonthBody.parse(req.body);
     const [existing] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, id));
@@ -526,9 +534,7 @@ router.delete("/cash/transactions/:id", async (req, res, next) => {
     await db.transaction(async (tx) => {
       const [existing] = await tx.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, id)).for("update");
       if (!existing) throw Object.assign(new Error("Кассын гүйлгээ олдсонгүй"), { status: 404 });
-      if (existing.sourceType !== null || existing.bankTransactionId !== null) {
-        throw Object.assign(new Error("Банктай холбосон эсвэл автомат гүйлгээг эх үүсвэр цэснээс өөрчилнө үү"), { status: 409 });
-      }
+      if (existing.sourceType !== null) throw Object.assign(new Error("Автомат гүйлгээг эх үүсвэр цэснээс өөрчилнө үү"), { status: 409 });
       if (await isCashDateClosed(String(existing.date))) {
         throw Object.assign(new Error("Өндөрлөсөн өдрийн гүйлгээг устгах боломжгүй"), { status: 409 });
       }

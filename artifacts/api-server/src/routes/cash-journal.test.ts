@@ -22,7 +22,9 @@ describe("cash journal posting", () => {
   let server: Server;
   let baseUrl: string;
   let cookie: string;
+  let accountantCookie: string;
   let userId: number;
+  let accountantUserId: number;
   let cashAccountId: number;
   let bankAccountId: number;
   let inventoryAccountId: number;
@@ -36,14 +38,24 @@ describe("cash journal posting", () => {
   before(async () => {
     process.env.SESSION_SECRET = "cash-journal-test-secret";
     const suffix = `${process.pid}-${randomUUID()}`;
-    const [user] = await db.insert(usersTable).values({
-      username: `cash-journal-${suffix}`,
-      normalizedUsername: `cash-journal-${suffix}`,
-      role: "admin",
-      passwordHash: "not-used-by-session-tests",
-    }).returning({ id: usersTable.id, username: usersTable.username, role: usersTable.role, tokenVersion: usersTable.tokenVersion });
+    const [user, accountant] = await db.insert(usersTable).values([
+      {
+        username: `cash-journal-${suffix}`,
+        normalizedUsername: `cash-journal-${suffix}`,
+        role: "admin",
+        passwordHash: "not-used-by-session-tests",
+      },
+      {
+        username: `cash-journal-accountant-${suffix}`,
+        normalizedUsername: `cash-journal-accountant-${suffix}`,
+        role: "accountant",
+        passwordHash: "not-used-by-session-tests",
+      },
+    ]).returning({ id: usersTable.id, username: usersTable.username, role: usersTable.role, tokenVersion: usersTable.tokenVersion });
     userId = user.id;
+    accountantUserId = accountant.id;
     cookie = `${hrCookie.name}=${createStaffSession(user)}`;
+    accountantCookie = `${hrCookie.name}=${createStaffSession(accountant)}`;
 
     const accounts = await db.insert(chartOfAccountsTable).values([
       { code: `cash-journal-cash-${suffix}`, name: "Cash journal cash", type: "asset", normalBalance: "debit" },
@@ -81,7 +93,7 @@ describe("cash journal posting", () => {
       await db.delete(journalEntriesTable).where(inArray(journalEntriesTable.id, journalIds));
     }
     await db.delete(chartOfAccountsTable).where(inArray(chartOfAccountsTable.id, testAccountIds));
-    await db.delete(usersTable).where(eq(usersTable.id, userId));
+    await db.delete(usersTable).where(inArray(usersTable.id, [userId, accountantUserId]));
   });
 
   async function requestPath(path: string, init: RequestInit) {
@@ -98,6 +110,31 @@ describe("cash journal posting", () => {
       body: JSON.stringify(body),
     });
   }
+
+  it("allows only admins to edit cash transactions", async () => {
+    const body = JSON.stringify({
+      type: "expense",
+      category: "Бусад",
+      description: "Unauthorized cash edit",
+      amount: 1,
+      date: "2025-01-20",
+      incomeMonth: null,
+    });
+    const [transactionEdit, incomeMonthEdit] = await Promise.all([
+      fetch(`${baseUrl}/api/cash/transactions/999999`, {
+        method: "PUT",
+        headers: { cookie: accountantCookie, "content-type": "application/json" },
+        body,
+      }),
+      fetch(`${baseUrl}/api/cash/transactions/999999/income-month`, {
+        method: "PATCH",
+        headers: { cookie: accountantCookie, "content-type": "application/json" },
+        body: JSON.stringify({ incomeMonth: "2025-01" }),
+      }),
+    ]);
+    assert.equal(transactionEdit.status, 403);
+    assert.equal(incomeMonthEdit.status, 403);
+  });
 
   it("posts a balanced income and links it to the cash transaction", async () => {
     const response = await request({
@@ -266,7 +303,7 @@ describe("cash journal posting", () => {
     journalIds.push(reversal.id);
   });
 
-  it("blocks PUT changes to a bank-linked cash transaction", async () => {
+  it("keeps a bank-linked cash PUT idempotent and settled through bank", async () => {
     const category = `Bank linked ${randomUUID()}`;
     const create = await request({
       type: "expense",
@@ -289,18 +326,20 @@ describe("cash journal posting", () => {
       method: "PUT",
       body: JSON.stringify({ type: "expense", category, description: "Bank linked original", amount: 21, date: "2025-01-28", incomeMonth: null }),
     });
-    assert.equal(unchanged.status, 409);
+    assert.equal(unchanged.status, 200);
+    const unchangedValue = await unchanged.json() as { journalEntryId: number };
+    assert.equal(unchangedValue.journalEntryId, original.journalEntryId);
 
     const changed = await requestPath(`/api/cash/transactions/${original.id}`, {
       method: "PUT",
       body: JSON.stringify({ type: "expense", category: `Bank linked changed ${randomUUID()}`, description: "Bank linked changed", amount: 22, date: "2025-01-29", incomeMonth: null }),
     });
-    assert.equal(changed.status, 409);
-
-    const [unchangedCash] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, original.id));
-    assert.equal(unchangedCash.journalEntryId, original.journalEntryId);
-    assert.equal(unchangedCash.description, "Bank linked original");
-    assert.equal(unchangedCash.amount, 21);
+    assert.equal(changed.status, 200);
+    const replacement = await changed.json() as { journalEntryId: number };
+    assert.notEqual(replacement.journalEntryId, original.journalEntryId);
+    journalIds.push(replacement.journalEntryId);
+    const lines = await db.select().from(journalLinesTable).where(eq(journalLinesTable.journalEntryId, replacement.journalEntryId));
+    assert.equal(lines.some((line) => line.accountId === bankAccountId && line.credit === 22), true);
   });
 
   it("does not backfill a historical cash row with a null journal link", async () => {
