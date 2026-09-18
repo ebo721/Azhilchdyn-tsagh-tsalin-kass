@@ -27,6 +27,10 @@ import type {
   BadRequestResponse,
   BankAccount,
   BankAccountInput,
+  BankExpenseLinkInput,
+  BankExpenseLinkResult,
+  BankPurchaseLinkInput,
+  BankPurchaseLinkResult,
   BankTransaction,
   BankTransactionAccountInput,
   BankTransactionCashLinkInput,
@@ -3988,6 +3992,150 @@ export const useRejectBankTransactionSuggestion = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRejectBankTransactionSuggestionMutationOptions(options));
+    }
+
+export const getLinkBankTransactionPurchaseUrl = (id: number,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}/link-purchase`
+}
+
+/**
+ * @summary Link a pending bank expense to an existing or newly created inventory purchase
+ */
+export const linkBankTransactionPurchase = async (id: number,
+    bankPurchaseLinkInput: BankPurchaseLinkInput, options?: Parameters<typeof customFetch>[1]): Promise<BankPurchaseLinkResult> => {
+
+  return customFetch<BankPurchaseLinkResult>(getLinkBankTransactionPurchaseUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bankPurchaseLinkInput)
+  }
+);}
+
+
+
+
+
+export const getLinkBankTransactionPurchaseMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionPurchase>>, TError,{id: number;data: BodyType<BankPurchaseLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionPurchase>>, TError,{id: number;data: BodyType<BankPurchaseLinkInput>}, TContext> => {
+
+const mutationKey = ['linkBankTransactionPurchase'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof linkBankTransactionPurchase>>, {id: number;data: BodyType<BankPurchaseLinkInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  linkBankTransactionPurchase(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LinkBankTransactionPurchaseMutationResult = NonNullable<Awaited<ReturnType<typeof linkBankTransactionPurchase>>>
+    export type LinkBankTransactionPurchaseMutationBody = BodyType<BankPurchaseLinkInput>
+    export type LinkBankTransactionPurchaseMutationError = ErrorType<void>
+
+    /**
+ * @summary Link a pending bank expense to an existing or newly created inventory purchase
+ */
+export const useLinkBankTransactionPurchase = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionPurchase>>, TError,{id: number;data: BodyType<BankPurchaseLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof linkBankTransactionPurchase>>,
+        TError,
+        {id: number;data: BodyType<BankPurchaseLinkInput>},
+        TContext
+      > => {
+      return useMutation(getLinkBankTransactionPurchaseMutationOptions(options));
+    }
+
+export const getLinkBankTransactionExpenseUrl = (id: number,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}/link-expense`
+}
+
+/**
+ * @summary Link a pending bank expense to an existing or newly created operating expense
+ */
+export const linkBankTransactionExpense = async (id: number,
+    bankExpenseLinkInput: BankExpenseLinkInput, options?: Parameters<typeof customFetch>[1]): Promise<BankExpenseLinkResult> => {
+
+  return customFetch<BankExpenseLinkResult>(getLinkBankTransactionExpenseUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bankExpenseLinkInput)
+  }
+);}
+
+
+
+
+
+export const getLinkBankTransactionExpenseMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionExpense>>, TError,{id: number;data: BodyType<BankExpenseLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionExpense>>, TError,{id: number;data: BodyType<BankExpenseLinkInput>}, TContext> => {
+
+const mutationKey = ['linkBankTransactionExpense'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof linkBankTransactionExpense>>, {id: number;data: BodyType<BankExpenseLinkInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  linkBankTransactionExpense(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LinkBankTransactionExpenseMutationResult = NonNullable<Awaited<ReturnType<typeof linkBankTransactionExpense>>>
+    export type LinkBankTransactionExpenseMutationBody = BodyType<BankExpenseLinkInput>
+    export type LinkBankTransactionExpenseMutationError = ErrorType<void>
+
+    /**
+ * @summary Link a pending bank expense to an existing or newly created operating expense
+ */
+export const useLinkBankTransactionExpense = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionExpense>>, TError,{id: number;data: BodyType<BankExpenseLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof linkBankTransactionExpense>>,
+        TError,
+        {id: number;data: BodyType<BankExpenseLinkInput>},
+        TContext
+      > => {
+      return useMutation(getLinkBankTransactionExpenseMutationOptions(options));
     }
 
 export const getUpdateBankTransactionAccountUrl = (id: number,) => {

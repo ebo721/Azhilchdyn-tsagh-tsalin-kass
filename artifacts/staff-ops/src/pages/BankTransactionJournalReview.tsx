@@ -7,15 +7,21 @@ import { Check, X, ArrowDownLeft, ArrowUpRight, ChevronLeft, RefreshCw } from 'l
 import { cn } from '@/lib/utils';
 import { money } from '@/lib/app-shared';
 import { bankDateTimeLabel } from './Cash';
+import { BankDocumentLinkPanel } from '@/components/BankDocumentLinkPanel';
 import {
   useListBankTransactionJournalReview,
   usePostBankTransactionJournal,
   useRejectBankTransactionSuggestion,
+  useLinkBankTransactionExpense,
+  useLinkBankTransactionPurchase,
   useListChartOfAccounts,
   useGetAuthSession,
   getListChartOfAccountsQueryKey,
   getListBankTransactionJournalReviewQueryKey,
   getListBankTransactionsQueryKey,
+  getListCashTransactionsQueryKey,
+  getListInventoryPurchasesQueryKey,
+  getListOperatingExpensesQueryKey,
   BankTransactionJournalReviewItemType,
   BankTransactionJournalReviewItem
 } from '@workspace/api-client-react';
@@ -34,14 +40,40 @@ export function BankTransactionJournalReview() {
 
   const post = usePostBankTransactionJournal();
   const reject = useRejectBankTransactionSuggestion();
+  const linkExpense = useLinkBankTransactionExpense();
+  const linkPurchase = useLinkBankTransactionPurchase();
 
   const [selectedAccounts, setSelectedAccounts] = useState<Record<number, number>>({});
+  const [linkingRowId, setLinkingRowId] = useState<number | null>(null);
+  const invalidateLinkedDocumentViews = () => {
+    [
+      getListBankTransactionJournalReviewQueryKey(),
+      getListBankTransactionsQueryKey(),
+      getListCashTransactionsQueryKey(),
+      getListInventoryPurchasesQueryKey(),
+      getListOperatingExpensesQueryKey(),
+    ].forEach((queryKey) => qc.invalidateQueries({ queryKey }));
+  };
   const mutationError = (error: unknown) => {
     window.alert(error instanceof Error ? error.message : 'Гүйлгээг журналд шивэхэд алдаа гарлаа.');
   };
 
   const handleApprove = (item: BankTransactionJournalReviewItem) => {
     if (!item.suggestedAccountId) return;
+    if (item.existingPurchaseMatch?.type === 'inventory_purchase') {
+      linkPurchase.mutate({ id: item.id, data: { inventoryPurchaseId: item.existingPurchaseMatch.id } }, {
+        onSuccess: invalidateLinkedDocumentViews,
+        onError: mutationError,
+      });
+      return;
+    }
+    if (item.existingPurchaseMatch?.type === 'operating_expense') {
+      linkExpense.mutate({ id: item.id, data: { operatingExpenseId: item.existingPurchaseMatch.id } }, {
+        onSuccess: invalidateLinkedDocumentViews,
+        onError: mutationError,
+      });
+      return;
+    }
     post.mutate({ id: item.id, data: { accountId: item.suggestedAccountId } }, {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getListBankTransactionJournalReviewQueryKey() });
@@ -116,10 +148,10 @@ export function BankTransactionJournalReview() {
               const isIncome = row.type === BankTransactionJournalReviewItemType.income;
               const hasSuggestion = row.suggestedAccountId !== null;
               
-              const isPending = post.isPending || reject.isPending;
+               const isPending = post.isPending || reject.isPending || linkExpense.isPending || linkPurchase.isPending;
               
               return (
-                <div key={row.id} className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center transition-colors hover:bg-secondary/35" data-testid={`journal-review-row-${row.id}`}>
+                <div key={row.id} className="flex flex-col gap-4 p-5 sm:flex-row sm:flex-wrap sm:items-center transition-colors hover:bg-secondary/35" data-testid={`journal-review-row-${row.id}`}>
                   <div className="flex flex-1 items-start gap-4">
                     <span className={cn('grid mt-0.5 size-10 shrink-0 place-items-center rounded-xl', isIncome ? 'bg-primary/10 text-primary' : 'bg-orange-100 text-orange-800')}>
                       {isIncome ? <ArrowDownLeft className="size-5" /> : <ArrowUpRight className="size-5" />}
@@ -212,9 +244,26 @@ export function BankTransactionJournalReview() {
                             Шивэх
                           </Button>
                         </div>
+                        {isIncome === false && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setLinkingRowId(linkingRowId === row.id ? null : row.id)}
+                            disabled={isPending}
+                            data-testid={`button-link-bank-document-${row.id}`}
+                          >
+                            Баримт холбох
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
+                  {isIncome === false && linkingRowId === row.id && (
+                    <div className="w-full basis-full">
+                      <BankDocumentLinkPanel row={row} onClose={() => setLinkingRowId(null)} />
+                    </div>
+                  )}
                 </div>
               );
             })}

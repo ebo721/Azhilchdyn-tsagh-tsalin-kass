@@ -1394,6 +1394,94 @@ export const RejectBankTransactionSuggestionResponse = zod.void()
 
 
 /**
+ * @summary Link a pending bank expense to an existing or newly created inventory purchase
+ */
+export const LinkBankTransactionPurchaseParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+export const linkBankTransactionPurchaseBodyTwoDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+export const linkBankTransactionPurchaseBodyTwoItemsItemQuantityExclusiveMin = 0;
+
+export const linkBankTransactionPurchaseBodyTwoItemsItemUnitPriceMin = 0;
+
+
+
+
+export const LinkBankTransactionPurchaseBody = zod.union([zod.object({
+  "inventoryPurchaseId": zod.number().int().min(1)
+}),zod.object({
+  "materialType": zod.enum(['food', 'supply']),
+  "supplierName": zod.string().min(1),
+  "hasReceipt": zod.boolean(),
+  "date": zod.string().regex(linkBankTransactionPurchaseBodyTwoDateRegExp),
+  "items": zod.array(zod.object({
+  "inventoryItemId": zod.number().int().optional(),
+  "name": zod.string().min(1),
+  "category": zod.string().min(1),
+  "unit": zod.enum(['ширхэг', 'кг', 'грамм', 'литр', 'мл', 'метр', 'багц', 'хайрцаг']),
+  "quantity": zod.number().gt(linkBankTransactionPurchaseBodyTwoItemsItemQuantityExclusiveMin),
+  "unitPrice": zod.number().min(linkBankTransactionPurchaseBodyTwoItemsItemUnitPriceMin)
+})).min(1)
+})])
+
+
+
+
+
+
+
+export const LinkBankTransactionPurchaseResponse = zod.object({
+  "bankTransactionId": zod.number().int().min(1),
+  "inventoryPurchaseId": zod.number().int().min(1),
+  "cashTransactionId": zod.number().int().min(1),
+  "journalEntryId": zod.number().int().min(1)
+})
+
+
+/**
+ * @summary Link a pending bank expense to an existing or newly created operating expense
+ */
+export const LinkBankTransactionExpenseParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+
+export const linkBankTransactionExpenseBodyTwoDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const linkBankTransactionExpenseBodyTwoAmountExclusiveMin = 0;
+
+
+
+export const LinkBankTransactionExpenseBody = zod.union([zod.object({
+  "operatingExpenseId": zod.number().int().min(1)
+}),zod.object({
+  "description": zod.string().min(1),
+  "accountId": zod.number().int().min(1),
+  "date": zod.string().regex(linkBankTransactionExpenseBodyTwoDateRegExp),
+  "amount": zod.number().gt(linkBankTransactionExpenseBodyTwoAmountExclusiveMin)
+})])
+
+
+
+
+
+
+
+export const LinkBankTransactionExpenseResponse = zod.object({
+  "bankTransactionId": zod.number().int().min(1),
+  "operatingExpenseId": zod.number().int().min(1),
+  "cashTransactionId": zod.number().int().min(1),
+  "journalEntryId": zod.number().int().min(1)
+})
+
+
+/**
  * @summary Assign or clear a chart account on a bank transaction
  */
 

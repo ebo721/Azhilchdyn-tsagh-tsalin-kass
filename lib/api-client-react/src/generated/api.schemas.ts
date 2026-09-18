@@ -1112,6 +1112,99 @@ export interface BankTransactionJournalReviewItem {
   existingPurchaseMatch?: BankTransactionPurchaseMatch;
 }
 
+export interface ExistingInventoryPurchaseLink {
+  /** @minimum 1 */
+  inventoryPurchaseId: number;
+}
+
+export type InventoryPurchaseInputMaterialType = typeof InventoryPurchaseInputMaterialType[keyof typeof InventoryPurchaseInputMaterialType];
+
+
+export const InventoryPurchaseInputMaterialType = {
+  food: 'food',
+  supply: 'supply',
+} as const;
+
+export type InventoryPurchaseItemInputUnit = typeof InventoryPurchaseItemInputUnit[keyof typeof InventoryPurchaseItemInputUnit];
+
+
+export const InventoryPurchaseItemInputUnit = {
+  ширхэг: 'ширхэг',
+  кг: 'кг',
+  грамм: 'грамм',
+  литр: 'литр',
+  мл: 'мл',
+  метр: 'метр',
+  багц: 'багц',
+  хайрцаг: 'хайрцаг',
+} as const;
+
+export interface InventoryPurchaseItemInput {
+  inventoryItemId?: number;
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 1 */
+  category: string;
+  unit: InventoryPurchaseItemInputUnit;
+  /** @exclusiveMinimum 0 */
+  quantity: number;
+  /** @minimum 0 */
+  unitPrice: number;
+}
+
+export interface InventoryPurchaseInput {
+  materialType: InventoryPurchaseInputMaterialType;
+  /** @minLength 1 */
+  supplierName: string;
+  hasReceipt: boolean;
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
+  date: string;
+  /** @minItems 1 */
+  items: InventoryPurchaseItemInput[];
+}
+
+export type BankPurchaseLinkInput = ExistingInventoryPurchaseLink | InventoryPurchaseInput;
+
+export interface BankPurchaseLinkResult {
+  /** @minimum 1 */
+  bankTransactionId: number;
+  /** @minimum 1 */
+  inventoryPurchaseId: number;
+  /** @minimum 1 */
+  cashTransactionId: number;
+  /** @minimum 1 */
+  journalEntryId: number;
+}
+
+export interface ExistingOperatingExpenseLink {
+  /** @minimum 1 */
+  operatingExpenseId: number;
+}
+
+export interface OperatingExpenseInput {
+  /** @minLength 1 */
+  description: string;
+  /** @minimum 1 */
+  accountId: number;
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
+  date: string;
+  /** @exclusiveMinimum 0 */
+  amount: number;
+}
+
+export type BankExpenseLinkInput = ExistingOperatingExpenseLink | OperatingExpenseInput;
+
+export interface BankExpenseLinkResult {
+  /** @minimum 1 */
+  bankTransactionId: number;
+  /** @minimum 1 */
+  operatingExpenseId: number;
+  /** @minimum 1 */
+  cashTransactionId: number;
+  /** @minimum 1 */
+  journalEntryId: number;
+}
+
 export interface BankTransactionJournalPostInput {
   /** @minimum 1 */
   accountId: number;
@@ -1174,52 +1267,6 @@ export interface InventoryPurchase {
   createdAt: string;
   editable: boolean;
   items: InventoryPurchaseItem[];
-}
-
-export type InventoryPurchaseItemInputUnit = typeof InventoryPurchaseItemInputUnit[keyof typeof InventoryPurchaseItemInputUnit];
-
-
-export const InventoryPurchaseItemInputUnit = {
-  ширхэг: 'ширхэг',
-  кг: 'кг',
-  грамм: 'грамм',
-  литр: 'литр',
-  мл: 'мл',
-  метр: 'метр',
-  багц: 'багц',
-  хайрцаг: 'хайрцаг',
-} as const;
-
-export interface InventoryPurchaseItemInput {
-  inventoryItemId?: number;
-  /** @minLength 1 */
-  name: string;
-  /** @minLength 1 */
-  category: string;
-  unit: InventoryPurchaseItemInputUnit;
-  /** @exclusiveMinimum 0 */
-  quantity: number;
-  /** @minimum 0 */
-  unitPrice: number;
-}
-
-export type InventoryPurchaseInputMaterialType = typeof InventoryPurchaseInputMaterialType[keyof typeof InventoryPurchaseInputMaterialType];
-
-
-export const InventoryPurchaseInputMaterialType = {
-  food: 'food',
-  supply: 'supply',
-} as const;
-
-export interface InventoryPurchaseInput {
-  materialType: InventoryPurchaseInputMaterialType;
-  /** @minLength 1 */
-  supplierName: string;
-  hasReceipt: boolean;
-  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
-  date: string;
-  /** @minItems 1 */
-  items: InventoryPurchaseItemInput[];
 }
 
 export interface InventoryPurchasePaymentInput {
@@ -1334,17 +1381,6 @@ export interface OperatingExpense {
   /** @nullable */
   cashTransactionId: number | null;
   createdAt: string;
-}
-
-export interface OperatingExpenseInput {
-  /** @minLength 1 */
-  description: string;
-  /** @minimum 1 */
-  accountId: number;
-  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
-  date: string;
-  /** @exclusiveMinimum 0 */
-  amount: number;
 }
 
 export interface OperatingExpensePaymentInput {

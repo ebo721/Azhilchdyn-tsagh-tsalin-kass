@@ -25,6 +25,12 @@ import {
   PostBankTransactionJournalParams,
   PostBankTransactionJournalResponse,
   RejectBankTransactionSuggestionParams,
+  LinkBankTransactionPurchaseBody,
+  LinkBankTransactionPurchaseParams,
+  LinkBankTransactionPurchaseResponse,
+  LinkBankTransactionExpenseBody,
+  LinkBankTransactionExpenseParams,
+  LinkBankTransactionExpenseResponse,
   TransferBankTransactionToCashBody,
   TransferBankTransactionToCashParams,
   TransferBankTransactionToCashResponse,
@@ -39,6 +45,7 @@ import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.j
 import { cashAccountForCategory } from "../lib/cash-account.js";
 import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
 import { loadBankRecognitionContext, recognizeBankTransaction } from "../lib/bank-recognition.js";
+import { linkBankPurchase, linkBankExpense } from "../lib/bank-document-linking.js";
 
 const router: IRouter = Router();
 const execFile = promisify(execFileCallback);
@@ -326,6 +333,38 @@ router.get("/bank-transactions/journal-review", async (_req, res, next) => {
       };
     })));
   } catch (error) { next(error); }
+});
+
+router.post("/bank-transactions/:id/link-purchase", async (req, res, next) => {
+  try {
+    const { id } = LinkBankTransactionPurchaseParams.parse(req.params);
+    const result = await linkBankPurchase(id, LinkBankTransactionPurchaseBody.parse(req.body));
+    if (typeof result === "string") {
+      const status = result === "missing_bank" || result === "missing_purchase" ? 404 : result === "bank_resolved" || result === "purchase_conflict" || result === "closed" ? 409 : 400;
+      return res.status(status).json({ error: result });
+    }
+    return res.json(LinkBankTransactionPurchaseResponse.parse(result));
+  } catch (error) {
+    const code = (error as { code?: string; cause?: { code?: string } }).code ?? (error as { cause?: { code?: string } }).cause?.code;
+    if (code === "23505" || (error instanceof Error && error.message.includes("claimed concurrently"))) return res.status(409).json({ error: "Банкны гүйлгээ аль хэдийн холбогдсон байна" });
+    return next(error);
+  }
+});
+
+router.post("/bank-transactions/:id/link-expense", async (req, res, next) => {
+  try {
+    const { id } = LinkBankTransactionExpenseParams.parse(req.params);
+    const result = await linkBankExpense(id, LinkBankTransactionExpenseBody.parse(req.body));
+    if (typeof result === "string") {
+      const status = result === "missing_bank" || result === "missing_expense" ? 404 : result === "bank_resolved" || result === "expense_conflict" || result === "closed" ? 409 : 400;
+      return res.status(status).json({ error: result });
+    }
+    return res.json(LinkBankTransactionExpenseResponse.parse(result));
+  } catch (error) {
+    const code = (error as { code?: string; cause?: { code?: string } }).code ?? (error as { cause?: { code?: string } }).cause?.code;
+    if (code === "23505" || (error instanceof Error && error.message.includes("claimed concurrently"))) return res.status(409).json({ error: "Банкны гүйлгээ аль хэдийн холбогдсон байна" });
+    return next(error);
+  }
 });
 
 router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
