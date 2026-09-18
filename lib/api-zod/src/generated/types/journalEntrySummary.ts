@@ -19,4 +19,6 @@ export interface JournalEntrySummary {
   /** @nullable */
   createdBy: number | null;
   createdAt: Date;
+  totalDebit: number;
+  totalCredit: number;
 }

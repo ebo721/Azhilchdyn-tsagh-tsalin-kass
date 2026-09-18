@@ -1,5 +1,5 @@
-import { type ReactNode, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { type ReactNode } from 'react';
+import * as Dialog from '@radix-ui/react-dialog';
 import { Activity, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -70,21 +70,20 @@ export function PageHeading({ eyebrow, title, detail, action }: { eyebrow?: stri
 }
 
 export function Modal({ title, detail, onClose, children, wide = false, fullScreen = false }: { title: string; detail: string; onClose: () => void; children: ReactNode; wide?: boolean; fullScreen?: boolean }) {
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previousOverflow; };
-  }, []);
-  return createPortal(
-    <div className={cn('fixed inset-0 z-50 flex justify-center overflow-y-auto bg-foreground/35 backdrop-blur-[2px] sm:p-4', fullScreen ? 'items-start p-0' : 'items-center p-3')} role="dialog" aria-modal="true" data-testid="modal">
-      <div className={cn('w-full overflow-y-auto border border-border bg-card p-5 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl sm:p-7', fullScreen ? 'h-[100dvh] max-h-none rounded-none pt-[calc(env(safe-area-inset-top)+1.25rem)] sm:max-h-[calc(100dvh-2rem)] sm:pt-7' : 'max-h-[calc(100dvh-1.5rem)] rounded-2xl', wide ? 'sm:max-w-5xl' : 'sm:max-w-xl')}>
+  return (
+    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-foreground/35 backdrop-blur-[2px]" />
+        <div className={cn('pointer-events-none fixed inset-0 z-50 flex justify-center overflow-y-auto sm:p-4', fullScreen ? 'items-start p-0' : 'items-center p-3')}>
+          <Dialog.Content className={cn('pointer-events-auto w-full overflow-y-auto border border-border bg-card p-5 shadow-2xl outline-none sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl sm:p-7', fullScreen ? 'h-[100dvh] max-h-none rounded-none pt-[calc(env(safe-area-inset-top)+1.25rem)] sm:max-h-[calc(100dvh-2rem)] sm:pt-7' : 'max-h-[calc(100dvh-1.5rem)] rounded-2xl', wide ? 'sm:max-w-5xl' : 'sm:max-w-xl')} data-testid="modal">
         <div className="sticky top-0 z-10 -mx-2 mb-6 flex items-start justify-between gap-4 bg-card px-2 pb-3">
-          <div><p className="text-lg font-bold tracking-tight">{title}</p><p className="mt-1 text-xs text-muted-foreground">{detail}</p></div>
-          <button onClick={onClose} className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Цонх хаах" data-testid="button-close-modal"><X className="size-4" /></button>
+          <div><Dialog.Title className="text-lg font-bold tracking-tight">{title}</Dialog.Title><Dialog.Description className="mt-1 text-xs text-muted-foreground">{detail}</Dialog.Description></div>
+          <Dialog.Close className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Цонх хаах" data-testid="button-close-modal"><X className="size-4" /></Dialog.Close>
         </div>
         {children}
-      </div>
-    </div>,
-    document.body,
+          </Dialog.Content>
+        </div>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

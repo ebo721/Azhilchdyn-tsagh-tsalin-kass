@@ -5,7 +5,7 @@ import {
   UpdateJournalEntryResponse, VoidJournalEntryParams, VoidJournalEntryResponse,
   GetJournalAccountLedgerParams, GetJournalAccountLedgerResponse, GetJournalTrialBalanceResponse,
 } from "@workspace/api-zod";
-import { and, asc, desc, eq, gte, lte, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lte, inArray, sql } from "drizzle-orm";
 import { db, chartOfAccountsTable, journalEntriesTable, journalLinesTable, type JournalEntry, type JournalLine } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import {
@@ -26,9 +26,14 @@ function journalDate(value: string) {
   }
   return value;
 }
-type JournalEntryWithLines = JournalEntry & { lines: JournalLine[] };
+type JournalEntryWithLines = JournalEntry & { lines: JournalLine[]; totalDebit: number; totalCredit: number };
 function entryWithLines(entry: JournalEntry, lines: JournalLine[]): JournalEntryWithLines {
-  return { ...entry, lines };
+  return {
+    ...entry,
+    lines,
+    totalDebit: lines.reduce((sum, line) => sum + Number(line.debit), 0),
+    totalCredit: lines.reduce((sum, line) => sum + Number(line.credit), 0),
+  };
 }
 async function loadEntry(id: number): Promise<JournalEntryWithLines | null> {
   const [entry] = await db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, id));
@@ -50,7 +55,21 @@ router.get("/journal/entries", async (req, res, next) => {
       filters.push(inArray(journalEntriesTable.id, ids.map((row) => row.id)));
     }
     const rows = await db.select().from(journalEntriesTable).where(filters.length ? and(...filters) : undefined).orderBy(desc(journalEntriesTable.date), desc(journalEntriesTable.id));
-    res.json(ListJournalEntriesResponse.parse(rows));
+    const totals = rows.length
+      ? await db.select({
+        journalEntryId: journalLinesTable.journalEntryId,
+        totalDebit: sql<number>`coalesce(sum(${journalLinesTable.debit}), 0)::double precision`,
+        totalCredit: sql<number>`coalesce(sum(${journalLinesTable.credit}), 0)::double precision`,
+      }).from(journalLinesTable)
+        .where(inArray(journalLinesTable.journalEntryId, rows.map((row) => row.id)))
+        .groupBy(journalLinesTable.journalEntryId)
+      : [];
+    const totalByEntry = new Map(totals.map((total) => [total.journalEntryId, total]));
+    res.json(ListJournalEntriesResponse.parse(rows.map((row) => ({
+      ...row,
+      totalDebit: Number(totalByEntry.get(row.id)?.totalDebit ?? 0),
+      totalCredit: Number(totalByEntry.get(row.id)?.totalCredit ?? 0),
+    }))));
   } catch (error) {
     if (error instanceof JournalValidationError) return res.status(400).json({ error: error.message });
     return next(error);

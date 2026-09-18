@@ -1762,7 +1762,7 @@ components:
           items: { $ref: "#/components/schemas/JournalEntryLineInput" }
     JournalEntrySummary:
       type: object
-      required: [id, date, description, sourceType, sourceId, status, createdBy, createdAt]
+      required: [id, date, description, sourceType, sourceId, status, createdBy, createdAt, totalDebit, totalCredit]
       properties:
         id: { type: integer }
         date: { $ref: "#/components/schemas/JournalDate" }
@@ -1772,6 +1772,8 @@ components:
         status: { type: string, enum: [draft, posted, void] }
         createdBy: { type: ["integer", "null"] }
         createdAt: { type: string, format: date-time }
+        totalDebit: { type: number }
+        totalCredit: { type: number }
     JournalEntry:
       allOf:
         - $ref: "#/components/schemas/JournalEntrySummary"

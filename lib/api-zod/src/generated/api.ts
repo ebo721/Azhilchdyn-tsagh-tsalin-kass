@@ -2584,7 +2584,9 @@ export const ListJournalEntriesResponseItem = zod.object({
   "sourceId": zod.number().int().nullable(),
   "status": zod.enum(['draft', 'posted', 'void']),
   "createdBy": zod.number().int().nullable(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "totalDebit": zod.number(),
+  "totalCredit": zod.number()
 })
 export const ListJournalEntriesResponse = zod.array(ListJournalEntriesResponseItem)
 
@@ -2629,7 +2631,9 @@ export const CreateJournalEntryResponse = zod.object({
   "sourceId": zod.number().int().nullable(),
   "status": zod.enum(['draft', 'posted', 'void']),
   "createdBy": zod.number().int().nullable(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "totalDebit": zod.number(),
+  "totalCredit": zod.number()
 }).and(zod.object({
   "lines": zod.array(zod.object({
   "id": zod.number().int(),
@@ -2665,7 +2669,9 @@ export const GetJournalEntryResponse = zod.object({
   "sourceId": zod.number().int().nullable(),
   "status": zod.enum(['draft', 'posted', 'void']),
   "createdBy": zod.number().int().nullable(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "totalDebit": zod.number(),
+  "totalCredit": zod.number()
 }).and(zod.object({
   "lines": zod.array(zod.object({
   "id": zod.number().int(),
@@ -2719,7 +2725,9 @@ export const UpdateJournalEntryResponse = zod.object({
   "sourceId": zod.number().int().nullable(),
   "status": zod.enum(['draft', 'posted', 'void']),
   "createdBy": zod.number().int().nullable(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "totalDebit": zod.number(),
+  "totalCredit": zod.number()
 }).and(zod.object({
   "lines": zod.array(zod.object({
   "id": zod.number().int(),

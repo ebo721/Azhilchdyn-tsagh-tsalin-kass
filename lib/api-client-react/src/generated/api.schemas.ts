@@ -69,6 +69,8 @@ export interface JournalEntrySummary {
   /** @nullable */
   createdBy: number | null;
   createdAt: string;
+  totalDebit: number;
+  totalCredit: number;
 }
 
 export type JournalEntry = JournalEntrySummary & ({
