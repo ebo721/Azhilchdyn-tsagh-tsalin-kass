@@ -1341,15 +1341,24 @@ export const ListBankTransactionsResponse = zod.array(ListBankTransactionsRespon
 /**
  * @summary List pending bank transactions with journal account suggestions
  */
+export const listBankTransactionJournalReviewResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+
 export const ListBankTransactionJournalReviewResponseItem = zod.object({
   "id": zod.number().int(),
+  "date": zod.string().regex(listBankTransactionJournalReviewResponseDateRegExp),
   "transactionAt": zod.coerce.date(),
   "type": zod.enum(['income', 'expense']),
   "description": zod.string(),
   "amount": zod.number(),
   "counterparty": zod.string(),
   "suggestedAccountId": zod.number().int().nullable(),
-  "suggestedAccountName": zod.string().nullable()
+  "suggestedAccountName": zod.string().nullable(),
+  "existingPurchaseMatch": zod.object({
+  "type": zod.enum(['inventory_purchase', 'operating_expense']),
+  "id": zod.number().int().min(1)
+}).optional()
 })
 export const ListBankTransactionJournalReviewResponse = zod.array(ListBankTransactionJournalReviewResponseItem)
 
@@ -1375,7 +1384,7 @@ export const PostBankTransactionJournalResponse = zod.object({
 
 
 /**
- * @summary Reject a journal suggestion and move the transaction to unclear review
+ * @summary Reject the current journal suggestion while keeping the transaction pending
  */
 export const RejectBankTransactionSuggestionParams = zod.object({
   "id": zod.coerce.number().int()

@@ -49,7 +49,11 @@ describe("ordered bank recognition", () => {
         bankAccountNumber: "1234567890",
       }],
     }));
-    assert.deepEqual(result, { accountId: 6900, rule: "unpaid_target" });
+    assert.deepEqual(result, {
+      accountId: 6900,
+      rule: "unpaid_target",
+      existingPurchaseMatch: { type: "operating_expense", id: 1 },
+    });
   });
 
   it("uses the latest matching historical identity before a keyword", () => {
@@ -73,7 +77,7 @@ describe("ordered bank recognition", () => {
         },
       ],
     }));
-    assert.deepEqual(result, { accountId: 6500, rule: "historical_identity" });
+    assert.deepEqual(result, { accountId: 6500, rule: "historical_identity", existingPurchaseMatch: null });
   });
 
   it("uses configurable salary, social insurance, rent, and VAT keyword accounts", () => {
@@ -98,7 +102,7 @@ describe("ordered bank recognition", () => {
         bankAccountNumber: "1234567890",
       }],
     }));
-    assert.deepEqual(result, { accountId: null, rule: "none" });
+    assert.deepEqual(result, { accountId: null, rule: "none", existingPurchaseMatch: null });
   });
 
   it("does not match an unpaid target without identity overlap", () => {
@@ -116,7 +120,7 @@ describe("ordered bank recognition", () => {
         text: "Хүнсний нийлүүлэгч",
       }],
     }));
-    assert.deepEqual(result, { accountId: null, rule: "none" });
+    assert.deepEqual(result, { accountId: null, rule: "none", existingPurchaseMatch: null });
   });
 
   it("leaves ambiguous equal-score unpaid targets unrecognized", () => {
@@ -142,13 +146,13 @@ describe("ordered bank recognition", () => {
         },
       ],
     }));
-    assert.deepEqual(result, { accountId: null, rule: "none" });
+    assert.deepEqual(result, { accountId: null, rule: "none", existingPurchaseMatch: null });
   });
 
   it("matches keywords on token boundaries only", () => {
     assert.deepEqual(
       recognizeBankTransaction(transaction({ description: "preventative үйлчилгээ" }), context()),
-      { accountId: null, rule: "none" },
+      { accountId: null, rule: "none", existingPurchaseMatch: null },
     );
     assert.equal(
       recognizeBankTransaction(transaction({ description: "Засвар үйлчилгээ" }), context({
@@ -156,5 +160,28 @@ describe("ordered bank recognition", () => {
       })).accountId,
       6500,
     );
+  });
+
+  it("does not re-suggest a rejected account from any rule", () => {
+    const rejected = transaction({ rejectedAccountIds: [6900, 6500, 6100] });
+    const result = recognizeBankTransaction(rejected, context({
+      unpaidTargets: [{
+        id: 1,
+        kind: "operating_expense",
+        accountId: 6900,
+        date: "2026-09-18",
+        amount: 100_000,
+        text: "Нийлүүлэгч",
+      }],
+      historical: [{
+        id: 1,
+        type: "expense",
+        accountId: 6500,
+        account: "99112233 / Нийлүүлэгч",
+        counterparty: "99112233 / Нийлүүлэгч",
+        bankAccountNumber: "1234567890",
+      }],
+    }));
+    assert.deepEqual(result, { accountId: null, rule: "none", existingPurchaseMatch: null });
   });
 });

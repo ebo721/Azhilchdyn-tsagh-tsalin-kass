@@ -6,9 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BankTransactionJournalReviewItemType } from './bankTransactionJournalReviewItemType';
+import type { BankTransactionPurchaseMatch } from './bankTransactionPurchaseMatch';
 
 export interface BankTransactionJournalReviewItem {
   id: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  date: string;
   transactionAt: Date;
   type: BankTransactionJournalReviewItemType;
   description: string;
@@ -18,4 +21,5 @@ export interface BankTransactionJournalReviewItem {
   suggestedAccountId: number | null;
   /** @nullable */
   suggestedAccountName: string | null;
+  existingPurchaseMatch?: BankTransactionPurchaseMatch;
 }

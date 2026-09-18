@@ -218,6 +218,7 @@ export const bankTransactionsTable = pgTable("bank_transactions", {
   type: text("type").notNull(),
   amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
   accountId: integer("account_id").references(() => chartOfAccountsTable.id, { onDelete: "restrict" }),
+  rejectedAccountIds: integer("rejected_account_ids").array().notNull().default(sql`ARRAY[]::integer[]`),
   account: text("account").notNull().default(""),
   counterparty: text("counterparty").notNull().default(""),
   balance: numeric("balance", { precision: 14, scale: 2, mode: "number" }),

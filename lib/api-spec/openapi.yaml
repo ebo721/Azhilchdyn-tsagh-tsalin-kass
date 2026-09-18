@@ -852,7 +852,7 @@ paths:
     post:
       operationId: rejectBankTransactionSuggestion
       tags: [bank-transactions]
-      summary: Reject a journal suggestion and move the transaction to unclear review
+      summary: Reject the current journal suggestion while keeping the transaction pending
       parameters:
         - $ref: "#/components/parameters/Id"
       responses:
@@ -887,6 +887,8 @@ paths:
           description: Invalid chart account
         "404":
           description: Bank transaction not found
+        "409":
+          description: Bank transaction was already resolved
   /bank-accounts:
     get:
       operationId: listBankAccounts
@@ -2316,9 +2318,10 @@ components:
         accountId: { type: ["integer", "null"], minimum: 1 }
     BankTransactionJournalReviewItem:
       type: object
-      required: [id, transactionAt, type, description, amount, counterparty, suggestedAccountId, suggestedAccountName]
+      required: [id, date, transactionAt, type, description, amount, counterparty, suggestedAccountId, suggestedAccountName]
       properties:
         id: { type: integer }
+        date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
         transactionAt: { type: string, format: date-time }
         type: { type: string, enum: [income, expense] }
         description: { type: string }
@@ -2326,6 +2329,14 @@ components:
         counterparty: { type: string }
         suggestedAccountId: { type: ["integer", "null"] }
         suggestedAccountName: { type: ["string", "null"] }
+        existingPurchaseMatch:
+          $ref: "#/components/schemas/BankTransactionPurchaseMatch"
+    BankTransactionPurchaseMatch:
+      type: object
+      required: [type, id]
+      properties:
+        type: { type: string, enum: [inventory_purchase, operating_expense] }
+        id: { type: integer, minimum: 1 }
     BankTransactionJournalPostInput:
       type: object
       required: [accountId]

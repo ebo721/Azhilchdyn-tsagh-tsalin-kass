@@ -3928,7 +3928,7 @@ export const getRejectBankTransactionSuggestionUrl = (id: number,) => {
 }
 
 /**
- * @summary Reject a journal suggestion and move the transaction to unclear review
+ * @summary Reject the current journal suggestion while keeping the transaction pending
  */
 export const rejectBankTransactionSuggestion = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
 
@@ -3977,7 +3977,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type RejectBankTransactionSuggestionMutationError = ErrorType<void>
 
     /**
- * @summary Reject a journal suggestion and move the transaction to unclear review
+ * @summary Reject the current journal suggestion while keeping the transaction pending
  */
 export const useRejectBankTransactionSuggestion = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectBankTransactionSuggestion>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}

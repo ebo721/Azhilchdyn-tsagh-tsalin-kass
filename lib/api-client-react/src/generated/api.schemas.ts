@@ -1082,8 +1082,24 @@ export const BankTransactionJournalReviewItemType = {
   expense: 'expense',
 } as const;
 
+export type BankTransactionPurchaseMatchType = typeof BankTransactionPurchaseMatchType[keyof typeof BankTransactionPurchaseMatchType];
+
+
+export const BankTransactionPurchaseMatchType = {
+  inventory_purchase: 'inventory_purchase',
+  operating_expense: 'operating_expense',
+} as const;
+
+export interface BankTransactionPurchaseMatch {
+  type: BankTransactionPurchaseMatchType;
+  /** @minimum 1 */
+  id: number;
+}
+
 export interface BankTransactionJournalReviewItem {
   id: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  date: string;
   transactionAt: string;
   type: BankTransactionJournalReviewItemType;
   description: string;
@@ -1093,6 +1109,7 @@ export interface BankTransactionJournalReviewItem {
   suggestedAccountId: number | null;
   /** @nullable */
   suggestedAccountName: string | null;
+  existingPurchaseMatch?: BankTransactionPurchaseMatch;
 }
 
 export interface BankTransactionJournalPostInput {

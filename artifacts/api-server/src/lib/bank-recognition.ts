@@ -17,6 +17,7 @@ export type RecognizableBankTransaction = {
   counterparty: string;
   description: string;
   bankAccountNumber: string | null;
+  rejectedAccountIds?: readonly number[];
 };
 
 export type BankRecognitionContext = {
@@ -42,6 +43,10 @@ export type BankRecognitionContext = {
 export type BankRecognitionResult = {
   accountId: number | null;
   rule: "unpaid_target" | "historical_identity" | "keyword" | "none";
+  existingPurchaseMatch: {
+    type: "inventory_purchase" | "operating_expense";
+    id: number;
+  } | null;
 };
 
 const normalize = (value: string | null | undefined) =>
@@ -60,14 +65,16 @@ const relatedTokens = (left: string, right: string) =>
 const daysBetween = (left: string, right: string) =>
   Math.abs((Date.parse(`${left}T00:00:00Z`) - Date.parse(`${right}T00:00:00Z`)) / 86_400_000);
 
-function unpaidTargetAccount(
+function unpaidTargetMatch(
   transaction: RecognizableBankTransaction,
   targets: BankRecognitionContext["unpaidTargets"],
 ) {
   if (transaction.type !== "expense") return null;
   const bankDate = transaction.transactionAt.toISOString().slice(0, 10);
   const bankTokens = tokens(`${transaction.counterparty} ${transaction.account} ${transaction.description}`);
+  const rejected = new Set(transaction.rejectedAccountIds ?? []);
   const candidates = targets.flatMap((target) => {
+    if (rejected.has(target.accountId)) return [];
     if (Math.abs(target.amount - transaction.amount) >= 0.01) return [];
     const distance = daysBetween(target.date, bankDate);
     if (distance > 7) return [];
@@ -82,7 +89,7 @@ function unpaidTargetAccount(
   const [best, runnerUp] = candidates;
   if (!best) return null;
   if (runnerUp && runnerUp.score === best.score && runnerUp.accountId !== best.accountId) return null;
-  return best.accountId;
+  return best;
 }
 
 function historicalIdentityAccount(
@@ -93,8 +100,10 @@ function historicalIdentityAccount(
     [transaction.counterparty, transaction.account].map(normalize).filter(Boolean),
   );
   const currentBankAccount = normalize(transaction.bankAccountNumber);
+  const rejected = new Set(transaction.rejectedAccountIds ?? []);
   for (const row of historical) {
     if (row.type !== transaction.type) continue;
+    if (rejected.has(row.accountId)) continue;
     const identityMatch = [row.counterparty, row.account]
       .map(normalize)
       .some((value) => value && currentIdentities.has(value));
@@ -114,8 +123,10 @@ function keywordAccount(
   keywordAccounts: BankRecognitionContext["keywordAccounts"],
 ) {
   const description = normalize(transaction.description);
+  const rejected = new Set(transaction.rejectedAccountIds ?? []);
   const rule = bankKeywordRecognitionRules.find((candidate) =>
     candidate.direction === transaction.type
+    && !rejected.has(keywordAccounts.get(candidate.accountCode) ?? -1)
     && candidate.keywords.some((keyword) => {
       const keywordText = normalizedTokenText(keyword);
       return keywordText && ` ${normalizedTokenText(description)} `.includes(` ${keywordText} `);
@@ -127,13 +138,21 @@ export function recognizeBankTransaction(
   transaction: RecognizableBankTransaction,
   context: BankRecognitionContext,
 ): BankRecognitionResult {
-  const targetAccountId = unpaidTargetAccount(transaction, context.unpaidTargets);
-  if (targetAccountId !== null) return { accountId: targetAccountId, rule: "unpaid_target" };
+  const target = unpaidTargetMatch(transaction, context.unpaidTargets);
+  if (target !== null) return {
+    accountId: target.accountId,
+    rule: "unpaid_target",
+    existingPurchaseMatch: { type: target.kind, id: target.id },
+  };
   const historicalAccountId = historicalIdentityAccount(transaction, context.historical);
-  if (historicalAccountId !== null) return { accountId: historicalAccountId, rule: "historical_identity" };
+  if (historicalAccountId !== null) return {
+    accountId: historicalAccountId,
+    rule: "historical_identity",
+    existingPurchaseMatch: null,
+  };
   const keywordAccountId = keywordAccount(transaction, context.keywordAccounts);
-  if (keywordAccountId !== null) return { accountId: keywordAccountId, rule: "keyword" };
-  return { accountId: null, rule: "none" };
+  if (keywordAccountId !== null) return { accountId: keywordAccountId, rule: "keyword", existingPurchaseMatch: null };
+  return { accountId: null, rule: "none", existingPurchaseMatch: null };
 }
 
 export async function loadBankRecognitionContext(): Promise<BankRecognitionContext> {

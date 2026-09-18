@@ -27,6 +27,8 @@ export * from './bankTransactionJournalPostInput';
 export * from './bankTransactionJournalPostResult';
 export * from './bankTransactionJournalReviewItem';
 export * from './bankTransactionJournalReviewItemType';
+export * from './bankTransactionPurchaseMatch';
+export * from './bankTransactionPurchaseMatchType';
 export * from './bankTransactionType';
 export * from './cashClosure';
 export * from './cashClosureInput';

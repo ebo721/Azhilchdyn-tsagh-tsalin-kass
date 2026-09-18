@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { PageHeading, LoadingBlock, ErrorBlock, EmptyState } from '@/components/ui-primitives';
-import { Check, X, ArrowDownLeft, ArrowUpRight, ChevronLeft, ExternalLink, RefreshCw } from 'lucide-react';
+import { Check, X, ArrowDownLeft, ArrowUpRight, ChevronLeft, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { money } from '@/lib/app-shared';
 import { bankDateTimeLabel } from './Cash';
@@ -16,7 +16,6 @@ import {
   getListChartOfAccountsQueryKey,
   getListBankTransactionJournalReviewQueryKey,
   getListBankTransactionsQueryKey,
-  getListUnclearTransactionsQueryKey,
   BankTransactionJournalReviewItemType,
   BankTransactionJournalReviewItem
 } from '@workspace/api-client-react';
@@ -37,8 +36,6 @@ export function BankTransactionJournalReview() {
   const reject = useRejectBankTransactionSuggestion();
 
   const [selectedAccounts, setSelectedAccounts] = useState<Record<number, number>>({});
-  const isAdmin = session.data?.role === 'admin';
-
   const mutationError = (error: unknown) => {
     window.alert(error instanceof Error ? error.message : 'Гүйлгээг журналд шивэхэд алдаа гарлаа.');
   };
@@ -70,7 +67,6 @@ export function BankTransactionJournalReview() {
     reject.mutate({ id: item.id }, {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getListBankTransactionJournalReviewQueryKey() });
-        qc.invalidateQueries({ queryKey: getListUnclearTransactionsQueryKey() });
         qc.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
       },
       onError: mutationError,
@@ -144,18 +140,16 @@ export function BankTransactionJournalReview() {
                             <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs font-bold text-emerald-700 border border-emerald-200">
                               {row.suggestedAccountName}
                             </span>
-                          </div>
-                        ) : (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600 border border-slate-200">Тодорхойгүй</span>
-                            {isAdmin ? (
-                              <Link href="/users" className="inline-flex items-center text-xs font-semibold text-primary hover:underline" data-testid={`link-unclear-transactions-${row.id}`}>
-                                Тохиргоо руу очих <ExternalLink className="ml-1 size-3" />
-                              </Link>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">Зөвхөн админ шийдвэрлэх боломжтой</span>
+                            {row.existingPurchaseMatch && (
+                              <span className="rounded bg-blue-50 px-1.5 py-0.5 text-xs font-semibold text-blue-700 border border-blue-200">
+                                {row.existingPurchaseMatch.type === 'inventory_purchase' ? 'Худалдан авалт' : 'Үйл ажиллагааны зардал'} #{row.existingPurchaseMatch.id}
+                              </span>
                             )}
                           </div>
+                        ) : (
+                          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600 border border-slate-200">
+                            Гараар ангилах
+                          </span>
                         )}
                       </div>
                     </div>
@@ -166,9 +160,9 @@ export function BankTransactionJournalReview() {
                       {isIncome ? '+' : '−'}{money(row.amount)}
                     </p>
                     
-                    {hasSuggestion && canMutate && (
+                    {canMutate && (
                       <div className="flex flex-col w-full gap-2 mt-1">
-                        <div className="flex gap-2">
+                        {hasSuggestion && <div className="flex gap-2">
                           <Button 
                             size="sm" 
                             variant="outline" 
@@ -189,7 +183,7 @@ export function BankTransactionJournalReview() {
                           >
                             <X className="size-4" />
                           </Button>
-                        </div>
+                        </div>}
                         
                         <div className="flex gap-2 items-center">
                           <select 

@@ -291,10 +291,11 @@ router.get("/bank-transactions", async (_req, res, next) => {
 
 router.get("/bank-transactions/journal-review", async (_req, res, next) => {
   try {
-    const rows = await db.select({
-      transaction: bankTransactionsTable,
-      suggestedAccountName: chartOfAccountsTable.name,
-    }).from(bankTransactionsTable)
+    const [rows, recognitionContext] = await Promise.all([
+      db.select({
+        transaction: bankTransactionsTable,
+        suggestedAccountName: chartOfAccountsTable.name,
+      }).from(bankTransactionsTable)
       .leftJoin(chartOfAccountsTable, eq(bankTransactionsTable.accountId, chartOfAccountsTable.id))
       .where(and(
         isNull(bankTransactionsTable.cashTransactionId),
@@ -302,17 +303,28 @@ router.get("/bank-transactions/journal-review", async (_req, res, next) => {
         isNull(bankTransactionsTable.unclearAt),
         isNull(bankTransactionsTable.journalEntryId),
       ))
-      .orderBy(desc(bankTransactionsTable.transactionAt), desc(bankTransactionsTable.id));
-    res.json(ListBankTransactionJournalReviewResponse.parse(rows.map(({ transaction, suggestedAccountName }) => ({
-      id: transaction.id,
-      transactionAt: transaction.transactionAt.toISOString(),
-      type: transaction.type,
-      description: transaction.description,
-      amount: Number(transaction.amount),
-      counterparty: transaction.counterparty,
-      suggestedAccountId: transaction.accountId,
-      suggestedAccountName,
-    }))));
+      .orderBy(desc(bankTransactionsTable.transactionAt), desc(bankTransactionsTable.id)),
+      loadBankRecognitionContext(),
+    ]);
+    res.json(ListBankTransactionJournalReviewResponse.parse(rows.map(({ transaction, suggestedAccountName }) => {
+      const recognition = recognizeBankTransaction(transaction, recognitionContext);
+      const existingPurchaseMatch = transaction.accountId !== null
+        && recognition.accountId === transaction.accountId
+        ? recognition.existingPurchaseMatch
+        : null;
+      return {
+        id: transaction.id,
+        date: transaction.transactionAt.toISOString().slice(0, 10),
+        transactionAt: transaction.transactionAt.toISOString(),
+        type: transaction.type,
+        description: transaction.description,
+        amount: Number(transaction.amount),
+        counterparty: transaction.counterparty,
+        suggestedAccountId: transaction.accountId,
+        suggestedAccountName,
+        ...(existingPurchaseMatch ? { existingPurchaseMatch } : {}),
+      };
+    })));
   } catch (error) { next(error); }
 });
 
@@ -383,9 +395,12 @@ router.post("/bank-transactions/:id/reject-suggestion", async (req, res, next) =
       if (bank.cashTransactionId !== null || bank.transferredAt !== null || bank.unclearAt !== null || bank.journalEntryId !== null) {
         return "resolved" as const;
       }
+      const rejectedAccountIds = bank.accountId === null
+        ? bank.rejectedAccountIds
+        : [...new Set([...bank.rejectedAccountIds, bank.accountId])];
       await tx.update(bankTransactionsTable).set({
         accountId: null,
-        unclearAt: new Date(),
+        rejectedAccountIds,
       }).where(eq(bankTransactionsTable.id, id));
       return "rejected" as const;
     });
@@ -406,19 +421,34 @@ router.patch("/bank-transactions/:id/account", async (req, res, next) => {
     const { id } = UpdateBankTransactionAccountParams.parse(req.params);
     const { accountId } = UpdateBankTransactionAccountBody.parse(req.body);
     const result = await db.transaction(async (tx) => {
+      const [bank] = await tx.select().from(bankTransactionsTable)
+        .where(eq(bankTransactionsTable.id, id))
+        .for("update");
+      if (!bank) return "missing" as const;
+      if (bank.cashTransactionId !== null || bank.transferredAt !== null || bank.unclearAt !== null || bank.journalEntryId !== null) {
+        return "resolved" as const;
+      }
       const account = accountId === null
         ? null
         : (await tx.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, accountId)))[0] ?? null;
       if (accountId !== null && !account) return "invalid_account" as const;
       const [updated] = await tx.update(bankTransactionsTable)
-        .set({ accountId })
+        .set({
+          accountId,
+          rejectedAccountIds: accountId === null
+            ? bank.rejectedAccountIds
+            : bank.rejectedAccountIds.filter((rejectedId) => rejectedId !== accountId),
+        })
         .where(eq(bankTransactionsTable.id, id))
         .returning();
-      if (!updated) return null;
       return { updated, account };
     });
-    if (result === null) {
+    if (result === "missing") {
       res.status(404).json({ error: "Банкны гүйлгээ олдсонгүй" });
+      return;
+    }
+    if (result === "resolved") {
+      res.status(409).json({ error: "Банкны гүйлгээ аль хэдийн шийдвэрлэгдсэн байна" });
       return;
     }
     if (result === "invalid_account") {

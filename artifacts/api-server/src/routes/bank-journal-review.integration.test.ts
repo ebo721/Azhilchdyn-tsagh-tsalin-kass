@@ -9,6 +9,7 @@ import {
   db,
   journalEntriesTable,
   journalLinesTable,
+  operatingExpensesTable,
   usersTable,
 } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
@@ -24,10 +25,13 @@ describe("bank journal review routes", () => {
   let suggestedBankId: number;
   let unknownBankId: number;
   let vatBankId: number;
+  let rejectedBankId: number;
+  let matchedExpenseId: number;
   const userIds: number[] = [];
   const accountIds: number[] = [];
   const bankIds: number[] = [];
   const journalEntryIds: number[] = [];
+  const operatingExpenseIds: number[] = [];
 
   before(async () => {
     process.env.SESSION_SECRET = "bank-journal-review-test";
@@ -59,6 +63,15 @@ describe("bank journal review routes", () => {
     liabilityAccountId = liabilityAccount.id;
     accountIds.push(expenseAccount.id, liabilityAccount.id);
 
+    const [matchedExpense] = await db.insert(operatingExpensesTable).values({
+      description: "Тест нийлүүлэгчийн худалдан авалт",
+      accountId: expenseAccountId,
+      date: "2099-03-01",
+      amount: 125_000,
+    }).returning();
+    matchedExpenseId = matchedExpense.id;
+    operatingExpenseIds.push(matchedExpense.id);
+
     const transactions = await db.insert(bankTransactionsTable).values([
       {
         transactionAt: new Date("2099-03-01T10:00:00.000Z"),
@@ -89,8 +102,18 @@ describe("bank journal review routes", () => {
         description: "НӨАТ төлбөр",
         fingerprint: `review-vat-${suffix}`,
       },
+      {
+        transactionAt: new Date("2099-03-04T11:00:00.000Z"),
+        type: "expense",
+        amount: 88_000,
+        accountId: expenseAccountId,
+        account: "5566778899",
+        counterparty: "Татгалзах харилцагч",
+        description: "Татгалзах санал",
+        fingerprint: `review-rejected-${suffix}`,
+      },
     ]).returning();
-    [suggestedBankId, unknownBankId, vatBankId] = transactions.map(({ id }) => id);
+    [suggestedBankId, unknownBankId, vatBankId, rejectedBankId] = transactions.map(({ id }) => id);
     bankIds.push(...transactions.map(({ id }) => id));
 
     server = app.listen(0);
@@ -101,6 +124,7 @@ describe("bank journal review routes", () => {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     if (bankIds.length) await db.delete(bankTransactionsTable).where(inArray(bankTransactionsTable.id, bankIds));
     if (journalEntryIds.length) await db.delete(journalEntriesTable).where(inArray(journalEntriesTable.id, journalEntryIds));
+    if (operatingExpenseIds.length) await db.delete(operatingExpensesTable).where(inArray(operatingExpensesTable.id, operatingExpenseIds));
     if (accountIds.length) await db.delete(chartOfAccountsTable).where(inArray(chartOfAccountsTable.id, accountIds));
     if (userIds.length) await db.delete(usersTable).where(inArray(usersTable.id, userIds));
   });
@@ -114,11 +138,18 @@ describe("bank journal review routes", () => {
       id: number;
       suggestedAccountId: number | null;
       suggestedAccountName: string | null;
+      date: string;
+      existingPurchaseMatch?: { type: string; id: number };
     }>;
     const suggested = rows.find(({ id }) => id === suggestedBankId);
     const unknown = rows.find(({ id }) => id === unknownBankId);
     assert.equal(suggested?.suggestedAccountId, expenseAccountId);
     assert.equal(suggested?.suggestedAccountName, "Review expense account");
+    assert.equal(suggested?.date, "2099-03-01");
+    assert.deepEqual(suggested?.existingPurchaseMatch, {
+      type: "operating_expense",
+      id: matchedExpenseId,
+    });
     assert.equal(unknown?.suggestedAccountId, null);
     assert.equal(unknown?.suggestedAccountName, null);
   });
@@ -148,22 +179,40 @@ describe("bank journal review routes", () => {
     const review = await fetch(`${baseUrl}/api/bank-transactions/journal-review`, { headers: { cookie } });
     const rows = await review.json() as Array<{ id: number }>;
     assert.equal(rows.some(({ id }) => id === suggestedBankId), false);
+    const [sourceExpense] = await db.select().from(operatingExpensesTable)
+      .where(eq(operatingExpensesTable.id, matchedExpenseId));
+    assert.equal(sourceExpense.paymentDate, null);
+    assert.equal(sourceExpense.bankTransactionId, null);
   });
 
-  it("rejects a suggestion into the unclear queue and removes it from review", async () => {
-    const rejected = await fetch(`${baseUrl}/api/bank-transactions/${unknownBankId}/reject-suggestion`, {
+  it("rejects only the suggested account and keeps the transaction pending", async () => {
+    const rejected = await fetch(`${baseUrl}/api/bank-transactions/${rejectedBankId}/reject-suggestion`, {
       method: "POST",
       headers: { cookie },
     });
     assert.equal(rejected.status, 204);
 
-    const [bank] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, unknownBankId));
-    assert.ok(bank.unclearAt);
+    const [bank] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, rejectedBankId));
+    assert.equal(bank.unclearAt, null);
     assert.equal(bank.accountId, null);
+    assert.deepEqual(bank.rejectedAccountIds, [expenseAccountId]);
 
     const review = await fetch(`${baseUrl}/api/bank-transactions/journal-review`, { headers: { cookie } });
-    const rows = await review.json() as Array<{ id: number }>;
-    assert.equal(rows.some(({ id }) => id === unknownBankId), false);
+    const rows = await review.json() as Array<{ id: number; suggestedAccountId: number | null }>;
+    const pending = rows.find(({ id }) => id === rejectedBankId);
+    assert.ok(pending);
+    assert.equal(pending.suggestedAccountId, null);
+
+    const manualAssignment = await fetch(`${baseUrl}/api/bank-transactions/${rejectedBankId}/account`, {
+      method: "PATCH",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ accountId: expenseAccountId }),
+    });
+    assert.equal(manualAssignment.status, 200);
+    const [manuallyAssigned] = await db.select().from(bankTransactionsTable)
+      .where(eq(bankTransactionsTable.id, rejectedBankId));
+    assert.equal(manuallyAssigned.accountId, expenseAccountId);
+    assert.deepEqual(manuallyAssigned.rejectedAccountIds, []);
   });
 
   it("posts a VAT payment by debiting the liability account and crediting bank", async () => {
