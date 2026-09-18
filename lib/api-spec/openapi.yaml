@@ -2339,7 +2339,7 @@ components:
         journalEntryId: { type: integer }
     BankTransactionImportResult:
       type: object
-      required: [imported, skippedDuplicate, skippedZero, totalRead, recognized, unrecognized]
+      required: [imported, skippedDuplicate, skippedZero, totalRead, recognized, unrecognized, transactionIds]
       properties:
         imported: { type: integer, minimum: 0 }
         skippedDuplicate: { type: integer, minimum: 0 }
@@ -2347,6 +2347,9 @@ components:
         totalRead: { type: integer, minimum: 0 }
         recognized: { type: integer, minimum: 0 }
         unrecognized: { type: integer, minimum: 0 }
+        transactionIds:
+          type: array
+          items: { type: integer, minimum: 1 }
     InventoryPurchaseItem:
       type: object
       required: [id, inventoryItemId, name, category, unit, quantity, unitPrice, totalAmount]

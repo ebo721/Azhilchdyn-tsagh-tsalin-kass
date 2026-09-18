@@ -19,4 +19,6 @@ export interface BankTransactionImportResult {
   recognized: number;
   /** @minimum 0 */
   unrecognized: number;
+  /** @items.minimum 1 */
+  transactionIds: number[];
 }

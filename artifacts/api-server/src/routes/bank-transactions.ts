@@ -541,6 +541,7 @@ router.post("/bank-transactions/import", raw({ type: "application/octet-stream",
       totalRead: inserted.length,
       recognized: inserted.filter((row) => row.accountId !== null).length,
       unrecognized: inserted.filter((row) => row.accountId === null).length,
+      transactionIds: inserted.map((row) => row.id),
     }));
   } catch (error) { next(error); }
 });

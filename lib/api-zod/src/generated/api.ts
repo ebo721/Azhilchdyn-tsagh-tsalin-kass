@@ -1481,13 +1481,15 @@ export const importKapitronBankTransactionsResponseUnrecognizedMin = 0;
 
 
 
+
 export const ImportKapitronBankTransactionsResponse = zod.object({
   "imported": zod.number().int().min(importKapitronBankTransactionsResponseImportedMin),
   "skippedDuplicate": zod.number().int().min(importKapitronBankTransactionsResponseSkippedDuplicateMin),
   "skippedZero": zod.number().int().min(importKapitronBankTransactionsResponseSkippedZeroMin),
   "totalRead": zod.number().int().min(importKapitronBankTransactionsResponseTotalReadMin),
   "recognized": zod.number().int().min(importKapitronBankTransactionsResponseRecognizedMin),
-  "unrecognized": zod.number().int().min(importKapitronBankTransactionsResponseUnrecognizedMin)
+  "unrecognized": zod.number().int().min(importKapitronBankTransactionsResponseUnrecognizedMin),
+  "transactionIds": zod.array(zod.number().int().min(1))
 })
 
 
