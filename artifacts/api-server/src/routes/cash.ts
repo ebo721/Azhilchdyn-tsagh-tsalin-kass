@@ -401,7 +401,9 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
     const result = await db.transaction(async (tx) => {
       const [existing] = await tx.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, id)).for("update");
       if (!existing) throw Object.assign(new Error("Кассын гүйлгээ олдсонгүй"), { status: 404 });
-      if (existing.sourceType !== null) throw Object.assign(new Error("Автомат гүйлгээг эх үүсвэр цэснээс засна уу"), { status: 409 });
+      if (existing.sourceType !== null || existing.bankTransactionId !== null) {
+        throw Object.assign(new Error("Банктай холбосон эсвэл автомат гүйлгээг эх үүсвэр цэснээс засна уу"), { status: 409 });
+      }
       if (await isCashDateClosed(String(existing.date)) || await isCashDateClosed(input.date)) {
         throw Object.assign(new Error("Өндөрлөсөн өдрийн гүйлгээг засах боломжгүй"), { status: 409 });
       }
@@ -524,7 +526,9 @@ router.delete("/cash/transactions/:id", async (req, res, next) => {
     await db.transaction(async (tx) => {
       const [existing] = await tx.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, id)).for("update");
       if (!existing) throw Object.assign(new Error("Кассын гүйлгээ олдсонгүй"), { status: 404 });
-      if (existing.sourceType !== null) throw Object.assign(new Error("Автомат гүйлгээг эх үүсвэр цэснээс өөрчилнө үү"), { status: 409 });
+      if (existing.sourceType !== null || existing.bankTransactionId !== null) {
+        throw Object.assign(new Error("Банктай холбосон эсвэл автомат гүйлгээг эх үүсвэр цэснээс өөрчилнө үү"), { status: 409 });
+      }
       if (await isCashDateClosed(String(existing.date))) {
         throw Object.assign(new Error("Өндөрлөсөн өдрийн гүйлгээг устгах боломжгүй"), { status: 409 });
       }

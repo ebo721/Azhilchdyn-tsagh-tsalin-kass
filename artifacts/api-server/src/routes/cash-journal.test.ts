@@ -266,7 +266,7 @@ describe("cash journal posting", () => {
     journalIds.push(reversal.id);
   });
 
-  it("keeps a bank-linked cash PUT idempotent and settled through bank", async () => {
+  it("blocks PUT changes to a bank-linked cash transaction", async () => {
     const category = `Bank linked ${randomUUID()}`;
     const create = await request({
       type: "expense",
@@ -289,20 +289,18 @@ describe("cash journal posting", () => {
       method: "PUT",
       body: JSON.stringify({ type: "expense", category, description: "Bank linked original", amount: 21, date: "2025-01-28", incomeMonth: null }),
     });
-    assert.equal(unchanged.status, 200);
-    const unchangedValue = await unchanged.json() as { journalEntryId: number };
-    assert.equal(unchangedValue.journalEntryId, original.journalEntryId);
+    assert.equal(unchanged.status, 409);
 
     const changed = await requestPath(`/api/cash/transactions/${original.id}`, {
       method: "PUT",
       body: JSON.stringify({ type: "expense", category: `Bank linked changed ${randomUUID()}`, description: "Bank linked changed", amount: 22, date: "2025-01-29", incomeMonth: null }),
     });
-    assert.equal(changed.status, 200);
-    const replacement = await changed.json() as { journalEntryId: number };
-    assert.notEqual(replacement.journalEntryId, original.journalEntryId);
-    journalIds.push(replacement.journalEntryId);
-    const lines = await db.select().from(journalLinesTable).where(eq(journalLinesTable.journalEntryId, replacement.journalEntryId));
-    assert.equal(lines.some((line) => line.accountId === bankAccountId && line.credit === 22), true);
+    assert.equal(changed.status, 409);
+
+    const [unchangedCash] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, original.id));
+    assert.equal(unchangedCash.journalEntryId, original.journalEntryId);
+    assert.equal(unchangedCash.description, "Bank linked original");
+    assert.equal(unchangedCash.amount, 21);
   });
 
   it("does not backfill a historical cash row with a null journal link", async () => {

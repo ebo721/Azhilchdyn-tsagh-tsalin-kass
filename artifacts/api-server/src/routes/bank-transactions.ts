@@ -74,10 +74,10 @@ async function counterAccount(tx: any, type: string, category: string, mapped: a
     : accountByCode(tx, "6900", "expense");
 }
 
-async function postBankCashJournal(tx: any, cash: any, counter: any) {
+async function postBankCashJournal(tx: any, cash: any, counter: any, bankTransactionId: number) {
   const bank = await accountByCode(tx, "1010", "asset");
   const result = await postJournalEntry(tx, {
-    date: String(cash.date), description: cash.description.trim(), sourceType: "cash", sourceId: cash.id, createdBy: null,
+    date: String(cash.date), description: cash.description.trim(), sourceType: "bank_transaction", sourceId: bankTransactionId, createdBy: null,
     lines: cash.type === "income"
       ? [{ accountId: bank.id, debit: Number(cash.amount), credit: 0 }, { accountId: counter.id, debit: 0, credit: Number(cash.amount) }]
       : [{ accountId: counter.id, debit: Number(cash.amount), credit: 0 }, { accountId: bank.id, debit: 0, credit: Number(cash.amount) }],
@@ -623,8 +623,9 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
         .returning();
       if (!updated) throw new BankCashLinkConflictError();
       const linkedCounter = await counterAccount(tx, cash.type, category, account);
-      const journalEntryId = await postBankCashJournal(tx, cash, linkedCounter);
+      const journalEntryId = await postBankCashJournal(tx, cash, linkedCounter, id);
       await tx.update(cashTransactionsTable).set({ journalEntryId }).where(eq(cashTransactionsTable.id, cash.id));
+      await tx.update(bankTransactionsTable).set({ journalEntryId }).where(eq(bankTransactionsTable.id, id));
       await syncOperatingExpenseForBankCash(tx, id, cash.id);
       return updated;
     });
@@ -711,16 +712,17 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
         .where(and(eq(bankTransactionsTable.id, id), isNull(bankTransactionsTable.cashTransactionId), isNull(bankTransactionsTable.transferredAt)))
         .returning();
       if (!linkedBank) throw new BankCashLinkConflictError();
-       if (cash.journalEntryId) {
-         await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
-         const mapped = cash.accountId
-           ? (await tx.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, cash.accountId)))[0]
-           : null;
-         const counter = await counterAccount(tx, cash.type, cash.category, mapped);
-         const journalEntryId = await postBankCashJournal(tx, { ...cash, bankTransactionId: id }, counter);
-         await tx.update(cashTransactionsTable).set({ journalEntryId }).where(eq(cashTransactionsTable.id, cashTransactionId));
-       }
-       await syncOperatingExpenseForBankCash(tx, id, cash.id);
+      if (cash.journalEntryId) {
+        await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
+      }
+      const mapped = cash.accountId
+        ? (await tx.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, cash.accountId)))[0]
+        : null;
+      const counter = await counterAccount(tx, cash.type, cash.category, mapped);
+      const journalEntryId = await postBankCashJournal(tx, { ...cash, bankTransactionId: id }, counter, id);
+      await tx.update(cashTransactionsTable).set({ journalEntryId }).where(eq(cashTransactionsTable.id, cashTransactionId));
+      await tx.update(bankTransactionsTable).set({ journalEntryId }).where(eq(bankTransactionsTable.id, id));
+      await syncOperatingExpenseForBankCash(tx, id, cash.id);
       return linkedBank;
     });
     if (result === "missing-bank" || result === "missing-cash") {
@@ -768,16 +770,28 @@ router.delete("/bank-transactions/:id", async (req, res, next) => {
         return;
       }
     }
-    const [existing] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id));
-    if (!existing) {
+    const result = await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(bankTransactionsTable)
+        .where(eq(bankTransactionsTable.id, id))
+        .for("update");
+      if (!existing) return "missing" as const;
+      if (existing.transferredAt || existing.cashTransactionId) return "cash-linked" as const;
+      if (existing.journalEntryId) return "journal-linked" as const;
+      await tx.delete(bankTransactionsTable).where(eq(bankTransactionsTable.id, id));
+      return "deleted" as const;
+    });
+    if (result === "missing") {
       res.status(404).json({ error: "Банкны гүйлгээ олдсонгүй" });
       return;
     }
-    if (existing.transferredAt || existing.cashTransactionId) {
+    if (result === "cash-linked") {
       res.status(409).json({ error: "Касс руу шилжүүлсэн банкны гүйлгээг устгах боломжгүй" });
       return;
     }
-    await db.delete(bankTransactionsTable).where(eq(bankTransactionsTable.id, id));
+    if (result === "journal-linked") {
+      res.status(409).json({ error: "Журналд бүртгэсэн банкны гүйлгээг устгах боломжгүй" });
+      return;
+    }
     res.status(204).send();
   } catch (error) { next(error); }
 });
