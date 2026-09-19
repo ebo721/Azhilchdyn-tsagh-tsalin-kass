@@ -154,21 +154,29 @@ describe("fixed asset journal posting", () => {
   });
 
   it("rolls back when either canonical posting account is inactive", async () => {
+    const rollbackAssetName = `Rollback fixed asset ${Date.now()}`;
     await db.update(chartOfAccountsTable).set({ isActive: false }).where(eq(chartOfAccountsTable.id, fixedAssetAccountId));
-    const response = await request("/fixed-assets", {
-      method: "POST",
-      body: JSON.stringify({ name: "Rollback fixed asset", unitPrice: 10, quantity: 1, date: "2098-01-20", purchased: true }),
-    });
-    assert.equal(response.status, 500);
-    assert.equal((await db.select().from(fixedAssetsTable).where(eq(fixedAssetsTable.name, "Rollback fixed asset"))).length, 0);
-    await db.update(chartOfAccountsTable).set({ isActive: true }).where(eq(chartOfAccountsTable.id, fixedAssetAccountId));
+    try {
+      const response = await request("/fixed-assets", {
+        method: "POST",
+        body: JSON.stringify({ name: rollbackAssetName, unitPrice: 10, quantity: 1, date: "2098-01-20", purchased: true }),
+      });
+      assert.equal(response.status, 500);
+      assert.equal((await db.select().from(fixedAssetsTable).where(eq(fixedAssetsTable.name, rollbackAssetName))).length, 0);
+    } finally {
+      await db.update(chartOfAccountsTable).set({ isActive: true }).where(eq(chartOfAccountsTable.id, fixedAssetAccountId));
+    }
+    const rollbackCashName = `Rollback cash account ${Date.now()}`;
     await db.update(chartOfAccountsTable).set({ isActive: false }).where(eq(chartOfAccountsTable.id, cashAccountId));
-    const second = await request("/fixed-assets", {
-      method: "POST",
-      body: JSON.stringify({ name: "Rollback cash account", unitPrice: 10, quantity: 1, date: "2098-01-21", purchased: true }),
-    });
-    assert.equal(second.status, 500);
-    assert.equal((await db.select().from(fixedAssetsTable).where(eq(fixedAssetsTable.name, "Rollback cash account"))).length, 0);
-    await db.update(chartOfAccountsTable).set({ isActive: true }).where(eq(chartOfAccountsTable.id, cashAccountId));
+    try {
+      const second = await request("/fixed-assets", {
+        method: "POST",
+        body: JSON.stringify({ name: rollbackCashName, unitPrice: 10, quantity: 1, date: "2098-01-21", purchased: true }),
+      });
+      assert.equal(second.status, 500);
+      assert.equal((await db.select().from(fixedAssetsTable).where(eq(fixedAssetsTable.name, rollbackCashName))).length, 0);
+    } finally {
+      await db.update(chartOfAccountsTable).set({ isActive: true }).where(eq(chartOfAccountsTable.id, cashAccountId));
+    }
   });
 });
