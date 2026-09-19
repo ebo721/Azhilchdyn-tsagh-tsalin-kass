@@ -163,20 +163,55 @@ describe("bank document linking", () => {
       headers: { cookie, "content-type": "application/json" },
       body: JSON.stringify({
         name: "Changed linked asset",
-        unitPrice: 150_000,
+        unitPrice: 100_000,
+        quantity: 3,
+        date: "2099-08-06",
+        purchased: true,
+      }),
+    });
+    assert.equal(update.status, 200);
+    const updatedAsset = await update.json() as { bankTransactionId: number | null; totalAmount: number };
+    assert.equal(updatedAsset.bankTransactionId, bankId);
+    assert.equal(updatedAsset.totalAmount, 300_000);
+    const [cashAfterUpdate] = await db.select().from(cashTransactionsTable)
+      .where(eq(cashTransactionsTable.id, cashBefore.id));
+    assert.equal(cashAfterUpdate.description, "Changed linked asset (3 ширхэг)");
+    assert.equal(cashAfterUpdate.bankTransactionId, bankId);
+    assert.notEqual(cashAfterUpdate.journalEntryId, result.journalEntryId);
+    assert.ok(cashAfterUpdate.journalEntryId);
+    journalIds.push(cashAfterUpdate.journalEntryId);
+    const [replacedBankJournal] = await db.select().from(journalEntriesTable)
+      .where(eq(journalEntriesTable.id, result.journalEntryId));
+    assert.equal(replacedBankJournal.status, "void");
+    const updatedLines = await db.select({
+      code: chartOfAccountsTable.code,
+      debit: journalLinesTable.debit,
+      credit: journalLinesTable.credit,
+    }).from(journalLinesTable)
+      .innerJoin(chartOfAccountsTable, eq(chartOfAccountsTable.id, journalLinesTable.accountId))
+      .where(eq(journalLinesTable.journalEntryId, cashAfterUpdate.journalEntryId));
+    assert.equal(Number(updatedLines.find((line) => line.code === "1800")?.debit), 300_000);
+    assert.equal(Number(updatedLines.find((line) => line.code === "1010")?.credit), 300_000);
+
+    const mismatchedUpdate = await fetch(`${baseUrl}/api/fixed-assets/${asset.id}`, {
+      method: "PUT",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Mismatched linked asset",
+        unitPrice: 149_000,
         quantity: 2,
         date: "2099-08-06",
         purchased: true,
       }),
     });
-    assert.equal(update.status, 409);
+    assert.equal(mismatchedUpdate.status, 409);
     const deletion = await fetch(`${baseUrl}/api/fixed-assets/${asset.id}`, {
       method: "DELETE",
       headers: { cookie },
     });
     assert.equal(deletion.status, 409);
     const [stillPosted] = await db.select().from(journalEntriesTable)
-      .where(eq(journalEntriesTable.id, result.journalEntryId));
+      .where(eq(journalEntriesTable.id, cashAfterUpdate.journalEntryId));
     assert.equal(stillPosted.status, "posted");
   });
 

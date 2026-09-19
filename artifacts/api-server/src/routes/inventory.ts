@@ -164,22 +164,29 @@ const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, op
 
 async function postFixedAssetJournal(
   tx: Tx,
-  input: { assetId: number; date: string; description: string; amount: number; },
+  input: {
+    assetId: number;
+    date: string;
+    description: string;
+    amount: number;
+    settlementAccountCode?: "1000" | "1010";
+  },
 ) {
+  const settlementAccountCode = input.settlementAccountCode ?? "1000";
   const [fixedAssetAccount] = await tx.select().from(chartOfAccountsTable).where(and(
     eq(chartOfAccountsTable.code, "1800"),
     eq(chartOfAccountsTable.type, "asset"),
     eq(chartOfAccountsTable.normalBalance, "debit"),
     eq(chartOfAccountsTable.isActive, true),
   ));
-  const [cashAccount] = await tx.select().from(chartOfAccountsTable).where(and(
-    eq(chartOfAccountsTable.code, "1000"),
+  const [settlementAccount] = await tx.select().from(chartOfAccountsTable).where(and(
+    eq(chartOfAccountsTable.code, settlementAccountCode),
     eq(chartOfAccountsTable.type, "asset"),
     eq(chartOfAccountsTable.normalBalance, "debit"),
     eq(chartOfAccountsTable.isActive, true),
   ));
   if (!fixedAssetAccount) throw new Error("Fixed asset account 1800 is missing or inactive");
-  if (!cashAccount) throw new Error("Cash account 1000 is missing or inactive");
+  if (!settlementAccount) throw new Error(`Settlement account ${settlementAccountCode} is missing or inactive`);
   const result = await postJournalEntry(tx, {
     date: input.date,
     description: input.description,
@@ -188,7 +195,7 @@ async function postFixedAssetJournal(
     createdBy: null,
     lines: [
       { accountId: fixedAssetAccount.id, debit: input.amount, credit: 0 },
-      { accountId: cashAccount.id, debit: 0, credit: input.amount },
+      { accountId: settlementAccount.id, debit: 0, credit: input.amount },
     ],
   });
   if (result.status !== "posted") throw new Error("Fixed asset journal entry must be balanced");
@@ -321,8 +328,18 @@ router.put("/fixed-assets/:id", async (req, res, next) => {
         eq(cashTransactionsTable.sourceType, "fixed_asset_purchase"),
         eq(cashTransactionsTable.sourceKey, sourceKey),
       )).for("update");
+      let linkedBank: typeof bankTransactionsTable.$inferSelect | null = null;
       if (oldCash?.bankTransactionId !== null && oldCash?.bankTransactionId !== undefined) {
-        return { kind: "bank_linked" as const };
+        [linkedBank] = await tx.select().from(bankTransactionsTable)
+          .where(eq(bankTransactionsTable.id, oldCash.bankTransactionId))
+          .for("update");
+        if (!linkedBank || linkedBank.cashTransactionId !== oldCash.id || !input.purchased) {
+          return { kind: "bank_linked_conflict" as const };
+        }
+        const bankDate = linkedBank.transactionAt.toISOString().slice(0, 10);
+        if (input.date !== bankDate || money(Number(linkedBank.amount)) !== totalAmount) {
+          return { kind: "bank_linked_conflict" as const };
+        }
       }
       const oldDescription = oldCash?.description;
       const oldAmount = oldCash ? Number(oldCash.amount) : null;
@@ -359,7 +376,7 @@ router.put("/fixed-assets/:id", async (req, res, next) => {
           || oldAmount !== totalAmount
           || oldDate !== input.date
           || oldDescription !== description;
-        if (!lockedExisting.purchased || (cash.journalEntryId !== null && changed)) {
+        if (!lockedExisting.purchased || (changed && (cash.journalEntryId !== null || linkedBank !== null))) {
           if (cash.journalEntryId !== null && changed) {
             await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
           }
@@ -368,6 +385,7 @@ router.put("/fixed-assets/:id", async (req, res, next) => {
             date: input.date,
             description,
             amount: totalAmount,
+            settlementAccountCode: linkedBank ? "1010" : "1000",
           });
           await tx.update(cashTransactionsTable).set({ journalEntryId })
             .where(eq(cashTransactionsTable.id, cash.id));
@@ -381,7 +399,11 @@ router.put("/fixed-assets/:id", async (req, res, next) => {
           eq(cashTransactionsTable.sourceKey, sourceKey),
         ));
       }
-      return { kind: "updated" as const, asset: updated };
+      return {
+        kind: "updated" as const,
+        asset: updated,
+        bankTransactionId: oldCash?.bankTransactionId ?? null,
+      };
     });
     if (result.kind === "missing") {
       res.status(404).json({ error: "Эд хөрөнгө олдсонгүй" });
@@ -391,8 +413,8 @@ router.put("/fixed-assets/:id", async (req, res, next) => {
       res.status(409).json({ error: "Өндөрлөсөн өдрийн худалдан авсан хөрөнгийг засах боломжгүй" });
       return;
     }
-    if (result.kind === "bank_linked") {
-      res.status(409).json({ error: "Банкны гүйлгээтэй холбогдсон эд хөрөнгийг засах боломжгүй" });
+    if (result.kind === "bank_linked_conflict") {
+      res.status(409).json({ error: "Засварласан огноо, нийт дүн банкны гүйлгээтэй таарах ёстой" });
       return;
     }
     res.json(UpdateFixedAssetResponse.parse({
@@ -400,7 +422,7 @@ router.put("/fixed-assets/:id", async (req, res, next) => {
       unitPrice: Number(result.asset.unitPrice),
       quantity: Number(result.asset.quantity),
       totalAmount,
-      bankTransactionId: null,
+      bankTransactionId: result.bankTransactionId,
       createdAt: result.asset.createdAt.toISOString(),
     }));
   } catch (error) {
