@@ -1,3 +1,1774 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: auth
+    description: HR manager authentication
+  - name: health
+    description: Health operations
+  - name: dashboard
+    description: Dashboard summaries
+  - name: employees
+    description: Employee management
+  - name: attendance
+    description: Attendance tracking
+  - name: payroll
+    description: Payroll calculations
+  - name: hour-balance
+    description: Monthly hour balances
+  - name: cash
+    description: Cash register transactions
+  - name: bank-transactions
+    description: Bank statement transactions
+  - name: users
+    description: Admin user management
+  - name: chart-of-accounts
+    description: Accounting chart management
+  - name: journal
+    description: General journal and accounting reports
+paths:
+  /auth/me:
+    get:
+      operationId: getAuthSession
+      tags: [auth]
+      responses:
+        "200":
+          description: Current session
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthSession" }
+  /auth/login:
+    post:
+      operationId: loginHrManager
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginInput" }
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthSession" }
+  /auth/logout:
+    post:
+      operationId: logoutHrManager
+      tags: [auth]
+      responses:
+        "204":
+          description: Logged out
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List users (admin only)
+      responses:
+        "200":
+          description: Users without password data
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/User" }
+  /users/{id}:
+    put:
+      operationId: updateUser
+      tags: [users]
+      summary: Update username, role, or password (admin only)
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserUpdateInput" }
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete a user (admin only)
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: User deleted
+  /chart-of-accounts:
+    get:
+      operationId: listChartOfAccounts
+      tags: [chart-of-accounts]
+      summary: List the chart of accounts for authenticated users
+      responses:
+        "200":
+          description: Chart of accounts ordered by code
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ChartOfAccount" }
+    post:
+      operationId: createChartOfAccount
+      tags: [chart-of-accounts]
+      summary: Create a chart of account entry (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChartOfAccountInput" }
+      responses:
+        "201":
+          description: Created account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChartOfAccount" }
+  /chart-of-accounts/{id}:
+    put:
+      operationId: updateChartOfAccount
+      tags: [chart-of-accounts]
+      summary: Update a chart of account entry (admin only)
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChartOfAccountInput" }
+      responses:
+        "200":
+          description: Updated account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChartOfAccount" }
+    delete:
+      operationId: deleteChartOfAccount
+      tags: [chart-of-accounts]
+      summary: Delete a chart of account entry (admin only)
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Account deleted
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Get dashboard summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+  /employees:
+    get:
+      operationId: listEmployees
+      tags: [employees]
+      summary: List employees
+      responses:
+        "200":
+          description: Employees
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Employee"
+    post:
+      operationId: createEmployee
+      tags: [employees]
+      summary: Create an employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmployeeInput"
+      responses:
+        "201":
+          description: Created employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+  /employees/{id}:
+    patch:
+      operationId: updateEmployee
+      tags: [employees]
+      summary: Update an employee
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmployeeUpdate"
+      responses:
+        "200":
+          description: Updated employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+    delete:
+      operationId: deleteEmployee
+      tags: [employees]
+      summary: Delete an employee
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Employee deleted
+  /employees/{id}/salary-history:
+    get:
+      operationId: listEmployeeSalaryHistory
+      tags: [employees]
+      summary: List an employee's salary history
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Salary history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EmployeeSalaryHistory"
+  /employees/{id}/salary-history/{historyId}:
+    patch:
+      operationId: updateEmployeeSalaryHistory
+      tags: [employees]
+      summary: Correct a salary history entry
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - in: path
+          name: historyId
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmployeeSalaryHistoryUpdate"
+      responses:
+        "200":
+          description: Updated salary history entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmployeeSalaryHistory"
+    delete:
+      operationId: deleteEmployeeSalaryHistory
+      tags: [employees]
+      summary: Delete an incorrect salary history entry
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - in: path
+          name: historyId
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Salary history entry deleted
+  /attendance:
+    get:
+      operationId: listAttendance
+      tags: [attendance]
+      summary: List attendance records
+      parameters:
+        - in: query
+          name: date
+          schema:
+            type: string
+          required: false
+        - in: query
+          name: month
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          required: false
+      responses:
+        "200":
+          description: Attendance records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Attendance"
+    post:
+      operationId: createAttendance
+      tags: [attendance]
+      summary: Create or replace attendance record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttendanceInput"
+      responses:
+        "201":
+          description: Created attendance record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attendance"
+    put:
+      operationId: upsertAttendance
+      tags: [attendance]
+      summary: Mark an employee as present or absent for a day
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttendanceToggleInput"
+      responses:
+        "200":
+          description: Updated attendance record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attendance"
+    delete:
+      operationId: deleteAttendance
+      tags: [attendance]
+      summary: Clear an employee attendance record for a day
+      parameters:
+        - in: query
+          name: employeeId
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: date
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Attendance record cleared
+  /attendance/shifts:
+    get:
+      operationId: listShifts
+      tags: [attendance]
+      summary: List reusable shift schedules
+      responses:
+        "200":
+          description: Shift schedules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Shift"
+    post:
+      operationId: createShift
+      tags: [attendance]
+      summary: Create a shift schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftInput"
+      responses:
+        "201":
+          description: Created shift
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+  /attendance/shifts/{id}:
+    patch:
+      operationId: updateShift
+      tags: [attendance]
+      summary: Update a shift schedule
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftInput"
+      responses:
+        "200":
+          description: Updated shift
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+    delete:
+      operationId: deleteShift
+      tags: [attendance]
+      summary: Delete an unused shift schedule
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Shift deleted
+  /attendance/shift-plans:
+    get:
+      operationId: listShiftPlans
+      tags: [attendance]
+      summary: List employee shift plans for a month
+      parameters:
+        - in: query
+          name: month
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+      responses:
+        "200":
+          description: Monthly shift plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ShiftPlan"
+    put:
+      operationId: upsertShiftPlan
+      tags: [attendance]
+      summary: Assign or clear an employee shift for a day
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftPlanInput"
+      responses:
+        "200":
+          description: Updated shift plan, or null when cleared
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ShiftPlan"
+                  - type: "null"
+  /attendance/shift-plans/copy-previous:
+    post:
+      operationId: copyPreviousShiftPlans
+      tags: [attendance]
+      summary: Copy valid active shift-employee plans from a selected month
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftPlanCopyInput"
+      responses:
+        "200":
+          description: Shift plan copy result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShiftPlanCopyResult"
+  /payroll:
+    get:
+      operationId: getPayroll
+      tags: [payroll]
+      summary: Calculate payroll for a month
+      parameters:
+        - in: query
+          name: month
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          required: false
+      responses:
+        "200":
+          description: Payroll summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayrollSummary"
+  /payroll-schedule:
+    get:
+      operationId: getPayrollSchedule
+      tags: [payroll]
+      summary: Get the global payroll cycle and payment schedule
+      responses:
+        "200":
+          description: Payroll schedule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayrollSchedule" }
+    put:
+      operationId: updatePayrollSchedule
+      tags: [payroll]
+      summary: Update the global payroll cycle and payment schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PayrollScheduleInput" }
+      responses:
+        "200":
+          description: Updated payroll schedule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayrollSchedule" }
+  /payroll-adjustments:
+    put:
+      operationId: upsertPayrollAdjustment
+      tags: [payroll]
+      summary: Save monthly payroll adjustments for an employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PayrollAdjustmentInput"
+      responses:
+        "200":
+          description: Saved payroll adjustment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayrollAdjustment"
+  /payroll-adjustments/{month}/{employeeId}/transactions/{sequence}:
+    delete:
+      operationId: deletePayrollAdjustmentTransaction
+      tags: [payroll]
+      summary: Delete one payroll payment transaction
+      parameters:
+        - in: path
+          name: month
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        - in: path
+          name: employeeId
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: sequence
+          required: true
+          schema: { type: integer, enum: [1, 2] }
+      responses:
+        "204":
+          description: Payroll payment transaction deleted
+  /payroll-advance:
+    get:
+      operationId: getPayrollAdvance
+      tags: [payroll]
+      summary: Get the monthly payroll advance list and approval status
+      parameters:
+        - in: query
+          name: month
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          required: false
+      responses:
+        "200":
+          description: Monthly payroll advance summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayrollAdvanceSummary"
+  /payroll-advance/approve:
+    post:
+      operationId: approvePayrollAdvance
+      tags: [payroll]
+      summary: Approve and freeze the monthly payroll advance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PayrollAdvanceApprovalInput"
+      responses:
+        "200":
+          description: Approved monthly payroll advance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayrollAdvanceSummary"
+  /payroll-advance/approval:
+    delete:
+      operationId: revertPayrollAdvanceApproval
+      tags: [payroll]
+      summary: Revert a monthly payroll advance approval
+      parameters:
+        - in: query
+          name: month
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+      responses:
+        "200":
+          description: Recalculated unapproved monthly payroll advance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayrollAdvanceSummary"
+  /payroll-advance/payment:
+    put:
+      operationId: updatePayrollAdvancePayment
+      tags: [payroll]
+      summary: Update an approved employee payroll advance amount and paid status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PayrollAdvancePaymentInput"
+      responses:
+        "200":
+          description: Updated monthly payroll advance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayrollAdvanceSummary"
+  /hour-balance:
+    get:
+      operationId: getHourBalance
+      tags: [hour-balance]
+      summary: Get monthly hour balance
+      parameters:
+        - in: query
+          name: month
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          required: false
+      responses:
+        "200":
+          description: Monthly hour balance by employee
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HourBalanceLine"
+  /cash/summary:
+    get:
+      operationId: getCashSummary
+      tags: [cash]
+      summary: Get cash summary
+      responses:
+        "200":
+          description: Cash summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashSummary"
+  /cash/transactions:
+    get:
+      operationId: listCashTransactions
+      tags: [cash]
+      summary: List cash transactions
+      responses:
+        "200":
+          description: Cash transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CashTransaction"
+    post:
+      operationId: createCashTransaction
+      tags: [cash]
+      summary: Create a cash transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashTransactionInput"
+      responses:
+        "201":
+          description: Created cash transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashTransaction"
+  /cash/transactions/{id}:
+    put:
+      operationId: updateCashTransaction
+      tags: [cash]
+      summary: Update an open manual cash transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashTransactionInput"
+      responses:
+        "200":
+          description: Updated cash transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashTransaction"
+    delete:
+      operationId: deleteCashTransaction
+      tags: [cash]
+      summary: Delete an open manual cash transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Deleted cash transaction
+  /cash/transactions/{id}/income-month:
+    patch:
+      operationId: updateBankCashTransactionIncomeMonth
+      tags: [cash]
+      summary: Update the income month of an open bank-originated cash income
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashIncomeMonthUpdate"
+      responses:
+        "200":
+          description: Updated cash transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashTransaction"
+  /cash/closures:
+    get:
+      operationId: listCashClosures
+      tags: [cash]
+      summary: List closed cash dates
+      responses:
+        "200":
+          description: Closed cash dates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CashClosure"
+    post:
+      operationId: closeCashDay
+      tags: [cash]
+      summary: Close a cash day
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashClosureInput"
+      responses:
+        "201":
+          description: Closed cash day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashClosure"
+  /bank-transactions:
+    get:
+      operationId: listBankTransactions
+      tags: [bank-transactions]
+      summary: List imported bank transactions
+      responses:
+        "200":
+          description: Bank transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BankTransaction" }
+  /bank-transactions/journal-review:
+    get:
+      operationId: listBankTransactionJournalReview
+      tags: [bank-transactions]
+      summary: List pending bank transactions with journal account suggestions
+      responses:
+        "200":
+          description: Pending bank transaction journal review rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BankTransactionJournalReviewItem" }
+  /bank-transactions/{id}/post-journal:
+    post:
+      operationId: postBankTransactionJournal
+      tags: [bank-transactions]
+      summary: Post a reviewed bank transaction to the journal
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankTransactionJournalPostInput" }
+      responses:
+        "200":
+          description: Posted bank transaction journal result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankTransactionJournalPostResult" }
+        "400":
+          description: Invalid chart account for the transaction type
+        "404":
+          description: Bank transaction not found
+        "409":
+          description: Bank transaction was already resolved
+  /bank-transactions/{id}/reject-suggestion:
+    post:
+      operationId: rejectBankTransactionSuggestion
+      tags: [bank-transactions]
+      summary: Reject the current journal suggestion while keeping the transaction pending
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Suggestion rejected
+        "404":
+          description: Bank transaction not found
+        "409":
+          description: Bank transaction was already resolved
+  /bank-transactions/{id}/link-purchase:
+    post:
+      operationId: linkBankTransactionPurchase
+      tags: [bank-transactions]
+      summary: Link a pending bank expense to an existing or newly created inventory purchase
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankPurchaseLinkInput" }
+      responses:
+        "200":
+          description: Bank transaction linked and journal posted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankPurchaseLinkResult" }
+        "400":
+          description: Invalid purchase input
+        "404":
+          description: Bank transaction or purchase not found
+        "409":
+          description: Bank transaction or purchase is incompatible or already resolved
+  /bank-transactions/{id}/link-expense:
+    post:
+      operationId: linkBankTransactionExpense
+      tags: [bank-transactions]
+      summary: Link a pending bank expense to an existing or newly created operating expense
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankExpenseLinkInput" }
+      responses:
+        "200":
+          description: Bank transaction linked and journal posted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankExpenseLinkResult" }
+        "400":
+          description: Invalid expense input
+        "404":
+          description: Bank transaction or expense not found
+        "409":
+          description: Bank transaction or expense is incompatible or already resolved
+  /bank-transactions/{id}/link-fixed-asset:
+    post:
+      operationId: linkBankTransactionFixedAsset
+      tags: [bank-transactions]
+      summary: Link a pending bank expense to an existing or newly created fixed asset purchase
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankFixedAssetLinkInput" }
+      responses:
+        "200":
+          description: Bank transaction linked and fixed asset journal posted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankFixedAssetLinkResult" }
+        "400":
+          description: Invalid fixed asset input
+        "404":
+          description: Bank transaction or fixed asset not found
+        "409":
+          description: Bank transaction or fixed asset is incompatible or already resolved
+  /bank-transactions/{id}/account:
+    patch:
+      operationId: updateBankTransactionAccount
+      tags: [bank-transactions]
+      summary: Assign or clear a chart account on a bank transaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankTransactionAccountInput" }
+      responses:
+        "200":
+          description: Updated bank transaction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankTransaction" }
+        "400":
+          description: Invalid chart account
+        "404":
+          description: Bank transaction not found
+        "409":
+          description: Bank transaction was already resolved
+  /bank-accounts:
+    get:
+      operationId: listBankAccounts
+      tags: [bank-transactions]
+      summary: List configured bank accounts
+      responses:
+        "200":
+          description: Bank accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BankAccount" }
+    post:
+      operationId: createBankAccount
+      tags: [bank-transactions]
+      summary: Configure a bank account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankAccountInput" }
+      responses:
+        "201":
+          description: Bank account created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankAccount" }
+  /bank-transactions/import:
+    post:
+      operationId: importKapitronBankTransactions
+      tags: [bank-transactions]
+      summary: Import a Kapitron XLSX statement
+      parameters:
+        - name: bankAccountId
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "201":
+          description: Imported transaction counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankTransactionImportResult" }
+  /bank-transactions/{id}/transfer-to-cash:
+    post:
+      operationId: transferBankTransactionToCash
+      tags: [bank-transactions]
+      summary: Create a verified cash transaction from a bank transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankTransactionCashTransferInput" }
+      responses:
+        "200":
+          description: Bank transaction linked to its created cash transaction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankTransaction" }
+  /bank-transactions/{id}/cash-suggestions:
+    get:
+      operationId: listBankTransactionCashSuggestions
+      tags: [bank-transactions]
+      summary: List matching unlinked cash transactions for a bank transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Ranked cash transaction suggestions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CashTransactionSuggestion" }
+  /bank-transactions/{id}/link-cash:
+    post:
+      operationId: linkBankTransactionToCash
+      tags: [bank-transactions]
+      summary: Verify an existing cash transaction against a bank transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankTransactionCashLinkInput" }
+      responses:
+        "200":
+          description: Bank transaction linked to the existing cash transaction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankTransaction" }
+  /bank-transactions/{id}:
+    delete:
+      operationId: deleteBankTransaction
+      tags: [bank-transactions]
+      summary: Delete an untransferred bank transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Deleted
+  /unclear-transactions:
+    get:
+      operationId: listUnclearTransactions
+      tags: [transactions]
+      summary: List transactions hidden as unclear
+      responses:
+        "200":
+          description: Unclear bank and cash transactions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnclearTransactionList" }
+  /unclear-transactions/{source}/{id}:
+    post:
+      operationId: markTransactionUnclear
+      tags: [transactions]
+      summary: Hide a bank or cash transaction as unclear
+      parameters:
+        - name: source
+          in: path
+          required: true
+          schema: { type: string, enum: [bank, cash] }
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Transaction hidden
+  /inventory/purchases:
+    get:
+      operationId: listInventoryPurchases
+      tags: [inventory]
+      summary: List inventory purchases
+      responses:
+        "200":
+          description: Inventory purchases
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryPurchase"
+    post:
+      operationId: createInventoryPurchase
+      tags: [inventory]
+      summary: Register a bulk inventory purchase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryPurchaseInput"
+      responses:
+        "201":
+          description: Created inventory purchase
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryPurchase"
+  /inventory/purchases/{id}:
+    put:
+      operationId: updateInventoryPurchase
+      tags: [inventory]
+      summary: Update inventory purchase, stock and cash transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryPurchaseInput"
+      responses:
+        "200":
+          description: Updated inventory purchase
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryPurchase"
+    delete:
+      operationId: deleteInventoryPurchase
+      tags: [inventory]
+      summary: Delete inventory purchase, reverse stock and remove cash transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Deleted inventory purchase
+  /inventory/purchases/{id}/payment:
+    put:
+      operationId: confirmInventoryPurchasePayment
+      tags: [inventory]
+      summary: Mark an inventory purchase as paid and create its cash expense
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryPurchasePaymentInput"
+      responses:
+        "200":
+          description: Payment confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryPurchase"
+    delete:
+      operationId: cancelInventoryPurchasePayment
+      tags: [inventory]
+      summary: Cancel an inventory purchase payment and remove its cash expense
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Payment cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryPurchase"
+  /inventory/purchases/{id}/payment-bank-suggestions:
+    get:
+      operationId: listInventoryPurchasePaymentBankSuggestions
+      tags: [inventory]
+      summary: Suggest unlinked bank expenses for an inventory purchase payment
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Ranked bank transaction suggestions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryPurchaseBankSuggestion"
+  /inventory/purchases/{id}/reclassify-as-expense:
+    post:
+      operationId: reclassifyInventoryPurchaseAsExpense
+      tags: [inventory]
+      summary: Move a misclassified inventory purchase to operating expenses, choosing its category. Stock and any cash/bank link are carried over; blocked if the purchase's stock has already been issued.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReclassifyInventoryPurchaseAsExpenseInput"
+      responses:
+        "201":
+          description: Created operating expense (the inventory purchase is removed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatingExpense"
+  /operating-expenses:
+    get:
+      operationId: listOperatingExpenses
+      tags: [operations]
+      responses:
+        "200":
+          description: Operating expenses
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/OperatingExpense" } }
+    post:
+      operationId: createOperatingExpense
+      tags: [operations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OperatingExpenseInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatingExpense" }
+  /operating-expenses/{id}:
+    put:
+      operationId: updateOperatingExpense
+      tags: [operations]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OperatingExpenseInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatingExpense" }
+    delete:
+      operationId: deleteOperatingExpense
+      tags: [operations]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses: { "204": { description: Deleted } }
+  /operating-expenses/{id}/payment-bank-suggestions:
+    get:
+      operationId: listOperatingExpensePaymentBankSuggestions
+      tags: [operations]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: Suggestions
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/OperatingExpenseBankSuggestion" } }
+  /operating-expenses/{id}/payment:
+    put:
+      operationId: confirmOperatingExpensePayment
+      tags: [operations]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OperatingExpensePaymentInput" }
+      responses:
+        "200":
+          description: Payment confirmed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatingExpense" }
+    delete:
+      operationId: cancelOperatingExpensePayment
+      tags: [operations]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: Payment cancelled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatingExpense" }
+  /inventory/suppliers:
+    get:
+      operationId: listInventorySuppliers
+      tags: [inventory]
+      summary: List inventory suppliers with aggregated purchases
+      responses:
+        "200":
+          description: Inventory suppliers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventorySupplier"
+  /inventory/suppliers/{id}:
+    put:
+      operationId: updateInventorySupplier
+      tags: [inventory]
+      summary: Rename an inventory supplier and its purchase history
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventorySupplierUpdate"
+      responses:
+        "200":
+          description: Updated inventory supplier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventorySupplier"
+    delete:
+      operationId: deleteInventorySupplier
+      tags: [inventory]
+      summary: Remove a supplier from the supplier directory without deleting purchase history
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Supplier removed
+  /inventory/items:
+    get:
+      operationId: listInventoryItems
+      tags: [inventory]
+      summary: List inventory catalog and stock
+      responses:
+        "200":
+          description: Inventory catalog
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryItem"
+  /inventory/items/{id}:
+    put:
+      operationId: updateInventoryItem
+      tags: [inventory]
+      summary: Update inventory item category
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryItemUpdate"
+      responses:
+        "200":
+          description: Updated inventory item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+  /inventory/issues:
+    get:
+      operationId: listInventoryIssues
+      tags: [inventory]
+      summary: List inventory issues
+      responses:
+        "200":
+          description: Inventory issues
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryIssue"
+    post:
+      operationId: createInventoryIssue
+      tags: [inventory]
+      summary: Issue inventory stock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryIssueInput"
+      responses:
+        "201":
+          description: Created inventory issue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryIssue"
+  /inventory/issues/{id}:
+    put:
+      operationId: updateInventoryIssue
+      tags: [inventory]
+      summary: Update inventory issue and rebalance stock
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryIssueInput"
+      responses:
+        "200":
+          description: Updated inventory issue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryIssue"
+    delete:
+      operationId: deleteInventoryIssue
+      tags: [inventory]
+      summary: Delete inventory issue and restore stock
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Deleted inventory issue
+  /fixed-assets:
+    get:
+      operationId: listFixedAssets
+      tags: [fixed-assets]
+      summary: List equipment and fixed assets
+      responses:
+        "200":
+          description: Fixed assets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FixedAsset"
+    post:
+      operationId: createFixedAsset
+      tags: [fixed-assets]
+      summary: Register equipment or fixed asset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FixedAssetInput"
+      responses:
+        "201":
+          description: Created fixed asset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FixedAsset"
+  /fixed-assets/{id}:
+    put:
+      operationId: updateFixedAsset
+      tags: [fixed-assets]
+      summary: Update equipment or fixed asset and its linked cash transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FixedAssetInput"
+      responses:
+        "200":
+          description: Updated fixed asset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FixedAsset"
+    delete:
+      operationId: deleteFixedAsset
+      tags: [fixed-assets]
+      summary: Delete equipment or fixed asset and its linked cash transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Deleted fixed asset
+  /deletion-requests:
+    get:
+      operationId: listDeletionRequests
+      tags: [deletion-requests]
+      summary: List deletion approval requests
+      responses:
+        "200":
+          description: Deletion requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DeletionRequest"
+    post:
+      operationId: createDeletionRequest
+      tags: [deletion-requests]
+      summary: Queue an operation for admin deletion approval
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeletionRequestInput"
+      responses:
+        "201":
+          description: Queued deletion request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletionRequest"
+  /deletion-requests/{id}/approve:
+    post:
+      operationId: approveDeletionRequest
+      tags: [deletion-requests]
+      summary: Approve and execute a queued deletion
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Completed deletion request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletionRequest"
+  /deletion-requests/{id}/cancel:
+    post:
+      operationId: cancelDeletionRequest
+      tags: [deletion-requests]
+      summary: Cancel a queued deletion request
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Cancelled deletion request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletionRequest"
+  /journal/entries:
+    get:
+      operationId: listJournalEntries
+      tags: [journal]
+      summary: List journal entries
+      parameters:
+        - $ref: "#/components/parameters/JournalDateFrom"
+        - $ref: "#/components/parameters/JournalDateTo"
+        - $ref: "#/components/parameters/JournalSourceType"
+        - $ref: "#/components/parameters/JournalAccountId"
+        - $ref: "#/components/parameters/JournalStatus"
+      responses:
+        "200":
+          description: Journal entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/JournalEntrySummary" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      operationId: createJournalEntry
+      tags: [journal]
+      summary: Create a manual journal entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JournalEntryInput" }
+      responses:
+        "201":
+          description: Created journal entry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalEntry" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /journal/entries/{id}:
+    get:
+      operationId: getJournalEntry
+      tags: [journal]
+      summary: Get a journal entry with lines
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Journal entry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalEntry" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: updateJournalEntry
+      tags: [journal]
+      summary: Update a draft journal entry
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JournalEntryUpdateInput" }
+      responses:
+        "200":
+          description: Updated journal entry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalEntry" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /journal/entries/{id}/void:
+    post:
+      operationId: voidJournalEntry
+      tags: [journal]
+      summary: Void a posted journal entry
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Voided journal entry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalVoidResult" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /journal/accounts/{id}/ledger:
+    get:
+      operationId: getJournalAccountLedger
+      tags: [journal]
+      summary: Get the posted ledger for an account
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Posted ledger entries with a running balance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalLedger" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /journal/trial-balance:
+    get:
+      operationId: getJournalTrialBalance
+      tags: [journal]
+      summary: Get the posted trial balance
+      responses:
+        "200":
+          description: Trial balance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalTrialBalance" }
+components:
+  parameters:
+    Id:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: integer
+    JournalDateFrom:
+      in: query
+      name: dateFrom
+      required: false
+      schema:
+        $ref: "#/components/schemas/JournalDate"
+    JournalDateTo:
+      in: query
+      name: dateTo
+      required: false
+      schema:
+        $ref: "#/components/schemas/JournalDate"
+    JournalSourceType:
+      in: query
+      name: sourceType
+      required: false
+      schema:
+        type: string
+    JournalAccountId:
+      in: query
+      name: accountId
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+    JournalStatus:
+      in: query
+      name: status
+      required: false
+      schema:
+        type: string
+        enum: [draft, posted, void]
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Conflict:
+      description: Operation conflicts with the current resource state
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+  schemas:
+    JournalDate:
+      type: string
+      pattern: '^\d{4}-\d{2}-\d{2}$'
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    JournalEntryLine:
+      type: object
+      required: [id, accountId, debit, credit, memo]
+      properties:
+        id: { type: integer }
+        accountId: { type: integer }
+        debit: { type: number, minimum: 0 }
+        credit: { type: number, minimum: 0 }
+        memo: { type: ["string", "null"] }
+    JournalEntryLineInput:
+      type: object
+      required: [accountId, debit, credit]
+      properties:
+        accountId: { type: integer, minimum: 1 }
+        debit: { type: number, minimum: 0 }
+        credit: { type: number, minimum: 0 }
+        memo: { type: ["string", "null"] }
+    JournalEntryInput:
+      type: object
+      required: [date, description, lines]
       properties:
         date: { $ref: "#/components/schemas/JournalDate" }
         description: { type: string, minLength: 1 }

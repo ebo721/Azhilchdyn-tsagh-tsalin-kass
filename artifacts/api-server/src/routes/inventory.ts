@@ -1,3 +1,617 @@
+import { Router, type IRouter } from "express";
+import { createServer } from "node:http";
+import {
+  CreateAttendanceBody,
+  CreateShiftBody,
+  CreateCashTransactionBody,
+  CloseCashDayBody,
+  CreateEmployeeBody,
+  DeleteAttendanceQueryParams,
+  CopyPreviousShiftPlansBody,
+  CopyPreviousShiftPlansResponse,
+  ApprovePayrollAdvanceBody,
+  GetDashboardResponse,
+  GetHourBalanceQueryParams,
+  GetHourBalanceResponse,
+  GetPayrollQueryParams,
+  GetPayrollResponse,
+  GetPayrollAdvanceQueryParams,
+  GetPayrollAdvanceResponse,
+  GetCashSummaryResponse,
+  ListAttendanceQueryParams,
+  ListAttendanceResponse,
+  ListShiftPlansQueryParams,
+  ListShiftPlansResponse,
+  ListShiftsResponse,
+  RevertPayrollAdvanceApprovalQueryParams,
+  ListCashTransactionsResponse,
+  ListCashClosuresResponse,
+  CloseCashDayResponse,
+  UpdateCashTransactionBody,
+  UpdateCashTransactionParams,
+  UpdateBankCashTransactionIncomeMonthBody,
+  UpdateBankCashTransactionIncomeMonthParams,
+  UpdateBankCashTransactionIncomeMonthResponse,
+  DeleteCashTransactionParams,
+  CreateInventoryPurchaseBody,
+  CreateInventoryPurchaseResponse,
+  ListInventoryPurchasesResponse,
+  ListInventorySuppliersResponse,
+  UpdateInventorySupplierBody,
+  UpdateInventorySupplierParams,
+  UpdateInventorySupplierResponse,
+  DeleteInventorySupplierParams,
+  ListInventoryItemsResponse,
+  UpdateInventoryItemBody,
+  UpdateInventoryItemParams,
+  UpdateInventoryItemResponse,
+  UpdateInventoryPurchaseBody,
+  UpdateInventoryPurchaseParams,
+  UpdateInventoryPurchaseResponse,
+  DeleteInventoryPurchaseParams,
+  ReclassifyInventoryPurchaseAsExpenseParams,
+  ReclassifyInventoryPurchaseAsExpenseBody,
+  ReclassifyInventoryPurchaseAsExpenseResponse,
+  ConfirmInventoryPurchasePaymentBody,
+  ConfirmInventoryPurchasePaymentParams,
+  ConfirmInventoryPurchasePaymentResponse,
+  ListInventoryPurchasePaymentBankSuggestionsParams,
+  ListInventoryPurchasePaymentBankSuggestionsResponse,
+  CancelInventoryPurchasePaymentParams,
+  CancelInventoryPurchasePaymentResponse,
+  CreateInventoryIssueBody,
+  CreateInventoryIssueResponse,
+  ListInventoryIssuesResponse,
+  UpdateInventoryIssueBody,
+  UpdateInventoryIssueParams,
+  UpdateInventoryIssueResponse,
+  DeleteInventoryIssueParams,
+  CreateFixedAssetBody,
+  CreateFixedAssetResponse,
+  UpdateFixedAssetBody,
+  UpdateFixedAssetParams,
+  UpdateFixedAssetResponse,
+  DeleteFixedAssetParams,
+  ListFixedAssetsResponse,
+  CreateOperatingExpenseBody,
+  CreateOperatingExpenseResponse,
+  ListOperatingExpensesResponse,
+  UpdateOperatingExpenseBody,
+  UpdateOperatingExpenseParams,
+  UpdateOperatingExpenseResponse,
+  DeleteOperatingExpenseParams,
+  ListOperatingExpensePaymentBankSuggestionsParams,
+  ListOperatingExpensePaymentBankSuggestionsResponse,
+  ConfirmOperatingExpensePaymentBody,
+  ConfirmOperatingExpensePaymentParams,
+  ConfirmOperatingExpensePaymentResponse,
+  CancelOperatingExpensePaymentParams,
+  CancelOperatingExpensePaymentResponse,
+  CreateDeletionRequestBody,
+  CreateDeletionRequestResponse,
+  ListDeletionRequestsResponse,
+  ApproveDeletionRequestParams,
+  ApproveDeletionRequestResponse,
+  CancelDeletionRequestParams,
+  CancelDeletionRequestResponse,
+  ListEmployeesResponse,
+  ListEmployeeSalaryHistoryParams,
+  ListEmployeeSalaryHistoryResponse,
+  DeleteEmployeeSalaryHistoryParams,
+  UpdateEmployeeSalaryHistoryBody,
+  UpdateEmployeeSalaryHistoryParams,
+  UpdateEmployeeSalaryHistoryResponse,
+  DeletePayrollAdjustmentTransactionParams,
+  UpsertPayrollAdjustmentBody,
+  UpdatePayrollAdvancePaymentBody,
+  UpsertAttendanceBody,
+  UpsertShiftPlanBody,
+  UpdateShiftBody,
+  UpdateShiftParams,
+  UpdateEmployeeBody,
+  UpdateEmployeeParams,
+  ListChartOfAccountsResponse,
+  GetPayrollScheduleResponse,
+  UpdatePayrollScheduleBody,
+  UpdatePayrollScheduleResponse,
+  CreateChartOfAccountBody,
+  CreateChartOfAccountResponse,
+  UpdateChartOfAccountBody,
+  UpdateChartOfAccountParams,
+  UpdateChartOfAccountResponse,
+  DeleteChartOfAccountParams,
+} from "@workspace/api-zod";
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import {
+  attendanceTable,
+  cashTransactionsTable,
+  cashClosuresTable,
+  bankTransactionsTable,
+  db,
+  employeesTable,
+  employeeSalaryHistoryTable,
+  employeeShiftPlansTable,
+  payrollAdjustmentsTable,
+  payrollAdvanceApprovalsTable,
+  inventoryPurchasesTable,
+  inventorySuppliersTable,
+  inventoryPurchaseItemsTable,
+  inventoryItemsTable,
+  inventoryIssuesTable,
+  inventoryIssueConsumptionsTable,
+  fixedAssetsTable,
+  operatingExpensesTable,
+  deletionRequestsTable,
+  shiftTemplatesTable,
+  chartOfAccountsTable,
+  payrollScheduleSettingsTable,
+} from "@workspace/db";
+import { getStaffRole, getStaffSession, type StaffRole } from "../lib/hr-session.js";
+import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment.js";
+import { planShiftPlanCopy } from "../lib/shift-plan-copy.js";
+import { reconcileOperatingExpenses } from "../lib/operating-expense-sync.js";
+import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
+import {
+  cashAccountForCategory,
+  isCanonicalCashCategory,
+  shouldMirrorCashAsOperatingExpense,
+} from "../lib/cash-account.js";
+import * as shared from "../lib/route-shared.js";
+import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-shared.js";
+
+const router: IRouter = Router();
+const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, operatingExpenseAccountName, inventoryMaterialLabel, defaultChartOfAccounts, operatingExpenseAccountCodes, inventoryPurchaseAccountCodes, reservedAccountTypes, chartOfAccountResponse, ensureDefaultChartOfAccounts, inventoryPurchaseAccount, lockedExpenseAccount, fallbackExpenseAccount, today, currentMonth, money, InventoryBankPaymentConflictError, OperatingExpenseBankPaymentConflictError, calendarDateOffset, descriptionTokens, inventoryBankSuggestionScore, deletionTargetPatterns, roleCanRequestDeletion, deletionRequestResponse, monthlyIncomeTaxRelief, hoursBetween, previousMonth, nextMonth, daysInMonth, isValidCalendarDate, calendarDateText, weekdayCount, monthWeekdays, defaultPayrollSchedule, getPayrollSchedule, scheduleDate, payrollPeriod, selectPayrollScheduleVersion, scheduleVersionAffectsMonth, shiftDailyRate, weekdayDatesBetween, salaryAt, getPayrollSummary, getPayrollAdvanceSummary, calculatePayrollAdvanceLine, InventoryInsufficientStockError, planInventoryFifoConsumption, applyInventoryFifoConsumption, reverseInventoryFifoConsumption, inventoryPurchaseResponse } = shared;
+
+async function postFixedAssetJournal(
+  tx: Tx,
+  input: { assetId: number; date: string; description: string; amount: number; },
+) {
+  const [fixedAssetAccount] = await tx.select().from(chartOfAccountsTable).where(and(
+    eq(chartOfAccountsTable.code, "1800"),
+    eq(chartOfAccountsTable.type, "asset"),
+    eq(chartOfAccountsTable.normalBalance, "debit"),
+    eq(chartOfAccountsTable.isActive, true),
+  ));
+  const [cashAccount] = await tx.select().from(chartOfAccountsTable).where(and(
+    eq(chartOfAccountsTable.code, "1000"),
+    eq(chartOfAccountsTable.type, "asset"),
+    eq(chartOfAccountsTable.normalBalance, "debit"),
+    eq(chartOfAccountsTable.isActive, true),
+  ));
+  if (!fixedAssetAccount) throw new Error("Fixed asset account 1800 is missing or inactive");
+  if (!cashAccount) throw new Error("Cash account 1000 is missing or inactive");
+  const result = await postJournalEntry(tx, {
+    date: input.date,
+    description: input.description,
+    sourceType: "fixed_asset",
+    sourceId: input.assetId,
+    createdBy: null,
+    lines: [
+      { accountId: fixedAssetAccount.id, debit: input.amount, credit: 0 },
+      { accountId: cashAccount.id, debit: 0, credit: input.amount },
+    ],
+  });
+  if (result.status !== "posted") throw new Error("Fixed asset journal entry must be balanced");
+  return result.journalEntryId;
+}
+
+
+
+router.get("/fixed-assets", async (_req, res, next) => {
+  try {
+    const [rows, purchaseCashRows] = await Promise.all([
+      db.select().from(fixedAssetsTable).orderBy(desc(fixedAssetsTable.date), desc(fixedAssetsTable.id)),
+      db.select({
+        sourceKey: cashTransactionsTable.sourceKey,
+        bankTransactionId: cashTransactionsTable.bankTransactionId,
+      }).from(cashTransactionsTable).where(eq(cashTransactionsTable.sourceType, "fixed_asset_purchase")),
+    ]);
+    const bankTransactionBySourceKey = new Map(
+      purchaseCashRows.map((cash) => [cash.sourceKey, cash.bankTransactionId]),
+    );
+    res.json(ListFixedAssetsResponse.parse(rows.map((asset) => ({
+      ...asset,
+      unitPrice: Number(asset.unitPrice),
+      quantity: Number(asset.quantity),
+      totalAmount: money(Number(asset.unitPrice) * Number(asset.quantity)),
+      bankTransactionId: bankTransactionBySourceKey.get(`fixed-asset:${asset.id}`) ?? null,
+      createdAt: asset.createdAt.toISOString(),
+    }))));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/fixed-assets", async (req, res, next) => {
+  try {
+    const input = CreateFixedAssetBody.parse(req.body);
+    if (!isValidCalendarDate(input.date)) {
+      res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
+      return;
+    }
+    const name = input.name.trim();
+    if (!name) {
+      res.status(400).json({ error: "Хөрөнгийн нэр хоосон байж болохгүй" });
+      return;
+    }
+    if (input.purchased && await isCashDateClosed(input.date)) {
+      res.status(409).json({ error: "Өндөрлөсөн өдөр худалдан авсан хөрөнгө бүртгэх боломжгүй" });
+      return;
+    }
+    const totalAmount = money(input.unitPrice * input.quantity);
+    const asset = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(fixedAssetsTable).values({
+        name,
+        unitPrice: input.unitPrice,
+        quantity: input.quantity,
+        date: input.date,
+        purchased: input.purchased,
+      }).returning();
+      if (input.purchased) {
+        const account = await cashAccountForCategory(tx, "Эд хөрөнгө");
+        const [cash] = await tx.insert(cashTransactionsTable).values({
+          type: "expense",
+          category: "Эд хөрөнгө",
+          accountId: account?.id ?? null,
+          description: `${name} (${input.quantity} ширхэг)`,
+          amount: totalAmount,
+          date: input.date,
+          sourceType: "fixed_asset_purchase",
+          sourceKey: `fixed-asset:${created.id}`,
+        }).returning({ id: cashTransactionsTable.id });
+        const journalEntryId = await postFixedAssetJournal(tx, {
+          assetId: created.id,
+          date: input.date,
+          description: `${name} (${input.quantity} ширхэг)`,
+          amount: totalAmount,
+        });
+        await tx.update(cashTransactionsTable)
+          .set({ journalEntryId })
+          .where(eq(cashTransactionsTable.id, cash.id));
+      }
+      return created;
+    });
+    res.status(201).json(CreateFixedAssetResponse.parse({
+      ...asset,
+      unitPrice: Number(asset.unitPrice),
+      quantity: Number(asset.quantity),
+      totalAmount,
+      bankTransactionId: null,
+      createdAt: asset.createdAt.toISOString(),
+    }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/fixed-assets/:id", async (req, res, next) => {
+  try {
+    const { id } = UpdateFixedAssetParams.parse(req.params);
+    const input = UpdateFixedAssetBody.parse(req.body);
+    if (!isValidCalendarDate(input.date)) {
+      res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
+      return;
+    }
+    const name = input.name.trim();
+    if (!name) {
+      res.status(400).json({ error: "Хөрөнгийн нэр хоосон байж болохгүй" });
+      return;
+    }
+    const [existing] = await db.select().from(fixedAssetsTable).where(eq(fixedAssetsTable.id, id));
+    if (!existing) {
+      res.status(404).json({ error: "Эд хөрөнгө олдсонгүй" });
+      return;
+    }
+    const totalAmount = money(input.unitPrice * input.quantity);
+    const result = await db.transaction(async (tx) => {
+      const [lockedExisting] = await tx.select().from(fixedAssetsTable)
+        .where(eq(fixedAssetsTable.id, id))
+        .for("update");
+      if (!lockedExisting) return { kind: "missing" as const };
+      const affectedDates = new Set<string>();
+      if (lockedExisting.purchased) affectedDates.add(lockedExisting.date);
+      if (input.purchased) affectedDates.add(input.date);
+      if (affectedDates.size) {
+        const closures = await tx.select({ date: cashClosuresTable.date }).from(cashClosuresTable);
+        if (closures.some(({ date }) => affectedDates.has(date))) return { kind: "cash_closed" as const };
+      }
+
+      const sourceKey = `fixed-asset:${id}`;
+      const [oldCash] = await tx.select().from(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "fixed_asset_purchase"),
+        eq(cashTransactionsTable.sourceKey, sourceKey),
+      )).for("update");
+      if (oldCash?.bankTransactionId !== null && oldCash?.bankTransactionId !== undefined) {
+        return { kind: "bank_linked" as const };
+      }
+      const oldDescription = oldCash?.description;
+      const oldAmount = oldCash ? Number(oldCash.amount) : null;
+      const oldDate = oldCash?.date;
+      const [updated] = await tx.update(fixedAssetsTable).set({
+        name,
+        unitPrice: input.unitPrice,
+        quantity: input.quantity,
+        date: input.date,
+        purchased: input.purchased,
+      }).where(eq(fixedAssetsTable.id, id)).returning();
+      if (input.purchased) {
+        const account = await cashAccountForCategory(tx, "Эд хөрөнгө");
+        const [cash] = await tx.insert(cashTransactionsTable).values({
+          type: "expense",
+          category: "Эд хөрөнгө",
+          accountId: account?.id ?? null,
+          description: `${name} (${input.quantity} ширхэг)`,
+          amount: totalAmount,
+          date: input.date,
+          sourceType: "fixed_asset_purchase",
+          sourceKey,
+        }).onConflictDoUpdate({
+          target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
+          set: {
+            accountId: account?.id ?? null,
+            description: `${name} (${input.quantity} ширхэг)`,
+            amount: totalAmount,
+            date: input.date,
+          },
+        }).returning();
+        const description = `${name} (${input.quantity} ширхэг)`;
+        const changed = !oldCash
+          || oldAmount !== totalAmount
+          || oldDate !== input.date
+          || oldDescription !== description;
+        if (!lockedExisting.purchased || (cash.journalEntryId !== null && changed)) {
+          if (cash.journalEntryId !== null && changed) {
+            await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
+          }
+          const journalEntryId = await postFixedAssetJournal(tx, {
+            assetId: id,
+            date: input.date,
+            description,
+            amount: totalAmount,
+          });
+          await tx.update(cashTransactionsTable).set({ journalEntryId })
+            .where(eq(cashTransactionsTable.id, cash.id));
+        }
+      } else {
+        if (oldCash?.journalEntryId !== null && oldCash?.journalEntryId !== undefined) {
+          await voidJournalEntry(tx, { journalEntryId: oldCash.journalEntryId, voidedBy: null });
+        }
+        await tx.delete(cashTransactionsTable).where(and(
+          eq(cashTransactionsTable.sourceType, "fixed_asset_purchase"),
+          eq(cashTransactionsTable.sourceKey, sourceKey),
+        ));
+      }
+      return { kind: "updated" as const, asset: updated };
+    });
+    if (result.kind === "missing") {
+      res.status(404).json({ error: "Эд хөрөнгө олдсонгүй" });
+      return;
+    }
+    if (result.kind === "cash_closed") {
+      res.status(409).json({ error: "Өндөрлөсөн өдрийн худалдан авсан хөрөнгийг засах боломжгүй" });
+      return;
+    }
+    if (result.kind === "bank_linked") {
+      res.status(409).json({ error: "Банкны гүйлгээтэй холбогдсон эд хөрөнгийг засах боломжгүй" });
+      return;
+    }
+    res.json(UpdateFixedAssetResponse.parse({
+      ...result.asset,
+      unitPrice: Number(result.asset.unitPrice),
+      quantity: Number(result.asset.quantity),
+      totalAmount,
+      bankTransactionId: null,
+      createdAt: result.asset.createdAt.toISOString(),
+    }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/fixed-assets/:id", async (req, res, next) => {
+  try {
+    const { id } = DeleteFixedAssetParams.parse(req.params);
+    const [existing] = await db.select().from(fixedAssetsTable).where(eq(fixedAssetsTable.id, id));
+    if (!existing) {
+      res.status(404).json({ error: "Эд хөрөнгө олдсонгүй" });
+      return;
+    }
+    const result = await db.transaction(async (tx) => {
+      const [lockedExisting] = await tx.select().from(fixedAssetsTable)
+        .where(eq(fixedAssetsTable.id, id))
+        .for("update");
+      if (!lockedExisting) return "missing" as const;
+      if (lockedExisting.purchased) {
+        const [closure] = await tx.select({ id: cashClosuresTable.id })
+          .from(cashClosuresTable)
+          .where(eq(cashClosuresTable.date, lockedExisting.date));
+        if (closure) return "cash_closed" as const;
+      }
+      const [cash] = await tx.select().from(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "fixed_asset_purchase"),
+        eq(cashTransactionsTable.sourceKey, `fixed-asset:${id}`),
+      )).for("update");
+      if (cash?.bankTransactionId !== null && cash?.bankTransactionId !== undefined) {
+        return "bank_linked" as const;
+      }
+      if (cash?.journalEntryId !== null && cash?.journalEntryId !== undefined) {
+        await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
+      }
+      await tx.delete(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "fixed_asset_purchase"),
+        eq(cashTransactionsTable.sourceKey, `fixed-asset:${id}`),
+      ));
+      await tx.delete(fixedAssetsTable).where(eq(fixedAssetsTable.id, id));
+      return "deleted" as const;
+    });
+    if (result === "missing") {
+      res.status(404).json({ error: "Эд хөрөнгө олдсонгүй" });
+      return;
+    }
+    if (result === "cash_closed") {
+      res.status(409).json({ error: "Өндөрлөсөн өдрийн худалдан авсан хөрөнгийг устгах боломжгүй" });
+      return;
+    }
+    if (result === "bank_linked") {
+      res.status(409).json({ error: "Банкны гүйлгээтэй холбогдсон эд хөрөнгийг устгах боломжгүй" });
+      return;
+    }
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/inventory/purchases", async (_req, res, next) => {
+  try {
+    const [purchases, items, closures] = await Promise.all([
+      db.select({
+        purchase: inventoryPurchasesTable,
+        accountCode: chartOfAccountsTable.code,
+        accountName: chartOfAccountsTable.name,
+      }).from(inventoryPurchasesTable)
+        .leftJoin(chartOfAccountsTable, eq(inventoryPurchasesTable.accountId, chartOfAccountsTable.id))
+        .orderBy(desc(inventoryPurchasesTable.date), desc(inventoryPurchasesTable.id)),
+      db.select().from(inventoryPurchaseItemsTable).orderBy(inventoryPurchaseItemsTable.id),
+      db.select({ date: cashClosuresTable.date }).from(cashClosuresTable),
+    ]);
+    const closedDates = new Set(closures.map((closure) => closure.date));
+    res.json(ListInventoryPurchasesResponse.parse(purchases.map((row) => ({
+      id: row.purchase.id,
+      materialType: row.purchase.materialType,
+      accountId: row.purchase.accountId,
+      accountCode: row.accountCode,
+      accountName: row.accountName,
+      supplierName: row.purchase.documentName,
+      hasReceipt: row.purchase.hasReceipt,
+      date: row.purchase.date,
+      totalAmount: Number(row.purchase.totalAmount),
+      paid: row.purchase.paymentDate !== null,
+      paymentDate: row.purchase.paymentDate,
+      paymentAmount: row.purchase.paymentAmount === null ? null : Number(row.purchase.paymentAmount),
+      createdAt: row.purchase.createdAt.toISOString(),
+      editable: !closedDates.has(row.purchase.date),
+      items: items
+        .filter((item) => item.purchaseId === row.purchase.id)
+        .map((item) => ({
+          id: item.id,
+          inventoryItemId: item.inventoryItemId,
+          name: item.name,
+          category: item.category,
+          unit: item.unit,
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice),
+          totalAmount: Number(item.totalAmount),
+        })),
+    }))));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/inventory/suppliers", async (_req, res, next) => {
+  try {
+    const [suppliers, purchases, purchaseItems] = await Promise.all([
+      db.select().from(inventorySuppliersTable).orderBy(inventorySuppliersTable.name),
+      db.select().from(inventoryPurchasesTable),
+      db.select().from(inventoryPurchaseItemsTable),
+    ]);
+    const normalized = (name: string) => name.trim().toLocaleLowerCase("mn-MN");
+    res.json(ListInventorySuppliersResponse.parse(suppliers.map((supplier) => {
+      const supplierPurchases = purchases.filter((purchase) => normalized(purchase.documentName) === supplier.normalizedName);
+      const purchaseIds = new Set(supplierPurchases.map((purchase) => purchase.id));
+      const groupedItems = new Map<string, { name: string; unit: string; quantity: number; totalAmount: number }>();
+      for (const item of purchaseItems) {
+        if (!purchaseIds.has(item.purchaseId)) continue;
+        const key = `${item.name.trim().toLocaleLowerCase("mn-MN")}\u0000${item.unit}`;
+        const existing = groupedItems.get(key);
+        if (existing) {
+          existing.quantity += Number(item.quantity);
+          existing.totalAmount += Number(item.totalAmount);
+        } else {
+          groupedItems.set(key, { name: item.name, unit: item.unit, quantity: Number(item.quantity), totalAmount: Number(item.totalAmount) });
+        }
+      }
+      return {
+        id: supplier.id,
+        name: supplier.name,
+        purchaseCount: supplierPurchases.length,
+        totalAmount: money(supplierPurchases.reduce((total, purchase) => total + Number(purchase.totalAmount), 0)),
+        unpaidAmount: money(supplierPurchases.reduce((total, purchase) => total + Number(purchase.totalAmount) - Number(purchase.paymentAmount ?? 0), 0)),
+        items: [...groupedItems.values()].map((item) => ({ ...item, totalAmount: money(item.totalAmount) })),
+      };
+    })));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/inventory/suppliers/:id", async (req, res, next) => {
+  try {
+    const { id } = UpdateInventorySupplierParams.parse(req.params);
+    const input = UpdateInventorySupplierBody.parse(req.body);
+    const name = input.name.normalize("NFKC").trim().replace(/\s+/g, " ");
+    if (!name) {
+      res.status(400).json({ error: "Харилцагчийн нэр хоосон байж болохгүй" });
+      return;
+    }
+    const normalizedName = name.toLocaleLowerCase("mn-MN");
+    const [supplier] = await db.select().from(inventorySuppliersTable).where(eq(inventorySuppliersTable.id, id));
+    if (!supplier) {
+      res.status(404).json({ error: "Харилцагч олдсонгүй" });
+      return;
+    }
+    const [duplicate] = await db.select({ id: inventorySuppliersTable.id })
+      .from(inventorySuppliersTable)
+      .where(eq(inventorySuppliersTable.normalizedName, normalizedName));
+    if (duplicate && duplicate.id !== id) {
+      res.status(409).json({ error: "Ийм нэртэй харилцагч аль хэдийн байна" });
+      return;
+    }
+    const allPurchases = await db.select().from(inventoryPurchasesTable);
+    const matchingPurchases = allPurchases.filter((purchase) =>
+      purchase.documentName.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("mn-MN") === supplier.normalizedName
+    );
+    const purchaseIds = matchingPurchases.map((purchase) => purchase.id);
+    const updatedSupplier = await db.transaction(async (tx) => {
+      const [updated] = await tx.update(inventorySuppliersTable)
+        .set({ name, normalizedName })
+        .where(eq(inventorySuppliersTable.id, id))
+        .returning();
+      if (purchaseIds.length > 0) {
+        await tx.update(inventoryPurchasesTable)
+          .set({ documentName: name })
+          .where(inArray(inventoryPurchasesTable.id, purchaseIds));
+        await tx.update(cashTransactionsTable)
+          .set({ description: name })
+          .where(and(
+            eq(cashTransactionsTable.sourceType, "inventory_purchase"),
+            inArray(cashTransactionsTable.sourceKey, purchaseIds.map((purchaseId) => `purchase:${purchaseId}`)),
+          ));
+      }
+      return updated;
+    });
+    const purchaseItems = purchaseIds.length > 0
+      ? await db.select().from(inventoryPurchaseItemsTable).where(inArray(inventoryPurchaseItemsTable.purchaseId, purchaseIds))
+      : [];
+    const groupedItems = new Map<string, { name: string; unit: string; quantity: number; totalAmount: number }>();
+    for (const item of purchaseItems) {
+      const key = `${item.name.trim().toLocaleLowerCase("mn-MN")}\u0000${item.unit}`;
+      const grouped = groupedItems.get(key);
+      if (grouped) {
+        grouped.quantity += Number(item.quantity);
+        grouped.totalAmount += Number(item.totalAmount);
+      } else {
+        groupedItems.set(key, { name: item.name, unit: item.unit, quantity: Number(item.quantity), totalAmount: Number(item.totalAmount) });
+      }
+    }
+    res.json(UpdateInventorySupplierResponse.parse({
+      id: updatedSupplier.id,
+      name: updatedSupplier.name,
+      purchaseCount: matchingPurchases.length,
+      totalAmount: money(matchingPurchases.reduce((total, purchase) => total + Number(purchase.totalAmount), 0)),
+      items: [...groupedItems.values()].map((item) => ({ ...item, totalAmount: money(item.totalAmount) })),
+    }));
   } catch (error) {
     next(error);
   }
