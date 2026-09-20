@@ -7,7 +7,7 @@ import {
   ListJournalReceivablesQueryParams, ListJournalReceivablesResponse, ListJournalSuppliersResponse,
 } from "@workspace/api-zod";
 import { and, asc, desc, eq, gte, lte, inArray, sql } from "drizzle-orm";
-import { db, chartOfAccountsTable, journalEntriesTable, journalLinesTable, receivablesTable, employeesTable, inventorySuppliersTable, type JournalEntry, type JournalLine } from "@workspace/db";
+import { db, bankTransactionsTable, cashTransactionsTable, chartOfAccountsTable, journalEntriesTable, journalLinesTable, receivablesTable, employeesTable, inventorySuppliersTable, type JournalEntry, type JournalLine } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import {
   JournalValidationError, postJournalEntry, voidJournalEntry,
@@ -171,6 +171,13 @@ router.put("/journal/entries/:id", async (req, res, next) => {
 router.post("/journal/entries/:id/void", async (req, res, next) => {
   try {
     const { id } = VoidJournalEntryParams.parse(req.params);
+    const [[bankOwner], [cashOwner]] = await Promise.all([
+      db.select({ id: bankTransactionsTable.id }).from(bankTransactionsTable).where(eq(bankTransactionsTable.journalEntryId, id)).limit(1),
+      db.select({ id: cashTransactionsTable.id }).from(cashTransactionsTable).where(eq(cashTransactionsTable.journalEntryId, id)).limit(1),
+    ]);
+    if (bankOwner || cashOwner) {
+      return res.status(409).json({ error: "Энэ журнал банк эсвэл кассын гүйлгээтэй холбоотой тул эх үүсвэр цэснээс өөрчилнө үү" });
+    }
     const session = await getStaffSession(req);
     const result = await db.transaction((tx) => voidJournalEntry(tx, { journalEntryId: id, voidedBy: session?.id ?? null }));
     return res.json(VoidJournalEntryResponse.parse(result));
