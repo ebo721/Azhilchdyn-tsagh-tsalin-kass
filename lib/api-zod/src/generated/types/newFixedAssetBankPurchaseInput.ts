@@ -6,18 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface FixedAsset {
-  id: number;
+export interface NewFixedAssetBankPurchaseInput {
+  /** @minLength 1 */
   name: string;
+  /** @exclusiveMinimum 0 */
   unitPrice: number;
+  /** @minimum 1 */
   quantity: number;
-  totalAmount: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   date: string;
-  purchased: boolean;
-  /**
-     * @minimum 1
-     * @nullable
-     */
-  bankTransactionId: number | null;
-  createdAt: string;
 }

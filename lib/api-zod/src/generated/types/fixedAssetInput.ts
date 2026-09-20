@@ -9,7 +9,7 @@
 export interface FixedAssetInput {
   /** @minLength 1 */
   name: string;
-  /** @minimum 0 */
+  /** @exclusiveMinimum 0 */
   unitPrice: number;
   /** @minimum 1 */
   quantity: number;

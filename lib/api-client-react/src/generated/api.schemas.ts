@@ -1207,6 +1207,35 @@ export interface BankExpenseLinkResult {
   journalEntryId: number;
 }
 
+export interface ExistingFixedAssetLink {
+  /** @minimum 1 */
+  fixedAssetId: number;
+}
+
+export interface NewFixedAssetBankPurchaseInput {
+  /** @minLength 1 */
+  name: string;
+  /** @exclusiveMinimum 0 */
+  unitPrice: number;
+  /** @minimum 1 */
+  quantity: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  date: string;
+}
+
+export type BankFixedAssetLinkInput = ExistingFixedAssetLink | NewFixedAssetBankPurchaseInput;
+
+export interface BankFixedAssetLinkResult {
+  /** @minimum 1 */
+  bankTransactionId: number;
+  /** @minimum 1 */
+  fixedAssetId: number;
+  /** @minimum 1 */
+  cashTransactionId: number;
+  /** @minimum 1 */
+  journalEntryId: number;
+}
+
 export interface BankTransactionJournalPostInput {
   /** @minimum 1 */
   accountId: number;
@@ -1410,13 +1439,18 @@ export interface FixedAsset {
   totalAmount: number;
   date: string;
   purchased: boolean;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  bankTransactionId: number | null;
   createdAt: string;
 }
 
 export interface FixedAssetInput {
   /** @minLength 1 */
   name: string;
-  /** @minimum 0 */
+  /** @exclusiveMinimum 0 */
   unitPrice: number;
   /** @minimum 1 */
   quantity: number;

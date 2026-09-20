@@ -6,11 +6,15 @@ import {
   getListBankTransactionsQueryKey,
   getListCashTransactionsQueryKey,
   getListChartOfAccountsQueryKey,
+  getListFixedAssetsQueryKey,
   getListInventoryPurchasesQueryKey,
+  getListJournalEntriesQueryKey,
   getListOperatingExpensesQueryKey,
   useLinkBankTransactionExpense,
+  useLinkBankTransactionFixedAsset,
   useLinkBankTransactionPurchase,
   useListChartOfAccounts,
+  useListFixedAssets,
   useListInventoryPurchases,
   useListOperatingExpenses,
   type BankTransactionJournalReviewItem,
@@ -18,7 +22,7 @@ import {
 } from '@workspace/api-client-react';
 import { money } from '@/lib/app-shared';
 
-type LinkType = 'expense' | 'purchase';
+type LinkType = 'expense' | 'purchase' | 'fixed-asset';
 type PurchaseItem = { name: string; category: string; unit: string; quantity: string; unitPrice: string };
 const inventoryUnits: InventoryPurchaseItemInputUnit[] = ['ширхэг', 'кг', 'грамм', 'литр', 'мл', 'метр', 'багц', 'хайрцаг'];
 
@@ -37,14 +41,19 @@ export function BankDocumentLinkPanel({
   const [materialType, setMaterialType] = useState<'food' | 'supply'>('food');
   const [supplierName, setSupplierName] = useState(row.counterparty || '');
   const [hasReceipt, setHasReceipt] = useState(false);
+  const [assetName, setAssetName] = useState(row.description);
+  const [assetQuantity, setAssetQuantity] = useState('1');
+  const [assetUnitPrice, setAssetUnitPrice] = useState(String(row.amount));
   const [items, setItems] = useState<PurchaseItem[]>([
     { name: row.description, category: '', unit: 'ширхэг', quantity: '1', unitPrice: String(row.amount) },
   ]);
   const expenses = useListOperatingExpenses();
   const purchases = useListInventoryPurchases();
+  const fixedAssets = useListFixedAssets();
   const accounts = useListChartOfAccounts();
   const linkExpense = useLinkBankTransactionExpense();
   const linkPurchase = useLinkBankTransactionPurchase();
+  const linkFixedAsset = useLinkBankTransactionFixedAsset();
 
   const unpaidExpenses = useMemo(
     () => (expenses.data ?? []).filter((item) => !item.paymentDate && item.date === row.date && item.amount === row.amount),
@@ -54,23 +63,34 @@ export function BankDocumentLinkPanel({
     () => (purchases.data ?? []).filter((item) => !item.paymentDate && item.date === row.date && item.totalAmount === row.amount),
     [purchases.data, row.date, row.amount],
   );
+  const matchingFixedAssets = useMemo(
+    () => (fixedAssets.data ?? []).filter((item) =>
+      item.date === row.date
+      && item.bankTransactionId === null
+      && Math.round(item.totalAmount * 100) === Math.round(row.amount * 100)),
+    [fixedAssets.data, row.date, row.amount],
+  );
   const purchaseTotal = useMemo(
     () => items.reduce((total, item) => total + Number(item.quantity || 0) * Number(item.unitPrice || 0), 0),
     [items],
   );
   const purchaseMatchesBank = Math.round(purchaseTotal * 100) === Math.round(row.amount * 100);
-  const error = linkExpense.error ?? linkPurchase.error;
-  const loading = expenses.isLoading || purchases.isLoading || accounts.isLoading;
+  const assetTotal = Number(assetQuantity || 0) * Number(assetUnitPrice || 0);
+  const assetMatchesBank = Math.round(assetTotal * 100) === Math.round(row.amount * 100);
+  const error = linkExpense.error ?? linkPurchase.error ?? linkFixedAsset.error;
+  const loading = expenses.isLoading || purchases.isLoading || fixedAssets.isLoading || accounts.isLoading;
   const invalidate = () => {
     [getListBankTransactionJournalReviewQueryKey(), getListBankTransactionsQueryKey(), getListCashTransactionsQueryKey(),
-      getListInventoryPurchasesQueryKey(), getListOperatingExpensesQueryKey(), getListChartOfAccountsQueryKey()]
+      getListInventoryPurchasesQueryKey(), getListOperatingExpensesQueryKey(), getListFixedAssetsQueryKey(),
+      getListJournalEntriesQueryKey(), getListChartOfAccountsQueryKey()]
       .forEach((queryKey) => qc.invalidateQueries({ queryKey }));
   };
   const done = () => { invalidate(); onClose(); };
   const submitExisting = () => {
     if (!existingId) return;
     if (type === 'expense') linkExpense.mutate({ id: row.id, data: { operatingExpenseId: Number(existingId) } }, { onSuccess: done });
-    else linkPurchase.mutate({ id: row.id, data: { inventoryPurchaseId: Number(existingId) } }, { onSuccess: done });
+    else if (type === 'purchase') linkPurchase.mutate({ id: row.id, data: { inventoryPurchaseId: Number(existingId) } }, { onSuccess: done });
+    else linkFixedAsset.mutate({ id: row.id, data: { fixedAssetId: Number(existingId) } }, { onSuccess: done });
   };
   const submitExpense = (event: FormEvent) => {
     event.preventDefault();
@@ -83,6 +103,18 @@ export function BankDocumentLinkPanel({
       data: {
         materialType, supplierName, hasReceipt, date: row.date,
         items: items.map((item) => ({ name: item.name, category: item.category, unit: item.unit as InventoryPurchaseItemInputUnit, quantity: Number(item.quantity), unitPrice: Number(item.unitPrice) })),
+      },
+    }, { onSuccess: done });
+  };
+  const submitFixedAsset = (event: FormEvent) => {
+    event.preventDefault();
+    linkFixedAsset.mutate({
+      id: row.id,
+      data: {
+        name: assetName,
+        unitPrice: Number(assetUnitPrice),
+        quantity: Number(assetQuantity),
+        date: row.date,
       },
     }, { onSuccess: done });
   };
@@ -100,16 +132,19 @@ export function BankDocumentLinkPanel({
           <div className="mb-3 flex gap-2">
             <Button type="button" size="sm" variant={type === 'expense' ? 'default' : 'outline'} onClick={() => { setType('expense'); setExistingId(''); }}>Зардал</Button>
             <Button type="button" size="sm" variant={type === 'purchase' ? 'default' : 'outline'} onClick={() => { setType('purchase'); setExistingId(''); }}>Худалдан авалт</Button>
+            <Button type="button" size="sm" variant={type === 'fixed-asset' ? 'default' : 'outline'} onClick={() => { setType('fixed-asset'); setExistingId(''); }}>Эд хөрөнгө</Button>
           </div>
-          {(type === 'expense' ? unpaidExpenses.length > 0 : unpaidPurchases.length > 0) && (
+          {(type === 'expense' ? unpaidExpenses.length > 0 : type === 'purchase' ? unpaidPurchases.length > 0 : matchingFixedAssets.length > 0) && (
             <div className="mb-4 flex gap-2">
               <select value={existingId} onChange={(event) => setExistingId(event.target.value)} className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm" data-testid={`select-existing-document-${row.id}`}>
                 <option value="">Таарсан төлөгдөөгүй баримт сонгох...</option>
                 {type === 'expense'
                   ? unpaidExpenses.map((item) => <option key={item.id} value={item.id}>{item.description} · {money(item.amount)}</option>)
-                  : unpaidPurchases.map((item) => <option key={item.id} value={item.id}>{item.supplierName} · {money(item.totalAmount)}</option>)}
+                  : type === 'purchase'
+                    ? unpaidPurchases.map((item) => <option key={item.id} value={item.id}>{item.supplierName} · {money(item.totalAmount)}</option>)
+                    : matchingFixedAssets.map((item) => <option key={item.id} value={item.id}>{item.name} · {money(item.totalAmount)} · {item.purchased ? 'Худалдан авсан' : 'Бүртгэсэн'}</option>)}
               </select>
-              <Button type="button" size="sm" disabled={!existingId || linkExpense.isPending || linkPurchase.isPending} onClick={submitExisting}>Холбох</Button>
+              <Button type="button" size="sm" disabled={!existingId || linkExpense.isPending || linkPurchase.isPending || linkFixedAsset.isPending} onClick={submitExisting}>Холбох</Button>
             </div>
           )}
           {type === 'expense' ? (
@@ -123,7 +158,7 @@ export function BankDocumentLinkPanel({
               <div className="grid grid-cols-2 gap-2 text-xs"><label>Огноо<input value={row.date} readOnly className="mt-1 h-9 w-full rounded-md border border-input bg-muted px-2" /></label><label>Дүн<input value={row.amount} readOnly className="mt-1 h-9 w-full rounded-md border border-input bg-muted px-2" /></label></div>
               <Button type="submit" size="sm" disabled={!accountId || linkExpense.isPending}>Шинэ зардал үүсгэж холбох</Button>
             </form>
-          ) : (
+          ) : type === 'purchase' ? (
             <form onSubmit={submitPurchase} className="space-y-3 border-t border-border/60 pt-3">
               <p className="text-xs font-semibold text-muted-foreground">Шинэ бараа материалын худалдан авалт</p>
               <div className="grid grid-cols-2 gap-2"><label className="text-xs font-semibold">Материал<select value={materialType} onChange={(event) => setMaterialType(event.target.value as 'food' | 'supply')} className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"><option value="food">Хүнсний бараа материал</option><option value="supply">Хангамжийн материал</option></select></label><label className="text-xs font-semibold">Нийлүүлэгч<input value={supplierName} onChange={(event) => setSupplierName(event.target.value)} required className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm" /></label></div>
@@ -142,6 +177,18 @@ export function BankDocumentLinkPanel({
                 Нийт: {money(purchaseTotal)} / Банкны дүн: {money(row.amount)}
               </p>
               <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => setItems((current) => [...current, { name: '', category: '', unit: 'ширхэг', quantity: '1', unitPrice: '' }])}>+ Мөр нэмэх</Button><Button type="submit" size="sm" disabled={linkPurchase.isPending || !purchaseMatchesBank}>Шинэ худалдан авалт үүсгэж холбох</Button></div>
+            </form>
+          ) : (
+            <form onSubmit={submitFixedAsset} className="space-y-3 border-t border-border/60 pt-3">
+              <p className="text-xs font-semibold text-muted-foreground">Шинэ эд хөрөнгө</p>
+              <input value={assetName} onChange={(event) => setAssetName(event.target.value)} required className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" placeholder="Хөрөнгийн нэр" data-testid={`input-link-fixed-asset-name-${row.id}`} />
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs font-semibold">Тоо ширхэг<input value={assetQuantity} onChange={(event) => setAssetQuantity(event.target.value)} required type="number" min="1" step="1" className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm" /></label>
+                <label className="text-xs font-semibold">Нэгж үнэ<input value={assetUnitPrice} onChange={(event) => setAssetUnitPrice(event.target.value)} required type="number" min="0" step="0.01" className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm" /></label>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs"><label>Огноо<input value={row.date} readOnly className="mt-1 h-9 w-full rounded-md border border-input bg-muted px-2" /></label><label>Нийт дүн<input value={assetTotal} readOnly className="mt-1 h-9 w-full rounded-md border border-input bg-muted px-2" /></label></div>
+              <p className={assetMatchesBank ? 'text-xs text-muted-foreground' : 'text-xs font-semibold text-destructive'}>Нийт: {money(assetTotal)} / Банкны дүн: {money(row.amount)}</p>
+              <Button type="submit" size="sm" disabled={linkFixedAsset.isPending || !assetMatchesBank || !assetName.trim()}>Шинэ эд хөрөнгө үүсгэж холбох</Button>
             </form>
           )}
           {error && <p className="mt-3 rounded-md bg-destructive/10 p-2 text-xs text-destructive">{error instanceof Error ? error.message : 'Баримт холбох үед алдаа гарлаа.'}</p>}

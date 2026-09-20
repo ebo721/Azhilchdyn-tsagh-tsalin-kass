@@ -27,6 +27,9 @@ import {
   LinkBankTransactionExpenseBody,
   LinkBankTransactionExpenseParams,
   LinkBankTransactionExpenseResponse,
+  LinkBankTransactionFixedAssetBody,
+  LinkBankTransactionFixedAssetParams,
+  LinkBankTransactionFixedAssetResponse,
   TransferBankTransactionToCashBody,
   TransferBankTransactionToCashParams,
   TransferBankTransactionToCashResponse,
@@ -41,7 +44,7 @@ import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.j
 import { cashAccountForCategory } from "../lib/cash-account.js";
 import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
 import { loadBankRecognitionContext, recognizeBankTransaction } from "../lib/bank-recognition.js";
-import { linkBankPurchase, linkBankExpense } from "../lib/bank-document-linking.js";
+import { linkBankPurchase, linkBankExpense, linkBankFixedAsset } from "../lib/bank-document-linking.js";
 
 const router: IRouter = Router();
 const maxUploadBytes = 10 * 1024 * 1024;
@@ -413,6 +416,29 @@ router.post("/bank-transactions/:id/link-expense", async (req, res, next) => {
   } catch (error) {
     const code = (error as { code?: string; cause?: { code?: string } }).code ?? (error as { cause?: { code?: string } }).cause?.code;
     if (code === "23505" || (error instanceof Error && error.message.includes("claimed concurrently"))) return res.status(409).json({ error: "Банкны гүйлгээ аль хэдийн холбогдсон байна" });
+    return next(error);
+  }
+});
+
+router.post("/bank-transactions/:id/link-fixed-asset", async (req, res, next) => {
+  try {
+    const { id } = LinkBankTransactionFixedAssetParams.parse(req.params);
+    const result = await linkBankFixedAsset(id, LinkBankTransactionFixedAssetBody.parse(req.body));
+    if (typeof result === "string") {
+      const status = result === "missing_bank" || result === "missing_fixed_asset"
+        ? 404
+        : result === "bank_resolved" || result === "fixed_asset_conflict" || result === "closed"
+          ? 409
+          : 400;
+      return res.status(status).json({ error: result });
+    }
+    return res.json(LinkBankTransactionFixedAssetResponse.parse(result));
+  } catch (error) {
+    const code = (error as { code?: string; cause?: { code?: string } }).code
+      ?? (error as { cause?: { code?: string } }).cause?.code;
+    if (code === "23505" || (error instanceof Error && error.message.includes("claimed concurrently"))) {
+      return res.status(409).json({ error: "Банкны гүйлгээ аль хэдийн холбогдсон байна" });
+    }
     return next(error);
   }
 });

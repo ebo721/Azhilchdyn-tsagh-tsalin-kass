@@ -29,6 +29,8 @@ import type {
   BankAccountInput,
   BankExpenseLinkInput,
   BankExpenseLinkResult,
+  BankFixedAssetLinkInput,
+  BankFixedAssetLinkResult,
   BankPurchaseLinkInput,
   BankPurchaseLinkResult,
   BankTransaction,
@@ -4136,6 +4138,78 @@ export const useLinkBankTransactionExpense = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getLinkBankTransactionExpenseMutationOptions(options));
+    }
+
+export const getLinkBankTransactionFixedAssetUrl = (id: number,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}/link-fixed-asset`
+}
+
+/**
+ * @summary Link a pending bank expense to an existing or newly created fixed asset purchase
+ */
+export const linkBankTransactionFixedAsset = async (id: number,
+    bankFixedAssetLinkInput: BankFixedAssetLinkInput, options?: Parameters<typeof customFetch>[1]): Promise<BankFixedAssetLinkResult> => {
+
+  return customFetch<BankFixedAssetLinkResult>(getLinkBankTransactionFixedAssetUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bankFixedAssetLinkInput)
+  }
+);}
+
+
+
+
+
+export const getLinkBankTransactionFixedAssetMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionFixedAsset>>, TError,{id: number;data: BodyType<BankFixedAssetLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionFixedAsset>>, TError,{id: number;data: BodyType<BankFixedAssetLinkInput>}, TContext> => {
+
+const mutationKey = ['linkBankTransactionFixedAsset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof linkBankTransactionFixedAsset>>, {id: number;data: BodyType<BankFixedAssetLinkInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  linkBankTransactionFixedAsset(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LinkBankTransactionFixedAssetMutationResult = NonNullable<Awaited<ReturnType<typeof linkBankTransactionFixedAsset>>>
+    export type LinkBankTransactionFixedAssetMutationBody = BodyType<BankFixedAssetLinkInput>
+    export type LinkBankTransactionFixedAssetMutationError = ErrorType<void>
+
+    /**
+ * @summary Link a pending bank expense to an existing or newly created fixed asset purchase
+ */
+export const useLinkBankTransactionFixedAsset = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionFixedAsset>>, TError,{id: number;data: BodyType<BankFixedAssetLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof linkBankTransactionFixedAsset>>,
+        TError,
+        {id: number;data: BodyType<BankFixedAssetLinkInput>},
+        TContext
+      > => {
+      return useMutation(getLinkBankTransactionFixedAssetMutationOptions(options));
     }
 
 export const getUpdateBankTransactionAccountUrl = (id: number,) => {
