@@ -107,6 +107,7 @@ export const journalLinesTable = pgTable("journal_lines", {
   debit: numeric("debit", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
   credit: numeric("credit", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
   memo: text("memo"),
+  allocation: jsonb("allocation"),
 }, (table) => [
   index("journal_lines_entry_idx").on(table.journalEntryId),
   index("journal_lines_account_idx").on(table.accountId),
@@ -114,6 +115,38 @@ export const journalLinesTable = pgTable("journal_lines", {
     "journal_lines_one_sided_check",
     sql`(${table.debit} > 0 AND ${table.credit} = 0) OR (${table.credit} > 0 AND ${table.debit} = 0)`,
   ),
+]);
+
+export const receivablesTable = pgTable("receivables", {
+  id: serial("id").primaryKey(),
+  originJournalEntryId: integer("origin_journal_entry_id").notNull().references(() => journalEntriesTable.id, { onDelete: "restrict" }),
+  originJournalLineId: integer("origin_journal_line_id").notNull().references(() => journalLinesTable.id, { onDelete: "restrict" }),
+  employeeId: integer("employee_id").references(() => employeesTable.id, { onDelete: "restrict" }),
+  supplierId: integer("supplier_id").references(() => inventorySuppliersTable.id, { onDelete: "restrict" }),
+  originalAmount: numeric("original_amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  openAmount: numeric("open_amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  status: text("status").notNull().default("open"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("receivables_origin_line_idx").on(table.originJournalLineId),
+  index("receivables_open_idx").on(table.status, table.openAmount),
+  check("receivables_exactly_one_party_check", sql`(${table.employeeId} IS NOT NULL)::integer + (${table.supplierId} IS NOT NULL)::integer = 1`),
+  check("receivables_amounts_check", sql`${table.originalAmount} > 0 AND ${table.openAmount} >= 0 AND ${table.openAmount} <= ${table.originalAmount}`),
+  check("receivables_status_balance_check", sql`(${table.status} = 'open' AND ${table.openAmount} > 0) OR (${table.status} = 'settled' AND ${table.openAmount} = 0)`),
+  check("receivables_status_check", sql`${table.status} IN ('open', 'settled')`),
+]);
+
+export const receivableAllocationsTable = pgTable("receivable_allocations", {
+  id: serial("id").primaryKey(),
+  receivableId: integer("receivable_id").notNull().references(() => receivablesTable.id, { onDelete: "restrict" }),
+  settlementJournalEntryId: integer("settlement_journal_entry_id").notNull().references(() => journalEntriesTable.id, { onDelete: "restrict" }),
+  settlementJournalLineId: integer("settlement_journal_line_id").notNull().references(() => journalLinesTable.id, { onDelete: "restrict" }),
+  amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("receivable_allocations_settlement_line_idx").on(table.settlementJournalLineId),
+  index("receivable_allocations_receivable_idx").on(table.receivableId),
+  check("receivable_allocations_amount_check", sql`${table.amount} > 0`),
 ]);
 
 export const shiftTemplatesTable = pgTable("shift_templates", {
@@ -370,6 +403,8 @@ export type User = typeof usersTable.$inferSelect;
 export type ChartOfAccount = typeof chartOfAccountsTable.$inferSelect;
 export type JournalEntry = typeof journalEntriesTable.$inferSelect;
 export type JournalLine = typeof journalLinesTable.$inferSelect;
+export type Receivable = typeof receivablesTable.$inferSelect;
+export type ReceivableAllocation = typeof receivableAllocationsTable.$inferSelect;
 export type ShiftTemplate = typeof shiftTemplatesTable.$inferSelect;
 export type EmployeeShiftPlan = typeof employeeShiftPlansTable.$inferSelect;
 export type Attendance = typeof attendanceTable.$inferSelect;

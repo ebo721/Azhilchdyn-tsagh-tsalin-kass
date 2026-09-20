@@ -29,8 +29,6 @@ import type {
   BankAccountInput,
   BankExpenseLinkInput,
   BankExpenseLinkResult,
-  BankFixedAssetLinkInput,
-  BankFixedAssetLinkResult,
   BankPurchaseLinkInput,
   BankPurchaseLinkResult,
   BankTransaction,
@@ -83,10 +81,13 @@ import type {
   JournalEntrySummary,
   JournalEntryUpdateInput,
   JournalLedger,
+  JournalReceivable,
+  JournalSupplier,
   JournalTrialBalance,
   JournalVoidResult,
   ListAttendanceParams,
   ListJournalEntriesParams,
+  ListJournalReceivablesParams,
   ListShiftPlansParams,
   LoginInput,
   NotFoundResponse,
@@ -4140,78 +4141,6 @@ export const useLinkBankTransactionExpense = <TError = ErrorType<void>,
       return useMutation(getLinkBankTransactionExpenseMutationOptions(options));
     }
 
-export const getLinkBankTransactionFixedAssetUrl = (id: number,) => {
-
-
-
-
-  return `/api/bank-transactions/${id}/link-fixed-asset`
-}
-
-/**
- * @summary Link a pending bank expense to an existing or newly created fixed asset purchase
- */
-export const linkBankTransactionFixedAsset = async (id: number,
-    bankFixedAssetLinkInput: BankFixedAssetLinkInput, options?: Parameters<typeof customFetch>[1]): Promise<BankFixedAssetLinkResult> => {
-
-  return customFetch<BankFixedAssetLinkResult>(getLinkBankTransactionFixedAssetUrl(id),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(bankFixedAssetLinkInput)
-  }
-);}
-
-
-
-
-
-export const getLinkBankTransactionFixedAssetMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionFixedAsset>>, TError,{id: number;data: BodyType<BankFixedAssetLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionFixedAsset>>, TError,{id: number;data: BodyType<BankFixedAssetLinkInput>}, TContext> => {
-
-const mutationKey = ['linkBankTransactionFixedAsset'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof linkBankTransactionFixedAsset>>, {id: number;data: BodyType<BankFixedAssetLinkInput>}> = (props) => {
-          const {id,data} = props ?? {};
-
-          return  linkBankTransactionFixedAsset(id,data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type LinkBankTransactionFixedAssetMutationResult = NonNullable<Awaited<ReturnType<typeof linkBankTransactionFixedAsset>>>
-    export type LinkBankTransactionFixedAssetMutationBody = BodyType<BankFixedAssetLinkInput>
-    export type LinkBankTransactionFixedAssetMutationError = ErrorType<void>
-
-    /**
- * @summary Link a pending bank expense to an existing or newly created fixed asset purchase
- */
-export const useLinkBankTransactionFixedAsset = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionFixedAsset>>, TError,{id: number;data: BodyType<BankFixedAssetLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof linkBankTransactionFixedAsset>>,
-        TError,
-        {id: number;data: BodyType<BankFixedAssetLinkInput>},
-        TContext
-      > => {
-      return useMutation(getLinkBankTransactionFixedAssetMutationOptions(options));
-    }
-
 export const getUpdateBankTransactionAccountUrl = (id: number,) => {
 
 
@@ -7356,7 +7285,7 @@ export const createJournalEntry = async (journalEntryInput: JournalEntryInput, o
 
 
 
-export const getCreateJournalEntryMutationOptions = <TError = ErrorType<BadRequestResponse | ConflictResponse>,
+export const getCreateJournalEntryMutationOptions = <TError = ErrorType<BadRequestResponse | NotFoundResponse | ConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createJournalEntry>>, TError,{data: BodyType<JournalEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createJournalEntry>>, TError,{data: BodyType<JournalEntryInput>}, TContext> => {
 
@@ -7385,12 +7314,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateJournalEntryMutationResult = NonNullable<Awaited<ReturnType<typeof createJournalEntry>>>
     export type CreateJournalEntryMutationBody = BodyType<JournalEntryInput>
-    export type CreateJournalEntryMutationError = ErrorType<BadRequestResponse | ConflictResponse>
+    export type CreateJournalEntryMutationError = ErrorType<BadRequestResponse | NotFoundResponse | ConflictResponse>
 
     /**
  * @summary Create a manual journal entry
  */
-export const useCreateJournalEntry = <TError = ErrorType<BadRequestResponse | ConflictResponse>,
+export const useCreateJournalEntry = <TError = ErrorType<BadRequestResponse | NotFoundResponse | ConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createJournalEntry>>, TError,{data: BodyType<JournalEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createJournalEntry>>,
@@ -7400,6 +7329,167 @@ export const useCreateJournalEntry = <TError = ErrorType<BadRequestResponse | Co
       > => {
       return useMutation(getCreateJournalEntryMutationOptions(options));
     }
+
+export const getListJournalReceivablesUrl = (params?: ListJournalReceivablesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/journal/receivables?${stringifiedParams}` : `/api/journal/receivables`
+}
+
+/**
+ * @summary List receivables and their open balances
+ */
+export const listJournalReceivables = async (params?: ListJournalReceivablesParams, options?: Parameters<typeof customFetch>[1]): Promise<JournalReceivable[]> => {
+
+  return customFetch<JournalReceivable[]>(getListJournalReceivablesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListJournalReceivablesQueryKey = (params?: ListJournalReceivablesParams,) => {
+    return [
+    `/api/journal/receivables`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListJournalReceivablesQueryOptions = <TData = Awaited<ReturnType<typeof listJournalReceivables>>, TError = ErrorType<BadRequestResponse>>(params?: ListJournalReceivablesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJournalReceivables>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListJournalReceivablesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listJournalReceivables>>> = ({ signal }) => listJournalReceivables(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listJournalReceivables>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListJournalReceivablesQueryResult = NonNullable<Awaited<ReturnType<typeof listJournalReceivables>>>
+export type ListJournalReceivablesQueryError = ErrorType<BadRequestResponse>
+
+
+/**
+ * @summary List receivables and their open balances
+ */
+
+export function useListJournalReceivables<TData = Awaited<ReturnType<typeof listJournalReceivables>>, TError = ErrorType<BadRequestResponse>>(
+ params?: ListJournalReceivablesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJournalReceivables>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListJournalReceivablesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListJournalSuppliersUrl = () => {
+
+
+
+
+  return `/api/journal/suppliers`
+}
+
+/**
+ * @summary List existing suppliers for journal allocations
+ */
+export const listJournalSuppliers = async ( options?: Parameters<typeof customFetch>[1]): Promise<JournalSupplier[]> => {
+
+  return customFetch<JournalSupplier[]>(getListJournalSuppliersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListJournalSuppliersQueryKey = () => {
+    return [
+    `/api/journal/suppliers`
+    ] as const;
+    }
+
+
+export const getListJournalSuppliersQueryOptions = <TData = Awaited<ReturnType<typeof listJournalSuppliers>>, TError = ErrorType<BadRequestResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJournalSuppliers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListJournalSuppliersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listJournalSuppliers>>> = ({ signal }) => listJournalSuppliers({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listJournalSuppliers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListJournalSuppliersQueryResult = NonNullable<Awaited<ReturnType<typeof listJournalSuppliers>>>
+export type ListJournalSuppliersQueryError = ErrorType<BadRequestResponse>
+
+
+/**
+ * @summary List existing suppliers for journal allocations
+ */
+
+export function useListJournalSuppliers<TData = Awaited<ReturnType<typeof listJournalSuppliers>>, TError = ErrorType<BadRequestResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJournalSuppliers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListJournalSuppliersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetJournalEntryUrl = (id: number,) => {
 

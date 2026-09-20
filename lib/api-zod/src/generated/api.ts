@@ -1482,44 +1482,6 @@ export const LinkBankTransactionExpenseResponse = zod.object({
 
 
 /**
- * @summary Link a pending bank expense to an existing or newly created fixed asset purchase
- */
-export const LinkBankTransactionFixedAssetParams = zod.object({
-  "id": zod.coerce.number().int()
-})
-
-
-
-export const linkBankTransactionFixedAssetBodyTwoUnitPriceExclusiveMin = 0;
-
-
-export const linkBankTransactionFixedAssetBodyTwoDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
-
-
-export const LinkBankTransactionFixedAssetBody = zod.union([zod.object({
-  "fixedAssetId": zod.number().int().min(1)
-}),zod.object({
-  "name": zod.string().min(1),
-  "unitPrice": zod.number().gt(linkBankTransactionFixedAssetBodyTwoUnitPriceExclusiveMin),
-  "quantity": zod.number().int().min(1),
-  "date": zod.string().regex(linkBankTransactionFixedAssetBodyTwoDateRegExp)
-})])
-
-
-
-
-
-
-
-export const LinkBankTransactionFixedAssetResponse = zod.object({
-  "bankTransactionId": zod.number().int().min(1),
-  "fixedAssetId": zod.number().int().min(1),
-  "cashTransactionId": zod.number().int().min(1),
-  "journalEntryId": zod.number().int().min(1)
-})
-
-
-/**
  * @summary Assign or clear a chart account on a bank transaction
  */
 
@@ -2426,9 +2388,6 @@ export const DeleteInventoryIssueResponse = zod.void()
 /**
  * @summary List equipment and fixed assets
  */
-
-
-
 export const ListFixedAssetsResponseItem = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
@@ -2437,7 +2396,6 @@ export const ListFixedAssetsResponseItem = zod.object({
   "totalAmount": zod.number(),
   "date": zod.string(),
   "purchased": zod.boolean(),
-  "bankTransactionId": zod.number().int().min(1).nullable(),
   "createdAt": zod.string()
 })
 export const ListFixedAssetsResponse = zod.array(ListFixedAssetsResponseItem)
@@ -2447,7 +2405,7 @@ export const ListFixedAssetsResponse = zod.array(ListFixedAssetsResponseItem)
  * @summary Register equipment or fixed asset
  */
 
-export const createFixedAssetBodyUnitPriceExclusiveMin = 0;
+export const createFixedAssetBodyUnitPriceMin = 0;
 
 
 export const createFixedAssetBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
@@ -2455,14 +2413,11 @@ export const createFixedAssetBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2]
 
 export const CreateFixedAssetBody = zod.object({
   "name": zod.string().min(1),
-  "unitPrice": zod.number().gt(createFixedAssetBodyUnitPriceExclusiveMin),
+  "unitPrice": zod.number().min(createFixedAssetBodyUnitPriceMin),
   "quantity": zod.number().int().min(1),
   "date": zod.string().regex(createFixedAssetBodyDateRegExp),
   "purchased": zod.boolean()
 })
-
-
-
 
 export const CreateFixedAssetResponse = zod.object({
   "id": zod.number().int(),
@@ -2472,7 +2427,6 @@ export const CreateFixedAssetResponse = zod.object({
   "totalAmount": zod.number(),
   "date": zod.string(),
   "purchased": zod.boolean(),
-  "bankTransactionId": zod.number().int().min(1).nullable(),
   "createdAt": zod.string()
 })
 
@@ -2485,7 +2439,7 @@ export const UpdateFixedAssetParams = zod.object({
 })
 
 
-export const updateFixedAssetBodyUnitPriceExclusiveMin = 0;
+export const updateFixedAssetBodyUnitPriceMin = 0;
 
 
 export const updateFixedAssetBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
@@ -2493,14 +2447,11 @@ export const updateFixedAssetBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2]
 
 export const UpdateFixedAssetBody = zod.object({
   "name": zod.string().min(1),
-  "unitPrice": zod.number().gt(updateFixedAssetBodyUnitPriceExclusiveMin),
+  "unitPrice": zod.number().min(updateFixedAssetBodyUnitPriceMin),
   "quantity": zod.number().int().min(1),
   "date": zod.string().regex(updateFixedAssetBodyDateRegExp),
   "purchased": zod.boolean()
 })
-
-
-
 
 export const UpdateFixedAssetResponse = zod.object({
   "id": zod.number().int(),
@@ -2510,7 +2461,6 @@ export const UpdateFixedAssetResponse = zod.object({
   "totalAmount": zod.number(),
   "date": zod.string(),
   "purchased": zod.boolean(),
-  "bankTransactionId": zod.number().int().min(1).nullable(),
   "createdAt": zod.string()
 })
 
@@ -2651,6 +2601,9 @@ export const createJournalEntryBodyLinesItemDebitMin = 0;
 
 export const createJournalEntryBodyLinesItemCreditMin = 0;
 
+
+
+
 export const createJournalEntryBodyLinesMin = 2;
 
 
@@ -2662,7 +2615,16 @@ export const CreateJournalEntryBody = zod.object({
   "accountId": zod.number().int().min(1),
   "debit": zod.number().min(createJournalEntryBodyLinesItemDebitMin),
   "credit": zod.number().min(createJournalEntryBodyLinesItemCreditMin),
-  "memo": zod.string().nullish()
+  "memo": zod.string().nullish(),
+  "allocation": zod.union([zod.object({
+  "kind": zod.enum(['create']),
+  "partyType": zod.enum(['employee', 'supplier']),
+  "employeeId": zod.number().int().min(1).optional(),
+  "supplierId": zod.number().int().min(1).optional()
+}),zod.object({
+  "kind": zod.enum(['settle']),
+  "receivableId": zod.number().int().min(1)
+}),zod.null()]).optional()
 })).min(createJournalEntryBodyLinesMin)
 })
 
@@ -2670,6 +2632,9 @@ export const createJournalEntryResponseOneDateRegExp = new RegExp('^\\d{4}-\\d{2
 export const createJournalEntryResponseTwoLinesItemDebitMin = 0;
 
 export const createJournalEntryResponseTwoLinesItemCreditMin = 0;
+
+
+
 
 
 
@@ -2690,11 +2655,54 @@ export const CreateJournalEntryResponse = zod.object({
   "accountId": zod.number().int(),
   "debit": zod.number().min(createJournalEntryResponseTwoLinesItemDebitMin),
   "credit": zod.number().min(createJournalEntryResponseTwoLinesItemCreditMin),
-  "memo": zod.string().nullable()
+  "memo": zod.string().nullable(),
+  "allocation": zod.union([zod.object({
+  "kind": zod.enum(['create']),
+  "partyType": zod.enum(['employee', 'supplier']),
+  "employeeId": zod.number().int().min(1).optional(),
+  "supplierId": zod.number().int().min(1).optional()
+}),zod.object({
+  "kind": zod.enum(['settle']),
+  "receivableId": zod.number().int().min(1)
+}),zod.null()])
 })),
   "voidedAt": zod.coerce.date().nullable(),
   "voidedBy": zod.number().int().nullable()
 }))
+
+
+/**
+ * @summary List receivables and their open balances
+ */
+export const listJournalReceivablesQueryStatusDefault = `open`;
+
+export const ListJournalReceivablesQueryParams = zod.object({
+  "status": zod.enum(['open', 'settled', 'all']).default(listJournalReceivablesQueryStatusDefault)
+})
+
+export const ListJournalReceivablesResponseItem = zod.object({
+  "id": zod.number().int(),
+  "originJournalEntryId": zod.number().int(),
+  "originJournalLineId": zod.number().int(),
+  "partyType": zod.enum(['employee', 'supplier']),
+  "partyId": zod.number().int(),
+  "partyLabel": zod.string(),
+  "originalAmount": zod.number(),
+  "openAmount": zod.number(),
+  "status": zod.enum(['open', 'settled']),
+  "createdAt": zod.coerce.date()
+})
+export const ListJournalReceivablesResponse = zod.array(ListJournalReceivablesResponseItem)
+
+
+/**
+ * @summary List existing suppliers for journal allocations
+ */
+export const ListJournalSuppliersResponseItem = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string()
+})
+export const ListJournalSuppliersResponse = zod.array(ListJournalSuppliersResponseItem)
 
 
 /**
@@ -2708,6 +2716,9 @@ export const getJournalEntryResponseOneDateRegExp = new RegExp('^\\d{4}-\\d{2}-\
 export const getJournalEntryResponseTwoLinesItemDebitMin = 0;
 
 export const getJournalEntryResponseTwoLinesItemCreditMin = 0;
+
+
+
 
 
 
@@ -2728,7 +2739,16 @@ export const GetJournalEntryResponse = zod.object({
   "accountId": zod.number().int(),
   "debit": zod.number().min(getJournalEntryResponseTwoLinesItemDebitMin),
   "credit": zod.number().min(getJournalEntryResponseTwoLinesItemCreditMin),
-  "memo": zod.string().nullable()
+  "memo": zod.string().nullable(),
+  "allocation": zod.union([zod.object({
+  "kind": zod.enum(['create']),
+  "partyType": zod.enum(['employee', 'supplier']),
+  "employeeId": zod.number().int().min(1).optional(),
+  "supplierId": zod.number().int().min(1).optional()
+}),zod.object({
+  "kind": zod.enum(['settle']),
+  "receivableId": zod.number().int().min(1)
+}),zod.null()])
 })),
   "voidedAt": zod.coerce.date().nullable(),
   "voidedBy": zod.number().int().nullable()
@@ -2747,6 +2767,9 @@ export const updateJournalEntryBodyLinesItemDebitMin = 0;
 
 export const updateJournalEntryBodyLinesItemCreditMin = 0;
 
+
+
+
 export const updateJournalEntryBodyLinesMin = 2;
 
 
@@ -2756,7 +2779,16 @@ export const UpdateJournalEntryBody = zod.object({
   "accountId": zod.number().int().min(1),
   "debit": zod.number().min(updateJournalEntryBodyLinesItemDebitMin),
   "credit": zod.number().min(updateJournalEntryBodyLinesItemCreditMin),
-  "memo": zod.string().nullish()
+  "memo": zod.string().nullish(),
+  "allocation": zod.union([zod.object({
+  "kind": zod.enum(['create']),
+  "partyType": zod.enum(['employee', 'supplier']),
+  "employeeId": zod.number().int().min(1).optional(),
+  "supplierId": zod.number().int().min(1).optional()
+}),zod.object({
+  "kind": zod.enum(['settle']),
+  "receivableId": zod.number().int().min(1)
+}),zod.null()]).optional()
 })).min(updateJournalEntryBodyLinesMin)
 })
 
@@ -2764,6 +2796,9 @@ export const updateJournalEntryResponseOneDateRegExp = new RegExp('^\\d{4}-\\d{2
 export const updateJournalEntryResponseTwoLinesItemDebitMin = 0;
 
 export const updateJournalEntryResponseTwoLinesItemCreditMin = 0;
+
+
+
 
 
 
@@ -2784,7 +2819,16 @@ export const UpdateJournalEntryResponse = zod.object({
   "accountId": zod.number().int(),
   "debit": zod.number().min(updateJournalEntryResponseTwoLinesItemDebitMin),
   "credit": zod.number().min(updateJournalEntryResponseTwoLinesItemCreditMin),
-  "memo": zod.string().nullable()
+  "memo": zod.string().nullable(),
+  "allocation": zod.union([zod.object({
+  "kind": zod.enum(['create']),
+  "partyType": zod.enum(['employee', 'supplier']),
+  "employeeId": zod.number().int().min(1).optional(),
+  "supplierId": zod.number().int().min(1).optional()
+}),zod.object({
+  "kind": zod.enum(['settle']),
+  "receivableId": zod.number().int().min(1)
+}),zod.null()])
 })),
   "voidedAt": zod.coerce.date().nullable(),
   "voidedBy": zod.number().int().nullable()
@@ -2845,5 +2889,3 @@ export const GetJournalTrialBalanceResponse = zod.object({
   "balance": zod.number()
 }))
 })
-
-

@@ -25,6 +25,7 @@ export function JournalEntryDetail({ entryId, onClose, role, onEdit }: { entryId
         toast.success('Гүйлгээ амжилттай буцаагдлаа');
         queryClient.invalidateQueries({ queryKey: getListJournalEntriesQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetJournalTrialBalanceQueryKey() });
+         queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/api/journal/receivables') });
         queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/api/journal/accounts/') });
         refetch();
       },
@@ -81,7 +82,10 @@ export function JournalEntryDetail({ entryId, onClose, role, onEdit }: { entryId
                     <td className="px-4 py-2 text-xs">{accountLabels.get(line.accountId) ?? `Данс #${line.accountId}`}</td>
                     <td className="px-4 py-2 text-right font-mono text-xs">{formatMoney(line.debit)}</td>
                     <td className="px-4 py-2 text-right font-mono text-xs">{formatMoney(line.credit)}</td>
-                    <td className="px-4 py-2 text-muted-foreground">{line.memo || '-'}</td>
+                    <td className="px-4 py-2 text-muted-foreground">
+                      {line.memo || '-'}
+                      {line.allocation && <div className="mt-1 text-xs text-primary">{line.allocation.kind === 'settle' ? `Авлага #${line.allocation.receivableId} төлөлт` : `Авлага үүсгэсэн (${line.allocation.partyType === 'employee' ? `ажилтан #${line.allocation.employeeId}` : `нийлүүлэгч #${line.allocation.supplierId}`})`}</div>}
+                    </td>
                   </tr>
                 ))}
               </tbody>

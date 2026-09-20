@@ -5,6 +5,9 @@ import {
   useListChartOfAccounts,
   getListJournalEntriesQueryKey,
   getGetJournalTrialBalanceQueryKey,
+  useListEmployees,
+  useListJournalSuppliers,
+  useListJournalReceivables,
   type JournalEntry,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -21,6 +24,7 @@ type EditableJournalLine = {
   debit: string;
   credit: string;
   memo: string;
+  allocation?: { kind: 'create'; partyType: 'employee' | 'supplier'; employeeId?: number; supplierId?: number } | { kind: 'settle'; receivableId: number };
 };
 
 export function JournalEntryForm({ onClose, entry }: { onClose: () => void; entry?: JournalEntry }) {
@@ -28,6 +32,9 @@ export function JournalEntryForm({ onClose, entry }: { onClose: () => void; entr
   const createEntry = useCreateJournalEntry();
   const updateEntry = useUpdateJournalEntry();
   const { data: accounts } = useListChartOfAccounts();
+  const { data: employees } = useListEmployees();
+  const { data: suppliers } = useListJournalSuppliers();
+  const { data: receivables } = useListJournalReceivables({ status: 'open' });
   const isEditing = Boolean(entry);
   
   const [date, setDate] = useState(entry?.date ?? format(new Date(), 'yyyy-MM-dd'));
@@ -39,6 +46,7 @@ export function JournalEntryForm({ onClose, entry }: { onClose: () => void; entr
       debit: Number(line.debit) > 0 ? String(line.debit) : '',
       credit: Number(line.credit) > 0 ? String(line.credit) : '',
       memo: line.memo ?? '',
+       allocation: line.allocation ?? undefined,
     }))
     : [
       { id: 1, accountId: '', debit: '', credit: '', memo: '' },
@@ -57,11 +65,20 @@ export function JournalEntryForm({ onClose, entry }: { onClose: () => void; entr
   const updateLine = (id: number, field: keyof Omit<EditableJournalLine, 'id'>, value: string) => {
     setLines((current) => current.map((line) => {
       if (line.id !== id) return line;
-      if (field === 'debit') return { ...line, debit: value, credit: '' };
-      if (field === 'credit') return { ...line, credit: value, debit: '' };
+      if (field === 'debit') return {
+        ...line, debit: value, credit: '',
+        allocation: Number(value) > 0 && line.allocation?.kind === 'create' ? line.allocation : undefined,
+      };
+      if (field === 'credit') return {
+        ...line, credit: value, debit: '',
+        allocation: Number(value) > 0 && line.allocation?.kind === 'settle' ? line.allocation : undefined,
+      };
+      if (field === 'accountId' && accounts?.find((account) => String(account.id) === value)?.code !== '1200') return { ...line, accountId: value, allocation: undefined };
       return { ...line, [field]: value };
     }));
   };
+  const updateAllocation = (id: number, allocation: EditableJournalLine['allocation']) =>
+    setLines((current) => current.map((line) => line.id === id ? { ...line, allocation } : line));
 
   const { totalDebit, totalCredit, diff } = useMemo(() => {
     const td = Math.round(lines.reduce((sum, l) => sum + (Number(l.debit) || 0), 0) * 100) / 100;
@@ -89,12 +106,31 @@ export function JournalEntryForm({ onClose, entry }: { onClose: () => void; entr
       debit: Number(l.debit) || 0,
       credit: Number(l.credit) || 0,
       memo: l.memo || null,
+      ...(l.allocation ? { allocation: l.allocation } : {}),
     }));
+    for (const line of validLines) {
+      const account = accounts?.find((candidate) => String(candidate.id) === line.accountId);
+      if (account?.code === '1200' && !line.allocation) {
+        toast.error('1200 Авлагын мөрөнд ажилтан, нийлүүлэгч эсвэл өмнөх авлага сонгоно уу');
+        return;
+      }
+      if (account?.code === '1200' && line.allocation?.kind === 'create' &&
+        ((line.allocation.partyType === 'employee' && !line.allocation.employeeId) ||
+          (line.allocation.partyType === 'supplier' && !line.allocation.supplierId))) {
+        toast.error('Авлага хуваарилах этгээдийг сонгоно уу');
+        return;
+      }
+      if (account?.code === '1200' && line.allocation?.kind === 'settle' && !line.allocation.receivableId) {
+        toast.error('Төлөгдөх өмнөх авлагыг сонгоно уу');
+        return;
+      }
+    }
     const callbacks = {
       onSuccess: (res: JournalEntry) => {
         toast.success(res.status === 'draft' ? 'Ноорог журнал хадгалагдлаа (Тэнцээгүй)' : isEditing ? 'Ноорог журнал тэнцэж, батлагдлаа' : 'Журнал амжилттай бүртгэгдлээ');
         queryClient.invalidateQueries({ queryKey: getListJournalEntriesQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetJournalTrialBalanceQueryKey() });
+         queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/api/journal/receivables') });
         queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/api/journal/accounts/') });
         onClose();
       },
@@ -143,6 +179,23 @@ export function JournalEntryForm({ onClose, entry }: { onClose: () => void; entr
                         <option value="" disabled>Данс сонгох...</option>
                         {accounts?.map(acc => <option key={acc.id} value={acc.id}>{acc.code} - {acc.name}</option>)}
                       </select>
+                    {accounts?.find((account) => String(account.id) === line.accountId)?.code === '1200' && (
+                      <div className="mt-1 space-y-1">
+                        {Number(line.debit) > 0 ? (
+                          <div className="flex gap-2">
+                            <select className="rounded border px-2 py-1" value={line.allocation?.kind === 'create' ? line.allocation.partyType : ''} onChange={(e) => updateAllocation(line.id, e.target.value === 'employee' ? { kind: 'create', partyType: 'employee' } : { kind: 'create', partyType: 'supplier' })}>
+                              <option value="">Авлага хуваарилах...</option><option value="employee">Ажилтан</option><option value="supplier">Нийлүүлэгч</option>
+                            </select>
+                            {line.allocation?.kind === 'create' && line.allocation.partyType === 'employee' && <select className="rounded border px-2 py-1" value={line.allocation.employeeId ?? ''} onChange={(e) => updateAllocation(line.id, { kind: 'create', partyType: 'employee', employeeId: Number(e.target.value) })}><option value="">Ажилтан сонгох</option>{employees?.filter((e) => e.status === 'active').map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</select>}
+                            {line.allocation?.kind === 'create' && line.allocation.partyType === 'supplier' && <select className="rounded border px-2 py-1" value={line.allocation.supplierId ?? ''} onChange={(e) => updateAllocation(line.id, { kind: 'create', partyType: 'supplier', supplierId: Number(e.target.value) })}><option value="">Нийлүүлэгч сонгох</option>{suppliers?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}
+                          </div>
+                        ) : Number(line.credit) > 0 ? (
+                          <select className="w-full rounded border px-2 py-1" value={line.allocation?.kind === 'settle' ? line.allocation.receivableId : ''} onChange={(e) => updateAllocation(line.id, { kind: 'settle', receivableId: Number(e.target.value) })}>
+                            <option value="">Өмнөх авлага сонгох...</option>{receivables?.map((r) => <option key={r.id} value={r.id}>{r.partyLabel} — үлдэгдэл {formatMoney(r.openAmount)}</option>)}
+                          </select>
+                        ) : null}
+                      </div>
+                    )}
                     </td>
                     <td className="p-2">
                       <input aria-label={`${idx + 1}-р мөрийн дебет`} type="number" min="0" step="0.01" value={line.debit} onChange={e => updateLine(line.id, 'debit', e.target.value)} placeholder="0.00" className="w-full rounded border-transparent bg-transparent px-2 py-1.5 text-sm text-right font-mono hover:bg-muted focus:bg-background focus:border-border" />

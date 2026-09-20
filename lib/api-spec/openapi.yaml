@@ -910,30 +910,6 @@ paths:
           description: Bank transaction or expense not found
         "409":
           description: Bank transaction or expense is incompatible or already resolved
-  /bank-transactions/{id}/link-fixed-asset:
-    post:
-      operationId: linkBankTransactionFixedAsset
-      tags: [bank-transactions]
-      summary: Link a pending bank expense to an existing or newly created fixed asset purchase
-      parameters:
-        - $ref: "#/components/parameters/Id"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/BankFixedAssetLinkInput" }
-      responses:
-        "200":
-          description: Bank transaction linked and fixed asset journal posted
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/BankFixedAssetLinkResult" }
-        "400":
-          description: Invalid fixed asset input
-        "404":
-          description: Bank transaction or fixed asset not found
-        "409":
-          description: Bank transaction or fixed asset is incompatible or already resolved
   /bank-transactions/{id}/account:
     patch:
       operationId: updateBankTransactionAccount
@@ -1601,8 +1577,45 @@ paths:
               schema: { $ref: "#/components/schemas/JournalEntry" }
         "400":
           $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+  /journal/receivables:
+    get:
+      operationId: listJournalReceivables
+      tags: [journal]
+      summary: List receivables and their open balances
+      parameters:
+        - in: query
+          name: status
+          required: false
+          schema: { type: string, enum: [open, settled, all], default: open }
+      responses:
+        "200":
+          description: Receivables
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/JournalReceivable" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /journal/suppliers:
+    get:
+      operationId: listJournalSuppliers
+      tags: [journal]
+      summary: List existing suppliers for journal allocations
+      responses:
+        "200":
+          description: Existing suppliers
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/JournalSupplier" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
   /journal/entries/{id}:
     get:
       operationId: getJournalEntry
@@ -1751,13 +1764,18 @@ components:
         error: { type: string }
     JournalEntryLine:
       type: object
-      required: [id, accountId, debit, credit, memo]
+      required: [id, accountId, debit, credit, memo, allocation]
       properties:
         id: { type: integer }
         accountId: { type: integer }
         debit: { type: number, minimum: 0 }
         credit: { type: number, minimum: 0 }
         memo: { type: ["string", "null"] }
+        allocation:
+          oneOf:
+            - $ref: "#/components/schemas/ReceivableCreateAllocation"
+            - $ref: "#/components/schemas/ReceivableSettleAllocation"
+            - type: "null"
     JournalEntryLineInput:
       type: object
       required: [accountId, debit, credit]
@@ -1766,6 +1784,25 @@ components:
         debit: { type: number, minimum: 0 }
         credit: { type: number, minimum: 0 }
         memo: { type: ["string", "null"] }
+        allocation:
+          oneOf:
+            - $ref: "#/components/schemas/ReceivableCreateAllocation"
+            - $ref: "#/components/schemas/ReceivableSettleAllocation"
+            - type: "null"
+    ReceivableCreateAllocation:
+      type: object
+      required: [kind, partyType]
+      properties:
+        kind: { type: string, enum: [create] }
+        partyType: { type: string, enum: [employee, supplier] }
+        employeeId: { type: integer, minimum: 1 }
+        supplierId: { type: integer, minimum: 1 }
+    ReceivableSettleAllocation:
+      type: object
+      required: [kind, receivableId]
+      properties:
+        kind: { type: string, enum: [settle] }
+        receivableId: { type: integer, minimum: 1 }
     JournalEntryInput:
       type: object
       required: [date, description, lines]
@@ -1814,6 +1851,26 @@ components:
       required: [reversalEntryId]
       properties:
         reversalEntryId: { type: integer }
+    JournalReceivable:
+      type: object
+      required: [id, originJournalEntryId, originJournalLineId, partyType, partyId, partyLabel, originalAmount, openAmount, status, createdAt]
+      properties:
+        id: { type: integer }
+        originJournalEntryId: { type: integer }
+        originJournalLineId: { type: integer }
+        partyType: { type: string, enum: [employee, supplier] }
+        partyId: { type: integer }
+        partyLabel: { type: string }
+        originalAmount: { type: number }
+        openAmount: { type: number }
+        status: { type: string, enum: [open, settled] }
+        createdAt: { type: string, format: date-time }
+    JournalSupplier:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer }
+        name: { type: string }
     JournalLedger:
       type: object
       required: [accountId, code, name, normalBalance, entries]
@@ -2445,31 +2502,6 @@ components:
         operatingExpenseId: { type: integer, minimum: 1 }
         cashTransactionId: { type: integer, minimum: 1 }
         journalEntryId: { type: integer, minimum: 1 }
-    ExistingFixedAssetLink:
-      type: object
-      required: [fixedAssetId]
-      properties:
-        fixedAssetId: { type: integer, minimum: 1 }
-    NewFixedAssetBankPurchaseInput:
-      type: object
-      required: [name, unitPrice, quantity, date]
-      properties:
-        name: { type: string, minLength: 1 }
-        unitPrice: { type: number, exclusiveMinimum: 0 }
-        quantity: { type: integer, minimum: 1 }
-        date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
-    BankFixedAssetLinkInput:
-      anyOf:
-        - $ref: "#/components/schemas/ExistingFixedAssetLink"
-        - $ref: "#/components/schemas/NewFixedAssetBankPurchaseInput"
-    BankFixedAssetLinkResult:
-      type: object
-      required: [bankTransactionId, fixedAssetId, cashTransactionId, journalEntryId]
-      properties:
-        bankTransactionId: { type: integer, minimum: 1 }
-        fixedAssetId: { type: integer, minimum: 1 }
-        cashTransactionId: { type: integer, minimum: 1 }
-        journalEntryId: { type: integer, minimum: 1 }
     BankTransactionJournalPostInput:
       type: object
       required: [accountId]
@@ -2692,7 +2724,7 @@ components:
         score: { type: number }
     FixedAsset:
       type: object
-      required: [id, name, unitPrice, quantity, totalAmount, date, purchased, bankTransactionId, createdAt]
+      required: [id, name, unitPrice, quantity, totalAmount, date, purchased, createdAt]
       properties:
         id: { type: integer }
         name: { type: string }
@@ -2701,14 +2733,13 @@ components:
         totalAmount: { type: number }
         date: { type: string }
         purchased: { type: boolean }
-        bankTransactionId: { type: ["integer", "null"], minimum: 1 }
         createdAt: { type: string }
     FixedAssetInput:
       type: object
       required: [name, unitPrice, quantity, date, purchased]
       properties:
         name: { type: string, minLength: 1 }
-        unitPrice: { type: number, exclusiveMinimum: 0 }
+        unitPrice: { type: number, minimum: 0 }
         quantity: { type: integer, minimum: 1 }
         date:
           type: string

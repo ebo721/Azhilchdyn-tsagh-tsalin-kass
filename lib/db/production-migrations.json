@@ -12,7 +12,11 @@
     {
       "filename": "20260923_bank_transaction_rejected_accounts.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20260924_receivable_allocations.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "dc575b5481abad27a27e1fa1b23c30c72d18f0e8fad3578a687eb6172c358fc1"
+  "schemaFingerprint": "5bf91c2695995c5d0d709e261685d5e3c58cf6d6827cbc07fd08286ca4d7cc33"
 }
