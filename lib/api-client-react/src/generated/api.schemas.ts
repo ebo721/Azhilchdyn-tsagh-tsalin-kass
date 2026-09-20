@@ -709,6 +709,8 @@ export interface PayrollLine {
   incomeTax: number;
   advanceAmount: number;
   manualDeduction: number;
+  /** @nullable */
+  receivableId: number | null;
   deductions: number;
   carryoverAmount: number;
   payable: number;
@@ -729,6 +731,8 @@ export interface PayrollAdjustment {
   month: string;
   taxRelief: number;
   manualDeduction: number;
+  /** @nullable */
+  receivableId: number | null;
   paidAmount: number;
   /** @nullable */
   paymentDate?: string | null;
@@ -743,6 +747,8 @@ export interface PayrollAdjustmentInput {
   month: string;
   /** @minimum 0 */
   manualDeduction: number;
+  /** @nullable */
+  receivableId?: number | null;
   /** @minimum 0 */
   paidAmount: number;
   /** @nullable */

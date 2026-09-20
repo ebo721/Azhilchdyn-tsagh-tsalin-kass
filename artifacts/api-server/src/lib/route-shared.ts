@@ -701,6 +701,7 @@ export async function getPayrollSummary(month: string, existingData?: PayrollCal
       incomeTax,
       advanceAmount,
       manualDeduction,
+      receivableId: adjustment?.receivableId ?? null,
       deductions,
       carryoverAmount,
       payable,

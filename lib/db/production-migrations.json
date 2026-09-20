@@ -16,7 +16,11 @@
     {
       "filename": "20260924_receivable_allocations.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20260925_payroll_receivable_allocation.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "5bf91c2695995c5d0d709e261685d5e3c58cf6d6827cbc07fd08286ca4d7cc33"
+  "schemaFingerprint": "56fe09a602161774c42e3dbf65995a0fa4d238c5665d00a3181f37eded40e6ae"
 }

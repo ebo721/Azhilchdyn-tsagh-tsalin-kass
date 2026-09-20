@@ -191,6 +191,7 @@ export const payrollAdjustmentsTable = pgTable("payroll_adjustments", {
   paymentDate: date("payment_date", { mode: "string" }),
   secondPaidAmount: numeric("second_paid_amount", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
   secondPaymentDate: date("second_payment_date", { mode: "string" }),
+  receivableId: integer("receivable_id").references(() => receivablesTable.id, { onDelete: "restrict" }),
   journalEntryId: integer("journal_entry_id").references(() => journalEntriesTable.id, { onDelete: "set null" }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [

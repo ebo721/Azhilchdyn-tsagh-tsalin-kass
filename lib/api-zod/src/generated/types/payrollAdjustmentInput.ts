@@ -12,6 +12,8 @@ export interface PayrollAdjustmentInput {
   month: string;
   /** @minimum 0 */
   manualDeduction: number;
+  /** @nullable */
+  receivableId?: number | null;
   /** @minimum 0 */
   paidAmount: number;
   /** @nullable */
