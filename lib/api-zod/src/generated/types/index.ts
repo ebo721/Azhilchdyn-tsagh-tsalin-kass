@@ -29,6 +29,7 @@ export * from './bankTransactionAccountInput';
 export * from './bankTransactionCashLinkInput';
 export * from './bankTransactionCashTransferInput';
 export * from './bankTransactionImportResult';
+export * from './bankTransactionJournalDeleteResult';
 export * from './bankTransactionJournalPostInput';
 export * from './bankTransactionJournalPostResult';
 export * from './bankTransactionJournalReviewItem';

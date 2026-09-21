@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { inflateRawSync } from "node:zlib";
 import {
   DeleteBankTransactionParams,
+  DeleteBankTransactionJournalParams,
+  DeleteBankTransactionJournalResponse,
   CreateBankAccountBody,
   CreateBankAccountResponse,
   ImportKapitronBankTransactionsResponse,
@@ -38,7 +40,7 @@ import {
   UpdateBankTransactionAccountResponse,
 } from "@workspace/api-zod";
 import { and, desc, eq, gte, isNotNull, isNull, lte } from "drizzle-orm";
-import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable } from "@workspace/db";
+import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable, journalEntriesTable } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.js";
 import { cashAccountForCategory } from "../lib/cash-account.js";
@@ -500,6 +502,62 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
       return;
     }
     res.json(PostBankTransactionJournalResponse.parse(result));
+  } catch (error) { next(error); }
+});
+
+router.delete("/bank-transactions/:id/journal", async (req, res, next) => {
+  try {
+    const { id } = DeleteBankTransactionJournalParams.parse(req.params);
+    const session = await getStaffSession(req);
+    const result = await db.transaction(async (tx) => {
+      const [bank] = await tx.select().from(bankTransactionsTable)
+        .where(eq(bankTransactionsTable.id, id))
+        .for("update");
+      if (!bank) return "missing" as const;
+      if (bank.cashTransactionId !== null || bank.transferredAt !== null) return "source_managed" as const;
+      if (bank.journalEntryId === null) return "not_posted" as const;
+
+      const [entry] = await tx.select().from(journalEntriesTable)
+        .where(eq(journalEntriesTable.id, bank.journalEntryId))
+        .for("update");
+      if (!entry
+        || entry.sourceType !== "bank"
+        || entry.sourceId !== bank.id
+        || entry.status !== "posted") {
+        return "source_managed" as const;
+      }
+
+      const { reversalEntryId } = await voidJournalEntry(tx, {
+        journalEntryId: entry.id,
+        voidedBy: session?.id ?? null,
+      });
+      const rejectedAccountIds = bank.accountId === null
+        ? bank.rejectedAccountIds
+        : [...new Set([...bank.rejectedAccountIds, bank.accountId])];
+      await tx.update(bankTransactionsTable).set({
+        accountId: null,
+        journalEntryId: null,
+        rejectedAccountIds,
+      }).where(eq(bankTransactionsTable.id, bank.id));
+      return {
+        bankTransactionId: bank.id,
+        voidedJournalEntryId: entry.id,
+        reversalJournalEntryId: reversalEntryId,
+      };
+    });
+    if (result === "missing") {
+      res.status(404).json({ error: "Банкны гүйлгээ олдсонгүй" });
+      return;
+    }
+    if (result === "not_posted") {
+      res.status(409).json({ error: "Устгах батлагдсан банкны журнал алга" });
+      return;
+    }
+    if (result === "source_managed") {
+      res.status(409).json({ error: "Касс эсвэл баримттай холбоотой журналыг эх үүсвэр цэснээс цуцална уу" });
+      return;
+    }
+    res.json(DeleteBankTransactionJournalResponse.parse(result));
   } catch (error) { next(error); }
 });
 

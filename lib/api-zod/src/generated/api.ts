@@ -1387,6 +1387,25 @@ export const PostBankTransactionJournalResponse = zod.object({
 
 
 /**
+ * @summary Reverse and unlink a directly posted bank journal while preserving audit history
+ */
+export const DeleteBankTransactionJournalParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+
+
+
+export const DeleteBankTransactionJournalResponse = zod.object({
+  "bankTransactionId": zod.number().int().min(1),
+  "voidedJournalEntryId": zod.number().int().min(1),
+  "reversalJournalEntryId": zod.number().int().min(1)
+})
+
+
+/**
  * @summary Reject the current journal suggestion while keeping the transaction pending
  */
 export const RejectBankTransactionSuggestionParams = zod.object({

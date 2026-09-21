@@ -1325,6 +1325,15 @@ export interface BankTransactionJournalPostResult {
   journalEntryId: number;
 }
 
+export interface BankTransactionJournalDeleteResult {
+  /** @minimum 1 */
+  bankTransactionId: number;
+  /** @minimum 1 */
+  voidedJournalEntryId: number;
+  /** @minimum 1 */
+  reversalJournalEntryId: number;
+}
+
 export interface BankTransactionImportResult {
   /** @minimum 0 */
   imported: number;

@@ -29,6 +29,7 @@ describe("bank journal review routes", () => {
   let rejectedBankId: number;
   let transferBankId: number;
   let linkBankId: number;
+  let reversibleBankId: number;
   let matchedExpenseId: number;
   const userIds: number[] = [];
   const accountIds: number[] = [];
@@ -136,8 +137,17 @@ describe("bank journal review routes", () => {
         description: "Existing cash холбоосын туршилт",
         fingerprint: `review-link-${suffix}`,
       },
+      {
+        transactionAt: new Date("2099-03-07T11:00:00.000Z"),
+        type: "expense",
+        amount: 27_000,
+        account: "9900112233",
+        counterparty: "Буцаах журнал",
+        description: "Батлагдсан журнал устгах туршилт",
+        fingerprint: `review-reversible-${suffix}`,
+      },
     ]).returning();
-    [suggestedBankId, unknownBankId, vatBankId, rejectedBankId, transferBankId, linkBankId] = transactions.map(({ id }) => id);
+    [suggestedBankId, unknownBankId, vatBankId, rejectedBankId, transferBankId, linkBankId, reversibleBankId] = transactions.map(({ id }) => id);
     bankIds.push(...transactions.map(({ id }) => id));
 
     server = app.listen(0);
@@ -228,6 +238,63 @@ describe("bank journal review routes", () => {
     assert.ok(bank.journalEntryId);
     const [entry] = await db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, bank.journalEntryId));
     assert.equal(entry.status, "posted");
+  });
+
+  it("reverses and unlinks a directly posted bank journal so it can be posted again", async () => {
+    const post = () => fetch(`${baseUrl}/api/bank-transactions/${reversibleBankId}/post-journal`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ accountId: expenseAccountId }),
+    });
+    const firstPost = await post();
+    assert.equal(firstPost.status, 200);
+    const first = await firstPost.json() as { journalEntryId: number };
+    journalEntryIds.push(first.journalEntryId);
+
+    const remove = await fetch(`${baseUrl}/api/bank-transactions/${reversibleBankId}/journal`, {
+      method: "DELETE",
+      headers: { cookie },
+    });
+    assert.equal(remove.status, 200);
+    const removed = await remove.json() as {
+      bankTransactionId: number;
+      voidedJournalEntryId: number;
+      reversalJournalEntryId: number;
+    };
+    journalEntryIds.push(removed.reversalJournalEntryId);
+    assert.equal(removed.bankTransactionId, reversibleBankId);
+    assert.equal(removed.voidedJournalEntryId, first.journalEntryId);
+
+    const [bank] = await db.select().from(bankTransactionsTable)
+      .where(eq(bankTransactionsTable.id, reversibleBankId));
+    assert.equal(bank.journalEntryId, null);
+    assert.equal(bank.accountId, null);
+    assert.equal(bank.rejectedAccountIds.includes(expenseAccountId), true);
+
+    const [original, reversal] = await Promise.all([
+      db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, first.journalEntryId)),
+      db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, removed.reversalJournalEntryId)),
+    ]);
+    assert.equal(original[0].status, "void");
+    assert.equal(reversal[0].status, "posted");
+    assert.equal(reversal[0].sourceType, "reversal");
+    assert.equal(reversal[0].sourceId, first.journalEntryId);
+
+    const reversalLines = await db.select().from(journalLinesTable)
+      .where(inArray(journalLinesTable.journalEntryId, [first.journalEntryId, removed.reversalJournalEntryId]));
+    assert.equal(reversalLines.reduce((sum, line) => sum + Number(line.debit) - Number(line.credit), 0), 0);
+
+    const duplicateRemove = await fetch(`${baseUrl}/api/bank-transactions/${reversibleBankId}/journal`, {
+      method: "DELETE",
+      headers: { cookie },
+    });
+    assert.equal(duplicateRemove.status, 409);
+
+    const secondPost = await post();
+    assert.equal(secondPost.status, 200);
+    const second = await secondPost.json() as { journalEntryId: number };
+    journalEntryIds.push(second.journalEntryId);
+    assert.notEqual(second.journalEntryId, first.journalEntryId);
   });
 
   it("serializes concurrent journal posting and bank deletion without orphaning a journal", async () => {
