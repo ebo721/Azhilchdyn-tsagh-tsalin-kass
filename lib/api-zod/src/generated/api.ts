@@ -1387,7 +1387,7 @@ export const PostBankTransactionJournalResponse = zod.object({
 
 
 /**
- * @summary Reverse and unlink a directly posted bank journal while preserving audit history
+ * @summary Reverse and unlink a bank or bank-cash journal while preserving audit history
  */
 export const DeleteBankTransactionJournalParams = zod.object({
   "id": zod.coerce.number().int()

@@ -344,7 +344,7 @@ describe("bank journal review routes", () => {
     const transfer = () => fetch(`${baseUrl}/api/bank-transactions/${transferBankId}/transfer-to-cash`, {
       method: "POST",
       headers: { cookie, "content-type": "application/json" },
-      body: JSON.stringify({ category: "Бусад", incomeMonth: null }),
+      body: JSON.stringify({ category: "Бараа материал", incomeMonth: null }),
     });
     const first = await transfer();
     assert.equal(first.status, 200);
@@ -380,6 +380,26 @@ describe("bank journal review routes", () => {
       eq(journalEntriesTable.sourceId, transferBankId),
     ));
     assert.equal(sourceEntries.length, 1);
+
+    const remove = await fetch(`${baseUrl}/api/bank-transactions/${transferBankId}/journal`, {
+      method: "DELETE",
+      headers: { cookie },
+    });
+    assert.equal(remove.status, 200);
+    const removed = await remove.json() as { reversalJournalEntryId: number };
+    journalEntryIds.push(removed.reversalJournalEntryId);
+    const [[afterDeleteBank], [afterDeleteCash], [voided], [reversal]] = await Promise.all([
+      db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, transferBankId)),
+      db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, firstResult.cashTransactionId)),
+      db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, bank.journalEntryId)),
+      db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, removed.reversalJournalEntryId)),
+    ]);
+    assert.equal(afterDeleteBank.journalEntryId, null);
+    assert.equal(afterDeleteCash.journalEntryId, null);
+    assert.equal(afterDeleteBank.cashTransactionId, afterDeleteCash.id);
+    assert.equal(afterDeleteCash.bankTransactionId, afterDeleteBank.id);
+    assert.equal(voided.status, "void");
+    assert.equal(reversal.status, "posted");
   });
 
   it("posts a journal for a journal-less cash link and blocks source-side edits", async () => {

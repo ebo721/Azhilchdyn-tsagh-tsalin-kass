@@ -70,7 +70,9 @@ export function JournalEntryDetail({ entryId, onClose, role, onEdit }: { entryId
   const isBalanced = totalDebit === totalCredit;
   const accountLabels = new Map(accounts?.map((account) => [account.id, `${account.code} — ${account.name}`]) ?? []);
   const canVoid = entry.status === 'posted' && (role === 'admin' || role === 'accountant');
-  const canDeleteBankJournal = canVoid && entry.sourceType === 'bank' && entry.sourceId !== null;
+  const canDeleteBankJournal = canVoid
+    && (entry.sourceType === 'bank' || entry.sourceType === 'bank_transaction')
+    && entry.sourceId !== null;
 
   return (
     <Modal title={`Журнал #${entryId}`} detail={entry.description} onClose={onClose} wide>

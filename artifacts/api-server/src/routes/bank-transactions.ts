@@ -39,8 +39,8 @@ import {
   UpdateBankTransactionAccountParams,
   UpdateBankTransactionAccountResponse,
 } from "@workspace/api-zod";
-import { and, desc, eq, gte, isNotNull, isNull, lte } from "drizzle-orm";
-import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable, journalEntriesTable } from "@workspace/db";
+import { and, desc, eq, gte, isNotNull, isNull, lte, or } from "drizzle-orm";
+import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable, journalEntriesTable, operatingExpensesTable } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.js";
 import { cashAccountForCategory } from "../lib/cash-account.js";
@@ -514,16 +514,39 @@ router.delete("/bank-transactions/:id/journal", async (req, res, next) => {
         .where(eq(bankTransactionsTable.id, id))
         .for("update");
       if (!bank) return "missing" as const;
-      if (bank.cashTransactionId !== null || bank.transferredAt !== null) return "source_managed" as const;
       if (bank.journalEntryId === null) return "not_posted" as const;
 
       const [entry] = await tx.select().from(journalEntriesTable)
         .where(eq(journalEntriesTable.id, bank.journalEntryId))
         .for("update");
-      if (!entry
-        || entry.sourceType !== "bank"
-        || entry.sourceId !== bank.id
-        || entry.status !== "posted") {
+      if (!entry || entry.sourceId !== bank.id || entry.status !== "posted") {
+        return "source_managed" as const;
+      }
+      let linkedCashId: number | null = null;
+      if (entry.sourceType === "bank") {
+        if (bank.cashTransactionId !== null || bank.transferredAt !== null) return "source_managed" as const;
+      } else if (entry.sourceType === "bank_transaction") {
+        if (bank.cashTransactionId === null || bank.transferredAt === null) return "source_managed" as const;
+        const [cash] = await tx.select().from(cashTransactionsTable)
+          .where(eq(cashTransactionsTable.id, bank.cashTransactionId))
+          .for("update");
+        if (!cash
+          || cash.bankTransactionId !== bank.id
+          || cash.journalEntryId !== entry.id
+          || cash.sourceType !== "bank_transaction") {
+          return "source_managed" as const;
+        }
+        const [linkedExpense] = await tx.select({ id: operatingExpensesTable.id })
+          .from(operatingExpensesTable)
+          .where(or(
+            eq(operatingExpensesTable.bankTransactionId, bank.id),
+            eq(operatingExpensesTable.cashTransactionId, cash.id),
+          ))
+          .limit(1)
+          .for("update");
+        if (linkedExpense) return "source_managed" as const;
+        linkedCashId = cash.id;
+      } else {
         return "source_managed" as const;
       }
 
@@ -531,14 +554,21 @@ router.delete("/bank-transactions/:id/journal", async (req, res, next) => {
         journalEntryId: entry.id,
         voidedBy: session?.id ?? null,
       });
-      const rejectedAccountIds = bank.accountId === null
-        ? bank.rejectedAccountIds
-        : [...new Set([...bank.rejectedAccountIds, bank.accountId])];
-      await tx.update(bankTransactionsTable).set({
-        accountId: null,
-        journalEntryId: null,
-        rejectedAccountIds,
-      }).where(eq(bankTransactionsTable.id, bank.id));
+      if (linkedCashId === null) {
+        const rejectedAccountIds = bank.accountId === null
+          ? bank.rejectedAccountIds
+          : [...new Set([...bank.rejectedAccountIds, bank.accountId])];
+        await tx.update(bankTransactionsTable).set({
+          accountId: null,
+          journalEntryId: null,
+          rejectedAccountIds,
+        }).where(eq(bankTransactionsTable.id, bank.id));
+      } else {
+        await Promise.all([
+          tx.update(bankTransactionsTable).set({ journalEntryId: null }).where(eq(bankTransactionsTable.id, bank.id)),
+          tx.update(cashTransactionsTable).set({ journalEntryId: null }).where(eq(cashTransactionsTable.id, linkedCashId)),
+        ]);
+      }
       return {
         bankTransactionId: bank.id,
         voidedJournalEntryId: entry.id,
@@ -554,7 +584,7 @@ router.delete("/bank-transactions/:id/journal", async (req, res, next) => {
       return;
     }
     if (result === "source_managed") {
-      res.status(409).json({ error: "Касс эсвэл баримттай холбоотой журналыг эх үүсвэр цэснээс цуцална уу" });
+      res.status(409).json({ error: "Энэ журнал баримт эсвэл өөр эх үүсвэртэй холбоотой тул эх үүсвэр цэснээс цуцална уу" });
       return;
     }
     res.json(DeleteBankTransactionJournalResponse.parse(result));
