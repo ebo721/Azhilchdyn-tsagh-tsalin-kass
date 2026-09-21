@@ -1298,6 +1298,26 @@ export const UpdateBankCashTransactionIncomeMonthResponse = zod.object({
 
 
 /**
+ * @summary Post a journal for an eligible cash transaction without one
+ */
+export const PostCashTransactionJournalParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+
+export const PostCashTransactionJournalBody = zod.object({
+  "accountId": zod.number().int().min(1)
+})
+
+export const PostCashTransactionJournalResponse = zod.object({
+  "cashTransactionId": zod.number().int(),
+  "journalEntryId": zod.number().int()
+})
+
+
+/**
  * @summary List closed cash dates
  */
 export const ListCashClosuresResponseItem = zod.object({

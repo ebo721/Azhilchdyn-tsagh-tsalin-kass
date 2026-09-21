@@ -165,6 +165,42 @@ import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-
 const router: IRouter = Router();
 const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, operatingExpenseAccountName, inventoryMaterialLabel, defaultChartOfAccounts, operatingExpenseAccountCodes, inventoryPurchaseAccountCodes, reservedAccountTypes, chartOfAccountResponse, ensureDefaultChartOfAccounts, inventoryPurchaseAccount, lockedExpenseAccount, fallbackExpenseAccount, today, currentMonth, money, InventoryBankPaymentConflictError, OperatingExpenseBankPaymentConflictError, calendarDateOffset, descriptionTokens, inventoryBankSuggestionScore, deletionTargetPatterns, roleCanRequestDeletion, deletionRequestResponse, monthlyIncomeTaxRelief, hoursBetween, previousMonth, nextMonth, daysInMonth, isValidCalendarDate, calendarDateText, weekdayCount, monthWeekdays, defaultPayrollSchedule, getPayrollSchedule, scheduleDate, payrollPeriod, selectPayrollScheduleVersion, scheduleVersionAffectsMonth, shiftDailyRate, weekdayDatesBetween, salaryAt, getPayrollSummary, getPayrollAdvanceSummary, calculatePayrollAdvanceLine, InventoryInsufficientStockError, planInventoryFifoConsumption, applyInventoryFifoConsumption, reverseInventoryFifoConsumption, inventoryPurchaseResponse } = shared;
 
+async function lockCashDate(tx: any, date: string) {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`cash-date:${date}`}))`);
+}
+
+async function replacePayrollCashJournal(tx: any, cash: any, next: { amount: number; date: string; description: string }) {
+  if (!cash.journalEntryId) return null;
+  const [entry, cashAccount, lines] = await Promise.all([
+    tx.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, cash.journalEntryId)).then((rows: any[]) => rows[0]),
+    tx.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1000")).then((rows: any[]) => rows[0]),
+    tx.select().from(journalLinesTable).where(eq(journalLinesTable.journalEntryId, cash.journalEntryId)),
+  ]);
+  if (!entry || !cashAccount) {
+    throw Object.assign(new Error("Цалингийн кассын журналын дансны мэдээлэл дутуу байна"), { status: 409 });
+  }
+  const counterLines = lines.filter((line: any) => line.accountId !== cashAccount.id);
+  if (counterLines.length !== 1) {
+    throw Object.assign(new Error("Цалингийн кассын журналын эсрэг дансыг тодорхойлох боломжгүй"), { status: 409 });
+  }
+  await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
+  const posting = await postJournalEntry(tx, {
+    date: next.date,
+    description: next.description,
+    sourceType: "cash",
+    sourceId: cash.id,
+    createdBy: entry.createdBy,
+    lines: [
+      { accountId: counterLines[0].accountId, debit: next.amount, credit: 0 },
+      { accountId: cashAccount.id, debit: 0, credit: next.amount },
+    ],
+  });
+  if (posting.status !== "posted") {
+    throw Object.assign(new Error("Цалингийн кассын журнал тэнцээгүй байна"), { status: 409 });
+  }
+  return posting.journalEntryId;
+}
+
 
 
 router.get("/payroll-schedule", async (_req, res, next) => {
@@ -284,6 +320,15 @@ router.put("/payroll-adjustments", async (req, res, next) => {
     const selectedReceivableId = input.receivableId ?? null;
     const adjustment = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
+      for (const date of [...protectedDates].sort()) {
+        await lockCashDate(tx, date);
+        const [closure] = await tx.select({ id: cashClosuresTable.id })
+          .from(cashClosuresTable)
+          .where(eq(cashClosuresTable.date, date));
+        if (closure) {
+          throw Object.assign(new Error(`${date} өдрийн касс өндөрлөсөн тул цалингийн гүйлгээг засах боломжгүй`), { status: 409 });
+        }
+      }
       const existingCashRows = await tx.select().from(cashTransactionsTable).where(and(
         eq(cashTransactionsTable.sourceType, sourceType),
         inArray(cashTransactionsTable.sourceKey, [sourceKey, secondSourceKey]),
@@ -398,58 +443,68 @@ router.put("/payroll-adjustments", async (req, res, next) => {
         })
         .returning();
 
-      if (input.paidAmount > 0 && input.paymentDate) {
-        const account = await cashAccountForCategory(tx, "Цалин");
-        await tx.insert(cashTransactionsTable).values({
-          type: "expense",
-          category: "Цалин",
-          accountId: account?.id ?? null,
-          description: `${employee.name} · ${input.month} сарын цалин`,
+      const account = await cashAccountForCategory(tx, "Цалин");
+      const cashPayments = [
+        {
+          key: sourceKey,
           amount: input.paidAmount,
           date: input.paymentDate,
-          sourceType,
-          sourceKey,
-        }).onConflictDoUpdate({
-          target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
-          set: {
-            accountId: account?.id ?? null,
-            amount: input.paidAmount,
-            date: input.paymentDate,
-            description: `${employee.name} · ${input.month} сарын цалин`,
-          },
-        });
-      } else {
-        await tx.delete(cashTransactionsTable).where(and(
-          eq(cashTransactionsTable.sourceType, sourceType),
-          eq(cashTransactionsTable.sourceKey, sourceKey),
-        ));
-      }
-
-      if (input.secondPaidAmount > 0 && input.secondPaymentDate) {
-        const account = await cashAccountForCategory(tx, "Цалин");
-        await tx.insert(cashTransactionsTable).values({
-          type: "expense",
-          category: "Цалин",
-          accountId: account?.id ?? null,
-          description: `${employee.name} · ${input.month} сарын цалин · 2-р олголт`,
+          description: `${employee.name} · ${input.month} сарын цалин`,
+        },
+        {
+          key: secondSourceKey,
           amount: input.secondPaidAmount,
           date: input.secondPaymentDate,
-          sourceType,
-          sourceKey: secondSourceKey,
-        }).onConflictDoUpdate({
-          target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
-          set: {
+          description: `${employee.name} · ${input.month} сарын цалин · 2-р олголт`,
+        },
+      ];
+      for (const payment of cashPayments) {
+        const existingCash = cashBySourceKey.get(payment.key);
+        if (payment.amount > 0 && payment.date) {
+          let journalEntryId = existingCash?.journalEntryId ?? null;
+          const journalChanged = existingCash
+            && existingCash.bankTransactionId === null
+            && existingCash.bankVerifiedAt === null
+            && journalEntryId
+            && (Number(existingCash.amount) !== payment.amount
+              || String(existingCash.date) !== payment.date
+              || existingCash.description !== payment.description);
+          if (journalChanged) {
+            journalEntryId = await replacePayrollCashJournal(tx, existingCash, {
+              amount: payment.amount,
+              date: payment.date,
+              description: payment.description,
+            });
+          }
+          await tx.insert(cashTransactionsTable).values({
+            type: "expense",
+            category: "Цалин",
             accountId: account?.id ?? null,
-            amount: input.secondPaidAmount,
-            date: input.secondPaymentDate,
-            description: `${employee.name} · ${input.month} сарын цалин · 2-р олголт`,
-          },
-        });
-      } else {
-        await tx.delete(cashTransactionsTable).where(and(
-          eq(cashTransactionsTable.sourceType, sourceType),
-          eq(cashTransactionsTable.sourceKey, secondSourceKey),
-        ));
+            description: payment.description,
+            amount: payment.amount,
+            date: payment.date,
+            sourceType,
+            sourceKey: payment.key,
+            journalEntryId,
+          }).onConflictDoUpdate({
+            target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
+            set: {
+              accountId: account?.id ?? null,
+              amount: payment.amount,
+              date: payment.date,
+              description: payment.description,
+              journalEntryId,
+            },
+          });
+        } else {
+          if (existingCash?.journalEntryId) {
+            await voidJournalEntry(tx, { journalEntryId: existingCash.journalEntryId, voidedBy: null });
+          }
+          await tx.delete(cashTransactionsTable).where(and(
+            eq(cashTransactionsTable.sourceType, sourceType),
+            eq(cashTransactionsTable.sourceKey, payment.key),
+          ));
+        }
       }
 
       return savedAdjustment;
@@ -496,6 +551,7 @@ router.delete("/payroll-adjustments/:month/:employeeId/transactions/:sequence", 
       const paidAmount = Number(sequence === 1 ? adjustment.paidAmount : adjustment.secondPaidAmount);
       if (paidAmount <= 0) return "missing_transaction" as const;
       if (paymentDate) {
+        await lockCashDate(tx, paymentDate);
         const [closure] = await tx.select({ id: cashClosuresTable.id })
           .from(cashClosuresTable)
           .where(eq(cashClosuresTable.date, paymentDate));
@@ -507,6 +563,9 @@ router.delete("/payroll-adjustments/:month/:employeeId/transactions/:sequence", 
       )).for("update");
       if (cash && (cash.bankTransactionId !== null || cash.bankVerifiedAt !== null)) {
         return "bank_linked" as const;
+      }
+      if (cash?.journalEntryId) {
+        await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
       }
       if (adjustment.journalEntryId) {
         const remainingPaidAmount = Number(sequence === 1 ? adjustment.secondPaidAmount : adjustment.paidAmount);

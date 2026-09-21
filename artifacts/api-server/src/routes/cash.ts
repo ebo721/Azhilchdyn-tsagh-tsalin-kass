@@ -32,6 +32,9 @@ import {
   UpdateBankCashTransactionIncomeMonthBody,
   UpdateBankCashTransactionIncomeMonthParams,
   UpdateBankCashTransactionIncomeMonthResponse,
+  PostCashTransactionJournalBody,
+  PostCashTransactionJournalParams,
+  PostCashTransactionJournalResponse,
   DeleteCashTransactionParams,
   CreateInventoryPurchaseBody,
   CreateInventoryPurchaseResponse,
@@ -151,7 +154,7 @@ import {
 import { getStaffRole, getStaffSession, type StaffRole } from "../lib/hr-session.js";
 import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment.js";
 import { planShiftPlanCopy } from "../lib/shift-plan-copy.js";
-import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
+import { JournalValidationError, postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
 import { reconcileOperatingExpenses } from "../lib/operating-expense-sync.js";
 import {
   cashAccountForCategory,
@@ -163,6 +166,10 @@ import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-
 
 const router: IRouter = Router();
 const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, operatingExpenseAccountName, inventoryMaterialLabel, defaultChartOfAccounts, operatingExpenseAccountCodes, inventoryPurchaseAccountCodes, reservedAccountTypes, chartOfAccountResponse, ensureDefaultChartOfAccounts, inventoryPurchaseAccount, lockedExpenseAccount, fallbackExpenseAccount, today, currentMonth, money, InventoryBankPaymentConflictError, OperatingExpenseBankPaymentConflictError, calendarDateOffset, descriptionTokens, inventoryBankSuggestionScore, deletionTargetPatterns, roleCanRequestDeletion, deletionRequestResponse, monthlyIncomeTaxRelief, hoursBetween, previousMonth, nextMonth, daysInMonth, isValidCalendarDate, calendarDateText, weekdayCount, monthWeekdays, defaultPayrollSchedule, getPayrollSchedule, scheduleDate, payrollPeriod, selectPayrollScheduleVersion, scheduleVersionAffectsMonth, shiftDailyRate, weekdayDatesBetween, salaryAt, getPayrollSummary, getPayrollAdvanceSummary, calculatePayrollAdvanceLine, InventoryInsufficientStockError, planInventoryFifoConsumption, applyInventoryFifoConsumption, reverseInventoryFifoConsumption, inventoryPurchaseResponse } = shared;
+
+async function lockCashDate(tx: any, date: string) {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`cash-date:${date}`}))`);
+}
 
 async function safeCashAccount(tx: any, category: string) {
   try {
@@ -210,13 +217,13 @@ async function journalCounterAccount(tx: any, type: string, category: string, ma
   return canonicalFallback;
 }
 
-async function postCashJournal(tx: any, cash: any, counterAccount: any, cashAccount: any) {
+async function postCashJournal(tx: any, cash: any, counterAccount: any, cashAccount: any, createdBy: number | null = null) {
   const posting = await postJournalEntry(tx, {
     date: String(cash.date),
     description: cash.description.trim(),
     sourceType: "cash",
     sourceId: cash.id,
-    createdBy: null,
+    createdBy,
     lines: cash.type === "income"
       ? [
         { accountId: cashAccount.id, debit: Number(cash.amount), credit: 0 },
@@ -529,6 +536,85 @@ router.patch("/cash/transactions/:id/income-month", async (req, res, next) => {
   }
 });
 
+router.post("/cash/transactions/:id/journal", async (req, res, next) => {
+  try {
+    const session = await getStaffSession(req);
+    if (session?.role !== "admin" && session?.role !== "accountant") {
+      res.status(403).json({ error: "Журнал бичих эрх хүрэлцэхгүй байна" });
+      return;
+    }
+    const { id } = PostCashTransactionJournalParams.parse(req.params);
+    const { accountId } = PostCashTransactionJournalBody.parse(req.body);
+    const result = await db.transaction(async (tx) => {
+      const [cashSnapshot] = await tx.select({ date: cashTransactionsTable.date })
+        .from(cashTransactionsTable)
+        .where(eq(cashTransactionsTable.id, id));
+      if (!cashSnapshot) throw Object.assign(new Error("Кассын гүйлгээ олдсонгүй"), { status: 404 });
+      await lockCashDate(tx, String(cashSnapshot.date));
+      const [cash] = await tx.select().from(cashTransactionsTable)
+        .where(eq(cashTransactionsTable.id, id))
+        .for("update");
+      if (!cash) throw Object.assign(new Error("Кассын гүйлгээ олдсонгүй"), { status: 404 });
+      if (String(cash.date) !== String(cashSnapshot.date)) {
+        throw Object.assign(new Error("Кассын гүйлгээний огноо өөрчлөгдсөн тул дахин оролдоно уу"), { status: 409 });
+      }
+      if (cash.journalEntryId !== null) {
+        throw Object.assign(new Error("Энэ кассын гүйлгээнд журнал аль хэдийн бичигдсэн байна"), { status: 409 });
+      }
+      if (cash.bankTransactionId !== null || cash.bankVerifiedAt !== null || cash.sourceType === "bank_transaction") {
+        throw Object.assign(new Error("Банктай холбоотой гүйлгээг банкны гүйлгээний цэснээс журналдана уу"), { status: 409 });
+      }
+      if (cash.sourceType !== null && !["payroll", "payroll_advance"].includes(cash.sourceType)) {
+        throw Object.assign(new Error("Энэ автомат гүйлгээг эх үүсвэр цэснээс журналдана уу"), { status: 409 });
+      }
+      if (cash.unclearAt !== null) {
+        throw Object.assign(new Error("Тодорхойгүй болгосон кассын гүйлгээнд журнал бичих боломжгүй"), { status: 409 });
+      }
+      const [closure] = await tx.select({ id: cashClosuresTable.id })
+        .from(cashClosuresTable)
+        .where(eq(cashClosuresTable.date, String(cash.date)));
+      if (closure) {
+        throw Object.assign(new Error("Өндөрлөсөн өдрийн гүйлгээнд журнал бичих боломжгүй"), { status: 409 });
+      }
+      const [counterAccount] = await tx.select().from(chartOfAccountsTable)
+        .where(eq(chartOfAccountsTable.id, accountId))
+        .for("update");
+      if (!counterAccount) throw Object.assign(new Error("Сонгосон данс олдсонгүй"), { status: 404 });
+      if (!counterAccount.isActive) {
+        throw Object.assign(new Error("Идэвхгүй дансаар журнал бичих боломжгүй"), { status: 409 });
+      }
+      if (counterAccount.code === "1200") {
+        throw Object.assign(new Error("Авлагын 1200 дансыг авлагын цэснээс баримттайгаар журналдана уу"), { status: 409 });
+      }
+      const ledgerAccount = await cashLedgerAccount(tx);
+      if (counterAccount.id === ledgerAccount.id) {
+        throw Object.assign(new Error("Кассын 1000 дансыг эсрэг дансаар сонгох боломжгүй"), { status: 409 });
+      }
+      const journalEntryId = await postCashJournal(tx, cash, counterAccount, ledgerAccount, session.id);
+      const [linkedCash] = await tx.update(cashTransactionsTable)
+        .set({ journalEntryId })
+        .where(and(
+          eq(cashTransactionsTable.id, cash.id),
+          isNull(cashTransactionsTable.journalEntryId),
+        ))
+        .returning({ id: cashTransactionsTable.id });
+      if (!linkedCash) throw Object.assign(new Error("Кассын гүйлгээнд журнал аль хэдийн бичигдсэн байна"), { status: 409 });
+      return { cashTransactionId: cash.id, journalEntryId };
+    });
+    res.json(PostCashTransactionJournalResponse.parse(result));
+  } catch (error) {
+    if (error instanceof JournalValidationError) {
+      res.status(409).json({ error: error.message });
+      return;
+    }
+    if (error && typeof error === "object" && "status" in error) {
+      res.status(Number(error.status)).json({ error: error instanceof Error ? error.message : "Журнал бичигдсэнгүй" });
+      return;
+    }
+    next(error);
+  }
+});
+
 router.delete("/cash/transactions/:id", async (req, res, next) => {
   try {
     const { id } = DeleteCashTransactionParams.parse(req.params);
@@ -579,15 +665,18 @@ router.post("/cash/closures", async (req, res, next) => {
       res.status(400).json({ error: "Ирээдүйн өдрийн кассыг өндөрлөх боломжгүй" });
       return;
     }
-    const [created] = await db
-      .insert(cashClosuresTable)
-      .values({ date })
-      .onConflictDoNothing()
-      .returning();
-    const saved = created ?? (await db
-      .select()
-      .from(cashClosuresTable)
-      .where(eq(cashClosuresTable.date, date)))[0];
+    const saved = await db.transaction(async (tx) => {
+      await lockCashDate(tx, date);
+      const [created] = await tx
+        .insert(cashClosuresTable)
+        .values({ date })
+        .onConflictDoNothing()
+        .returning();
+      return created ?? (await tx
+        .select()
+        .from(cashClosuresTable)
+        .where(eq(cashClosuresTable.date, date)))[0];
+    });
     res.status(201).json(CloseCashDayResponse.parse({
       id: saved.id,
       date: saved.date,

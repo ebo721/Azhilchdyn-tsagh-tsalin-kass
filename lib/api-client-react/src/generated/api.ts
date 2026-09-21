@@ -45,6 +45,8 @@ import type {
   CashClosure,
   CashClosureInput,
   CashIncomeMonthUpdate,
+  CashJournalPosting,
+  CashJournalPostingInput,
   CashSummary,
   CashTransaction,
   CashTransactionInput,
@@ -61,6 +63,7 @@ import type {
   EmployeeSalaryHistory,
   EmployeeSalaryHistoryUpdate,
   EmployeeUpdate,
+  ErrorResponse,
   FixedAsset,
   FixedAssetInput,
   GetHourBalanceParams,
@@ -3553,6 +3556,78 @@ export const useUpdateBankCashTransactionIncomeMonth = <TError = ErrorType<unkno
         TContext
       > => {
       return useMutation(getUpdateBankCashTransactionIncomeMonthMutationOptions(options));
+    }
+
+export const getPostCashTransactionJournalUrl = (id: number,) => {
+
+
+
+
+  return `/api/cash/transactions/${id}/journal`
+}
+
+/**
+ * @summary Post a journal for an eligible cash transaction without one
+ */
+export const postCashTransactionJournal = async (id: number,
+    cashJournalPostingInput: CashJournalPostingInput, options?: Parameters<typeof customFetch>[1]): Promise<CashJournalPosting> => {
+
+  return customFetch<CashJournalPosting>(getPostCashTransactionJournalUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(cashJournalPostingInput)
+  }
+);}
+
+
+
+
+
+export const getPostCashTransactionJournalMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCashTransactionJournal>>, TError,{id: number;data: BodyType<CashJournalPostingInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postCashTransactionJournal>>, TError,{id: number;data: BodyType<CashJournalPostingInput>}, TContext> => {
+
+const mutationKey = ['postCashTransactionJournal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCashTransactionJournal>>, {id: number;data: BodyType<CashJournalPostingInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  postCashTransactionJournal(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostCashTransactionJournalMutationResult = NonNullable<Awaited<ReturnType<typeof postCashTransactionJournal>>>
+    export type PostCashTransactionJournalMutationBody = BodyType<CashJournalPostingInput>
+    export type PostCashTransactionJournalMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Post a journal for an eligible cash transaction without one
+ */
+export const usePostCashTransactionJournal = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCashTransactionJournal>>, TError,{id: number;data: BodyType<CashJournalPostingInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postCashTransactionJournal>>,
+        TError,
+        {id: number;data: BodyType<CashJournalPostingInput>},
+        TContext
+      > => {
+      return useMutation(getPostCashTransactionJournalMutationOptions(options));
     }
 
 export const getListCashClosuresUrl = () => {

@@ -767,6 +767,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CashTransaction"
+  /cash/transactions/{id}/journal:
+    post:
+      operationId: postCashTransactionJournal
+      tags: [cash]
+      summary: Post a journal for an eligible cash transaction without one
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashJournalPostingInput"
+      responses:
+        "200":
+          description: Posted cash journal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashJournalPosting"
+        "403":
+          description: Insufficient role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: Cash transaction or account not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "409":
+          description: Cash transaction cannot be posted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
   /cash/closures:
     get:
       operationId: listCashClosures
@@ -2453,6 +2488,17 @@ components:
       required: [incomeMonth]
       properties:
         incomeMonth: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+    CashJournalPostingInput:
+      type: object
+      required: [accountId]
+      properties:
+        accountId: { type: integer, minimum: 1 }
+    CashJournalPosting:
+      type: object
+      required: [cashTransactionId, journalEntryId]
+      properties:
+        cashTransactionId: { type: integer }
+        journalEntryId: { type: integer }
     CashClosure:
       type: object
       required: [id, date, closedAt]

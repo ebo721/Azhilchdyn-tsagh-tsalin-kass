@@ -74,6 +74,7 @@ import {
   useCreateCashTransaction,
   useUpdateCashTransaction,
   useDeleteCashTransaction,
+  usePostCashTransactionJournal,
   useCloseCashDay,
   useCreateEmployee,
   useDeleteAttendance,
@@ -225,18 +226,24 @@ export function Cash() {
   const session = useGetAuthSession();
   const list = useListCashTransactions();
   const closures = useListCashClosures();
+  const chartAccounts = useListChartOfAccounts();
   const create = useCreateCashTransaction();
   const update = useUpdateCashTransaction();
+  const postJournal = usePostCashTransactionJournal();
   const deletion = useQueueDeletion();
   const remove = deletion;
   const qc = useQueryClient();
   const [editing, setEditing] = useState<CashTransaction | null>(null);
+  const [journalCash, setJournalCash] = useState<CashTransaction | null>(null);
+  const [journalAccountId, setJournalAccountId] = useState('');
   const [open, setOpen] = useState(false);
   const [filterMonth, setFilterMonth] = useState(currentMonth());
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const form = useForm<CashForm>({ defaultValues: { type: 'income', category: '', description: '', amount: '', date: today() } });
   const closedDates = new Set(closures.data?.map((closure) => closure.date) ?? []);
+  const canPostJournal = session.data?.role === 'admin' || session.data?.role === 'accountant';
+  const journalAccounts = (chartAccounts.data ?? []).filter((account) => account.isActive && !['1000', '1200'].includes(account.code));
   const cashCategories = CASH_EXPENSE_CATEGORIES;
   const filteredTransactions = (list.data ?? []).filter((row) =>
     (row.type === CashTransactionType.income ? row.incomeMonth === filterMonth : row.date.startsWith(filterMonth))
@@ -274,6 +281,25 @@ export function Cash() {
     if (!window.confirm(`${row.description} гүйлгээг устгах уу?`)) return;
     deletion.request(`/cash/transactions/${row.id}`, `${row.description} кассын гүйлгээ`);
   };
+  const startJournal = (row: CashTransaction) => {
+    const preferredAccount = journalAccounts.find((account) => account.id === row.accountId);
+    setJournalCash(row);
+    setJournalAccountId(preferredAccount ? String(preferredAccount.id) : '');
+  };
+  const closeJournal = () => {
+    setJournalCash(null);
+    setJournalAccountId('');
+  };
+  const submitJournal = () => {
+    if (!journalCash || !journalAccountId) return;
+    postJournal.mutate({ id: journalCash.id, data: { accountId: Number(journalAccountId) } }, {
+      onSuccess: () => {
+        refresh();
+        closeJournal();
+      },
+      onError: (error) => window.alert(error instanceof Error ? error.message : 'Журнал бичих үед алдаа гарлаа.'),
+    });
+  };
   return <div className="page-enter">
     <div className="mb-7 flex flex-wrap items-center justify-end gap-2"><CashDayCloseControls /><Button onClick={startCreate} data-testid="button-add-cash"><Plus className="size-4" />Гүйлгээ оруулах</Button></div>
     <section className="overflow-hidden rounded-2xl border border-border bg-card">
@@ -287,10 +313,15 @@ export function Cash() {
       </div>
       {list.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : list.isError ? <ErrorBlock onRetry={() => list.refetch()} /> : !filteredTransactions.length ? <EmptyState title="Шүүлтэд тохирох гүйлгээ алга" detail="Өөр сар эсвэл гүйлгээний төрөл сонгоно уу." icon={WalletCards} /> : <div className="divide-y divide-border">{filteredTransactions.map((row) => {
         const closed = closedDates.has(row.date);
+        const journalEligible = canPostJournal
+          && row.journalEntryId === null
+          && row.bankTransactionId === null
+          && !row.bankVerifiedAt
+          && ['manual', 'payroll', 'payroll_advance'].includes(row.transactionKind);
         return <div className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-secondary/35" key={row.id} data-testid={`row-cash-${row.id}`}>
           <span className={cn('grid size-9 shrink-0 place-items-center rounded-xl', row.type === CashTransactionType.income ? 'bg-primary/10 text-primary' : 'bg-orange-100 text-orange-800')}>{row.type === CashTransactionType.income ? <ArrowDownLeft className="size-4" /> : <ArrowUpRight className="size-4" />}</span>
           <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold">{row.description}</p><span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-800">{row.category}</span>{row.journalEntryId && <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-800" data-testid={`badge-cash-journal-${row.id}`}>Журнал бичигдсэн #{row.journalEntryId}</span>}{(row.bankVerifiedAt || row.bankTransactionId) && <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">Банкны хуулгаар баталгаажсан</span>}</div><p className="mt-0.5 text-xs text-muted-foreground">{dateLabel(row.date)}{row.type === CashTransactionType.income && row.incomeMonth ? ` · ${mongolianMonthLabel(row.incomeMonth)}-ийн орлого` : ''}{closed ? ' · Өндөрлөсөн' : ''}</p><AccountLabel code={row.accountCode} name={row.accountName} className="mt-1" /></div>
-          {(session.data?.role === 'admin' || row.editable) && <div className="flex gap-1">{session.data?.role === 'admin' && <Button size="icon" variant="ghost" disabled={closed} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Засах'} onClick={() => startEdit(row)} data-testid={`button-edit-cash-${row.id}`}><Pencil className="size-4" /></Button>}{row.editable && <Button size="icon" variant="ghost" disabled={closed || deletion.isPending} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Устгах хүсэлт'} onClick={() => deleteRow(row)} data-testid={`button-delete-cash-${row.id}`}><Trash2 className="size-4" /></Button>}</div>}
+          {(session.data?.role === 'admin' || row.editable || journalEligible) && <div className="flex gap-1">{journalEligible && <Button size="sm" variant="outline" disabled={closed || postJournal.isPending} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Журнал бичих'} onClick={() => startJournal(row)} data-testid={`button-post-cash-journal-${row.id}`}><BookOpen className="size-4" />Журнал бичих</Button>}{session.data?.role === 'admin' && <Button size="icon" variant="ghost" disabled={closed} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Засах'} onClick={() => startEdit(row)} data-testid={`button-edit-cash-${row.id}`}><Pencil className="size-4" /></Button>}{row.editable && <Button size="icon" variant="ghost" disabled={closed || deletion.isPending} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Устгах хүсэлт'} onClick={() => deleteRow(row)} data-testid={`button-delete-cash-${row.id}`}><Trash2 className="size-4" /></Button>}</div>}
           <p className={cn('font-mono text-sm font-bold', row.type === CashTransactionType.income ? 'text-primary' : 'text-orange-800')}>{row.type === CashTransactionType.income ? '+' : '−'}{money(row.amount)}</p>
         </div>;
       })}</div>}
@@ -310,6 +341,21 @@ export function Cash() {
         {form.watch('type') === 'income' && <label className="block space-y-2 text-xs font-semibold">Хамаарах сар<input type="month" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('incomeMonth', { required: true })} data-testid="input-cash-income-month" /></label>}
         <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Болих</Button><Button type="submit" disabled={create.isPending || update.isPending}>{create.isPending || update.isPending ? 'Хадгалж байна...' : 'Хадгалах'}</Button></div>
       </form></Form>
+    </Modal>}
+    {journalCash && <Modal title="Кассын журнал бичих" detail="Кассын 1000 дансны эсрэг талд бичигдэх GL дансыг сонгоно." onClose={closeJournal}>
+      <form className="space-y-5" onSubmit={(event) => { event.preventDefault(); submitJournal(); }} data-testid="form-post-cash-journal">
+        <div className="rounded-xl border border-border bg-secondary/35 px-4 py-3">
+          <p className="text-sm font-semibold">{journalCash.description}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{dateLabel(journalCash.date)} · {journalCash.type === CashTransactionType.income ? 'Орлого' : 'Зарлага'} · {money(journalCash.amount)}</p>
+        </div>
+        <label className="block space-y-2 text-xs font-semibold">Эсрэг GL данс
+          <select value={journalAccountId} onChange={(event) => setJournalAccountId(event.target.value)} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" required data-testid="select-cash-journal-account">
+            <option value="">Данс сонгох</option>
+            {journalAccounts.map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}
+          </select>
+        </label>
+        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={closeJournal}>Болих</Button><Button type="submit" disabled={!journalAccountId || postJournal.isPending} data-testid="button-confirm-cash-journal">{postJournal.isPending ? 'Бичиж байна...' : 'Журнал бичих'}</Button></div>
+      </form>
     </Modal>}
   </div>;
 }

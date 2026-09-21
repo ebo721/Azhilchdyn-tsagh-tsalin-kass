@@ -374,6 +374,94 @@ describe("cash journal posting", () => {
     assert.equal(lines.reduce((sum, line) => sum + line.credit, 0), 10);
   });
 
+  it("lets an accountant post exactly one journal for an unposted payroll cash row", async () => {
+    const [cash] = await db.insert(cashTransactionsTable).values({
+      type: "expense",
+      category: "Цалин",
+      description: "Historical payroll journal action",
+      amount: 123.45,
+      date: "2025-01-30",
+      sourceType: "payroll",
+      sourceKey: `2025-01:${randomUUID()}:2`,
+      journalEntryId: null,
+    }).returning();
+    cashIds.push(cash.id);
+    const post = () => fetch(`${baseUrl}/api/cash/transactions/${cash.id}/journal`, {
+      method: "POST",
+      headers: { cookie: accountantCookie, "content-type": "application/json" },
+      body: JSON.stringify({ accountId: expenseAccountId }),
+    });
+    const responses = await Promise.all([post(), post()]);
+    assert.deepEqual(responses.map((response) => response.status).sort(), [200, 409]);
+    const success = responses.find((response) => response.status === 200)!;
+    const value = await success.json() as { cashTransactionId: number; journalEntryId: number };
+    assert.equal(value.cashTransactionId, cash.id);
+    journalIds.push(value.journalEntryId);
+
+    const [[linkedCash], [entry], lines, sourceEntries] = await Promise.all([
+      db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, cash.id)),
+      db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, value.journalEntryId)),
+      db.select().from(journalLinesTable).where(eq(journalLinesTable.journalEntryId, value.journalEntryId)),
+      db.select().from(journalEntriesTable).where(and(
+        eq(journalEntriesTable.sourceType, "cash"),
+        eq(journalEntriesTable.sourceId, cash.id),
+      )),
+    ]);
+    assert.equal(linkedCash.journalEntryId, value.journalEntryId);
+    assert.equal(entry.createdBy, accountantUserId);
+    assert.equal(entry.status, "posted");
+    assert.equal(sourceEntries.length, 1);
+    assert.deepEqual(lines.map((line) => [line.accountId, line.debit, line.credit]).sort((a, b) => Number(a[0]) - Number(b[0])), [
+      [cashAccountId, 0, 123.45],
+      [expenseAccountId, 123.45, 0],
+    ]);
+  });
+
+  it("rejects source-managed cash rows from the manual journal action", async () => {
+    const [cash] = await db.insert(cashTransactionsTable).values({
+      type: "expense",
+      category: "Бараа материал",
+      description: "Managed inventory cash",
+      amount: 50,
+      date: "2025-01-31",
+      sourceType: "inventory_purchase",
+      sourceKey: `purchase:${randomUUID()}`,
+      journalEntryId: null,
+    }).returning();
+    cashIds.push(cash.id);
+    const response = await requestPath(`/api/cash/transactions/${cash.id}/journal`, {
+      method: "POST",
+      body: JSON.stringify({ accountId: expenseAccountId }),
+    });
+    assert.equal(response.status, 409);
+    const [unchanged] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, cash.id));
+    assert.equal(unchanged.journalEntryId, null);
+  });
+
+  it("rejects receivables account 1200 without allocation metadata", async () => {
+    const [receivableAccount] = await db.select({ id: chartOfAccountsTable.id })
+      .from(chartOfAccountsTable)
+      .where(eq(chartOfAccountsTable.code, "1200"));
+    assert.ok(receivableAccount);
+    const [cash] = await db.insert(cashTransactionsTable).values({
+      type: "income",
+      category: "Бусад орлого",
+      description: "Receivable account guard",
+      amount: 75,
+      date: "2025-01-31",
+      sourceType: null,
+      journalEntryId: null,
+    }).returning();
+    cashIds.push(cash.id);
+    const response = await requestPath(`/api/cash/transactions/${cash.id}/journal`, {
+      method: "POST",
+      body: JSON.stringify({ accountId: receivableAccount.id }),
+    });
+    assert.equal(response.status, 409);
+    const [unchanged] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, cash.id));
+    assert.equal(unchanged.journalEntryId, null);
+  });
+
   it("rolls back the cash row when the cash posting account is unavailable", async () => {
     await db.update(chartOfAccountsTable).set({ isActive: false }).where(eq(chartOfAccountsTable.id, cashAccountId));
     try {

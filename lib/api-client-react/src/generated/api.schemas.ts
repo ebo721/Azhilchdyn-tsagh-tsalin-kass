@@ -1100,6 +1100,16 @@ export interface CashIncomeMonthUpdate {
   incomeMonth: string;
 }
 
+export interface CashJournalPostingInput {
+  /** @minimum 1 */
+  accountId: number;
+}
+
+export interface CashJournalPosting {
+  cashTransactionId: number;
+  journalEntryId: number;
+}
+
 export interface CashClosure {
   id: number;
   date: string;
