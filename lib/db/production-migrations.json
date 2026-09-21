@@ -20,6 +20,10 @@
     {
       "filename": "20260925_payroll_receivable_allocation.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20260926_normalize_receivable_functions.sql",
+      "releaseMode": "expand"
     }
   ],
   "schemaFingerprint": "56fe09a602161774c42e3dbf65995a0fa4d238c5665d00a3181f37eded40e6ae"
