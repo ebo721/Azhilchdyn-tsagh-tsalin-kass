@@ -32,15 +32,15 @@ export function JournalEntryDetail({ entryId, onClose, role, onEdit }: { entryId
   };
 
   const handleVoid = () => {
-    if (!window.confirm('Энэ гүйлгээг буцаахдаа итгэлтэй байна уу? Энэ үйлдэл буцахгүй.')) return;
+    if (!window.confirm('Энэ батлагдсан журналыг устгах уу? Журналын түүх хадгалагдаж, эсрэг бичилт үүснэ.')) return;
     voidEntry.mutate({ id: entryId }, {
       onSuccess: () => {
-        toast.success('Гүйлгээ амжилттай буцаагдлаа');
+        toast.success('Журнал амжилттай буцаагдлаа');
         refreshAccountingViews();
         refetch();
       },
       onError: (error) => {
-        toast.error(error instanceof Error ? error.message : 'Гүйлгээ буцаахад алдаа гарлаа');
+        toast.error(error instanceof Error ? error.message : 'Журнал устгахад алдаа гарлаа');
       }
     });
   };
@@ -139,8 +139,8 @@ export function JournalEntryDetail({ entryId, onClose, role, onEdit }: { entryId
                 {deleteBankJournal.isPending ? 'Устгаж байна...' : 'Устгах'}
               </Button>
             ) : canVoid ? (
-              <Button variant="destructive" onClick={handleVoid} disabled={voidEntry.isPending}>
-                {voidEntry.isPending ? 'Цуцалж байна...' : 'Гүйлгээ буцаах (Void)'}
+              <Button variant="destructive" onClick={handleVoid} disabled={voidEntry.isPending} data-testid="button-delete-approved-journal">
+                {voidEntry.isPending ? 'Устгаж байна...' : 'Устгах'}
               </Button>
             ) : null}
           </div>
