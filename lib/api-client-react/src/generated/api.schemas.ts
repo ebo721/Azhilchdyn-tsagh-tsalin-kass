@@ -14,6 +14,43 @@ export interface ErrorResponse {
   error: string;
 }
 
+export type ReceivableCreateAllocationKind = typeof ReceivableCreateAllocationKind[keyof typeof ReceivableCreateAllocationKind];
+
+
+export const ReceivableCreateAllocationKind = {
+  create: 'create',
+} as const;
+
+export type ReceivableCreateAllocationPartyType = typeof ReceivableCreateAllocationPartyType[keyof typeof ReceivableCreateAllocationPartyType];
+
+
+export const ReceivableCreateAllocationPartyType = {
+  employee: 'employee',
+  supplier: 'supplier',
+} as const;
+
+export interface ReceivableCreateAllocation {
+  kind: ReceivableCreateAllocationKind;
+  partyType: ReceivableCreateAllocationPartyType;
+  /** @minimum 1 */
+  employeeId?: number;
+  /** @minimum 1 */
+  supplierId?: number;
+}
+
+export type ReceivableSettleAllocationKind = typeof ReceivableSettleAllocationKind[keyof typeof ReceivableSettleAllocationKind];
+
+
+export const ReceivableSettleAllocationKind = {
+  settle: 'settle',
+} as const;
+
+export interface ReceivableSettleAllocation {
+  kind: ReceivableSettleAllocationKind;
+  /** @minimum 1 */
+  receivableId: number;
+}
+
 export interface JournalEntryLine {
   id: number;
   accountId: number;
@@ -23,6 +60,7 @@ export interface JournalEntryLine {
   credit: number;
   /** @nullable */
   memo: string | null;
+  allocation: ReceivableCreateAllocation | ReceivableSettleAllocation | null;
 }
 
 export interface JournalEntryLineInput {
@@ -34,6 +72,7 @@ export interface JournalEntryLineInput {
   credit: number;
   /** @nullable */
   memo?: string | null;
+  allocation?: ReceivableCreateAllocation | ReceivableSettleAllocation | null;
 }
 
 export interface JournalEntryInput {
@@ -83,6 +122,40 @@ export type JournalEntry = JournalEntrySummary & ({
 
 export interface JournalVoidResult {
   reversalEntryId: number;
+}
+
+export type JournalReceivablePartyType = typeof JournalReceivablePartyType[keyof typeof JournalReceivablePartyType];
+
+
+export const JournalReceivablePartyType = {
+  employee: 'employee',
+  supplier: 'supplier',
+} as const;
+
+export type JournalReceivableStatus = typeof JournalReceivableStatus[keyof typeof JournalReceivableStatus];
+
+
+export const JournalReceivableStatus = {
+  open: 'open',
+  settled: 'settled',
+} as const;
+
+export interface JournalReceivable {
+  id: number;
+  originJournalEntryId: number;
+  originJournalLineId: number;
+  partyType: JournalReceivablePartyType;
+  partyId: number;
+  partyLabel: string;
+  originalAmount: number;
+  openAmount: number;
+  status: JournalReceivableStatus;
+  createdAt: string;
+}
+
+export interface JournalSupplier {
+  id: number;
+  name: string;
 }
 
 export type JournalLedgerNormalBalance = typeof JournalLedgerNormalBalance[keyof typeof JournalLedgerNormalBalance];
@@ -636,6 +709,8 @@ export interface PayrollLine {
   incomeTax: number;
   advanceAmount: number;
   manualDeduction: number;
+  /** @nullable */
+  receivableId: number | null;
   deductions: number;
   carryoverAmount: number;
   payable: number;
@@ -656,6 +731,8 @@ export interface PayrollAdjustment {
   month: string;
   taxRelief: number;
   manualDeduction: number;
+  /** @nullable */
+  receivableId: number | null;
   paidAmount: number;
   /** @nullable */
   paymentDate?: string | null;
@@ -670,6 +747,8 @@ export interface PayrollAdjustmentInput {
   month: string;
   /** @minimum 0 */
   manualDeduction: number;
+  /** @nullable */
+  receivableId?: number | null;
   /** @minimum 0 */
   paidAmount: number;
   /** @nullable */
@@ -1605,4 +1684,17 @@ sourceType?: JournalSourceTypeParameter;
 accountId?: JournalAccountIdParameter;
 status?: JournalStatusParameter;
 };
+
+export type ListJournalReceivablesParams = {
+status?: ListJournalReceivablesStatus;
+};
+
+export type ListJournalReceivablesStatus = typeof ListJournalReceivablesStatus[keyof typeof ListJournalReceivablesStatus];
+
+
+export const ListJournalReceivablesStatus = {
+  open: 'open',
+  settled: 'settled',
+  all: 'all',
+} as const;
 

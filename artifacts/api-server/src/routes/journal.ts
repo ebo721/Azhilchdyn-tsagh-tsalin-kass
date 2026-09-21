@@ -4,9 +4,10 @@ import {
   ListJournalEntriesQueryParams, ListJournalEntriesResponse, UpdateJournalEntryBody, UpdateJournalEntryParams,
   UpdateJournalEntryResponse, VoidJournalEntryParams, VoidJournalEntryResponse,
   GetJournalAccountLedgerParams, GetJournalAccountLedgerResponse, GetJournalTrialBalanceResponse,
+  ListJournalReceivablesQueryParams, ListJournalReceivablesResponse, ListJournalSuppliersResponse,
 } from "@workspace/api-zod";
 import { and, asc, desc, eq, gte, lte, inArray, sql } from "drizzle-orm";
-import { db, chartOfAccountsTable, journalEntriesTable, journalLinesTable, type JournalEntry, type JournalLine } from "@workspace/db";
+import { db, chartOfAccountsTable, journalEntriesTable, journalLinesTable, receivablesTable, employeesTable, inventorySuppliersTable, type JournalEntry, type JournalLine } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import {
   JournalValidationError, postJournalEntry, voidJournalEntry,
@@ -71,9 +72,47 @@ router.get("/journal/entries", async (req, res, next) => {
       totalCredit: Number(totalByEntry.get(row.id)?.totalCredit ?? 0),
     }))));
   } catch (error) {
+    if (error && typeof error === "object" && "status" in error) return res.status(Number(error.status)).json({ error: errorMessage(error) });
     if (error instanceof JournalValidationError) return res.status(400).json({ error: error.message });
     return next(error);
   }
+});
+
+router.get("/journal/receivables", async (req, res, next) => {
+  try {
+    const { status = "open" } = ListJournalReceivablesQueryParams.parse(req.query);
+    const filters = status === "all" ? undefined : eq(receivablesTable.status, status);
+    const rows = await db.select({
+      id: receivablesTable.id,
+      originJournalEntryId: receivablesTable.originJournalEntryId,
+      originJournalLineId: receivablesTable.originJournalLineId,
+      employeeId: receivablesTable.employeeId,
+      supplierId: receivablesTable.supplierId,
+      originalAmount: receivablesTable.originalAmount,
+      openAmount: receivablesTable.openAmount,
+      status: receivablesTable.status,
+      createdAt: receivablesTable.createdAt,
+      employeeName: employeesTable.name,
+      supplierName: inventorySuppliersTable.name,
+    }).from(receivablesTable)
+      .leftJoin(employeesTable, eq(employeesTable.id, receivablesTable.employeeId))
+      .leftJoin(inventorySuppliersTable, eq(inventorySuppliersTable.id, receivablesTable.supplierId))
+      .where(filters).orderBy(desc(receivablesTable.createdAt));
+    return res.json(ListJournalReceivablesResponse.parse(rows.map((row) => ({
+      ...row,
+      partyType: row.employeeId ? "employee" : "supplier",
+      partyId: row.employeeId ?? row.supplierId!,
+      partyLabel: row.employeeName ?? row.supplierName!,
+    }))));
+  } catch (error) { return next(error); }
+});
+
+router.get("/journal/suppliers", async (_req, res, next) => {
+  try {
+    const rows = await db.select({ id: inventorySuppliersTable.id, name: inventorySuppliersTable.name })
+      .from(inventorySuppliersTable).orderBy(asc(inventorySuppliersTable.name));
+    return res.json(ListJournalSuppliersResponse.parse(rows));
+  } catch (error) { return next(error); }
 });
 
 router.get("/journal/entries/:id", async (req, res, next) => {
@@ -96,6 +135,7 @@ router.post("/journal/entries", async (req, res, next) => {
     const entry = await loadEntry(result.journalEntryId);
     return res.status(201).json(CreateJournalEntryResponse.parse(entry));
   } catch (error) {
+    if (error && typeof error === "object" && "status" in error) return res.status(Number(error.status)).json({ error: errorMessage(error) });
     if (error instanceof JournalValidationError) return res.status(400).json({ error: error.message });
     return next(error);
   }
@@ -136,6 +176,9 @@ router.post("/journal/entries/:id/void", async (req, res, next) => {
     return res.json(VoidJournalEntryResponse.parse(result));
   } catch (error) {
     const message = errorMessage(error);
+    if (error && typeof error === "object" && "status" in error) {
+      return res.status(Number(error.status)).json({ error: message });
+    }
     if (message === "Journal entry not found") return res.status(404).json({ error: message });
     if (message === "Only a posted journal entry can be voided") return res.status(409).json({ error: message });
     return next(error);

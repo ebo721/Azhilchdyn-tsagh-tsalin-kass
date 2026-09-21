@@ -12,7 +12,15 @@
     {
       "filename": "20260923_bank_transaction_rejected_accounts.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20260924_receivable_allocations.sql",
+      "releaseMode": "expand"
+    },
+    {
+      "filename": "20260925_payroll_receivable_allocation.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "dc575b5481abad27a27e1fa1b23c30c72d18f0e8fad3578a687eb6172c358fc1"
+  "schemaFingerprint": "56fe09a602161774c42e3dbf65995a0fa4d238c5665d00a3181f37eded40e6ae"
 }

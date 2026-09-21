@@ -23,6 +23,8 @@ export interface PayrollLine {
   incomeTax: number;
   advanceAmount: number;
   manualDeduction: number;
+  /** @nullable */
+  receivableId: number | null;
   deductions: number;
   carryoverAmount: number;
   payable: number;

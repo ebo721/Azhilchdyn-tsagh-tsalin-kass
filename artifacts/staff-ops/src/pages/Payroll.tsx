@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { cn } from '@/lib/utils';
 import { CalendarDays, Banknote, Check, ChevronRight, Coins, Pencil, RefreshCw, Trash2 } from 'lucide-react';
-import { getGetDashboardQueryKey, getGetPayrollAdvanceQueryKey, getGetPayrollQueryKey, getGetPayrollScheduleQueryKey, useApprovePayrollAdvance, useGetAuthSession, useGetPayroll, useGetPayrollAdvance, useGetPayrollSchedule, useListCashClosures, useUpdatePayrollAdvancePayment, useUpdatePayrollSchedule, useUpsertPayrollAdjustment, type PayrollLine, type PayrollScheduleInput } from '@workspace/api-client-react';
+import { getGetDashboardQueryKey, getGetPayrollAdvanceQueryKey, getGetPayrollQueryKey, getGetPayrollScheduleQueryKey, getListJournalReceivablesQueryKey, useApprovePayrollAdvance, useGetAuthSession, useGetPayroll, useGetPayrollAdvance, useGetPayrollSchedule, useListCashClosures, useListJournalReceivables, useUpdatePayrollAdvancePayment, useUpdatePayrollSchedule, useUpsertPayrollAdjustment, type PayrollLine, type PayrollScheduleInput } from '@workspace/api-client-react';
 import { EmptyState, ErrorBlock, LoadingBlock, Modal } from '@/components/ui-primitives';
 import { dateLabel, currentMonth, money, shiftMonth, today } from '@/lib/app-shared';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
@@ -16,6 +16,7 @@ const mongolianMonthLabel = (value: string) => {
 };
 type PayrollAdjustmentForm = {
   manualDeduction: string;
+  receivableId: string;
   paidAmount: string;
   paymentDate: string;
   secondPaidAmount: string;
@@ -25,10 +26,12 @@ type PayrollAdjustmentForm = {
 function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; month: string; onClose: () => void }) {
   const save = useUpsertPayrollAdjustment();
   const deletion = useQueueDeletion();
+  const receivables = useListJournalReceivables({ status: 'all' });
   const qc = useQueryClient();
   const form = useForm<PayrollAdjustmentForm>({
     defaultValues: {
       manualDeduction: String(line.manualDeduction),
+      receivableId: line.receivableId === null ? '' : String(line.receivableId),
       paidAmount: String(line.paidAmount),
       paymentDate: line.paymentDate ?? today(),
       secondPaidAmount: String(line.secondPaidAmount),
@@ -41,6 +44,7 @@ function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; m
         employeeId: line.employeeId,
         month,
         manualDeduction: Number(values.manualDeduction),
+        receivableId: values.receivableId ? Number(values.receivableId) : null,
         paidAmount: Number(values.paidAmount),
         paymentDate: Number(values.paidAmount) > 0 ? values.paymentDate : null,
         secondPaidAmount: Number(values.secondPaidAmount),
@@ -50,10 +54,16 @@ function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; m
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getGetPayrollQueryKey({ month }) });
         qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+        qc.invalidateQueries({ queryKey: getListJournalReceivablesQueryKey({ status: 'all' }) });
         onClose();
       },
     });
   };
+  const employeeReceivables = (receivables.data ?? []).filter((receivable) =>
+    receivable.partyType === 'employee'
+    && receivable.partyId === line.employeeId
+    && (receivable.status === 'open' || receivable.id === line.receivableId)
+  );
   const removePayment = (sequence: 1 | 2) => {
     if (!window.confirm(`${line.employeeName}-ийн ${sequence}-р цалингийн гүйлгээг устгах уу?`)) return;
     deletion.request(
@@ -90,6 +100,17 @@ function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; m
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2 text-xs font-semibold"><span>ХХОАТ хөнгөлөлт</span><div className="mt-1 flex h-10 w-full items-center rounded-lg border border-input bg-secondary/40 px-3 font-mono text-sm">{money(line.taxRelief)}</div><p className="text-[11px] font-normal text-muted-foreground">НДШ тооцох цалингийн шатлалаар автоматаар тооцно.</p></div>
         <label className="space-y-2 text-xs font-semibold">Гараар оруулах суутгал<input type="number" min="0" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('manualDeduction', { required: true, min: 0 })} data-testid="input-payroll-manual-deduction" /></label>
+        <label className="space-y-2 text-xs font-semibold sm:col-span-2">Суутгалаар хаах авлага
+          <select className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('receivableId')} data-testid="select-payroll-receivable">
+            <option value="">Авлагатай холбохгүй</option>
+            {employeeReceivables.map((receivable) => (
+              <option key={receivable.id} value={receivable.id}>
+                #{receivable.id} · Үлдэгдэл {money(receivable.openAmount)}
+              </option>
+            ))}
+          </select>
+          <p className="text-[11px] font-normal text-muted-foreground">Авлага сонговол суутгалын дүн үлдэгдлээс хэтрэхгүй байна.</p>
+        </label>
         <div className="grid gap-3 rounded-xl border border-border p-3 sm:col-span-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end"><label className="space-y-2 text-xs font-semibold">1-р гүйлгээний дүн<input type="number" min="0" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('paidAmount', { required: true, min: 0 })} data-testid="input-payroll-paid-amount" /></label><label className="space-y-2 text-xs font-semibold">1-р гүйлгээний огноо<input type="date" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('paymentDate')} data-testid="input-payroll-payment-date" /></label><Button type="button" size="icon" variant="outline" className="size-10 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={line.paidAmount <= 0 || deletion.isPending} onClick={() => removePayment(1)} aria-label="1-р гүйлгээг устгах" title="1-р гүйлгээг устгах" data-testid="button-delete-payroll-payment-1"><Trash2 className="size-4" /></Button></div>
         <div className="grid gap-3 rounded-xl border border-border p-3 sm:col-span-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end"><label className="space-y-2 text-xs font-semibold">2-р гүйлгээний дүн<input type="number" min="0" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('secondPaidAmount', { required: true, min: 0 })} data-testid="input-payroll-second-paid-amount" /></label><label className="space-y-2 text-xs font-semibold">2-р гүйлгээний огноо<input type="date" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('secondPaymentDate')} data-testid="input-payroll-second-payment-date" /></label><Button type="button" size="icon" variant="outline" className="size-10 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={line.secondPaidAmount <= 0 || deletion.isPending} onClick={() => removePayment(2)} aria-label="2-р гүйлгээг устгах" title="2-р гүйлгээг устгах" data-testid="button-delete-payroll-payment-2"><Trash2 className="size-4" /></Button></div>
       </div>

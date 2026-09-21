@@ -146,6 +146,7 @@ import {
   deletionRequestsTable,
   shiftTemplatesTable,
   chartOfAccountsTable,
+  receivablesTable,
   payrollScheduleSettingsTable,
 } from "@workspace/db";
 import { getStaffRole, getStaffSession, type StaffRole } from "../lib/hr-session.js";
@@ -279,19 +280,85 @@ router.put("/payroll-adjustments", async (req, res, next) => {
     }
     const sourceType = "payroll";
     const sourceKey = `${input.month}:${input.employeeId}`;
+    const selectedReceivableId = input.receivableId ?? null;
     const adjustment = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
+      const settlementDate = input.paidAmount > 0
+        ? input.paymentDate
+        : input.secondPaidAmount > 0
+          ? input.secondPaymentDate
+          : null;
+      const postingChanged = existingAdjustment?.receivableId !== selectedReceivableId
+        || Number(existingAdjustment?.manualDeduction ?? 0) !== input.manualDeduction
+        || (Number(existingAdjustment?.paidAmount ?? 0) > 0
+          ? existingAdjustment?.paymentDate
+          : Number(existingAdjustment?.secondPaidAmount ?? 0) > 0
+            ? existingAdjustment?.secondPaymentDate
+            : null) !== settlementDate;
+      let journalEntryId = existingAdjustment?.journalEntryId ?? null;
+
+      if (journalEntryId && postingChanged) {
+        await voidJournalEntry(tx, { journalEntryId, voidedBy: null });
+        journalEntryId = null;
+      }
+
+      if (selectedReceivableId !== null) {
+        if (input.manualDeduction <= 0) {
+          throw Object.assign(new Error("Авлагаас суутгах дүн 0-ээс их байх ёстой"), { status: 400 });
+        }
+        const [receivable] = await tx.select().from(receivablesTable)
+          .where(eq(receivablesTable.id, selectedReceivableId))
+          .for("update");
+        if (!receivable || Number(receivable.employeeId) !== input.employeeId) {
+          throw Object.assign(new Error("Сонгосон авлага энэ ажилтанд хамаарахгүй байна"), { status: 409 });
+        }
+        if (!journalEntryId && settlementDate) {
+          const accounts = await tx.select({ id: chartOfAccountsTable.id, code: chartOfAccountsTable.code })
+            .from(chartOfAccountsTable)
+            .where(and(inArray(chartOfAccountsTable.code, ["1200", "2100"]), eq(chartOfAccountsTable.isActive, true)));
+          const accountByCode = new Map(accounts.map((account) => [account.code, account.id]));
+          const receivableAccountId = accountByCode.get("1200");
+          const payrollPayableAccountId = accountByCode.get("2100");
+          if (!receivableAccountId || !payrollPayableAccountId) {
+            throw Object.assign(new Error("1200 болон 2100 данс идэвхтэй байх шаардлагатай"), { status: 409 });
+          }
+          const posting = await postJournalEntry(tx, {
+            date: settlementDate,
+            description: `${employee.name} · ${input.month} сарын цалингаас авлага суутгав`,
+            sourceType: "payroll_receivable",
+            sourceId: existingAdjustment?.id ?? null,
+            createdBy: null,
+            lines: [
+              { accountId: payrollPayableAccountId, debit: input.manualDeduction, credit: 0 },
+              {
+                accountId: receivableAccountId,
+                debit: 0,
+                credit: input.manualDeduction,
+                allocation: { kind: "settle", receivableId: selectedReceivableId },
+              },
+            ],
+          });
+          if (posting.status !== "posted") throw new Error("Payroll receivable journal must be balanced");
+          journalEntryId = posting.journalEntryId;
+        }
+      } else if (journalEntryId) {
+        await voidJournalEntry(tx, { journalEntryId, voidedBy: null });
+        journalEntryId = null;
+      }
+
       const [savedAdjustment] = await tx
         .insert(payrollAdjustmentsTable)
-        .values(input)
+        .values({ ...input, receivableId: selectedReceivableId, journalEntryId })
         .onConflictDoUpdate({
           target: [payrollAdjustmentsTable.employeeId, payrollAdjustmentsTable.month],
           set: {
             manualDeduction: input.manualDeduction,
+            receivableId: selectedReceivableId,
             paidAmount: input.paidAmount,
             paymentDate: input.paidAmount > 0 ? input.paymentDate : null,
             secondPaidAmount: input.secondPaidAmount,
             secondPaymentDate: input.secondPaidAmount > 0 ? input.secondPaymentDate : null,
+            journalEntryId,
             updatedAt: new Date(),
           },
         })
@@ -359,12 +426,17 @@ router.put("/payroll-adjustments", async (req, res, next) => {
       month: adjustment.month,
       taxRelief: Number(adjustment.taxRelief),
       manualDeduction: Number(adjustment.manualDeduction),
+      receivableId: adjustment.receivableId,
       paidAmount: Number(adjustment.paidAmount),
       paymentDate: adjustment.paymentDate,
       secondPaidAmount: Number(adjustment.secondPaidAmount),
       secondPaymentDate: adjustment.secondPaymentDate,
     });
   } catch (error) {
+    if (error && typeof error === "object" && "status" in error) {
+      res.status(Number(error.status)).json({ error: error instanceof Error ? error.message : "Цалингийн тохируулга хадгалж чадсангүй" });
+      return;
+    }
     next(error);
   }
 });
@@ -400,11 +472,27 @@ router.delete("/payroll-adjustments/:month/:employeeId/transactions/:sequence", 
 
     const sourceKey = sequence === 1 ? `${month}:${employeeId}` : `${month}:${employeeId}:2`;
     await db.transaction(async (tx) => {
+      if (adjustment.journalEntryId) {
+        const remainingPaidAmount = Number(sequence === 1 ? adjustment.secondPaidAmount : adjustment.paidAmount);
+        if (remainingPaidAmount <= 0) {
+          await voidJournalEntry(tx, { journalEntryId: adjustment.journalEntryId, voidedBy: null });
+        }
+      }
       await tx
         .update(payrollAdjustmentsTable)
         .set(sequence === 1
-          ? { paidAmount: 0, paymentDate: null, updatedAt: new Date() }
-          : { secondPaidAmount: 0, secondPaymentDate: null, updatedAt: new Date() })
+          ? {
+              paidAmount: 0,
+              paymentDate: null,
+              journalEntryId: Number(adjustment.secondPaidAmount) > 0 ? adjustment.journalEntryId : null,
+              updatedAt: new Date(),
+            }
+          : {
+              secondPaidAmount: 0,
+              secondPaymentDate: null,
+              journalEntryId: Number(adjustment.paidAmount) > 0 ? adjustment.journalEntryId : null,
+              updatedAt: new Date(),
+            })
         .where(eq(payrollAdjustmentsTable.id, adjustment.id));
       await tx.delete(cashTransactionsTable).where(and(
         eq(cashTransactionsTable.sourceType, "payroll"),

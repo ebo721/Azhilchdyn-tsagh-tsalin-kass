@@ -687,6 +687,7 @@ export const GetPayrollResponse = zod.object({
   "incomeTax": zod.number(),
   "advanceAmount": zod.number(),
   "manualDeduction": zod.number(),
+  "receivableId": zod.number().int().nullable(),
   "deductions": zod.number(),
   "carryoverAmount": zod.number(),
   "payable": zod.number(),
@@ -792,6 +793,7 @@ export const UpsertPayrollAdjustmentBody = zod.object({
   "employeeId": zod.number().int(),
   "month": zod.string().regex(upsertPayrollAdjustmentBodyMonthRegExp),
   "manualDeduction": zod.number().min(upsertPayrollAdjustmentBodyManualDeductionMin),
+  "receivableId": zod.number().int().nullish(),
   "paidAmount": zod.number().min(upsertPayrollAdjustmentBodyPaidAmountMin),
   "paymentDate": zod.string().nullish(),
   "secondPaidAmount": zod.number().min(upsertPayrollAdjustmentBodySecondPaidAmountMin),
@@ -803,6 +805,7 @@ export const UpsertPayrollAdjustmentResponse = zod.object({
   "month": zod.string(),
   "taxRelief": zod.number(),
   "manualDeduction": zod.number(),
+  "receivableId": zod.number().int().nullable(),
   "paidAmount": zod.number(),
   "paymentDate": zod.string().nullish(),
   "secondPaidAmount": zod.number(),
@@ -2651,6 +2654,9 @@ export const createJournalEntryBodyLinesItemDebitMin = 0;
 
 export const createJournalEntryBodyLinesItemCreditMin = 0;
 
+
+
+
 export const createJournalEntryBodyLinesMin = 2;
 
 
@@ -2662,7 +2668,16 @@ export const CreateJournalEntryBody = zod.object({
   "accountId": zod.number().int().min(1),
   "debit": zod.number().min(createJournalEntryBodyLinesItemDebitMin),
   "credit": zod.number().min(createJournalEntryBodyLinesItemCreditMin),
-  "memo": zod.string().nullish()
+  "memo": zod.string().nullish(),
+  "allocation": zod.union([zod.object({
+  "kind": zod.enum(['create']),
+  "partyType": zod.enum(['employee', 'supplier']),
+  "employeeId": zod.number().int().min(1).optional(),
+  "supplierId": zod.number().int().min(1).optional()
+}),zod.object({
+  "kind": zod.enum(['settle']),
+  "receivableId": zod.number().int().min(1)
+}),zod.null()]).optional()
 })).min(createJournalEntryBodyLinesMin)
 })
 
@@ -2670,6 +2685,9 @@ export const createJournalEntryResponseOneDateRegExp = new RegExp('^\\d{4}-\\d{2
 export const createJournalEntryResponseTwoLinesItemDebitMin = 0;
 
 export const createJournalEntryResponseTwoLinesItemCreditMin = 0;
+
+
+
 
 
 
@@ -2690,11 +2708,54 @@ export const CreateJournalEntryResponse = zod.object({
   "accountId": zod.number().int(),
   "debit": zod.number().min(createJournalEntryResponseTwoLinesItemDebitMin),
   "credit": zod.number().min(createJournalEntryResponseTwoLinesItemCreditMin),
-  "memo": zod.string().nullable()
+  "memo": zod.string().nullable(),
+  "allocation": zod.union([zod.object({
+  "kind": zod.enum(['create']),
+  "partyType": zod.enum(['employee', 'supplier']),
+  "employeeId": zod.number().int().min(1).optional(),
+  "supplierId": zod.number().int().min(1).optional()
+}),zod.object({
+  "kind": zod.enum(['settle']),
+  "receivableId": zod.number().int().min(1)
+}),zod.null()])
 })),
   "voidedAt": zod.coerce.date().nullable(),
   "voidedBy": zod.number().int().nullable()
 }))
+
+
+/**
+ * @summary List receivables and their open balances
+ */
+export const listJournalReceivablesQueryStatusDefault = `open`;
+
+export const ListJournalReceivablesQueryParams = zod.object({
+  "status": zod.enum(['open', 'settled', 'all']).default(listJournalReceivablesQueryStatusDefault)
+})
+
+export const ListJournalReceivablesResponseItem = zod.object({
+  "id": zod.number().int(),
+  "originJournalEntryId": zod.number().int(),
+  "originJournalLineId": zod.number().int(),
+  "partyType": zod.enum(['employee', 'supplier']),
+  "partyId": zod.number().int(),
+  "partyLabel": zod.string(),
+  "originalAmount": zod.number(),
+  "openAmount": zod.number(),
+  "status": zod.enum(['open', 'settled']),
+  "createdAt": zod.coerce.date()
+})
+export const ListJournalReceivablesResponse = zod.array(ListJournalReceivablesResponseItem)
+
+
+/**
+ * @summary List existing suppliers for journal allocations
+ */
+export const ListJournalSuppliersResponseItem = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string()
+})
+export const ListJournalSuppliersResponse = zod.array(ListJournalSuppliersResponseItem)
 
 
 /**
@@ -2708,6 +2769,9 @@ export const getJournalEntryResponseOneDateRegExp = new RegExp('^\\d{4}-\\d{2}-\
 export const getJournalEntryResponseTwoLinesItemDebitMin = 0;
 
 export const getJournalEntryResponseTwoLinesItemCreditMin = 0;
+
+
+
 
 
 
@@ -2728,7 +2792,16 @@ export const GetJournalEntryResponse = zod.object({
   "accountId": zod.number().int(),
   "debit": zod.number().min(getJournalEntryResponseTwoLinesItemDebitMin),
   "credit": zod.number().min(getJournalEntryResponseTwoLinesItemCreditMin),
-  "memo": zod.string().nullable()
+  "memo": zod.string().nullable(),
+  "allocation": zod.union([zod.object({
+  "kind": zod.enum(['create']),
+  "partyType": zod.enum(['employee', 'supplier']),
+  "employeeId": zod.number().int().min(1).optional(),
+  "supplierId": zod.number().int().min(1).optional()
+}),zod.object({
+  "kind": zod.enum(['settle']),
+  "receivableId": zod.number().int().min(1)
+}),zod.null()])
 })),
   "voidedAt": zod.coerce.date().nullable(),
   "voidedBy": zod.number().int().nullable()
@@ -2747,6 +2820,9 @@ export const updateJournalEntryBodyLinesItemDebitMin = 0;
 
 export const updateJournalEntryBodyLinesItemCreditMin = 0;
 
+
+
+
 export const updateJournalEntryBodyLinesMin = 2;
 
 
@@ -2756,7 +2832,16 @@ export const UpdateJournalEntryBody = zod.object({
   "accountId": zod.number().int().min(1),
   "debit": zod.number().min(updateJournalEntryBodyLinesItemDebitMin),
   "credit": zod.number().min(updateJournalEntryBodyLinesItemCreditMin),
-  "memo": zod.string().nullish()
+  "memo": zod.string().nullish(),
+  "allocation": zod.union([zod.object({
+  "kind": zod.enum(['create']),
+  "partyType": zod.enum(['employee', 'supplier']),
+  "employeeId": zod.number().int().min(1).optional(),
+  "supplierId": zod.number().int().min(1).optional()
+}),zod.object({
+  "kind": zod.enum(['settle']),
+  "receivableId": zod.number().int().min(1)
+}),zod.null()]).optional()
 })).min(updateJournalEntryBodyLinesMin)
 })
 
@@ -2764,6 +2849,9 @@ export const updateJournalEntryResponseOneDateRegExp = new RegExp('^\\d{4}-\\d{2
 export const updateJournalEntryResponseTwoLinesItemDebitMin = 0;
 
 export const updateJournalEntryResponseTwoLinesItemCreditMin = 0;
+
+
+
 
 
 
@@ -2784,7 +2872,16 @@ export const UpdateJournalEntryResponse = zod.object({
   "accountId": zod.number().int(),
   "debit": zod.number().min(updateJournalEntryResponseTwoLinesItemDebitMin),
   "credit": zod.number().min(updateJournalEntryResponseTwoLinesItemCreditMin),
-  "memo": zod.string().nullable()
+  "memo": zod.string().nullable(),
+  "allocation": zod.union([zod.object({
+  "kind": zod.enum(['create']),
+  "partyType": zod.enum(['employee', 'supplier']),
+  "employeeId": zod.number().int().min(1).optional(),
+  "supplierId": zod.number().int().min(1).optional()
+}),zod.object({
+  "kind": zod.enum(['settle']),
+  "receivableId": zod.number().int().min(1)
+}),zod.null()])
 })),
   "voidedAt": zod.coerce.date().nullable(),
   "voidedBy": zod.number().int().nullable()
@@ -2845,5 +2942,3 @@ export const GetJournalTrialBalanceResponse = zod.object({
   "balance": zod.number()
 }))
 })
-
-
