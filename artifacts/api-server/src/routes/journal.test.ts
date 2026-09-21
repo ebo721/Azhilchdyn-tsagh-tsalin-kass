@@ -4,7 +4,7 @@ import { after, before, describe, it } from "node:test";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import express from "express";
-import { db, chartOfAccountsTable, journalEntriesTable, usersTable } from "@workspace/db";
+import { db, cashTransactionsTable, chartOfAccountsTable, journalEntriesTable, usersTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 import { createStaffSession, hrCookie } from "../lib/hr-session.js";
 import requireStaffAuth from "../middlewares/require-staff-auth.js";
@@ -15,12 +15,12 @@ describe("journal routes", () => {
   let baseUrl: string;
   let cookie: string;
   let viewerCookie: string;
-  let adminCookie: string;
   let debitAccount: number;
   let creditAccount: number;
   let reportDebitAccount: number;
   let reportCreditAccount: number;
   const entryIds: number[] = [];
+  const cashIds: number[] = [];
   const userIds: number[] = [];
 
   before(async () => {
@@ -43,7 +43,6 @@ describe("journal routes", () => {
     userIds.push(...users.map((user) => user.id));
     cookie = `${hrCookie.name}=${createStaffSession(users[0])}`;
     viewerCookie = `${hrCookie.name}=${createStaffSession(users[1])}`;
-    adminCookie = `${hrCookie.name}=${createStaffSession(users[2])}`;
     const accounts = await db.insert(chartOfAccountsTable).values([
       { code: `journal-test-debit-${suffix}`, name: "Journal test debit", type: "asset", normalBalance: "debit" },
       { code: `journal-test-credit-${suffix}`, name: "Journal test credit", type: "liability", normalBalance: "credit" },
@@ -63,6 +62,7 @@ describe("journal routes", () => {
 
   after(async () => {
     server.close();
+    if (cashIds.length) await db.delete(cashTransactionsTable).where(inArray(cashTransactionsTable.id, cashIds));
     if (entryIds.length) await db.delete(journalEntriesTable).where(inArray(journalEntriesTable.id, entryIds));
     await db.delete(chartOfAccountsTable).where(inArray(chartOfAccountsTable.id, [debitAccount, creditAccount, reportDebitAccount, reportCreditAccount]));
     await db.delete(usersTable).where(inArray(usersTable.id, userIds));
@@ -158,9 +158,27 @@ describe("journal routes", () => {
     assert.equal(detail.status, "void");
   });
 
-  it("does not expose DELETE", async () => {
-    const response = await request("/journal/entries/1", { method: "DELETE" }, adminCookie);
-    assert.equal(response.status, 404);
+  it("permanently deletes only the selected journal without creating a reversal", async () => {
+    const id = await create(10, 10);
+    const [cash] = await db.insert(cashTransactionsTable).values({
+      type: "expense",
+      category: "Journal delete test",
+      description: "Source transaction must survive journal deletion",
+      amount: 10,
+      date: "2025-01-15",
+      journalEntryId: id,
+    }).returning({ id: cashTransactionsTable.id });
+    cashIds.push(cash.id);
+    const response = await request(`/journal/entries/${id}`, { method: "DELETE" });
+    assert.equal(response.status, 204);
+    const [deleted] = await db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, id));
+    assert.equal(deleted, undefined);
+    const [survivingCash] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, cash.id));
+    assert.ok(survivingCash);
+    assert.equal(survivingCash.journalEntryId, null);
+    const reversals = await db.select().from(journalEntriesTable)
+      .where(eq(journalEntriesTable.sourceId, id));
+    assert.equal(reversals.length, 0);
   });
 
   it("returns debit- and credit-normal ledger balances in deterministic order", async () => {

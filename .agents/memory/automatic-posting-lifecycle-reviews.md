@@ -18,3 +18,9 @@ Payroll and payroll-advance payment records must create or update an unjournaled
 **Why:** Recording “paid” confirms the business payment state but does not prove whether settlement came from cash or bank. Automatic posting can create the wrong settlement account and later require avoidable reversals.
 
 **How to apply:** Keep new payroll cash rows at `journalEntryId = null`. Preserve and replace an existing explicitly posted cash journal when its amount or date changes, but never create a first journal from payroll payment, cash-row editing, or bank unlinking.
+
+The Journal screen’s “Delete” action permanently deletes only the selected journal entry and its lines. It must not create a reversal or delete the source transaction.
+
+**Why:** In this product, reversal is a separate accounting behavior; users expect “Delete” to remove the selected journal itself.
+
+**How to apply:** Use hard delete for the Journal screen action, rely on journal foreign keys to clear `journalEntryId`, leave cash/bank/source rows intact, and reject deletion when receivable records restrict it.

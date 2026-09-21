@@ -2939,6 +2939,16 @@ export const UpdateJournalEntryResponse = zod.object({
 
 
 /**
+ * @summary Permanently delete only the selected journal entry
+ */
+export const DeleteJournalEntryParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteJournalEntryResponse = zod.void()
+
+
+/**
  * @summary Void a posted journal entry
  */
 export const VoidJournalEntryParams = zod.object({

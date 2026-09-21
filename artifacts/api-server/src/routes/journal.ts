@@ -2,12 +2,12 @@ import { Router, type IRouter } from "express";
 import {
   CreateJournalEntryBody, CreateJournalEntryResponse, GetJournalEntryParams, GetJournalEntryResponse,
   ListJournalEntriesQueryParams, ListJournalEntriesResponse, UpdateJournalEntryBody, UpdateJournalEntryParams,
-  UpdateJournalEntryResponse, VoidJournalEntryParams, VoidJournalEntryResponse,
+  UpdateJournalEntryResponse, VoidJournalEntryParams, VoidJournalEntryResponse, DeleteJournalEntryParams,
   GetJournalAccountLedgerParams, GetJournalAccountLedgerResponse, GetJournalTrialBalanceResponse,
   ListJournalReceivablesQueryParams, ListJournalReceivablesResponse, ListJournalSuppliersResponse,
 } from "@workspace/api-zod";
 import { and, asc, desc, eq, gte, lte, inArray, sql } from "drizzle-orm";
-import { db, bankTransactionsTable, cashTransactionsTable, chartOfAccountsTable, journalEntriesTable, journalLinesTable, receivablesTable, employeesTable, inventorySuppliersTable, type JournalEntry, type JournalLine } from "@workspace/db";
+import { db, bankTransactionsTable, cashTransactionsTable, chartOfAccountsTable, journalEntriesTable, journalLinesTable, receivablesTable, receivableAllocationsTable, employeesTable, inventorySuppliersTable, type JournalEntry, type JournalLine } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import {
   JournalValidationError, postJournalEntry, voidJournalEntry,
@@ -164,6 +164,39 @@ router.put("/journal/entries/:id", async (req, res, next) => {
   } catch (error) {
     if (error && typeof error === "object" && "status" in error) return res.status(Number(error.status)).json({ error: errorMessage(error) });
     if (error instanceof JournalValidationError) return res.status(400).json({ error: error.message });
+    return next(error);
+  }
+});
+
+router.delete("/journal/entries/:id", async (req, res, next) => {
+  try {
+    const { id } = DeleteJournalEntryParams.parse(req.params);
+    const result = await db.transaction(async (tx) => {
+      const [entry] = await tx.select({ id: journalEntriesTable.id })
+        .from(journalEntriesTable)
+        .where(eq(journalEntriesTable.id, id))
+        .for("update");
+      if (!entry) return "missing" as const;
+      const [[originReceivable], [settlementAllocation]] = await Promise.all([
+        tx.select({ id: receivablesTable.id })
+          .from(receivablesTable)
+          .where(eq(receivablesTable.originJournalEntryId, id))
+          .limit(1),
+        tx.select({ id: receivableAllocationsTable.id })
+          .from(receivableAllocationsTable)
+          .where(eq(receivableAllocationsTable.settlementJournalEntryId, id))
+          .limit(1),
+      ]);
+      if (originReceivable || settlementAllocation) return "receivable_linked" as const;
+      await tx.delete(journalEntriesTable).where(eq(journalEntriesTable.id, id));
+      return "deleted" as const;
+    });
+    if (result === "missing") return res.status(404).json({ error: "Journal entry not found" });
+    if (result === "receivable_linked") {
+      return res.status(409).json({ error: "Авлагатай холбоотой журналыг шууд устгах боломжгүй" });
+    }
+    return res.status(204).end();
+  } catch (error) {
     return next(error);
   }
 });

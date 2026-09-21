@@ -1,7 +1,6 @@
 import {
   useGetJournalEntry,
-  useVoidJournalEntry,
-  useDeleteBankTransactionJournal,
+  useDeleteJournalEntry,
   useListChartOfAccounts,
   getListJournalEntriesQueryKey,
   getGetJournalTrialBalanceQueryKey,
@@ -19,8 +18,7 @@ export function JournalEntryDetail({ entryId, onClose, role, onEdit }: { entryId
   const queryClient = useQueryClient();
   const { data: entry, isLoading, isError, refetch } = useGetJournalEntry(entryId);
   const { data: accounts } = useListChartOfAccounts();
-  const voidEntry = useVoidJournalEntry();
-  const deleteBankJournal = useDeleteBankTransactionJournal();
+  const deleteEntry = useDeleteJournalEntry();
 
   const refreshAccountingViews = () => {
     queryClient.invalidateQueries({ queryKey: getListJournalEntriesQueryKey() });
@@ -31,32 +29,17 @@ export function JournalEntryDetail({ entryId, onClose, role, onEdit }: { entryId
     queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/api/journal/accounts/') });
   };
 
-  const handleVoid = () => {
-    if (!window.confirm('Энэ батлагдсан журналыг устгах уу? Журналын түүх хадгалагдаж, эсрэг бичилт үүснэ.')) return;
-    voidEntry.mutate({ id: entryId }, {
+  const handleDelete = () => {
+    if (!window.confirm('Энэ журналыг бүр мөсөн устгах уу? Зөвхөн сонгосон журнал устах бөгөөд эсрэг бичилт үүсэхгүй.')) return;
+    deleteEntry.mutate({ id: entryId }, {
       onSuccess: () => {
-        toast.success('Журнал амжилттай буцаагдлаа');
+        toast.success('Журнал бүр мөсөн устгагдлаа');
         refreshAccountingViews();
-        refetch();
+        onClose();
       },
       onError: (error) => {
         toast.error(error instanceof Error ? error.message : 'Журнал устгахад алдаа гарлаа');
       }
-    });
-  };
-
-  const handleDeleteBankJournal = () => {
-    if (!entry?.sourceId) return;
-    if (!window.confirm('Энэ батлагдсан журналыг устгах уу? Журналын түүх хадгалагдаж, эсрэг бичилт үүснэ. Банкны гүйлгээг зөв дансаар дахин журналд бичих боломжтой болно.')) return;
-    deleteBankJournal.mutate({ id: entry.sourceId }, {
-      onSuccess: () => {
-        toast.success('Журнал буцаагдаж, банкны гүйлгээ дахин шивэхэд бэлэн боллоо');
-        refreshAccountingViews();
-        refetch();
-      },
-      onError: (error) => {
-        toast.error(error instanceof Error ? error.message : 'Журнал устгахад алдаа гарлаа');
-      },
     });
   };
 
@@ -69,10 +52,7 @@ export function JournalEntryDetail({ entryId, onClose, role, onEdit }: { entryId
   const totalCredit = Math.round(entry.lines.reduce((sum, line) => sum + Number(line.credit || 0), 0) * 100) / 100;
   const isBalanced = totalDebit === totalCredit;
   const accountLabels = new Map(accounts?.map((account) => [account.id, `${account.code} — ${account.name}`]) ?? []);
-  const canVoid = entry.status === 'posted' && (role === 'admin' || role === 'accountant');
-  const canDeleteBankJournal = canVoid
-    && (entry.sourceType === 'bank' || entry.sourceType === 'bank_transaction')
-    && entry.sourceId !== null;
+  const canDelete = role === 'admin' || role === 'accountant';
 
   return (
     <Modal title={`Журнал #${entryId}`} detail={entry.description} onClose={onClose} wide>
@@ -131,18 +111,14 @@ export function JournalEntryDetail({ entryId, onClose, role, onEdit }: { entryId
           </div>
         </div>
 
-        {(canVoid || (isDraft && (role === 'admin' || role === 'accountant'))) && (
+        {(canDelete || (isDraft && (role === 'admin' || role === 'accountant'))) && (
           <div className="flex justify-end gap-2 pt-4 border-t">
             {isDraft && (role === 'admin' || role === 'accountant') && (
               <Button variant="outline" onClick={() => onEdit(entry)}>Ноорог засах</Button>
             )}
-            {canDeleteBankJournal ? (
-              <Button variant="destructive" onClick={handleDeleteBankJournal} disabled={deleteBankJournal.isPending} data-testid="button-delete-approved-bank-journal">
-                {deleteBankJournal.isPending ? 'Устгаж байна...' : 'Устгах'}
-              </Button>
-            ) : canVoid ? (
-              <Button variant="destructive" onClick={handleVoid} disabled={voidEntry.isPending} data-testid="button-delete-approved-journal">
-                {voidEntry.isPending ? 'Устгаж байна...' : 'Устгах'}
+            {canDelete ? (
+              <Button variant="destructive" onClick={handleDelete} disabled={deleteEntry.isPending} data-testid="button-delete-approved-journal">
+                {deleteEntry.isPending ? 'Устгаж байна...' : 'Устгах'}
               </Button>
             ) : null}
           </div>

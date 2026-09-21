@@ -176,6 +176,10 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
     next();
     return;
   }
+  if (req.method === "DELETE" && session.role === "accountant" && /^\/journal\/entries\/\d+$/.test(req.path)) {
+    next();
+    return;
+  }
   if (req.method === "DELETE") {
     const requestId = Number(req.header("x-deletion-request-id"));
     if (!Number.isInteger(requestId)) {
