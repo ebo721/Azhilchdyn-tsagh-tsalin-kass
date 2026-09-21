@@ -315,6 +315,7 @@ router.get("/cash/transactions", async (_req, res, next) => {
       date: String(transaction.date),
       bankTransactionId: transaction.bankTransactionId,
       bankVerifiedAt: transaction.bankVerifiedAt?.toISOString() ?? null,
+      journalEntryId: transaction.journalEntryId,
       createdAt: String(transaction.createdAt),
       editable: transaction.sourceType === null,
       transactionKind: transaction.sourceType ?? "manual",

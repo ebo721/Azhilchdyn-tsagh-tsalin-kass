@@ -280,9 +280,27 @@ router.put("/payroll-adjustments", async (req, res, next) => {
     }
     const sourceType = "payroll";
     const sourceKey = `${input.month}:${input.employeeId}`;
+    const secondSourceKey = `${sourceKey}:2`;
     const selectedReceivableId = input.receivableId ?? null;
     const adjustment = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
+      const existingCashRows = await tx.select().from(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, sourceType),
+        inArray(cashTransactionsTable.sourceKey, [sourceKey, secondSourceKey]),
+      )).for("update");
+      const cashBySourceKey = new Map(existingCashRows.map((cash) => [cash.sourceKey, cash]));
+      const paymentInputs = [
+        { key: sourceKey, amount: input.paidAmount, date: input.paymentDate },
+        { key: secondSourceKey, amount: input.secondPaidAmount, date: input.secondPaymentDate },
+      ];
+      for (const payment of paymentInputs) {
+        const existingCash = cashBySourceKey.get(payment.key);
+        if (existingCash
+          && (existingCash.bankTransactionId !== null || existingCash.bankVerifiedAt !== null)
+          && (Number(existingCash.amount) !== payment.amount || String(existingCash.date) !== payment.date)) {
+          throw Object.assign(new Error("Банкны хуулгаар баталгаажсан цалингийн гүйлгээний дүн, огноог өөрчлөх боломжгүй"), { status: 409 });
+        }
+      }
       const settlementDate = input.paidAmount > 0
         ? input.paymentDate
         : input.secondPaidAmount > 0
@@ -391,7 +409,6 @@ router.put("/payroll-adjustments", async (req, res, next) => {
         ));
       }
 
-      const secondSourceKey = `${sourceKey}:2`;
       if (input.secondPaidAmount > 0 && input.secondPaymentDate) {
         const account = await cashAccountForCategory(tx, "Цалин");
         await tx.insert(cashTransactionsTable).values({
@@ -447,31 +464,34 @@ router.delete("/payroll-adjustments/:month/:employeeId/transactions/:sequence", 
       ...req.params,
       sequence: Number(req.params.sequence),
     });
-    const [adjustment] = await db
-      .select()
-      .from(payrollAdjustmentsTable)
-      .where(and(
-        eq(payrollAdjustmentsTable.employeeId, employeeId),
-        eq(payrollAdjustmentsTable.month, month),
-      ));
-    if (!adjustment) {
-      res.status(404).json({ error: "Цалингийн тохируулга олдсонгүй" });
-      return;
-    }
-
-    const paymentDate = sequence === 1 ? adjustment.paymentDate : adjustment.secondPaymentDate;
-    const paidAmount = Number(sequence === 1 ? adjustment.paidAmount : adjustment.secondPaidAmount);
-    if (paidAmount <= 0) {
-      res.status(404).json({ error: `${sequence}-р гүйлгээ олдсонгүй` });
-      return;
-    }
-    if (paymentDate && await isCashDateClosed(paymentDate)) {
-      res.status(409).json({ error: `${paymentDate} өдрийн касс өндөрлөсөн тул цалингийн гүйлгээг устгах боломжгүй` });
-      return;
-    }
-
     const sourceKey = sequence === 1 ? `${month}:${employeeId}` : `${month}:${employeeId}:2`;
-    await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
+      const [adjustment] = await tx
+        .select()
+        .from(payrollAdjustmentsTable)
+        .where(and(
+          eq(payrollAdjustmentsTable.employeeId, employeeId),
+          eq(payrollAdjustmentsTable.month, month),
+        ))
+        .for("update");
+      if (!adjustment) return "missing_adjustment" as const;
+      const paymentDate = sequence === 1 ? adjustment.paymentDate : adjustment.secondPaymentDate;
+      const paidAmount = Number(sequence === 1 ? adjustment.paidAmount : adjustment.secondPaidAmount);
+      if (paidAmount <= 0) return "missing_transaction" as const;
+      if (paymentDate) {
+        const [closure] = await tx.select({ id: cashClosuresTable.id })
+          .from(cashClosuresTable)
+          .where(eq(cashClosuresTable.date, paymentDate));
+        if (closure) return "cash_closed" as const;
+      }
+      const [cash] = await tx.select().from(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "payroll"),
+        eq(cashTransactionsTable.sourceKey, sourceKey),
+      )).for("update");
+      if (cash && (cash.bankTransactionId !== null || cash.bankVerifiedAt !== null)) {
+        return "bank_linked" as const;
+      }
       if (adjustment.journalEntryId) {
         const remainingPaidAmount = Number(sequence === 1 ? adjustment.secondPaidAmount : adjustment.paidAmount);
         if (remainingPaidAmount <= 0) {
@@ -498,7 +518,24 @@ router.delete("/payroll-adjustments/:month/:employeeId/transactions/:sequence", 
         eq(cashTransactionsTable.sourceType, "payroll"),
         eq(cashTransactionsTable.sourceKey, sourceKey),
       ));
+      return "deleted" as const;
     });
+    if (result === "missing_adjustment") {
+      res.status(404).json({ error: "Цалингийн тохируулга олдсонгүй" });
+      return;
+    }
+    if (result === "missing_transaction") {
+      res.status(404).json({ error: `${sequence}-р гүйлгээ олдсонгүй` });
+      return;
+    }
+    if (result === "cash_closed") {
+      res.status(409).json({ error: "Касс өндөрлөсөн өдрийн цалингийн гүйлгээг устгах боломжгүй" });
+      return;
+    }
+    if (result === "bank_linked") {
+      res.status(409).json({ error: "Банкны хуулгаар баталгаажсан цалингийн гүйлгээг эхлээд журналаас буцаана уу" });
+      return;
+    }
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -673,6 +710,9 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
             eq(cashTransactionsTable.sourceKey, sourceKey),
           ))
           .for("update");
+        if (previousCash && (previousCash.bankTransactionId !== null || previousCash.bankVerifiedAt !== null)) {
+          throw Object.assign(new Error("Банкны хуулгаар баталгаажсан урьдчилгаа цалинг эх үүсвэрээс өөрчлөх боломжгүй"), { status: 409 });
+        }
         await tx.insert(cashTransactionsTable).values({
           type: "expense",
           category: "Урьдчилгаа цалин",
@@ -749,6 +789,9 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
             eq(cashTransactionsTable.sourceKey, sourceKey),
           ))
           .for("update");
+        if (cash && (cash.bankTransactionId !== null || cash.bankVerifiedAt !== null)) {
+          return "bank_linked" as const;
+        }
         if (cash?.journalEntryId) {
           await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
         }
@@ -769,6 +812,10 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
     }
     if (paymentResult === "cash_closed") {
       res.status(409).json({ error: "Касс өндөрлөсөн өдрийн урьдчилгааны гүйлгээг засах боломжгүй" });
+      return;
+    }
+    if (paymentResult === "bank_linked") {
+      res.status(409).json({ error: "Банкны хуулгаар баталгаажсан урьдчилгаа цалинг эхлээд журналаас буцаана уу" });
       return;
     }
     res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(input.month)));

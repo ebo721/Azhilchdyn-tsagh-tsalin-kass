@@ -32,6 +32,8 @@ export interface CashTransaction {
   bankTransactionId: number | null;
   /** @nullable */
   bankVerifiedAt: Date | null;
+  /** @nullable */
+  journalEntryId: number | null;
   createdAt: string;
   editable: boolean;
   transactionKind: CashTransactionTransactionKind;
