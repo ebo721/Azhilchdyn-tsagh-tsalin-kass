@@ -36,9 +36,10 @@ export function Journal() {
   const [showTrialBalance, setShowTrialBalance] = useState(false);
 
   const canCreate = role === 'admin' || role === 'accountant';
+  const visibleEntries = entries?.filter((entry) => entry.status !== 'void');
 
-  const totalPosted = entries?.filter(e => e.status === 'posted').length || 0;
-  const totalDraft = entries?.filter(e => e.status === 'draft').length || 0;
+  const totalPosted = visibleEntries?.filter(e => e.status === 'posted').length || 0;
+  const totalDraft = visibleEntries?.filter(e => e.status === 'draft').length || 0;
 
   return (
     <div className="page-enter space-y-6">
@@ -89,7 +90,7 @@ export function Journal() {
             <div className="p-8"><LoadingBlock className="h-64" /></div>
           ) : isError ? (
             <div className="p-8"><ErrorBlock onRetry={() => refetch()} /></div>
-          ) : entries?.length === 0 ? (
+          ) : visibleEntries?.length === 0 ? (
             <EmptyState title="Журналын бичилт олдсонгүй" detail="Сонгосон хугацаанд ямар нэг гүйлгээ бүртгэгдээгүй байна." icon={Search} />
           ) : (
             <table className="w-full text-sm text-left">
@@ -105,7 +106,7 @@ export function Journal() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {entries?.map((entry) => {
+                {visibleEntries?.map((entry) => {
                   const isDraft = entry.status === 'draft';
                   const isVoid = entry.status === 'void';
                   const total = entry.totalDebit;
