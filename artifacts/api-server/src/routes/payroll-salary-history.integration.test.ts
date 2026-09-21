@@ -19,6 +19,8 @@ describe("effective-dated payroll salary", () => {
   let server: Server;
   let baseUrl: string;
   let adminCookie: string;
+  let accountantCookie: string;
+  let accountantUserId: number;
   let employeeId: number;
   let insuredEmployeeId: number;
 
@@ -27,6 +29,15 @@ describe("effective-dated payroll salary", () => {
     const [admin] = await db.select().from(usersTable).where(eq(usersTable.role, "admin")).limit(1);
     assert.ok(admin, "An admin database user is required for the integration test");
     adminCookie = `${hrCookie.name}=${createStaffSession(admin)}`;
+    const [accountant] = await db.insert(usersTable).values({
+      username: `payroll-accountant-${process.pid}`,
+      normalizedUsername: `payroll-accountant-${process.pid}`,
+      role: "accountant",
+      passwordHash: "not-used-by-session-tests",
+    }).returning();
+    assert.ok(accountant);
+    accountantUserId = accountant.id;
+    accountantCookie = `${hrCookie.name}=${createStaffSession(accountant)}`;
 
     const [employee] = await db.insert(employeesTable).values({
       name: `Salary history test ${process.pid}`,
@@ -118,6 +129,7 @@ describe("effective-dated payroll salary", () => {
   after(async () => {
     await db.delete(employeesTable).where(eq(employeesTable.id, employeeId));
     await db.delete(employeesTable).where(eq(employeesTable.id, insuredEmployeeId));
+    await db.delete(usersTable).where(eq(usersTable.id, accountantUserId));
     server.close();
   });
 
@@ -235,7 +247,7 @@ describe("effective-dated payroll salary", () => {
       }));
       const approveResponse = await fetch(`${baseUrl}/api/payroll-advance/approve`, {
         method: "POST",
-        headers: { cookie: adminCookie, "content-type": "application/json" },
+        headers: { cookie: accountantCookie, "content-type": "application/json" },
         body: JSON.stringify({ month, approvalDate: `${month}-15`, lines: approvalLines }),
       });
       assert.equal(approveResponse.status, 200);
@@ -247,6 +259,28 @@ describe("effective-dated payroll salary", () => {
       assert.equal(approved.approved, true);
       assert.equal(approved.lines.find((line) => line.employeeId === twice.id)?.advanceAmount, 55_000);
       assert.equal(approved.totalAmount, approvalLines.reduce((total, line) => total + line.advanceAmount, 0));
+
+      const [storedApproval] = await db.select()
+        .from(payrollAdvanceApprovalsTable)
+        .where(eq(payrollAdvanceApprovalsTable.month, month));
+      assert.ok(storedApproval);
+      assert.equal(storedApproval.approvalDate, `${month}-15`);
+      assert.equal(Number(storedApproval.totalAmount), approved.totalAmount);
+
+      const reloadResponse = await fetch(`${baseUrl}/api/payroll-advance?month=${month}`, {
+        headers: { cookie: accountantCookie },
+      });
+      assert.equal(reloadResponse.status, 200);
+      const reloaded = await reloadResponse.json() as {
+        approved: boolean;
+        approvalDate: string | null;
+        totalAmount: number;
+        lines: Array<{ employeeId: number; advanceAmount: number }>;
+      };
+      assert.equal(reloaded.approved, true);
+      assert.equal(reloaded.approvalDate, `${month}-15`);
+      assert.equal(reloaded.totalAmount, approved.totalAmount);
+      assert.equal(reloaded.lines.find((line) => line.employeeId === twice.id)?.advanceAmount, 55_000);
       await db.delete(payrollAdvanceApprovalsTable).where(eq(payrollAdvanceApprovalsTable.month, month));
 
       const payrollResponse = await fetch(`${baseUrl}/api/payroll?month=${month}`, {
