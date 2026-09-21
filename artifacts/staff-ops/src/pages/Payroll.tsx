@@ -207,6 +207,10 @@ export function Payroll() {
   const deletion = useQueueDeletion();
   const revertAdvanceApproval = deletion;
   const updateAdvancePayment = useUpdatePayrollAdvancePayment();
+  useEffect(() => {
+    setAdvanceAmounts({});
+    setAdvanceDates({});
+  }, [month]);
   const payrollTotals = (query.data?.lines ?? []).reduce(
     (totals, line) => ({
       gross: totals.gross + Number(line.gross),
@@ -216,12 +220,25 @@ export function Payroll() {
     }),
     { gross: 0, advanceAmount: 0, payable: 0, paidAmount: 0 },
   );
+  const displayedAdvanceTotal = (advanceQuery.data?.lines ?? []).reduce((total, line) => {
+    const amount = Number(advanceAmounts[line.employeeId] ?? line.advanceAmount);
+    return total + (Number.isFinite(amount) ? amount : 0);
+  }, 0);
   const pullLatestAttendance = async () => {
     await query.refetch();
-    if (showAdvance && !advanceQuery.data?.approved) await advanceQuery.refetch();
+    if (showAdvance && !advanceQuery.data?.approved) {
+      setAdvanceAmounts({});
+      setAdvanceDates({});
+      await advanceQuery.refetch();
+    }
   };
   const refreshAdvanceEmployee = async (employeeId: number) => {
     setRefreshingAdvanceEmployeeId(employeeId);
+    setAdvanceAmounts((amounts) => {
+      const next = { ...amounts };
+      delete next[employeeId];
+      return next;
+    });
     try {
       await advanceQuery.refetch();
     } finally {
@@ -233,9 +250,20 @@ export function Payroll() {
       window.alert('Батлах огноог сонгоно уу.');
       return;
     }
-    if (!window.confirm(`${month} сарын урьдчилгаа цалинг ${advanceApprovalDate} огноогоор батлах уу? Баталсны дараа энэ жагсаалтын дүн өөрчлөгдөхгүй.`)) return;
-    approveAdvance.mutate({ data: { month, approvalDate: advanceApprovalDate } }, {
-      onSuccess: () => qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey({ month }) }),
+    const lines = (advanceQuery.data?.lines ?? []).map((line) => ({
+      employeeId: line.employeeId,
+      advanceAmount: Number(advanceAmounts[line.employeeId] ?? line.advanceAmount),
+    }));
+    if (lines.some((line) => !Number.isFinite(line.advanceAmount) || line.advanceAmount < 0)) {
+      window.alert('Олгох урьдчилгааны дүнгүүдийг зөв оруулна уу.');
+      return;
+    }
+    if (!window.confirm(`${month} сарын урьдчилгаа цалинг зассан дүнгээр ${advanceApprovalDate} огноогоор батлах уу? Баталсны дараа энэ жагсаалтын дүн өөрчлөгдөхгүй.`)) return;
+    approveAdvance.mutate({ data: { month, approvalDate: advanceApprovalDate, lines } }, {
+      onSuccess: () => {
+        setAdvanceAmounts({});
+        qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey({ month }) });
+      },
     });
   };
   const revertApproval = () => {
@@ -295,8 +323,8 @@ export function Payroll() {
       </div>
       {advanceQuery.isLoading ? <div className="p-5"><LoadingBlock className="h-36" /></div> : advanceQuery.isError ? <div className="p-5"><ErrorBlock onRetry={() => advanceQuery.refetch()} /></div> : <div className="overflow-x-auto">
         <table className="w-full min-w-[1400px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Ажилтан</th><th className="px-5 py-3 text-right">Үндсэн цалин</th><th className="px-5 py-3 text-right">Ажилласан хоног</th><th className="px-5 py-3 text-right">Өдрийн цалин</th><th className="px-5 py-3 text-right">Нийт олгох цалин</th><th className="px-5 py-3 text-right">Олгох урьдчилгаа</th><th className="px-5 py-3 text-center">Гүйлгээний огноо</th><th className="px-5 py-3 text-center">Төлөв</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead>
-          <tbody className="divide-y divide-border">{advanceQuery.data?.lines.map((line) => { const selectedDate = advanceDates[line.employeeId] ?? line.paymentDate ?? advanceQuery.data?.approvalDate ?? today(); const cashClosed = closedCashDates.has(selectedDate) || Boolean(line.paymentDate && closedCashDates.has(line.paymentDate)); const isRefreshing = refreshingAdvanceEmployeeId === line.employeeId; return <tr key={line.employeeId}><td className="px-5 py-4"><p className="text-sm font-semibold">{line.employeeName}</p><p className="text-xs text-muted-foreground">{line.employeeType === 'shift' ? 'Ээлжийн ажилтан' : 'Оффис ажилтан'}</p></td><td className="px-5 py-4 text-right font-mono text-sm">{line.employeeType === 'office' ? money(line.baseSalary) : '—'}</td><td className="px-5 py-4 text-right font-mono text-sm">{line.daysWorked}</td><td className="px-5 py-4 text-right font-mono text-sm">{line.employeeType === 'shift' ? money(line.dailySalary) : '—'}</td><td className="px-5 py-4 text-right font-mono text-sm">{money(line.totalSalary)}</td><td className="px-5 py-4 text-right"><input type="number" min="0" step="1000" value={advanceAmounts[line.employeeId] ?? String(line.advanceAmount)} disabled={!advanceQuery.data?.approved || line.paid || cashClosed} onChange={(event) => setAdvanceAmounts((amounts) => ({ ...amounts, [line.employeeId]: event.target.value }))} className="h-8 w-32 rounded-lg border border-input bg-background px-2 text-right font-mono text-sm font-bold text-primary outline-none focus:border-primary" data-testid={`input-advance-amount-${line.employeeId}`} /></td><td className="px-5 py-4 text-center"><input type="date" value={selectedDate} disabled={!advanceQuery.data?.approved || line.paid} onChange={(event) => setAdvanceDates((dates) => ({ ...dates, [line.employeeId]: event.target.value }))} className="h-8 rounded-lg border border-input bg-background px-2 text-xs outline-none focus:border-primary" data-testid={`input-advance-payment-date-${line.employeeId}`} /></td><td className="px-5 py-4 text-center">{advanceQuery.data?.approved ? <Button size="sm" variant={line.paid ? 'default' : 'outline'} disabled={updateAdvancePayment.isPending || cashClosed} onClick={() => setAdvancePaid(line.employeeId, !line.paid, line.advanceAmount, line.paymentDate)} title={cashClosed ? 'Энэ өдрийн касс өндөрлөсөн' : undefined} data-testid={`button-advance-paid-${line.employeeId}`}>{line.paid ? <><Check className="size-3.5" />Олгосон</> : 'Олгоогүй'}</Button> : <span className="text-xs text-muted-foreground">Батлаагүй</span>}</td><td className="px-5 py-4 text-right"><Button size="sm" variant="outline" disabled={Boolean(advanceQuery.data?.approved) || advanceQuery.isFetching} onClick={() => refreshAdvanceEmployee(line.employeeId)} title={advanceQuery.data?.approved ? 'Батлагдсан урьдчилгааны мэдээлэл өөрчлөгдөхгүй' : 'Цалин болон ажилласан хоногийн мэдээллийг шинэчлэх'} data-testid={`button-refresh-advance-employee-${line.employeeId}`}><RefreshCw className={cn('size-3.5', isRefreshing && 'animate-spin')} />{isRefreshing ? 'Шинэчилж байна...' : 'Шинэчлэх'}</Button></td></tr>; })}</tbody>
-          <tfoot className="border-t-2 border-border bg-secondary/35"><tr><td colSpan={5} className="px-5 py-4 text-right text-sm font-bold">Нийт олгох урьдчилгаа</td><td className="px-5 py-4 text-right font-mono text-base font-bold text-primary" data-testid="value-total-payroll-advance">{money(advanceQuery.data?.totalAmount)}</td><td colSpan={3} /></tr></tfoot>
+          <tbody className="divide-y divide-border">{advanceQuery.data?.lines.map((line) => { const selectedDate = advanceDates[line.employeeId] ?? line.paymentDate ?? advanceQuery.data?.approvalDate ?? today(); const cashClosed = closedCashDates.has(selectedDate) || Boolean(line.paymentDate && closedCashDates.has(line.paymentDate)); const isRefreshing = refreshingAdvanceEmployeeId === line.employeeId; return <tr key={line.employeeId}><td className="px-5 py-4"><p className="text-sm font-semibold">{line.employeeName}</p><p className="text-xs text-muted-foreground">{line.employeeType === 'shift' ? 'Ээлжийн ажилтан' : 'Оффис ажилтан'}</p></td><td className="px-5 py-4 text-right font-mono text-sm">{line.employeeType === 'office' ? money(line.baseSalary) : '—'}</td><td className="px-5 py-4 text-right font-mono text-sm">{line.daysWorked}</td><td className="px-5 py-4 text-right font-mono text-sm">{line.employeeType === 'shift' ? money(line.dailySalary) : '—'}</td><td className="px-5 py-4 text-right font-mono text-sm">{money(line.totalSalary)}</td><td className="px-5 py-4 text-right"><input type="number" min="0" step="1000" value={advanceAmounts[line.employeeId] ?? String(line.advanceAmount)} disabled={Boolean(advanceQuery.data?.approved && (line.paid || cashClosed))} onChange={(event) => setAdvanceAmounts((amounts) => ({ ...amounts, [line.employeeId]: event.target.value }))} className="h-8 w-32 rounded-lg border border-input bg-background px-2 text-right font-mono text-sm font-bold text-primary outline-none focus:border-primary" data-testid={`input-advance-amount-${line.employeeId}`} /></td><td className="px-5 py-4 text-center"><input type="date" value={selectedDate} disabled={!advanceQuery.data?.approved || line.paid} onChange={(event) => setAdvanceDates((dates) => ({ ...dates, [line.employeeId]: event.target.value }))} className="h-8 rounded-lg border border-input bg-background px-2 text-xs outline-none focus:border-primary" data-testid={`input-advance-payment-date-${line.employeeId}`} /></td><td className="px-5 py-4 text-center">{advanceQuery.data?.approved ? <Button size="sm" variant={line.paid ? 'default' : 'outline'} disabled={updateAdvancePayment.isPending || cashClosed} onClick={() => setAdvancePaid(line.employeeId, !line.paid, line.advanceAmount, line.paymentDate)} title={cashClosed ? 'Энэ өдрийн касс өндөрлөсөн' : undefined} data-testid={`button-advance-paid-${line.employeeId}`}>{line.paid ? <><Check className="size-3.5" />Олгосон</> : 'Олгоогүй'}</Button> : <span className="text-xs text-muted-foreground">Батлаагүй</span>}</td><td className="px-5 py-4 text-right"><Button size="sm" variant="outline" disabled={Boolean(advanceQuery.data?.approved) || advanceQuery.isFetching} onClick={() => refreshAdvanceEmployee(line.employeeId)} title={advanceQuery.data?.approved ? 'Батлагдсан урьдчилгааны мэдээлэл өөрчлөгдөхгүй' : 'Цалин болон ажилласан хоногийн мэдээллийг шинэчлэх'} data-testid={`button-refresh-advance-employee-${line.employeeId}`}><RefreshCw className={cn('size-3.5', isRefreshing && 'animate-spin')} />{isRefreshing ? 'Шинэчилж байна...' : 'Шинэчлэх'}</Button></td></tr>; })}</tbody>
+          <tfoot className="border-t-2 border-border bg-secondary/35"><tr><td colSpan={5} className="px-5 py-4 text-right text-sm font-bold">Нийт олгох урьдчилгаа</td><td className="px-5 py-4 text-right font-mono text-base font-bold text-primary" data-testid="value-total-payroll-advance">{money(displayedAdvanceTotal)}</td><td colSpan={3} /></tr></tfoot>
         </table>
       </div>}
       {revertAdvanceApproval.isError && <p className="border-t border-border bg-destructive/5 px-5 py-3 text-xs font-medium text-destructive">Устгах хүсэлт үүсгэхэд алдаа гарлаа.</p>}

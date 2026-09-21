@@ -2315,10 +2315,20 @@ components:
             $ref: "#/components/schemas/PayrollAdvanceLine"
     PayrollAdvanceApprovalInput:
       type: object
-      required: [month, approvalDate]
+      required: [month, approvalDate, lines]
       properties:
         month: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
         approvalDate: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' }
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/PayrollAdvanceApprovalLineInput"
+    PayrollAdvanceApprovalLineInput:
+      type: object
+      required: [employeeId, advanceAmount]
+      properties:
+        employeeId: { type: integer }
+        advanceAmount: { type: number, minimum: 0 }
     PayrollAdvancePaymentInput:
       type: object
       required: [month, employeeId, advanceAmount, paid]

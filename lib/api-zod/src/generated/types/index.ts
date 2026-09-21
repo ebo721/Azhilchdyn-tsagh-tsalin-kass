@@ -149,6 +149,7 @@ export * from './operatingExpensePaymentInput';
 export * from './payrollAdjustment';
 export * from './payrollAdjustmentInput';
 export * from './payrollAdvanceApprovalInput';
+export * from './payrollAdvanceApprovalLineInput';
 export * from './payrollAdvanceLine';
 export * from './payrollAdvanceLineEmployeeType';
 export * from './payrollAdvancePaymentInput';

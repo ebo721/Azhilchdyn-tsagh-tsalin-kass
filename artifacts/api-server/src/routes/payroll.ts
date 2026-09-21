@@ -553,19 +553,41 @@ router.get("/payroll-advance", async (req, res, next) => {
 
 router.post("/payroll-advance/approve", async (req, res, next) => {
   try {
-    const { month, approvalDate } = ApprovePayrollAdvanceBody.parse(req.body);
+    const { month, approvalDate, lines } = ApprovePayrollAdvanceBody.parse(req.body);
     if (!isValidCalendarDate(approvalDate)) {
       res.status(400).json({ error: "Урьдчилгаа цалин батлах огноог зөв оруулна уу" });
       return;
+    }
+    const overrideEmployeeIds = new Set<number>();
+    for (const line of lines) {
+      if (overrideEmployeeIds.has(line.employeeId)) {
+        res.status(400).json({ error: "Нэг ажилтны урьдчилгааны дүн давхар орсон байна" });
+        return;
+      }
+      overrideEmployeeIds.add(line.employeeId);
     }
     await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
       const existing = await getPayrollAdvanceSummary(month);
       if (!existing.approved) {
+        const currentLines = existing.lines as Array<Record<string, unknown> & {
+          employeeId: number;
+          advanceAmount: number;
+        }>;
+        const employeeIds = new Set(currentLines.map((line) => line.employeeId));
+        const unknownEmployeeId = lines.find((line) => !employeeIds.has(line.employeeId))?.employeeId;
+        if (unknownEmployeeId !== undefined) {
+          throw Object.assign(new Error(`Урьдчилгааны жагсаалтад байхгүй ажилтан #${unknownEmployeeId}`), { status: 409 });
+        }
+        const overrides = new Map(lines.map((line) => [line.employeeId, money(line.advanceAmount)]));
+        const approvedLines = currentLines.map((line) => ({
+          ...line,
+          advanceAmount: overrides.get(line.employeeId) ?? line.advanceAmount,
+        }));
         await tx.insert(payrollAdvanceApprovalsTable).values({
           month,
-          lines: existing.lines,
-          totalAmount: existing.totalAmount,
+          lines: approvedLines,
+          totalAmount: money(approvedLines.reduce((total, line) => total + line.advanceAmount, 0)),
           approvalDate,
         }).onConflictDoNothing();
       }

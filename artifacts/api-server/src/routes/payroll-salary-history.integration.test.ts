@@ -9,6 +9,7 @@ import {
   employeesTable,
   employeeSalaryHistoryTable,
   payrollAdjustmentsTable,
+  payrollAdvanceApprovalsTable,
   usersTable,
 } from "@workspace/db";
 import app from "../app";
@@ -228,6 +229,26 @@ describe("effective-dated payroll salary", () => {
       assert.equal(result.lines.some((line) => line.employeeId === once.id), false);
       assert.equal(result.lines.find((line) => line.employeeId === twice.id)?.advanceAmount, 100_000);
 
+      const approvalLines = result.lines.map((line) => ({
+        employeeId: line.employeeId,
+        advanceAmount: line.employeeId === twice.id ? 55_000 : line.advanceAmount,
+      }));
+      const approveResponse = await fetch(`${baseUrl}/api/payroll-advance/approve`, {
+        method: "POST",
+        headers: { cookie: adminCookie, "content-type": "application/json" },
+        body: JSON.stringify({ month, approvalDate: `${month}-15`, lines: approvalLines }),
+      });
+      assert.equal(approveResponse.status, 200);
+      const approved = await approveResponse.json() as {
+        approved: boolean;
+        totalAmount: number;
+        lines: Array<{ employeeId: number; advanceAmount: number }>;
+      };
+      assert.equal(approved.approved, true);
+      assert.equal(approved.lines.find((line) => line.employeeId === twice.id)?.advanceAmount, 55_000);
+      assert.equal(approved.totalAmount, approvalLines.reduce((total, line) => total + line.advanceAmount, 0));
+      await db.delete(payrollAdvanceApprovalsTable).where(eq(payrollAdvanceApprovalsTable.month, month));
+
       const payrollResponse = await fetch(`${baseUrl}/api/payroll?month=${month}`, {
         headers: { cookie: adminCookie },
       });
@@ -241,6 +262,7 @@ describe("effective-dated payroll salary", () => {
       assert.equal(onceFinal.advanceAmount, 0);
       assert.equal(onceFinal.payable, 100_000);
     } finally {
+      await db.delete(payrollAdvanceApprovalsTable).where(eq(payrollAdvanceApprovalsTable.month, month));
       for (const employee of created) await db.delete(employeesTable).where(eq(employeesTable.id, employee.id));
     }
   });
