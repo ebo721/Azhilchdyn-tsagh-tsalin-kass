@@ -132,14 +132,14 @@ describe("calendar month request validation", () => {
   });
 });
 
-describe("accountant employee page dependencies", () => {
+describe("accountant workflow access", () => {
   let server: Server | undefined;
   let baseUrl: string;
   let accountantCookie: string;
   let testUserId: number | undefined;
 
   before(async () => {
-    process.env.SESSION_SECRET = "accountant-employee-page-access-test";
+    process.env.SESSION_SECRET = "accountant-workflow-access-test";
     const uniqueName = `operations-accountant-${process.pid}-${randomUUID()}`;
     const [testUser] = await db.insert(usersTable).values({
       username: uniqueName,
@@ -170,6 +170,14 @@ describe("accountant employee page dependencies", () => {
     ]);
 
     assert.deepEqual(responses.map(({ status }) => status), [200, 200, 200]);
+  });
+
+  it("allows accountant access to payroll advance calculations", async () => {
+    const response = await fetch(`${baseUrl}/api/payroll-advance?month=2026-09`, {
+      headers: { cookie: accountantCookie },
+    });
+
+    assert.equal(response.status, 200);
   });
 
   it("does not grant accountant access to attendance mutations", async () => {

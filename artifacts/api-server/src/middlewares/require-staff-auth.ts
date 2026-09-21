@@ -221,7 +221,7 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
   const allowedPrefixes = role === "hr"
     ? ["/employees", "/attendance", "/hour-balance"]
       : role === "accountant"
-        ? ["/hour-balance", "/payroll", "/payroll-schedule", "/cash", "/bank-accounts", "/bank-transactions", "/journal"]
+        ? ["/hour-balance", "/payroll", "/payroll-advance", "/payroll-schedule", "/cash", "/bank-accounts", "/bank-transactions", "/journal"]
       : role === "warehouse"
         ? ["/inventory", "/fixed-assets", "/operating-expenses"]
         : [];
