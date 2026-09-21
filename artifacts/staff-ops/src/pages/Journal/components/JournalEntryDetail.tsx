@@ -1,9 +1,12 @@
 import {
   useGetJournalEntry,
   useVoidJournalEntry,
+  useDeleteBankTransactionJournal,
   useListChartOfAccounts,
   getListJournalEntriesQueryKey,
   getGetJournalTrialBalanceQueryKey,
+  getListBankTransactionsQueryKey,
+  getListBankTransactionJournalReviewQueryKey,
   type JournalEntry,
 } from '@workspace/api-client-react';
 import { Modal, ErrorBlock, LoadingBlock } from '@/components/ui-primitives';
@@ -17,21 +20,43 @@ export function JournalEntryDetail({ entryId, onClose, role, onEdit }: { entryId
   const { data: entry, isLoading, isError, refetch } = useGetJournalEntry(entryId);
   const { data: accounts } = useListChartOfAccounts();
   const voidEntry = useVoidJournalEntry();
+  const deleteBankJournal = useDeleteBankTransactionJournal();
+
+  const refreshAccountingViews = () => {
+    queryClient.invalidateQueries({ queryKey: getListJournalEntriesQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetJournalTrialBalanceQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getListBankTransactionJournalReviewQueryKey() });
+    queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/api/journal/receivables') });
+    queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/api/journal/accounts/') });
+  };
 
   const handleVoid = () => {
-    if (!window.confirm('Энэ гүйлгээг буцаахдаа итгэлтэй байна уу? Энэ үйлдэл буцахгүй.')) return;
+    if (!window.confirm('Энэ батлагдсан журналыг устгах уу? Журналын түүх хадгалагдаж, эсрэг бичилт үүснэ.')) return;
     voidEntry.mutate({ id: entryId }, {
       onSuccess: () => {
-        toast.success('Гүйлгээ амжилттай буцаагдлаа');
-        queryClient.invalidateQueries({ queryKey: getListJournalEntriesQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getGetJournalTrialBalanceQueryKey() });
-         queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/api/journal/receivables') });
-        queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/api/journal/accounts/') });
+        toast.success('Журнал амжилттай буцаагдлаа');
+        refreshAccountingViews();
         refetch();
       },
       onError: (error) => {
-        toast.error(error instanceof Error ? error.message : 'Гүйлгээ буцаахад алдаа гарлаа');
+        toast.error(error instanceof Error ? error.message : 'Журнал устгахад алдаа гарлаа');
       }
+    });
+  };
+
+  const handleDeleteBankJournal = () => {
+    if (!entry?.sourceId) return;
+    if (!window.confirm('Энэ батлагдсан журналыг устгах уу? Журналын түүх хадгалагдаж, эсрэг бичилт үүснэ. Банкны гүйлгээг зөв дансаар дахин журналд бичих боломжтой болно.')) return;
+    deleteBankJournal.mutate({ id: entry.sourceId }, {
+      onSuccess: () => {
+        toast.success('Журнал буцаагдаж, банкны гүйлгээ дахин шивэхэд бэлэн боллоо');
+        refreshAccountingViews();
+        refetch();
+      },
+      onError: (error) => {
+        toast.error(error instanceof Error ? error.message : 'Журнал устгахад алдаа гарлаа');
+      },
     });
   };
 
@@ -45,6 +70,7 @@ export function JournalEntryDetail({ entryId, onClose, role, onEdit }: { entryId
   const isBalanced = totalDebit === totalCredit;
   const accountLabels = new Map(accounts?.map((account) => [account.id, `${account.code} — ${account.name}`]) ?? []);
   const canVoid = entry.status === 'posted' && (role === 'admin' || role === 'accountant');
+  const canDeleteBankJournal = canVoid && entry.sourceType === 'bank' && entry.sourceId !== null;
 
   return (
     <Modal title={`Журнал #${entryId}`} detail={entry.description} onClose={onClose} wide>
@@ -108,11 +134,15 @@ export function JournalEntryDetail({ entryId, onClose, role, onEdit }: { entryId
             {isDraft && (role === 'admin' || role === 'accountant') && (
               <Button variant="outline" onClick={() => onEdit(entry)}>Ноорог засах</Button>
             )}
-            {canVoid && (
-            <Button variant="destructive" onClick={handleVoid} disabled={voidEntry.isPending}>
-              {voidEntry.isPending ? 'Цуцалж байна...' : 'Гүйлгээ буцаах (Void)'}
-            </Button>
-            )}
+            {canDeleteBankJournal ? (
+              <Button variant="destructive" onClick={handleDeleteBankJournal} disabled={deleteBankJournal.isPending} data-testid="button-delete-approved-bank-journal">
+                {deleteBankJournal.isPending ? 'Устгаж байна...' : 'Устгах'}
+              </Button>
+            ) : canVoid ? (
+              <Button variant="destructive" onClick={handleVoid} disabled={voidEntry.isPending} data-testid="button-delete-approved-journal">
+                {voidEntry.isPending ? 'Устгаж байна...' : 'Устгах'}
+              </Button>
+            ) : null}
           </div>
         )}
       </div>

@@ -38,6 +38,7 @@ import type {
   BankTransactionCashLinkInput,
   BankTransactionCashTransferInput,
   BankTransactionImportResult,
+  BankTransactionJournalDeleteResult,
   BankTransactionJournalPostInput,
   BankTransactionJournalPostResult,
   BankTransactionJournalReviewItem,
@@ -3926,6 +3927,77 @@ export const usePostBankTransactionJournal = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getPostBankTransactionJournalMutationOptions(options));
+    }
+
+export const getDeleteBankTransactionJournalUrl = (id: number,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}/journal`
+}
+
+/**
+ * @summary Reverse and unlink a directly posted bank journal while preserving audit history
+ */
+export const deleteBankTransactionJournal = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<BankTransactionJournalDeleteResult> => {
+
+  return customFetch<BankTransactionJournalDeleteResult>(getDeleteBankTransactionJournalUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteBankTransactionJournalMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBankTransactionJournal>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteBankTransactionJournal>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteBankTransactionJournal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteBankTransactionJournal>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteBankTransactionJournal(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteBankTransactionJournalMutationResult = NonNullable<Awaited<ReturnType<typeof deleteBankTransactionJournal>>>
+
+    export type DeleteBankTransactionJournalMutationError = ErrorType<void>
+
+    /**
+ * @summary Reverse and unlink a directly posted bank journal while preserving audit history
+ */
+export const useDeleteBankTransactionJournal = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBankTransactionJournal>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteBankTransactionJournal>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteBankTransactionJournalMutationOptions(options));
     }
 
 export const getRejectBankTransactionSuggestionUrl = (id: number,) => {

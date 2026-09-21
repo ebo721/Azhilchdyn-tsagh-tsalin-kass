@@ -848,6 +848,23 @@ paths:
           description: Bank transaction not found
         "409":
           description: Bank transaction was already resolved
+  /bank-transactions/{id}/journal:
+    delete:
+      operationId: deleteBankTransactionJournal
+      tags: [bank-transactions]
+      summary: Reverse and unlink a directly posted bank journal while preserving audit history
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Bank journal reversed and transaction returned to journal review
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankTransactionJournalDeleteResult" }
+        "404":
+          description: Bank transaction not found
+        "409":
+          description: No directly posted bank journal can be deleted
   /bank-transactions/{id}/reject-suggestion:
     post:
       operationId: rejectBankTransactionSuggestion
@@ -2565,6 +2582,13 @@ components:
       properties:
         id: { type: integer }
         journalEntryId: { type: integer }
+    BankTransactionJournalDeleteResult:
+      type: object
+      required: [bankTransactionId, voidedJournalEntryId, reversalJournalEntryId]
+      properties:
+        bankTransactionId: { type: integer, minimum: 1 }
+        voidedJournalEntryId: { type: integer, minimum: 1 }
+        reversalJournalEntryId: { type: integer, minimum: 1 }
     BankTransactionImportResult:
       type: object
       required: [imported, skippedDuplicate, skippedZero, totalRead, recognized, unrecognized, transactionIds]
