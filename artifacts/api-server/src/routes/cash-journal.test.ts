@@ -341,7 +341,7 @@ describe("cash journal posting", () => {
     assert.equal(lines.some((line) => line.accountId === bankAccountId && line.credit === 21), true);
   });
 
-  it("posts a journal when an edited historical payroll cash row has no journal link", async () => {
+  it("keeps an edited historical payroll cash row unposted until the explicit journal action", async () => {
     const [cash] = await db.insert(cashTransactionsTable).values({
       type: "expense",
       category: "Цалин",
@@ -361,17 +361,13 @@ describe("cash journal posting", () => {
     });
     assert.equal(response.status, 200);
     const value = await response.json() as { journalEntryId: number | null; transactionKind: string };
-    assert.ok(value.journalEntryId);
+    assert.equal(value.journalEntryId, null);
     assert.equal(value.transactionKind, "payroll");
-    journalIds.push(value.journalEntryId);
-    const [entry] = await db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, value.journalEntryId));
-    assert.equal(entry.status, "posted");
-    assert.equal(entry.sourceType, "cash");
-    assert.equal(entry.sourceId, cash.id);
-    const lines = await db.select().from(journalLinesTable).where(eq(journalLinesTable.journalEntryId, value.journalEntryId));
-    assert.equal(lines.length, 2);
-    assert.equal(lines.reduce((sum, line) => sum + line.debit, 0), 10);
-    assert.equal(lines.reduce((sum, line) => sum + line.credit, 0), 10);
+    const sourceEntries = await db.select().from(journalEntriesTable).where(and(
+      eq(journalEntriesTable.sourceType, "cash"),
+      eq(journalEntriesTable.sourceId, cash.id),
+    ));
+    assert.equal(sourceEntries.length, 0);
   });
 
   it("lets an accountant post exactly one journal for an unposted payroll cash row", async () => {

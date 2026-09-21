@@ -538,7 +538,7 @@ describe("bank journal review routes", () => {
     assert.equal(relinkedCash.sourceKey, sourceKey);
   });
 
-  it("reverses an advance journal before linking the payroll advance to its bank payment", async () => {
+  it("creates an advance journal only when the unposted cash row is linked to its bank payment", async () => {
     const [bank] = await db.insert(bankTransactionsTable).values({
       transactionAt: new Date("2099-03-09T11:00:00.000Z"),
       type: "expense",
@@ -549,19 +549,6 @@ describe("bank journal review routes", () => {
       fingerprint: `review-payroll-advance-${randomUUID()}`,
     }).returning();
     bankIds.push(bank.id);
-    const existingPosting = await db.transaction((tx) => postJournalEntry(tx, {
-      date: "2099-03-09",
-      description: "Тест Ажилтан · 2099-03 сарын урьдчилгаа",
-      sourceType: "payroll",
-      sourceId: null,
-      createdBy: null,
-      lines: [
-        { accountId: expenseAccountId, debit: 35_000, credit: 0 },
-        { accountId: liabilityAccountId, debit: 0, credit: 35_000 },
-      ],
-    }));
-    assert.equal(existingPosting.status, "posted");
-    journalEntryIds.push(existingPosting.journalEntryId);
     const sourceKey = "2099-03:456";
     const [cash] = await db.insert(cashTransactionsTable).values({
       type: "expense",
@@ -572,7 +559,6 @@ describe("bank journal review routes", () => {
       date: "2099-03-09",
       sourceType: "payroll_advance",
       sourceKey,
-      journalEntryId: existingPosting.journalEntryId,
     }).returning();
     cashIds.push(cash.id);
 
@@ -587,7 +573,7 @@ describe("bank journal review routes", () => {
     }>;
     const suggestion = suggestions.find((candidate) => candidate.id === cash.id);
     assert.equal(suggestion?.transactionKind, "payroll_advance");
-    assert.equal(suggestion?.journalEntryId, existingPosting.journalEntryId);
+    assert.equal(suggestion?.journalEntryId, null);
 
     const linkResponse = await fetch(`${baseUrl}/api/bank-transactions/${bank.id}/link-cash`, {
       method: "POST",
@@ -595,22 +581,15 @@ describe("bank journal review routes", () => {
       body: JSON.stringify({ cashTransactionId: cash.id }),
     });
     assert.equal(linkResponse.status, 200);
-    const [[linkedBank], [linkedCash], [voidedEntry], reversalEntries] = await Promise.all([
+    const [[linkedBank], [linkedCash]] = await Promise.all([
       db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bank.id)),
       db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, cash.id)),
-      db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, existingPosting.journalEntryId)),
-      db.select().from(journalEntriesTable).where(and(
-        eq(journalEntriesTable.sourceType, "reversal"),
-        eq(journalEntriesTable.sourceId, existingPosting.journalEntryId),
-      )),
     ]);
     assert.ok(linkedBank.journalEntryId);
-    journalEntryIds.push(linkedBank.journalEntryId, ...reversalEntries.map((entry) => entry.id));
+    journalEntryIds.push(linkedBank.journalEntryId);
     assert.equal(linkedCash.journalEntryId, linkedBank.journalEntryId);
     assert.equal(linkedCash.sourceType, "payroll_advance");
     assert.equal(linkedCash.sourceKey, sourceKey);
-    assert.equal(voidedEntry.status, "void");
-    assert.equal(reversalEntries.length, 1);
 
     const unlinkResponse = await fetch(`${baseUrl}/api/bank-transactions/${bank.id}/journal`, {
       method: "DELETE",
@@ -619,31 +598,16 @@ describe("bank journal review routes", () => {
     assert.equal(unlinkResponse.status, 200);
     const unlinkedResult = await unlinkResponse.json() as { reversalJournalEntryId: number };
     journalEntryIds.push(unlinkedResult.reversalJournalEntryId);
-    const [[unlinkedBank], [unlinkedCash], canonicalAccounts] = await Promise.all([
+    const [[unlinkedBank], [unlinkedCash]] = await Promise.all([
       db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bank.id)),
       db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, cash.id)),
-      db.select().from(chartOfAccountsTable).where(inArray(chartOfAccountsTable.code, ["6000", "1000"])),
     ]);
     assert.equal(unlinkedBank.cashTransactionId, null);
     assert.equal(unlinkedBank.journalEntryId, null);
     assert.equal(unlinkedCash.bankTransactionId, null);
     assert.equal(unlinkedCash.sourceType, "payroll_advance");
     assert.equal(unlinkedCash.sourceKey, sourceKey);
-    assert.ok(unlinkedCash.journalEntryId);
-    assert.notEqual(unlinkedCash.journalEntryId, linkedCash.journalEntryId);
-    journalEntryIds.push(unlinkedCash.journalEntryId);
-    const restoredLines = await db.select().from(journalLinesTable)
-      .where(eq(journalLinesTable.journalEntryId, unlinkedCash.journalEntryId));
-    const accountByCode = new Map(canonicalAccounts.map((account) => [account.code, account.id]));
-    assert.equal(restoredLines.length, 2);
-    assert.ok(restoredLines.some((line) =>
-      line.accountId === accountByCode.get("6000")
-      && Number(line.debit) === 35_000
-      && Number(line.credit) === 0));
-    assert.ok(restoredLines.some((line) =>
-      line.accountId === accountByCode.get("1000")
-      && Number(line.debit) === 0
-      && Number(line.credit) === 35_000));
+    assert.equal(unlinkedCash.journalEntryId, null);
   });
 
   it("posts a journal for a journal-less cash link and blocks source-side edits", async () => {

@@ -783,23 +783,6 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
 
       if (cashTransaction) {
         const account = await cashAccountForCategory(tx, "Урьдчилгаа цалин");
-        const [payrollExpenseAccount, cashAccount] = await Promise.all([
-          tx.select().from(chartOfAccountsTable).where(and(
-            eq(chartOfAccountsTable.code, "6000"),
-            eq(chartOfAccountsTable.type, "expense"),
-            eq(chartOfAccountsTable.normalBalance, "debit"),
-            eq(chartOfAccountsTable.isActive, true),
-          )),
-          tx.select().from(chartOfAccountsTable).where(and(
-            eq(chartOfAccountsTable.code, "1000"),
-            eq(chartOfAccountsTable.type, "asset"),
-            eq(chartOfAccountsTable.normalBalance, "debit"),
-            eq(chartOfAccountsTable.isActive, true),
-          )),
-        ]);
-        if (!payrollExpenseAccount[0] || !cashAccount[0]) {
-          throw new Error("Payroll posting accounts 6000 and 1000 must be active");
-        }
         const sourceKey = `${input.month}:${input.employeeId}`;
         const [previousCash] = await tx.select().from(cashTransactionsTable)
           .where(and(
@@ -810,74 +793,38 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
         if (previousCash && (previousCash.bankTransactionId !== null || previousCash.bankVerifiedAt !== null)) {
           throw Object.assign(new Error("Банкны хуулгаар баталгаажсан урьдчилгаа цалинг эх үүсвэрээс өөрчлөх боломжгүй"), { status: 409 });
         }
+        const description = `${employee.name} · ${input.month} сарын урьдчилгаа`;
+        let journalEntryId = previousCash?.journalEntryId ?? null;
+        if (previousCash?.journalEntryId
+          && (Number(previousCash.amount) !== cashTransaction.amount
+            || String(previousCash.date) !== cashTransaction.date
+            || previousCash.description !== description)) {
+          journalEntryId = await replacePayrollCashJournal(tx, previousCash, {
+            amount: cashTransaction.amount,
+            date: cashTransaction.date,
+            description,
+          });
+        }
         await tx.insert(cashTransactionsTable).values({
           type: "expense",
           category: "Урьдчилгаа цалин",
           accountId: account?.id ?? null,
-          description: `${employee.name} · ${input.month} сарын урьдчилгаа`,
+          description,
           amount: cashTransaction.amount,
           date: cashTransaction.date,
           sourceType: cashTransaction.sourceType,
           sourceKey: cashTransaction.sourceKey,
+          journalEntryId,
         }).onConflictDoUpdate({
           target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
           set: {
             accountId: account?.id ?? null,
             amount: cashTransaction.amount,
             date: cashTransaction.date,
-            description: `${employee.name} · ${input.month} сарын урьдчилгаа`,
+            description,
+            journalEntryId,
           },
         });
-        const [cash] = await tx.select().from(cashTransactionsTable)
-          .where(and(
-            eq(cashTransactionsTable.sourceType, "payroll_advance"),
-            eq(cashTransactionsTable.sourceKey, sourceKey),
-          ))
-          .for("update");
-        if (!cash) throw new Error("Payroll cash transaction was not persisted");
-
-        let reusable = false;
-        if (previousCash?.journalEntryId) {
-          const [existingEntry] = await tx.select().from(journalEntriesTable)
-            .where(eq(journalEntriesTable.id, previousCash.journalEntryId))
-            .for("update");
-          if (existingEntry?.status === "posted" && String(existingEntry.date) === cashTransaction.date) {
-            const existingLines = await tx.select().from(journalLinesTable)
-              .where(eq(journalLinesTable.journalEntryId, existingEntry.id));
-            const amount = Number(cashTransaction.amount);
-            reusable = existingLines.length === 2
-              && existingLines.some((line) =>
-                line.accountId === payrollExpenseAccount[0].id
-                && Number(line.debit) === amount
-                && Number(line.credit) === 0)
-              && existingLines.some((line) =>
-                line.accountId === cashAccount[0].id
-                && Number(line.credit) === amount
-                && Number(line.debit) === 0);
-          }
-          if (!reusable) {
-            if (!existingEntry) throw new Error("Linked payroll journal entry was not found");
-            if (existingEntry.status !== "posted") throw new Error("Linked payroll journal entry is not posted");
-            await voidJournalEntry(tx, { journalEntryId: existingEntry.id, voidedBy: null });
-          }
-        }
-        if (!reusable) {
-          const posting = await postJournalEntry(tx, {
-            date: cashTransaction.date,
-            description: `${employee.name} · ${input.month} сарын урьдчилгаа`,
-            sourceType: "payroll",
-            sourceId: approval.id,
-            createdBy: null,
-            lines: [
-              { accountId: payrollExpenseAccount[0].id, debit: cashTransaction.amount, credit: 0 },
-              { accountId: cashAccount[0].id, debit: 0, credit: cashTransaction.amount },
-            ],
-          });
-          if (posting.status !== "posted") throw new Error("Payroll journal entry must be balanced");
-          await tx.update(cashTransactionsTable)
-            .set({ journalEntryId: posting.journalEntryId })
-            .where(eq(cashTransactionsTable.id, cash.id));
-        }
       } else {
         const sourceKey = `${input.month}:${input.employeeId}`;
         const [cash] = await tx.select().from(cashTransactionsTable)

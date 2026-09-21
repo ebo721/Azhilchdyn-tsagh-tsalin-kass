@@ -40,7 +40,7 @@ import {
   UpdateBankTransactionAccountResponse,
 } from "@workspace/api-zod";
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
-import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable, journalEntriesTable, operatingExpensesTable, payrollAdvanceApprovalsTable } from "@workspace/db";
+import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable, journalEntriesTable, operatingExpensesTable } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.js";
 import { cashAccountForCategory } from "../lib/cash-account.js";
@@ -537,7 +537,6 @@ router.delete("/bank-transactions/:id/journal", async (req, res, next) => {
       }
       let linkedCashId: number | null = null;
       let linkedCashSourceType: string | null = null;
-      let linkedCash: typeof cashTransactionsTable.$inferSelect | null = null;
       if (entry.sourceType === "bank") {
         if (bank.cashTransactionId !== null || bank.transferredAt !== null) return "source_managed" as const;
       } else if (entry.sourceType === "bank_transaction") {
@@ -562,7 +561,6 @@ router.delete("/bank-transactions/:id/journal", async (req, res, next) => {
         if (linkedExpense) return "source_managed" as const;
         linkedCashId = cash.id;
         linkedCashSourceType = cash.sourceType;
-        linkedCash = cash;
       } else {
         return "source_managed" as const;
       }
@@ -581,30 +579,6 @@ router.delete("/bank-transactions/:id/journal", async (req, res, next) => {
           rejectedAccountIds,
         }).where(eq(bankTransactionsTable.id, bank.id));
       } else {
-        let restoredJournalEntryId: number | null = null;
-        if (linkedCashSourceType === "payroll_advance" && linkedCash) {
-          const [payrollExpenseAccount, cashAccount, approval] = await Promise.all([
-            accountByCode(tx, "6000", "expense"),
-            accountByCode(tx, "1000", "asset"),
-            tx.select({ id: payrollAdvanceApprovalsTable.id })
-              .from(payrollAdvanceApprovalsTable)
-              .where(eq(payrollAdvanceApprovalsTable.month, linkedCash.sourceKey?.slice(0, 7) ?? ""))
-              .then((rows: Array<{ id: number }>) => rows[0] ?? null),
-          ]);
-          const restored = await postJournalEntry(tx, {
-            date: String(linkedCash.date),
-            description: linkedCash.description,
-            sourceType: "payroll",
-            sourceId: approval?.id ?? null,
-            createdBy: null,
-            lines: [
-              { accountId: payrollExpenseAccount.id, debit: Number(linkedCash.amount), credit: 0 },
-              { accountId: cashAccount.id, debit: 0, credit: Number(linkedCash.amount) },
-            ],
-          });
-          if (restored.status !== "posted") throw new Error("Restored payroll advance journal must be balanced");
-          restoredJournalEntryId = restored.journalEntryId;
-        }
         await Promise.all([
           tx.update(bankTransactionsTable).set({
             cashTransactionId: null,
@@ -614,7 +588,7 @@ router.delete("/bank-transactions/:id/journal", async (req, res, next) => {
           tx.update(cashTransactionsTable).set({
             bankTransactionId: null,
             bankVerifiedAt: null,
-            journalEntryId: restoredJournalEntryId,
+            journalEntryId: null,
             ...(linkedCashSourceType === "bank_transaction"
               ? { sourceType: null, sourceKey: null }
               : {}),

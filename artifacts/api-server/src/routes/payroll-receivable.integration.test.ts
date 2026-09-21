@@ -176,6 +176,7 @@ describe("payroll receivable deductions", () => {
       eq(cashTransactionsTable.sourceKey, `${month}:${employeeId}`),
     ));
     assert.ok(cashBeforeJournal);
+    assert.equal(cashBeforeJournal.journalEntryId, null);
     const postCashJournalResponse = await fetch(`${baseUrl}/api/cash/transactions/${cashBeforeJournal.id}/journal`, {
       method: "POST",
       headers: { "content-type": "application/json", cookie: adminCookie },

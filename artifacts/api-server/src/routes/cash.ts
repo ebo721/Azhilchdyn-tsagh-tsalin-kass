@@ -452,7 +452,9 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
         });
       }
       let journalEntryId = existing.journalEntryId;
-      if (!existing.journalEntryId || replacement) {
+      const waitsForExplicitPayrollPosting = existing.journalEntryId === null
+        && ["payroll", "payroll_advance"].includes(existing.sourceType ?? "");
+      if ((!existing.journalEntryId && !waitsForExplicitPayrollPosting) || replacement) {
         if (existing.journalEntryId) {
           await voidJournalEntry(tx, { journalEntryId: existing.journalEntryId, voidedBy: null });
         }
