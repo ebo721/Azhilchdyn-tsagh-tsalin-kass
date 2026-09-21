@@ -3938,7 +3938,7 @@ export const getDeleteBankTransactionJournalUrl = (id: number,) => {
 }
 
 /**
- * @summary Reverse and unlink a directly posted bank journal while preserving audit history
+ * @summary Reverse and unlink a bank or bank-cash journal while preserving audit history
  */
 export const deleteBankTransactionJournal = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<BankTransactionJournalDeleteResult> => {
 
@@ -3987,7 +3987,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type DeleteBankTransactionJournalMutationError = ErrorType<void>
 
     /**
- * @summary Reverse and unlink a directly posted bank journal while preserving audit history
+ * @summary Reverse and unlink a bank or bank-cash journal while preserving audit history
  */
 export const useDeleteBankTransactionJournal = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBankTransactionJournal>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}

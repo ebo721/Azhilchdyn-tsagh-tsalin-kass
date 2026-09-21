@@ -852,7 +852,7 @@ paths:
     delete:
       operationId: deleteBankTransactionJournal
       tags: [bank-transactions]
-      summary: Reverse and unlink a directly posted bank journal while preserving audit history
+      summary: Reverse and unlink a bank or bank-cash journal while preserving audit history
       parameters:
         - $ref: "#/components/parameters/Id"
       responses:
@@ -864,7 +864,7 @@ paths:
         "404":
           description: Bank transaction not found
         "409":
-          description: No directly posted bank journal can be deleted
+          description: No supported bank journal can be deleted
   /bank-transactions/{id}/reject-suggestion:
     post:
       operationId: rejectBankTransactionSuggestion
