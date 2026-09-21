@@ -802,6 +802,23 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /cash/transactions/{id}/bank-suggestions:
+    get:
+      operationId: listCashTransactionBankSuggestions
+      tags: [cash]
+      summary: List matching unlinked bank transactions for a cash transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Ranked bank transaction suggestions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CashBankSuggestion" }
+        "404":
+          $ref: "#/components/responses/NotFound"
   /cash/closures:
     get:
       operationId: listCashClosures
@@ -2512,6 +2529,20 @@ components:
       properties:
         cashTransactionId: { type: integer }
         journalEntryId: { type: integer }
+    CashBankSuggestion:
+      type: object
+      required: [id, transactionAt, type, amount, account, counterparty, description, bankName, bankAccountNumber, score]
+      properties:
+        id: { type: integer, minimum: 1 }
+        transactionAt: { type: string, format: date-time }
+        type: { type: string, enum: [income, expense] }
+        amount: { type: number }
+        account: { type: string }
+        counterparty: { type: string }
+        description: { type: string }
+        bankName: { type: ["string", "null"] }
+        bankAccountNumber: { type: ["string", "null"] }
+        score: { type: number }
     CashClosure:
       type: object
       required: [id, date, closedAt]

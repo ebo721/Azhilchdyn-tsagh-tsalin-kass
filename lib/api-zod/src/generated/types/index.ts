@@ -37,6 +37,8 @@ export * from './bankTransactionJournalReviewItemType';
 export * from './bankTransactionPurchaseMatch';
 export * from './bankTransactionPurchaseMatchType';
 export * from './bankTransactionType';
+export * from './cashBankSuggestion';
+export * from './cashBankSuggestionType';
 export * from './cashClosure';
 export * from './cashClosureInput';
 export * from './cashIncomeMonthUpdate';

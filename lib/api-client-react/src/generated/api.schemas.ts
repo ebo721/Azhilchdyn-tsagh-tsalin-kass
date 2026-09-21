@@ -1110,6 +1110,30 @@ export interface CashJournalPosting {
   journalEntryId: number;
 }
 
+export type CashBankSuggestionType = typeof CashBankSuggestionType[keyof typeof CashBankSuggestionType];
+
+
+export const CashBankSuggestionType = {
+  income: 'income',
+  expense: 'expense',
+} as const;
+
+export interface CashBankSuggestion {
+  /** @minimum 1 */
+  id: number;
+  transactionAt: string;
+  type: CashBankSuggestionType;
+  amount: number;
+  account: string;
+  counterparty: string;
+  description: string;
+  /** @nullable */
+  bankName: string | null;
+  /** @nullable */
+  bankAccountNumber: string | null;
+  score: number;
+}
+
 export interface CashClosure {
   id: number;
   date: string;

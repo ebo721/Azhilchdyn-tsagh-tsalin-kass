@@ -7,6 +7,7 @@ import express from "express";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   db,
+  bankTransactionsTable,
   chartOfAccountsTable,
   cashTransactionsTable,
   journalEntriesTable,
@@ -33,6 +34,7 @@ describe("cash journal posting", () => {
   let expenseAccountId: number;
   let testAccountIds: number[] = [];
   const cashIds: number[] = [];
+  const bankIds: number[] = [];
   const journalIds: number[] = [];
 
   before(async () => {
@@ -85,6 +87,9 @@ describe("cash journal posting", () => {
 
   after(async () => {
     server.close();
+    if (bankIds.length) {
+      await db.delete(bankTransactionsTable).where(inArray(bankTransactionsTable.id, bankIds));
+    }
     if (cashIds.length) {
       await db.delete(operatingExpensesTable).where(inArray(operatingExpensesTable.cashTransactionId, cashIds));
       await db.delete(cashTransactionsTable).where(inArray(cashTransactionsTable.id, cashIds));
@@ -411,6 +416,48 @@ describe("cash journal posting", () => {
       [cashAccountId, 0, 123.45],
       [expenseAccountId, 123.45, 0],
     ]);
+  });
+
+  it("suggests only matching unlinked bank transactions for a cash journal", async () => {
+    const [cash] = await db.insert(cashTransactionsTable).values({
+      type: "expense",
+      category: "Цалин",
+      description: "September payroll",
+      amount: 321.5,
+      date: "2025-09-21",
+      sourceType: "payroll",
+      sourceKey: `2025-09:${randomUUID()}`,
+      journalEntryId: null,
+    }).returning();
+    cashIds.push(cash.id);
+    const banks = await db.insert(bankTransactionsTable).values([
+      {
+        transactionAt: new Date("2025-09-21T10:00:00.000Z"),
+        type: "expense",
+        amount: 321.5,
+        account: "Payroll account",
+        counterparty: "Employees",
+        description: "September payroll",
+        fingerprint: `cash-suggestion-match-${randomUUID()}`,
+      },
+      {
+        transactionAt: new Date("2025-09-21T10:00:00.000Z"),
+        type: "expense",
+        amount: 999,
+        account: "Wrong amount",
+        counterparty: "Other",
+        description: "September payroll",
+        fingerprint: `cash-suggestion-wrong-${randomUUID()}`,
+      },
+    ]).returning({ id: bankTransactionsTable.id });
+    bankIds.push(...banks.map((bank) => bank.id));
+
+    const response = await requestPath(`/api/cash/transactions/${cash.id}/bank-suggestions`, { method: "GET" });
+    assert.equal(response.status, 200);
+    const suggestions = await response.json() as { id: number; amount: number; score: number }[];
+    assert.deepEqual(suggestions.map((suggestion) => suggestion.id), [banks[0].id]);
+    assert.equal(suggestions[0].amount, 321.5);
+    assert.equal(suggestions[0].score, 100);
   });
 
   it("rejects source-managed cash rows from the manual journal action", async () => {

@@ -1318,6 +1318,31 @@ export const PostCashTransactionJournalResponse = zod.object({
 
 
 /**
+ * @summary List matching unlinked bank transactions for a cash transaction
+ */
+export const ListCashTransactionBankSuggestionsParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+
+export const ListCashTransactionBankSuggestionsResponseItem = zod.object({
+  "id": zod.number().int().min(1),
+  "transactionAt": zod.coerce.date(),
+  "type": zod.enum(['income', 'expense']),
+  "amount": zod.number(),
+  "account": zod.string(),
+  "counterparty": zod.string(),
+  "description": zod.string(),
+  "bankName": zod.string().nullable(),
+  "bankAccountNumber": zod.string().nullable(),
+  "score": zod.number()
+})
+export const ListCashTransactionBankSuggestionsResponse = zod.array(ListCashTransactionBankSuggestionsResponseItem)
+
+
+/**
  * @summary List closed cash dates
  */
 export const ListCashClosuresResponseItem = zod.object({

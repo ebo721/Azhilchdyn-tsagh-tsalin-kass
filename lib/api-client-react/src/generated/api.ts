@@ -42,6 +42,7 @@ import type {
   BankTransactionJournalPostInput,
   BankTransactionJournalPostResult,
   BankTransactionJournalReviewItem,
+  CashBankSuggestion,
   CashClosure,
   CashClosureInput,
   CashIncomeMonthUpdate,
@@ -3629,6 +3630,83 @@ export const usePostCashTransactionJournal = <TError = ErrorType<ErrorResponse>,
       > => {
       return useMutation(getPostCashTransactionJournalMutationOptions(options));
     }
+
+export const getListCashTransactionBankSuggestionsUrl = (id: number,) => {
+
+
+
+
+  return `/api/cash/transactions/${id}/bank-suggestions`
+}
+
+/**
+ * @summary List matching unlinked bank transactions for a cash transaction
+ */
+export const listCashTransactionBankSuggestions = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<CashBankSuggestion[]> => {
+
+  return customFetch<CashBankSuggestion[]>(getListCashTransactionBankSuggestionsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCashTransactionBankSuggestionsQueryKey = (id: number,) => {
+    return [
+    `/api/cash/transactions/${id}/bank-suggestions`
+    ] as const;
+    }
+
+
+export const getListCashTransactionBankSuggestionsQueryOptions = <TData = Awaited<ReturnType<typeof listCashTransactionBankSuggestions>>, TError = ErrorType<NotFoundResponse>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCashTransactionBankSuggestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCashTransactionBankSuggestionsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCashTransactionBankSuggestions>>> = ({ signal }) => listCashTransactionBankSuggestions(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCashTransactionBankSuggestions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCashTransactionBankSuggestionsQueryResult = NonNullable<Awaited<ReturnType<typeof listCashTransactionBankSuggestions>>>
+export type ListCashTransactionBankSuggestionsQueryError = ErrorType<NotFoundResponse>
+
+
+/**
+ * @summary List matching unlinked bank transactions for a cash transaction
+ */
+
+export function useListCashTransactionBankSuggestions<TData = Awaited<ReturnType<typeof listCashTransactionBankSuggestions>>, TError = ErrorType<NotFoundResponse>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCashTransactionBankSuggestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCashTransactionBankSuggestionsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListCashClosuresUrl = () => {
 
