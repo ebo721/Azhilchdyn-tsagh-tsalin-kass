@@ -53,6 +53,7 @@ const maxUploadBytes = 10 * 1024 * 1024;
 const maxXmlBytes = 8 * 1024 * 1024;
 const maxRows = 20_000;
 const requiredHeaders = ["Огноо", "Зарлага", "Орлого", "Exchange", "Харьцсан данс / Нэр", "Үлдэгдэл", "Гүйлгээний утга", "Гүйлгээ хийсэн огноо"];
+const payrollBankRoundingTolerance = 1;
 
 class BankCashLinkConflictError extends Error {}
 
@@ -76,6 +77,7 @@ async function counterAccount(tx: any, type: string, category: string, mapped: a
 
 async function postBankCashJournal(tx: any, bankTransaction: any, cash: any, counter: any) {
   const bankAccount = await accountByCode(tx, "1010", "asset");
+  const journalAmount = Number(bankTransaction.amount);
   const result = await postJournalEntry(tx, {
     date: bankTransaction.transactionAt.toISOString().slice(0, 10),
     description: bankTransaction.description.trim() || bankTransaction.counterparty.trim() || cash.description.trim(),
@@ -83,8 +85,8 @@ async function postBankCashJournal(tx: any, bankTransaction: any, cash: any, cou
     sourceId: bankTransaction.id,
     createdBy: null,
     lines: cash.type === "income"
-      ? [{ accountId: bankAccount.id, debit: Number(cash.amount), credit: 0 }, { accountId: counter.id, debit: 0, credit: Number(cash.amount) }]
-      : [{ accountId: counter.id, debit: Number(cash.amount), credit: 0 }, { accountId: bankAccount.id, debit: 0, credit: Number(cash.amount) }],
+      ? [{ accountId: bankAccount.id, debit: journalAmount, credit: 0 }, { accountId: counter.id, debit: 0, credit: journalAmount }]
+      : [{ accountId: counter.id, debit: journalAmount, credit: 0 }, { accountId: bankAccount.id, debit: 0, credit: journalAmount }],
   });
   if (result.status !== "posted") throw new Error("Bank cash journal entry must be balanced");
   return result.journalEntryId;
@@ -229,6 +231,16 @@ function suggestionScore(bank: typeof bankTransactionsTable.$inferSelect, cash: 
   const overlap = [...bankTokens].filter((token) => cashTokens.has(token)).length;
   const tokenOverlap = overlap / Math.max(new Set([...bankTokens, ...cashTokens]).size, 1);
   return Math.round((0.4 * (1 - distance / 7) + 0.35 * amountCloseness + 0.25 * tokenOverlap) * 10_000) / 100;
+}
+
+function bankAndCashAmountsMatch(
+  bank: typeof bankTransactionsTable.$inferSelect,
+  cash: typeof cashTransactionsTable.$inferSelect,
+) {
+  const difference = Math.abs(Number(bank.amount) - Number(cash.amount));
+  if (difference === 0) return true;
+  return ["payroll", "payroll_advance"].includes(cash.sourceType ?? "")
+    && difference < payrollBankRoundingTolerance;
 }
 
 function cashSuggestionResponse(row: typeof cashTransactionsTable.$inferSelect, score: number) {
@@ -924,7 +936,7 @@ router.get("/bank-transactions/:id/cash-suggestions", async (req, res, next) => 
       lte(cashTransactionsTable.date, calendarDateOffset(bankDate, 7)),
     ));
     const suggestions = candidates
-      .filter((cash) => Number(cash.amount) === Number(bank.amount))
+      .filter((cash) => bankAndCashAmountsMatch(bank, cash))
       .map((cash) => ({ cash, score: suggestionScore(bank, cash) }))
       .sort((left, right) => right.score - left.score || left.cash.id - right.cash.id)
       .slice(0, 10)
@@ -955,10 +967,10 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
       }
       if (bank.journalEntryId !== null || bank.unclearAt !== null) return "resolved" as const;
       if (cash.type !== bank.type) return "type-mismatch" as const;
-      if (Number(cash.amount) !== Number(bank.amount)) return "amount-mismatch" as const;
-       if (cash.sourceType !== null && !["payroll", "payroll_advance"].includes(cash.sourceType)) {
-         return "cash-source-managed" as const;
-       }
+      if (cash.sourceType !== null && !["payroll", "payroll_advance"].includes(cash.sourceType)) {
+        return "cash-source-managed" as const;
+      }
+      if (!bankAndCashAmountsMatch(bank, cash)) return "amount-mismatch" as const;
       if (cash.bankTransactionId !== null) return "cash-linked" as const;
       const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, String(cash.date)));
       if (closed) return "closed" as const;
@@ -1003,7 +1015,7 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
       const errors = {
         resolved: "Банкны гүйлгээ аль хэдийн холбогдсон байна",
         "type-mismatch": "Банк болон кассын гүйлгээний төрөл таарахгүй байна",
-         "amount-mismatch": "Банк болон кассын гүйлгээний дүн яг ижил байх шаардлагатай",
+         "amount-mismatch": "Банк болон кассын гүйлгээний дүн таарахгүй байна",
          "cash-source-managed": "Энэ автомат кассын гүйлгээг банкны гүйлгээтэй шууд холбох боломжгүй",
         "cash-linked": "Кассын гүйлгээ аль хэдийн банкны гүйлгээнд холбогдсон байна",
         closed: "Өндөрлөсөн өдрийн кассын гүйлгээг холбох боломжгүй",

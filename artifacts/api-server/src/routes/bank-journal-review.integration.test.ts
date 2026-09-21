@@ -407,7 +407,7 @@ describe("bank journal review routes", () => {
     assert.equal(reversal.status, "posted");
   });
 
-  it("suggests and links payroll cash while preserving its employee source key", async () => {
+  it("suggests and links payroll cash with sub-tugrik bank rounding while preserving its employee source key", async () => {
     const [bank] = await db.insert(bankTransactionsTable).values({
       transactionAt: new Date("2099-03-08T11:00:00.000Z"),
       type: "expense",
@@ -440,6 +440,9 @@ describe("bank journal review routes", () => {
     const [bankAfterBlockedTransfer] = await db.select().from(bankTransactionsTable)
       .where(eq(bankTransactionsTable.id, bank.id));
     assert.equal(bankAfterBlockedTransfer.cashTransactionId, null);
+    await db.update(bankTransactionsTable)
+      .set({ amount: 43_999.43 })
+      .where(eq(bankTransactionsTable.id, bank.id));
 
     const [unrelatedBank] = await db.insert(bankTransactionsTable).values({
       transactionAt: new Date("2099-03-08T12:00:00.000Z"),
@@ -489,6 +492,10 @@ describe("bank journal review routes", () => {
     ]);
     assert.ok(linkedBank.journalEntryId);
     journalEntryIds.push(linkedBank.journalEntryId);
+    const postedLines = await db.select().from(journalLinesTable)
+      .where(eq(journalLinesTable.journalEntryId, linkedBank.journalEntryId));
+    assert.equal(postedLines.length, 2);
+    assert.ok(postedLines.every((line) => Number(line.debit) === 43_999.43 || Number(line.credit) === 43_999.43));
     assert.equal(linkedCash.journalEntryId, linkedBank.journalEntryId);
     assert.equal(linkedCash.sourceType, "payroll");
     assert.equal(linkedCash.sourceKey, sourceKey);
