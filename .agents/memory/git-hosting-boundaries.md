@@ -12,3 +12,9 @@ Before any destructive production SQL, show the exact SQL, explain its impact an
 **Why:** Database dumps can contain password hashes, financial records, and other production data. Vercel does not read `.replit`, and Replit's development database is separate from the production Neon database. A production `DROP COLUMN` was previously run after deploy validation without the required explicit database approval.
 
 **How to apply:** Before pushing, verify dumps and backups are excluded from Git history. Validate development and Neon production separately, use reversible migrations, then push GitHub to trigger Vercel. Stop at a production migration gate until the user explicitly approves the displayed SQL.
+
+If the checkout's HTTPS remote rejects its stored GitHub credential, use the connected GitHub integration to create one atomic commit with an expected-head guard instead of force-pushing or writing files as separate commits.
+
+**Why:** The workspace remote credential can be stale even when the GitHub integration is healthy; an expected-head atomic commit prevents overwriting concurrent changes or briefly deploying a partial update.
+
+**How to apply:** Require the remote `main` head to equal the local commit's parent, commit all changed files together, then sync local `main` only after confirming the remote and local trees are identical.
