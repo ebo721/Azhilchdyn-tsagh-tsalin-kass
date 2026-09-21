@@ -39,7 +39,7 @@ import {
   UpdateBankTransactionAccountParams,
   UpdateBankTransactionAccountResponse,
 } from "@workspace/api-zod";
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, or } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable, journalEntriesTable, operatingExpensesTable, payrollAdvanceApprovalsTable } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.js";
@@ -799,7 +799,11 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
   try {
     const { id } = TransferBankTransactionToCashParams.parse(req.params);
     const { category, incomeMonth } = TransferBankTransactionToCashBody.parse(req.body);
+    const managedPayrollSource = category === "Цалин" ? "payroll" : null;
     const result = await db.transaction(async (tx) => {
+      if (managedPayrollSource) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
+      }
       const [bank] = await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id)).for("update");
       if (!bank) return null;
       if (bank.cashTransactionId !== null || bank.transferredAt !== null) {
@@ -814,6 +818,20 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
       if (bank.journalEntryId !== null || bank.unclearAt !== null) return "resolved" as const;
       if (bank.type === "income" && incomeMonth === null) return "income_month_required" as const;
       const date = bank.transactionAt.toISOString().slice(0, 10);
+      const [managedCash] = managedPayrollSource
+        ? await tx.select({ id: cashTransactionsTable.id })
+          .from(cashTransactionsTable)
+          .where(and(
+            eq(cashTransactionsTable.type, bank.type),
+            eq(cashTransactionsTable.amount, bank.amount),
+            eq(cashTransactionsTable.date, date),
+            eq(cashTransactionsTable.sourceType, managedPayrollSource),
+            isNull(cashTransactionsTable.bankTransactionId),
+            isNull(cashTransactionsTable.unclearAt),
+          ))
+          .limit(1)
+        : [];
+      if (managedCash) return "managed-cash-exists" as const;
       const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, date));
       if (closed) return "closed" as const;
       const verifiedAt = new Date();
@@ -857,6 +875,10 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
     }
     if (result === "income_month_required") {
       res.status(400).json({ error: "Орлогын хамаарах сар шаардлагатай" });
+      return;
+    }
+    if (result === "managed-cash-exists") {
+      res.status(409).json({ error: "Ижил огноо, дүнтэй цалингийн кассын гүйлгээ байна. Шинэ мөр үүсгэхийн оронд одоо байгаа гүйлгээтэй холбоно уу" });
       return;
     }
     if (result === "resolved") {

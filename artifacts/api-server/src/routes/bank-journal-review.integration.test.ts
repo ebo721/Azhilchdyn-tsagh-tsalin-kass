@@ -431,6 +431,39 @@ describe("bank journal review routes", () => {
     }).returning();
     cashIds.push(cash.id);
 
+    const duplicateTransferResponse = await fetch(`${baseUrl}/api/bank-transactions/${bank.id}/transfer-to-cash`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ category: "Цалин", incomeMonth: null }),
+    });
+    assert.equal(duplicateTransferResponse.status, 409);
+    const [bankAfterBlockedTransfer] = await db.select().from(bankTransactionsTable)
+      .where(eq(bankTransactionsTable.id, bank.id));
+    assert.equal(bankAfterBlockedTransfer.cashTransactionId, null);
+
+    const [unrelatedBank] = await db.insert(bankTransactionsTable).values({
+      transactionAt: new Date("2099-03-08T12:00:00.000Z"),
+      type: "expense",
+      amount: 44_000,
+      account: "9988776655",
+      counterparty: "Цалинтай ижил дүнтэй нийлүүлэгч",
+      description: "Цалинтай давхцсан дүнтэй бараа материал",
+      fingerprint: `review-non-payroll-collision-${randomUUID()}`,
+    }).returning();
+    bankIds.push(unrelatedBank.id);
+    const unrelatedTransferResponse = await fetch(`${baseUrl}/api/bank-transactions/${unrelatedBank.id}/transfer-to-cash`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ category: "Бараа материал", incomeMonth: null }),
+    });
+    assert.equal(unrelatedTransferResponse.status, 200);
+    const unrelatedTransfer = await unrelatedTransferResponse.json() as {
+      cashTransactionId: number;
+      journalEntryId: number;
+    };
+    cashIds.push(unrelatedTransfer.cashTransactionId);
+    journalEntryIds.push(unrelatedTransfer.journalEntryId);
+
     const suggestionsResponse = await fetch(`${baseUrl}/api/bank-transactions/${bank.id}/cash-suggestions`, {
       headers: { cookie },
     });

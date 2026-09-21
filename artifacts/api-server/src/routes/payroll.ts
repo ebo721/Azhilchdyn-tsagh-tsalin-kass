@@ -294,6 +294,22 @@ router.put("/payroll-adjustments", async (req, res, next) => {
         { key: secondSourceKey, amount: input.secondPaidAmount, date: input.secondPaymentDate },
       ];
       for (const payment of paymentInputs) {
+        if (payment.amount > 0 && payment.date) {
+          const [bankCash] = await tx.select({ id: cashTransactionsTable.id })
+            .from(cashTransactionsTable)
+            .where(and(
+              eq(cashTransactionsTable.type, "expense"),
+              eq(cashTransactionsTable.category, "Цалин"),
+              eq(cashTransactionsTable.amount, payment.amount),
+              eq(cashTransactionsTable.date, payment.date),
+              eq(cashTransactionsTable.sourceType, "bank_transaction"),
+              isNotNull(cashTransactionsTable.bankTransactionId),
+            ))
+            .limit(1);
+          if (bankCash) {
+            throw Object.assign(new Error("Ижил огноо, дүнтэй банкны цалингийн гүйлгээ байна. Банкны мөрийг устгаад цалинг хадгалсны дараа кассын мөртэй холбоно уу"), { status: 409 });
+          }
+        }
         const existingCash = cashBySourceKey.get(payment.key);
         if (existingCash
           && (existingCash.bankTransactionId !== null || existingCash.bankVerifiedAt !== null)
