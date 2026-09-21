@@ -39,8 +39,8 @@ import {
   UpdateBankTransactionAccountParams,
   UpdateBankTransactionAccountResponse,
 } from "@workspace/api-zod";
-import { and, desc, eq, gte, isNotNull, isNull, lte, or } from "drizzle-orm";
-import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable, journalEntriesTable, operatingExpensesTable } from "@workspace/db";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, or } from "drizzle-orm";
+import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable, journalEntriesTable, operatingExpensesTable, payrollAdvanceApprovalsTable } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.js";
 import { cashAccountForCategory } from "../lib/cash-account.js";
@@ -253,6 +253,7 @@ function cashSuggestionResponse(row: typeof cashTransactionsTable.$inferSelect, 
     date: String(row.date),
     bankTransactionId: row.bankTransactionId,
     bankVerifiedAt: row.bankVerifiedAt?.toISOString() ?? null,
+    journalEntryId: row.journalEntryId,
     createdAt: row.createdAt.toISOString(),
     editable: row.sourceType === null,
     transactionKind: (row.sourceType ?? "manual") as "manual" | "payroll" | "payroll_advance" | "inventory_purchase" | "fixed_asset_purchase" | "bank_transaction",
@@ -523,6 +524,8 @@ router.delete("/bank-transactions/:id/journal", async (req, res, next) => {
         return "source_managed" as const;
       }
       let linkedCashId: number | null = null;
+      let linkedCashSourceType: string | null = null;
+      let linkedCash: typeof cashTransactionsTable.$inferSelect | null = null;
       if (entry.sourceType === "bank") {
         if (bank.cashTransactionId !== null || bank.transferredAt !== null) return "source_managed" as const;
       } else if (entry.sourceType === "bank_transaction") {
@@ -533,7 +536,7 @@ router.delete("/bank-transactions/:id/journal", async (req, res, next) => {
         if (!cash
           || cash.bankTransactionId !== bank.id
           || cash.journalEntryId !== entry.id
-          || cash.sourceType !== "bank_transaction") {
+          || !["bank_transaction", "payroll", "payroll_advance"].includes(cash.sourceType ?? "")) {
           return "source_managed" as const;
         }
         const [linkedExpense] = await tx.select({ id: operatingExpensesTable.id })
@@ -546,6 +549,8 @@ router.delete("/bank-transactions/:id/journal", async (req, res, next) => {
           .for("update");
         if (linkedExpense) return "source_managed" as const;
         linkedCashId = cash.id;
+        linkedCashSourceType = cash.sourceType;
+        linkedCash = cash;
       } else {
         return "source_managed" as const;
       }
@@ -564,9 +569,44 @@ router.delete("/bank-transactions/:id/journal", async (req, res, next) => {
           rejectedAccountIds,
         }).where(eq(bankTransactionsTable.id, bank.id));
       } else {
+        let restoredJournalEntryId: number | null = null;
+        if (linkedCashSourceType === "payroll_advance" && linkedCash) {
+          const [payrollExpenseAccount, cashAccount, approval] = await Promise.all([
+            accountByCode(tx, "6000", "expense"),
+            accountByCode(tx, "1000", "asset"),
+            tx.select({ id: payrollAdvanceApprovalsTable.id })
+              .from(payrollAdvanceApprovalsTable)
+              .where(eq(payrollAdvanceApprovalsTable.month, linkedCash.sourceKey?.slice(0, 7) ?? ""))
+              .then((rows: Array<{ id: number }>) => rows[0] ?? null),
+          ]);
+          const restored = await postJournalEntry(tx, {
+            date: String(linkedCash.date),
+            description: linkedCash.description,
+            sourceType: "payroll",
+            sourceId: approval?.id ?? null,
+            createdBy: null,
+            lines: [
+              { accountId: payrollExpenseAccount.id, debit: Number(linkedCash.amount), credit: 0 },
+              { accountId: cashAccount.id, debit: 0, credit: Number(linkedCash.amount) },
+            ],
+          });
+          if (restored.status !== "posted") throw new Error("Restored payroll advance journal must be balanced");
+          restoredJournalEntryId = restored.journalEntryId;
+        }
         await Promise.all([
-          tx.update(bankTransactionsTable).set({ journalEntryId: null }).where(eq(bankTransactionsTable.id, bank.id)),
-          tx.update(cashTransactionsTable).set({ journalEntryId: null }).where(eq(cashTransactionsTable.id, linkedCashId)),
+          tx.update(bankTransactionsTable).set({
+            cashTransactionId: null,
+            transferredAt: null,
+            journalEntryId: null,
+          }).where(eq(bankTransactionsTable.id, bank.id)),
+          tx.update(cashTransactionsTable).set({
+            bankTransactionId: null,
+            bankVerifiedAt: null,
+            journalEntryId: restoredJournalEntryId,
+            ...(linkedCashSourceType === "bank_transaction"
+              ? { sourceType: null, sourceKey: null }
+              : {}),
+          }).where(eq(cashTransactionsTable.id, linkedCashId)),
         ]);
       }
       return {
@@ -853,7 +893,10 @@ router.get("/bank-transactions/:id/cash-suggestions", async (req, res, next) => 
     const candidates = await db.select().from(cashTransactionsTable).where(and(
       eq(cashTransactionsTable.type, bank.type),
       isNull(cashTransactionsTable.bankTransactionId),
-      isNull(cashTransactionsTable.sourceType),
+      or(
+        isNull(cashTransactionsTable.sourceType),
+        inArray(cashTransactionsTable.sourceType, ["payroll", "payroll_advance"]),
+      ),
       isNull(cashTransactionsTable.unclearAt),
       gte(cashTransactionsTable.date, calendarDateOffset(bankDate, -7)),
       lte(cashTransactionsTable.date, calendarDateOffset(bankDate, 7)),
@@ -891,18 +934,21 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
       if (bank.journalEntryId !== null || bank.unclearAt !== null) return "resolved" as const;
       if (cash.type !== bank.type) return "type-mismatch" as const;
       if (Number(cash.amount) !== Number(bank.amount)) return "amount-mismatch" as const;
-      if (cash.sourceType !== null) return "cash-source-managed" as const;
+       if (cash.sourceType !== null && !["payroll", "payroll_advance"].includes(cash.sourceType)) {
+         return "cash-source-managed" as const;
+       }
       if (cash.bankTransactionId !== null) return "cash-linked" as const;
       const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, String(cash.date)));
       if (closed) return "closed" as const;
       const verifiedAt = new Date();
-      const [linkedCash] = await tx.update(cashTransactionsTable)
-        .set({
-          bankTransactionId: id,
-          bankVerifiedAt: verifiedAt,
-          sourceType: "bank_transaction",
-          sourceKey: `bank:${id}`,
-        })
+       const [linkedCash] = await tx.update(cashTransactionsTable)
+         .set({
+           bankTransactionId: id,
+           bankVerifiedAt: verifiedAt,
+           ...(cash.sourceType === null
+             ? { sourceType: "bank_transaction", sourceKey: `bank:${id}` }
+             : {}),
+         })
         .where(and(eq(cashTransactionsTable.id, cashTransactionId), isNull(cashTransactionsTable.bankTransactionId)))
         .returning({ id: cashTransactionsTable.id });
       if (!linkedCash) throw new BankCashLinkConflictError();
@@ -936,7 +982,7 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
         resolved: "Банкны гүйлгээ аль хэдийн холбогдсон байна",
         "type-mismatch": "Банк болон кассын гүйлгээний төрөл таарахгүй байна",
          "amount-mismatch": "Банк болон кассын гүйлгээний дүн яг ижил байх шаардлагатай",
-         "cash-source-managed": "Автомат үүссэн кассын гүйлгээг эх үүсвэрийн цэснээс банкны гүйлгээтэй холбоно уу",
+         "cash-source-managed": "Энэ автомат кассын гүйлгээг банкны гүйлгээтэй шууд холбох боломжгүй",
         "cash-linked": "Кассын гүйлгээ аль хэдийн банкны гүйлгээнд холбогдсон байна",
         closed: "Өндөрлөсөн өдрийн кассын гүйлгээг холбох боломжгүй",
       };

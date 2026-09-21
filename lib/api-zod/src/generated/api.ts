@@ -1145,6 +1145,7 @@ export const ListCashTransactionsResponseItem = zod.object({
   "incomeMonth": zod.string().regex(listCashTransactionsResponseIncomeMonthRegExp).nullable(),
   "bankTransactionId": zod.number().int().nullable(),
   "bankVerifiedAt": zod.coerce.date().nullable(),
+  "journalEntryId": zod.number().int().nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
   "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction'])
@@ -1188,6 +1189,7 @@ export const CreateCashTransactionResponse = zod.object({
   "incomeMonth": zod.string().regex(createCashTransactionResponseIncomeMonthRegExp).nullable(),
   "bankTransactionId": zod.number().int().nullable(),
   "bankVerifiedAt": zod.coerce.date().nullable(),
+  "journalEntryId": zod.number().int().nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
   "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction'])
@@ -1234,6 +1236,7 @@ export const UpdateCashTransactionResponse = zod.object({
   "incomeMonth": zod.string().regex(updateCashTransactionResponseIncomeMonthRegExp).nullable(),
   "bankTransactionId": zod.number().int().nullable(),
   "bankVerifiedAt": zod.coerce.date().nullable(),
+  "journalEntryId": zod.number().int().nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
   "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction'])
@@ -1281,6 +1284,7 @@ export const UpdateBankCashTransactionIncomeMonthResponse = zod.object({
   "incomeMonth": zod.string().regex(updateBankCashTransactionIncomeMonthResponseIncomeMonthRegExp).nullable(),
   "bankTransactionId": zod.number().int().nullable(),
   "bankVerifiedAt": zod.coerce.date().nullable(),
+  "journalEntryId": zod.number().int().nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
   "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction'])
@@ -1706,6 +1710,7 @@ export const ListBankTransactionCashSuggestionsResponseItem = zod.object({
   "date": zod.string(),
   "bankTransactionId": zod.number().int().nullable(),
   "bankVerifiedAt": zod.coerce.date().nullable(),
+  "journalEntryId": zod.number().int().nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
   "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction']),

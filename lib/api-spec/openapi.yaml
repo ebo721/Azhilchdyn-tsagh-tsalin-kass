@@ -2350,7 +2350,7 @@ components:
         finalPayDay: { type: integer, minimum: 1, maximum: 31 }
     CashTransaction:
       type: object
-      required: [id, type, category, subcategory, accountId, accountCode, accountName, description, amount, date, incomeMonth, bankTransactionId, bankVerifiedAt, createdAt, editable, transactionKind]
+      required: [id, type, category, subcategory, accountId, accountCode, accountName, description, amount, date, incomeMonth, bankTransactionId, bankVerifiedAt, journalEntryId, createdAt, editable, transactionKind]
       properties:
         id: { type: integer }
         type: { type: string, enum: [income, expense] }
@@ -2365,6 +2365,7 @@ components:
         incomeMonth: { type: ["string", "null"], pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
         bankTransactionId: { type: ["integer", "null"] }
         bankVerifiedAt: { type: ["string", "null"], format: date-time }
+        journalEntryId: { type: ["integer", "null"] }
         createdAt: { type: string }
         editable: { type: boolean }
         transactionKind: { type: string, enum: [manual, payroll, payroll_advance, inventory_purchase, fixed_asset_purchase, operating_expense, bank_transaction] }
@@ -2411,7 +2412,7 @@ components:
         cashTransactionId: { type: integer, minimum: 1 }
     CashTransactionSuggestion:
       type: object
-      required: [id, type, category, subcategory, description, amount, date, bankTransactionId, bankVerifiedAt, createdAt, editable, transactionKind, score]
+      required: [id, type, category, subcategory, description, amount, date, bankTransactionId, bankVerifiedAt, journalEntryId, createdAt, editable, transactionKind, score]
       properties:
         id: { type: integer }
         type: { type: string, enum: [income, expense] }
@@ -2422,6 +2423,7 @@ components:
         date: { type: string }
         bankTransactionId: { type: ["integer", "null"] }
         bankVerifiedAt: { type: ["string", "null"], format: date-time }
+        journalEntryId: { type: ["integer", "null"] }
         createdAt: { type: string }
         editable: { type: boolean }
         transactionKind: { type: string, enum: [manual, payroll, payroll_advance, inventory_purchase, fixed_asset_purchase, operating_expense, bank_transaction] }
