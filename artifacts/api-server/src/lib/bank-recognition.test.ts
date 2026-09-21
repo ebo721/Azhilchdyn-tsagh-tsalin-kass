@@ -24,6 +24,7 @@ const context = (overrides: Partial<BankRecognitionContext> = {}): BankRecogniti
     ["1000", 1000],
     ["1500", 1500],
     ["1510", 1510],
+    ["1800", 1800],
     ["6000", 6000],
     ["6010", 6010],
     ["6100", 6100],
@@ -85,6 +86,25 @@ describe("ordered bank recognition", () => {
     assert.deepEqual(result, { accountId: 6500, rule: "historical_identity", existingPurchaseMatch: null });
   });
 
+  it("uses salary and purchase keywords before historical identity", () => {
+    const historical = [{
+      id: 1,
+      type: "expense",
+      accountId: 6900,
+      account: "99112233 / Нийлүүлэгч",
+      counterparty: "99112233 / Нийлүүлэгч",
+      bankAccountNumber: "1234567890",
+    }];
+    assert.equal(recognizeBankTransaction(
+      transaction({ description: "Ажилчдын цалин" }),
+      context({ historical }),
+    ).accountId, 6000);
+    assert.equal(recognizeBankTransaction(
+      transaction({ description: "Үндсэн хөрөнгө худалдан авалт" }),
+      context({ historical }),
+    ).accountId, 1800);
+  });
+
   it("uses configurable salary, social insurance, rent, and VAT keyword accounts", () => {
     assert.equal(recognizeBankTransaction(transaction({ description: "Ажилчдын цалин" }), context()).accountId, 6000);
     assert.equal(recognizeBankTransaction(transaction({ description: "9 сарын НДШ" }), context()).accountId, 6010);
@@ -101,6 +121,7 @@ describe("ordered bank recognition", () => {
     assert.equal(recognizeBankTransaction(transaction({ description: "ТТТ ахуйн бараа" }), context()).accountId, 1510);
     assert.equal(recognizeBankTransaction(transaction({ description: "Самасаа ХХК Velfire бинзен" }), context()).accountId, 6200);
     assert.equal(recognizeBankTransaction(transaction({ description: "Хостинг төлбөр" }), context()).accountId, 6400);
+    assert.equal(recognizeBankTransaction(transaction({ description: "Тоног төхөөрөмж худалдан авалт" }), context()).accountId, 1800);
   });
 
   it("uses a specific expense rule before the broad TTT inventory rule", () => {

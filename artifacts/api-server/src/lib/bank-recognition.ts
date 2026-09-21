@@ -121,13 +121,14 @@ function historicalIdentityAccount(
 function keywordAccount(
   transaction: RecognizableBankTransaction,
   keywordAccounts: BankRecognitionContext["keywordAccounts"],
+  priorityOnly = false,
 ) {
   const description = normalize(transaction.description);
   const rejected = new Set(transaction.rejectedAccountIds ?? []);
   const rule = bankKeywordRecognitionRules.find((candidate) =>
     candidate.direction === transaction.type
     && !rejected.has(keywordAccounts.get(candidate.accountCode) ?? -1)
-    && candidate.keywords.some((keyword) => {
+    && (priorityOnly ? candidate.priorityKeywords ?? [] : candidate.keywords).some((keyword) => {
       const keywordText = normalizedTokenText(keyword);
       return keywordText && ` ${normalizedTokenText(description)} `.includes(` ${keywordText} `);
     }));
@@ -144,6 +145,14 @@ export function recognizeBankTransaction(
     rule: "unpaid_target",
     existingPurchaseMatch: { type: target.kind, id: target.id },
   };
+  const documentCategoryAccountId = keywordAccount(
+    transaction,
+    context.keywordAccounts,
+    true,
+  );
+  if (documentCategoryAccountId !== null) {
+    return { accountId: documentCategoryAccountId, rule: "keyword", existingPurchaseMatch: null };
+  }
   const historicalAccountId = historicalIdentityAccount(transaction, context.historical);
   if (historicalAccountId !== null) return {
     accountId: historicalAccountId,

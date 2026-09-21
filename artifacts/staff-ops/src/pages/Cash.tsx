@@ -172,6 +172,13 @@ import {
   type OperatingExpense,
   type OperatingExpenseBankSuggestion,
 } from '@workspace/api-client-react';
+
+const automaticJournalCashCategory = (accountCode: string | null | undefined) => ({
+  '1500': 'Бараа материал',
+  '1510': 'Хангамжийн материал',
+  '1800': 'Эд хөрөнгө',
+  '6000': 'Цалин',
+} as Record<string, string>)[accountCode ?? ''] ?? null;
 import { EmptyState, ErrorBlock, LoadingBlock, Modal, PageHeading, StatCard } from '@/components/ui-primitives';
 import { currentMonth, dateLabel, money, shiftMonth, today } from '@/lib/app-shared';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
@@ -360,6 +367,9 @@ export function BankTransactions() {
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
+  const automaticCashCategory = selectedBank?.type === 'expense'
+    ? automaticJournalCashCategory(selectedBank.accountCode)
+    : null;
   const suggestions = useListBankTransactionCashSuggestions(selectedBank?.id ?? 0, { query: { queryKey: getListBankTransactionCashSuggestionsQueryKey(selectedBank?.id ?? 0), enabled: Boolean(selectedBank) } });
   const pendingJournalReviewCount = journalReview.data?.length ?? 0;
   const filteredBankTransactions = list.data?.filter((transaction) => transaction.transactionAt.slice(0, 7) === filterMonth) ?? [];
@@ -416,7 +426,10 @@ export function BankTransactions() {
     });
   };
   const openCashTransfer = (row: BankTransaction) => {
-    setCategory('');
+    const recognizedCategory = row.type === 'expense'
+      ? automaticJournalCashCategory(row.accountCode)
+      : null;
+    setCategory(recognizedCategory ?? '');
     setIncomeMonth(row.transactionAt.slice(0, 7));
     setSelectedBank(row);
   };
@@ -506,7 +519,14 @@ export function BankTransactions() {
         <div className="flex items-center gap-3" aria-label="эсвэл"><div className="h-px flex-1 bg-border" /><span className="text-xs font-semibold text-muted-foreground">эсвэл</span><div className="h-px flex-1 bg-border" /></div>
         <section aria-labelledby="create-cash-title">
           <h3 id="create-cash-title" className="text-sm font-bold">Касс шинээр үүсгээд журнал бичих</h3>
-          <label className="mt-3 block space-y-2 text-xs font-semibold">{selectedBank.type === 'expense' ? 'Үйл ажиллагааны зардлын дэд ангилал' : 'Ангилал'}<input value={category} onChange={(event) => setCategory(event.target.value)} list="cash-category-options" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" placeholder={selectedBank.type === 'expense' ? 'Жишээ: Түрээс' : 'Ангилал сонгох эсвэл шинээр бичих'} aria-label="Шинэ кассын гүйлгээний ангилал" data-testid="input-bank-transfer-category" required /></label>
+          {automaticCashCategory ? (
+            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3" data-testid="bank-transfer-automatic-category">
+              <p className="text-xs font-semibold text-emerald-700">Гүйлгээний утгаар санал болгосон төрөл</p>
+              <p className="mt-1 text-sm font-bold text-emerald-900">{automaticCashCategory}</p>
+            </div>
+          ) : (
+            <label className="mt-3 block space-y-2 text-xs font-semibold">{selectedBank.type === 'expense' ? 'Үйл ажиллагааны зардлын дэд ангилал' : 'Ангилал'}<input value={category} onChange={(event) => setCategory(event.target.value)} list="cash-category-options" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" placeholder={selectedBank.type === 'expense' ? 'Жишээ: Түрээс' : 'Ангилал сонгох эсвэл шинээр бичих'} aria-label="Шинэ кассын гүйлгээний ангилал" data-testid="input-bank-transfer-category" required /></label>
+          )}
           {selectedBank.type === 'income' && <label className="mt-3 block space-y-2 text-xs font-semibold">Хамаарах сар<input type="month" value={incomeMonth} onChange={(event) => setIncomeMonth(event.target.value)} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="input-bank-transfer-income-month" required /></label>}
           <datalist id="cash-category-options">{[...new Set([...categories, 'Захирал'])].map((existingCategory) => <option key={existingCategory} value={existingCategory} />)}</datalist>
         </section>
