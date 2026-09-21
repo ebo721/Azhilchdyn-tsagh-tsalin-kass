@@ -406,6 +406,9 @@ router.put("/cash/transactions/:id", async (req, res, next) => {
     const result = await db.transaction(async (tx) => {
       const [existing] = await tx.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, id)).for("update");
       if (!existing) throw Object.assign(new Error("Кассын гүйлгээ олдсонгүй"), { status: 404 });
+      if (existing.bankTransactionId !== null || existing.sourceType === "bank_transaction") {
+        throw Object.assign(new Error("Банктай холбогдсон кассын гүйлгээг банкны гүйлгээний цэснээс өөрчилнө үү"), { status: 409 });
+      }
       if (await isCashDateClosed(String(existing.date)) || await isCashDateClosed(input.date)) {
         throw Object.assign(new Error("Өндөрлөсөн өдрийн гүйлгээг засах боломжгүй"), { status: 409 });
       }

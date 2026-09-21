@@ -375,6 +375,55 @@ describe("bank journal review routes", () => {
       headers: { cookie },
     });
     assert.equal(remove.status, 409);
+
+    const voidJournal = await fetch(`${baseUrl}/api/journal/entries/${bank.journalEntryId}/void`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: "{}",
+    });
+    assert.equal(voidJournal.status, 409);
+  });
+
+  it("does not offer or relabel cash owned by another source", async () => {
+    const suffix = randomUUID();
+    const [bank] = await db.insert(bankTransactionsTable).values({
+      transactionAt: new Date("2099-03-08T11:00:00.000Z"),
+      type: "expense",
+      amount: 9_000,
+      accountId: expenseAccountId,
+      description: "Source managed cash хамгаалалт",
+      fingerprint: `review-source-managed-bank-${suffix}`,
+    }).returning();
+    bankIds.push(bank.id);
+    const [cash] = await db.insert(cashTransactionsTable).values({
+      type: "expense",
+      category: "Цалин",
+      accountId: expenseAccountId,
+      description: "Payroll-owned cash",
+      amount: 9_000,
+      date: "2099-03-08",
+      sourceType: "payroll",
+      sourceKey: `source-managed-${suffix}`,
+    }).returning();
+    cashIds.push(cash.id);
+
+    const suggestionsResponse = await fetch(`${baseUrl}/api/bank-transactions/${bank.id}/cash-suggestions`, {
+      headers: { cookie },
+    });
+    assert.equal(suggestionsResponse.status, 200);
+    const suggestions = await suggestionsResponse.json() as Array<{ id: number }>;
+    assert.equal(suggestions.some(({ id }) => id === cash.id), false);
+
+    const link = await fetch(`${baseUrl}/api/bank-transactions/${bank.id}/link-cash`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ cashTransactionId: cash.id }),
+    });
+    assert.equal(link.status, 409);
+    const [unchanged] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, cash.id));
+    assert.equal(unchanged.sourceType, "payroll");
+    assert.equal(unchanged.sourceKey, `source-managed-${suffix}`);
+    assert.equal(unchanged.bankTransactionId, null);
   });
 
   it("rejects only the suggested account and keeps the transaction pending", async () => {
