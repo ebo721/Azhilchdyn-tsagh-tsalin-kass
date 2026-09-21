@@ -204,6 +204,10 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
   }
   if (role === "accountant" && (
     (req.method === "GET" && req.path === "/employees")
+    || (req.method === "GET" && (
+      req.path === "/attendance/shifts"
+      || req.path === "/attendance/shift-plans"
+    ))
     || (req.method === "PATCH" && req.path.startsWith("/employees/"))
     || matchesPrefix("/operating-expenses")
   )) {

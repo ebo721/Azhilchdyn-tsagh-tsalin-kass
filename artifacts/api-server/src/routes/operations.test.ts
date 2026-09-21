@@ -131,3 +131,61 @@ describe("calendar month request validation", () => {
     assert.equal(response.status, 400);
   });
 });
+
+describe("accountant employee page dependencies", () => {
+  let server: Server | undefined;
+  let baseUrl: string;
+  let accountantCookie: string;
+  let testUserId: number | undefined;
+
+  before(async () => {
+    process.env.SESSION_SECRET = "accountant-employee-page-access-test";
+    const uniqueName = `operations-accountant-${process.pid}-${randomUUID()}`;
+    const [testUser] = await db.insert(usersTable).values({
+      username: uniqueName,
+      normalizedUsername: uniqueName,
+      role: "accountant",
+      passwordHash: "not-used-by-session-tests",
+    }).returning();
+    assert.ok(testUser);
+    testUserId = testUser.id;
+    accountantCookie = `${hrCookie.name}=${createStaffSession(testUser)}`;
+    server = app.listen(0);
+    const address = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${address.port}`;
+  });
+
+  after(async () => {
+    server?.close();
+    if (testUserId !== undefined) {
+      await db.delete(usersTable).where(eq(usersTable.id, testUserId));
+    }
+  });
+
+  it("allows the read requests used by the employee page", async () => {
+    const responses = await Promise.all([
+      fetch(`${baseUrl}/api/employees`, { headers: { cookie: accountantCookie } }),
+      fetch(`${baseUrl}/api/attendance/shifts`, { headers: { cookie: accountantCookie } }),
+      fetch(`${baseUrl}/api/attendance/shift-plans?month=2026-09`, { headers: { cookie: accountantCookie } }),
+    ]);
+
+    assert.deepEqual(responses.map(({ status }) => status), [200, 200, 200]);
+  });
+
+  it("does not grant accountant access to attendance mutations", async () => {
+    const response = await fetch(`${baseUrl}/api/attendance/shift-plans`, {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        cookie: accountantCookie,
+      },
+      body: JSON.stringify({
+        employeeId: 1,
+        date: "2026-09-21",
+        shiftId: 1,
+      }),
+    });
+
+    assert.equal(response.status, 403);
+  });
+});
