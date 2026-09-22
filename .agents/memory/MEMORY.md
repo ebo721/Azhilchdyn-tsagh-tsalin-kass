@@ -12,3 +12,4 @@
 - [Bank recognition settlement boundary](bank-recognition-settlement-boundary.md) — Recognition suggests only a GL account; generic journal approval must not settle a source document.
 - [Kapitron XLSX headers](kapitron-xlsx-headers.md) — Statement exports may prepend account metadata; find the complete transaction header instead of assuming row one.
 - [Bank-settled fixed assets](bank-settled-fixed-assets.md) — Allow edits only while date/total still match the bank; reconcile cash and journals atomically, and block ordinary deletion.
+- [Production migration ordering](production-migration-ordering.md) — New external-Neon migrations must append after the latest applied filename; backdated names are rejected.
