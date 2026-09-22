@@ -10,10 +10,6 @@
       "releaseMode": "expand"
     },
     {
-      "filename": "20260922_meals_and_ingredients.sql",
-      "releaseMode": "expand"
-    },
-    {
       "filename": "20260923_bank_transaction_rejected_accounts.sql",
       "releaseMode": "expand"
     },
@@ -30,7 +26,11 @@
       "releaseMode": "expand"
     },
     {
-      "filename": "20260927_meal_weekly_schedule.sql",
+      "filename": "20260927_meals_and_ingredients.sql",
+      "releaseMode": "expand"
+    },
+    {
+      "filename": "20260928_meal_weekly_schedule.sql",
       "releaseMode": "expand"
     }
   ],
