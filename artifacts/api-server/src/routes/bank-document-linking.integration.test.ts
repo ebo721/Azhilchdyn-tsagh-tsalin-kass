@@ -79,7 +79,6 @@ describe("bank document linking", () => {
       amount: 63_000,
       date: "2099-08-05",
       accountId,
-      sourceType: "manual",
     }).returning();
     cashIds.push(cash.id);
     assert.equal(cash.journalEntryId, null);

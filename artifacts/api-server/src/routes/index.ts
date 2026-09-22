@@ -14,6 +14,8 @@ import chartOfAccountsRouter from "./chart-of-accounts.js";
 import deletionRequestsRouter from "./deletion-requests.js";
 import dashboardRouter from "./dashboard.js";
 import journalRouter from "./journal.js";
+import mealsRouter from "./meals.js";
+import mealScheduleRouter from "./meal-schedule.js";
 
 const router: IRouter = Router();
 
@@ -32,5 +34,7 @@ router.use(chartOfAccountsRouter);
 router.use(deletionRequestsRouter);
 router.use(dashboardRouter);
 router.use(journalRouter);
+router.use(mealsRouter);
+router.use(mealScheduleRouter);
 
 export default router;

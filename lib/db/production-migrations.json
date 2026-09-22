@@ -10,6 +10,10 @@
       "releaseMode": "expand"
     },
     {
+      "filename": "20260922_meals_and_ingredients.sql",
+      "releaseMode": "expand"
+    },
+    {
       "filename": "20260923_bank_transaction_rejected_accounts.sql",
       "releaseMode": "expand"
     },
@@ -24,7 +28,11 @@
     {
       "filename": "20260926_normalize_receivable_functions.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20260927_meal_weekly_schedule.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "56fe09a602161774c42e3dbf65995a0fa4d238c5665d00a3181f37eded40e6ae"
+  "schemaFingerprint": "941a3d11d85f0a914beaedff4eda2b9276f49f36085d9b4c243761187e7a4a3f"
 }

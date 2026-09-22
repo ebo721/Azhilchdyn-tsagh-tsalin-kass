@@ -1165,6 +1165,219 @@ paths:
       responses:
         "204":
           description: Transaction hidden
+  /meals:
+    get:
+      operationId: listMeals
+      responses:
+        "200":
+          description: Meal list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Meal"
+    post:
+      operationId: createMeal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MealInput"
+      responses:
+        "201":
+          description: Created meal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Meal"
+  /meals/{id}:
+    put:
+      operationId: updateMeal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MealInput"
+      responses:
+        "200":
+          description: Updated meal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Meal"
+    delete:
+      operationId: deleteMeal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+  /meals/{mealId}/ingredients:
+    post:
+      operationId: createMealIngredient
+      parameters:
+        - name: mealId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MealIngredientInput"
+      responses:
+        "201":
+          description: Created ingredient and recalculated meal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Meal"
+  /meals/{mealId}/ingredients/{ingredientId}:
+    put:
+      operationId: updateMealIngredient
+      parameters:
+        - name: mealId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: ingredientId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MealIngredientInput"
+      responses:
+        "200":
+          description: Updated ingredient and recalculated meal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Meal"
+    delete:
+      operationId: deleteMealIngredient
+      parameters:
+        - name: mealId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: ingredientId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted ingredient and recalculated meal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Meal"
+  /meal-schedule/slots:
+    get:
+      operationId: listMealScheduleSlots
+      responses:
+        "200":
+          description: Active meal-time rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MealScheduleSlot"
+  /meal-schedule:
+    get:
+      operationId: listMealSchedule
+      parameters:
+        - name: weekStart
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$'
+      responses:
+        "200":
+          description: Entries in the requested Monday-to-Sunday week
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MealScheduleEntry"
+    post:
+      operationId: createMealScheduleEntry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MealScheduleEntryInput"
+      responses:
+        "201":
+          description: Created schedule entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MealScheduleEntry"
+  /meal-schedule/{id}:
+    put:
+      operationId: updateMealScheduleEntry
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MealScheduleEntryInput"
+      responses:
+        "200":
+          description: Updated schedule entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MealScheduleEntry"
+    delete:
+      operationId: deleteMealScheduleEntry
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Deleted schedule entry
+  /meal-schedule/{id}/move:
+    post:
+      operationId: moveMealScheduleEntry
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MealScheduleMoveInput"
+      responses:
+        "200":
+          description: Moved entry; an occupied target is swapped atomically
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MealScheduleEntry"
   /inventory/purchases:
     get:
       operationId: listInventoryPurchases
@@ -2704,6 +2917,98 @@ components:
         transactionIds:
           type: array
           items: { type: integer, minimum: 1 }
+    MealIngredient:
+      type: object
+      required: [id, inventoryItemId, inventoryItemName, quantity, unit, caloriesPerUnit, totalCalories]
+      properties:
+        id: { type: integer }
+        inventoryItemId: { type: integer }
+        inventoryItemName: { type: string }
+        quantity: { type: number }
+        unit: { type: string }
+        caloriesPerUnit: { type: number }
+        totalCalories: { type: number }
+    Meal:
+      type: object
+      required: [id, name, category, type, isActive, totalCalories, ingredients, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        category: { type: string }
+        type:
+          type: string
+          enum: [single, set]
+        isActive: { type: boolean }
+        totalCalories: { type: number }
+        ingredients:
+          type: array
+          items:
+            $ref: "#/components/schemas/MealIngredient"
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    MealInput:
+      type: object
+      required: [name, category, type, isActive]
+      properties:
+        name: { type: string, minLength: 1 }
+        category: { type: string, minLength: 1 }
+        type:
+          type: string
+          enum: [single, set]
+        isActive: { type: boolean }
+    MealIngredientInput:
+      type: object
+      required: [inventoryItemName, inventoryItemCategory, quantity, unit, caloriesPerUnit]
+      properties:
+        inventoryItemId:
+          type: ["integer", "null"]
+        inventoryItemName: { type: string, minLength: 1 }
+        inventoryItemCategory: { type: string, minLength: 1 }
+        quantity: { type: number, exclusiveMinimum: 0 }
+        unit: { type: string, minLength: 1 }
+        caloriesPerUnit: { type: number, minimum: 0 }
+    MealScheduleSlot:
+      type: object
+      required: [id, name, startTime, endTime, sortOrder]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        startTime: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+        endTime: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+        sortOrder: { type: integer }
+    MealScheduleEntry:
+      type: object
+      required: [id, date, slotId, slotName, startTime, endTime, kind, mealId, mealName, mealType, totalCalories, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        date: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' }
+        slotId: { type: integer }
+        slotName: { type: string }
+        startTime: { type: string }
+        endTime: { type: string }
+        kind: { type: string, enum: [meal, break] }
+        mealId: { type: ["integer", "null"] }
+        mealName: { type: ["string", "null"] }
+        mealType:
+          type: ["string", "null"]
+          enum: [single, set, null]
+        totalCalories: { type: ["number", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    MealScheduleEntryInput:
+      type: object
+      required: [date, slotId, kind, mealId]
+      properties:
+        date: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' }
+        slotId: { type: integer, minimum: 1 }
+        kind: { type: string, enum: [meal, break] }
+        mealId: { type: ["integer", "null"], minimum: 1 }
+    MealScheduleMoveInput:
+      type: object
+      required: [date, slotId]
+      properties:
+        date: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' }
+        slotId: { type: integer, minimum: 1 }
     InventoryPurchaseItem:
       type: object
       required: [id, inventoryItemId, name, category, unit, quantity, unitPrice, totalAmount]

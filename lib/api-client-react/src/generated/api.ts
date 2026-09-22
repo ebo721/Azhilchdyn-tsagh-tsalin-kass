@@ -95,8 +95,16 @@ import type {
   ListAttendanceParams,
   ListJournalEntriesParams,
   ListJournalReceivablesParams,
+  ListMealScheduleParams,
   ListShiftPlansParams,
   LoginInput,
+  Meal,
+  MealIngredientInput,
+  MealInput,
+  MealScheduleEntry,
+  MealScheduleEntryInput,
+  MealScheduleMoveInput,
+  MealScheduleSlot,
   NotFoundResponse,
   OperatingExpense,
   OperatingExpenseBankSuggestion,
@@ -5179,6 +5187,885 @@ export const useMarkTransactionUnclear = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getMarkTransactionUnclearMutationOptions(options));
+    }
+
+export const getListMealsUrl = () => {
+
+
+
+
+  return `/api/meals`
+}
+
+export const listMeals = async ( options?: Parameters<typeof customFetch>[1]): Promise<Meal[]> => {
+
+  return customFetch<Meal[]>(getListMealsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMealsQueryKey = () => {
+    return [
+    `/api/meals`
+    ] as const;
+    }
+
+
+export const getListMealsQueryOptions = <TData = Awaited<ReturnType<typeof listMeals>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMeals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMealsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMeals>>> = ({ signal }) => listMeals({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMeals>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMealsQueryResult = NonNullable<Awaited<ReturnType<typeof listMeals>>>
+export type ListMealsQueryError = ErrorType<unknown>
+
+
+
+export function useListMeals<TData = Awaited<ReturnType<typeof listMeals>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMeals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMealsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateMealUrl = () => {
+
+
+
+
+  return `/api/meals`
+}
+
+export const createMeal = async (mealInput: MealInput, options?: Parameters<typeof customFetch>[1]): Promise<Meal> => {
+
+  return customFetch<Meal>(getCreateMealUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(mealInput)
+  }
+);}
+
+
+
+
+
+export const getCreateMealMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMeal>>, TError,{data: BodyType<MealInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createMeal>>, TError,{data: BodyType<MealInput>}, TContext> => {
+
+const mutationKey = ['createMeal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createMeal>>, {data: BodyType<MealInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createMeal(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateMealMutationResult = NonNullable<Awaited<ReturnType<typeof createMeal>>>
+    export type CreateMealMutationBody = BodyType<MealInput>
+    export type CreateMealMutationError = ErrorType<unknown>
+
+    export const useCreateMeal = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMeal>>, TError,{data: BodyType<MealInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createMeal>>,
+        TError,
+        {data: BodyType<MealInput>},
+        TContext
+      > => {
+      return useMutation(getCreateMealMutationOptions(options));
+    }
+
+export const getUpdateMealUrl = (id: number,) => {
+
+
+
+
+  return `/api/meals/${id}`
+}
+
+export const updateMeal = async (id: number,
+    mealInput: MealInput, options?: Parameters<typeof customFetch>[1]): Promise<Meal> => {
+
+  return customFetch<Meal>(getUpdateMealUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(mealInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateMealMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMeal>>, TError,{id: number;data: BodyType<MealInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateMeal>>, TError,{id: number;data: BodyType<MealInput>}, TContext> => {
+
+const mutationKey = ['updateMeal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMeal>>, {id: number;data: BodyType<MealInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateMeal(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateMealMutationResult = NonNullable<Awaited<ReturnType<typeof updateMeal>>>
+    export type UpdateMealMutationBody = BodyType<MealInput>
+    export type UpdateMealMutationError = ErrorType<unknown>
+
+    export const useUpdateMeal = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMeal>>, TError,{id: number;data: BodyType<MealInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateMeal>>,
+        TError,
+        {id: number;data: BodyType<MealInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateMealMutationOptions(options));
+    }
+
+export const getDeleteMealUrl = (id: number,) => {
+
+
+
+
+  return `/api/meals/${id}`
+}
+
+export const deleteMeal = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteMealUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteMealMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMeal>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteMeal>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteMeal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMeal>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteMeal(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteMealMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMeal>>>
+
+    export type DeleteMealMutationError = ErrorType<unknown>
+
+    export const useDeleteMeal = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMeal>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteMeal>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteMealMutationOptions(options));
+    }
+
+export const getCreateMealIngredientUrl = (mealId: number,) => {
+
+
+
+
+  return `/api/meals/${mealId}/ingredients`
+}
+
+export const createMealIngredient = async (mealId: number,
+    mealIngredientInput: MealIngredientInput, options?: Parameters<typeof customFetch>[1]): Promise<Meal> => {
+
+  return customFetch<Meal>(getCreateMealIngredientUrl(mealId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(mealIngredientInput)
+  }
+);}
+
+
+
+
+
+export const getCreateMealIngredientMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMealIngredient>>, TError,{mealId: number;data: BodyType<MealIngredientInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createMealIngredient>>, TError,{mealId: number;data: BodyType<MealIngredientInput>}, TContext> => {
+
+const mutationKey = ['createMealIngredient'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createMealIngredient>>, {mealId: number;data: BodyType<MealIngredientInput>}> = (props) => {
+          const {mealId,data} = props ?? {};
+
+          return  createMealIngredient(mealId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateMealIngredientMutationResult = NonNullable<Awaited<ReturnType<typeof createMealIngredient>>>
+    export type CreateMealIngredientMutationBody = BodyType<MealIngredientInput>
+    export type CreateMealIngredientMutationError = ErrorType<unknown>
+
+    export const useCreateMealIngredient = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMealIngredient>>, TError,{mealId: number;data: BodyType<MealIngredientInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createMealIngredient>>,
+        TError,
+        {mealId: number;data: BodyType<MealIngredientInput>},
+        TContext
+      > => {
+      return useMutation(getCreateMealIngredientMutationOptions(options));
+    }
+
+export const getUpdateMealIngredientUrl = (mealId: number,
+    ingredientId: number,) => {
+
+
+
+
+  return `/api/meals/${mealId}/ingredients/${ingredientId}`
+}
+
+export const updateMealIngredient = async (mealId: number,
+    ingredientId: number,
+    mealIngredientInput: MealIngredientInput, options?: Parameters<typeof customFetch>[1]): Promise<Meal> => {
+
+  return customFetch<Meal>(getUpdateMealIngredientUrl(mealId,ingredientId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(mealIngredientInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateMealIngredientMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMealIngredient>>, TError,{mealId: number;ingredientId: number;data: BodyType<MealIngredientInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateMealIngredient>>, TError,{mealId: number;ingredientId: number;data: BodyType<MealIngredientInput>}, TContext> => {
+
+const mutationKey = ['updateMealIngredient'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMealIngredient>>, {mealId: number;ingredientId: number;data: BodyType<MealIngredientInput>}> = (props) => {
+          const {mealId,ingredientId,data} = props ?? {};
+
+          return  updateMealIngredient(mealId,ingredientId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateMealIngredientMutationResult = NonNullable<Awaited<ReturnType<typeof updateMealIngredient>>>
+    export type UpdateMealIngredientMutationBody = BodyType<MealIngredientInput>
+    export type UpdateMealIngredientMutationError = ErrorType<unknown>
+
+    export const useUpdateMealIngredient = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMealIngredient>>, TError,{mealId: number;ingredientId: number;data: BodyType<MealIngredientInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateMealIngredient>>,
+        TError,
+        {mealId: number;ingredientId: number;data: BodyType<MealIngredientInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateMealIngredientMutationOptions(options));
+    }
+
+export const getDeleteMealIngredientUrl = (mealId: number,
+    ingredientId: number,) => {
+
+
+
+
+  return `/api/meals/${mealId}/ingredients/${ingredientId}`
+}
+
+export const deleteMealIngredient = async (mealId: number,
+    ingredientId: number, options?: Parameters<typeof customFetch>[1]): Promise<Meal> => {
+
+  return customFetch<Meal>(getDeleteMealIngredientUrl(mealId,ingredientId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteMealIngredientMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMealIngredient>>, TError,{mealId: number;ingredientId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteMealIngredient>>, TError,{mealId: number;ingredientId: number}, TContext> => {
+
+const mutationKey = ['deleteMealIngredient'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMealIngredient>>, {mealId: number;ingredientId: number}> = (props) => {
+          const {mealId,ingredientId} = props ?? {};
+
+          return  deleteMealIngredient(mealId,ingredientId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteMealIngredientMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMealIngredient>>>
+
+    export type DeleteMealIngredientMutationError = ErrorType<unknown>
+
+    export const useDeleteMealIngredient = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMealIngredient>>, TError,{mealId: number;ingredientId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteMealIngredient>>,
+        TError,
+        {mealId: number;ingredientId: number},
+        TContext
+      > => {
+      return useMutation(getDeleteMealIngredientMutationOptions(options));
+    }
+
+export const getListMealScheduleSlotsUrl = () => {
+
+
+
+
+  return `/api/meal-schedule/slots`
+}
+
+export const listMealScheduleSlots = async ( options?: Parameters<typeof customFetch>[1]): Promise<MealScheduleSlot[]> => {
+
+  return customFetch<MealScheduleSlot[]>(getListMealScheduleSlotsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMealScheduleSlotsQueryKey = () => {
+    return [
+    `/api/meal-schedule/slots`
+    ] as const;
+    }
+
+
+export const getListMealScheduleSlotsQueryOptions = <TData = Awaited<ReturnType<typeof listMealScheduleSlots>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMealScheduleSlots>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMealScheduleSlotsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMealScheduleSlots>>> = ({ signal }) => listMealScheduleSlots({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMealScheduleSlots>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMealScheduleSlotsQueryResult = NonNullable<Awaited<ReturnType<typeof listMealScheduleSlots>>>
+export type ListMealScheduleSlotsQueryError = ErrorType<unknown>
+
+
+
+export function useListMealScheduleSlots<TData = Awaited<ReturnType<typeof listMealScheduleSlots>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMealScheduleSlots>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMealScheduleSlotsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListMealScheduleUrl = (params: ListMealScheduleParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/meal-schedule?${stringifiedParams}` : `/api/meal-schedule`
+}
+
+export const listMealSchedule = async (params: ListMealScheduleParams, options?: Parameters<typeof customFetch>[1]): Promise<MealScheduleEntry[]> => {
+
+  return customFetch<MealScheduleEntry[]>(getListMealScheduleUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMealScheduleQueryKey = (params?: ListMealScheduleParams,) => {
+    return [
+    `/api/meal-schedule`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListMealScheduleQueryOptions = <TData = Awaited<ReturnType<typeof listMealSchedule>>, TError = ErrorType<unknown>>(params: ListMealScheduleParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMealSchedule>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMealScheduleQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMealSchedule>>> = ({ signal }) => listMealSchedule(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMealSchedule>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMealScheduleQueryResult = NonNullable<Awaited<ReturnType<typeof listMealSchedule>>>
+export type ListMealScheduleQueryError = ErrorType<unknown>
+
+
+
+export function useListMealSchedule<TData = Awaited<ReturnType<typeof listMealSchedule>>, TError = ErrorType<unknown>>(
+ params: ListMealScheduleParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMealSchedule>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMealScheduleQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateMealScheduleEntryUrl = () => {
+
+
+
+
+  return `/api/meal-schedule`
+}
+
+export const createMealScheduleEntry = async (mealScheduleEntryInput: MealScheduleEntryInput, options?: Parameters<typeof customFetch>[1]): Promise<MealScheduleEntry> => {
+
+  return customFetch<MealScheduleEntry>(getCreateMealScheduleEntryUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(mealScheduleEntryInput)
+  }
+);}
+
+
+
+
+
+export const getCreateMealScheduleEntryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMealScheduleEntry>>, TError,{data: BodyType<MealScheduleEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createMealScheduleEntry>>, TError,{data: BodyType<MealScheduleEntryInput>}, TContext> => {
+
+const mutationKey = ['createMealScheduleEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createMealScheduleEntry>>, {data: BodyType<MealScheduleEntryInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createMealScheduleEntry(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateMealScheduleEntryMutationResult = NonNullable<Awaited<ReturnType<typeof createMealScheduleEntry>>>
+    export type CreateMealScheduleEntryMutationBody = BodyType<MealScheduleEntryInput>
+    export type CreateMealScheduleEntryMutationError = ErrorType<unknown>
+
+    export const useCreateMealScheduleEntry = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMealScheduleEntry>>, TError,{data: BodyType<MealScheduleEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createMealScheduleEntry>>,
+        TError,
+        {data: BodyType<MealScheduleEntryInput>},
+        TContext
+      > => {
+      return useMutation(getCreateMealScheduleEntryMutationOptions(options));
+    }
+
+export const getUpdateMealScheduleEntryUrl = (id: number,) => {
+
+
+
+
+  return `/api/meal-schedule/${id}`
+}
+
+export const updateMealScheduleEntry = async (id: number,
+    mealScheduleEntryInput: MealScheduleEntryInput, options?: Parameters<typeof customFetch>[1]): Promise<MealScheduleEntry> => {
+
+  return customFetch<MealScheduleEntry>(getUpdateMealScheduleEntryUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(mealScheduleEntryInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateMealScheduleEntryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMealScheduleEntry>>, TError,{id: number;data: BodyType<MealScheduleEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateMealScheduleEntry>>, TError,{id: number;data: BodyType<MealScheduleEntryInput>}, TContext> => {
+
+const mutationKey = ['updateMealScheduleEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMealScheduleEntry>>, {id: number;data: BodyType<MealScheduleEntryInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateMealScheduleEntry(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateMealScheduleEntryMutationResult = NonNullable<Awaited<ReturnType<typeof updateMealScheduleEntry>>>
+    export type UpdateMealScheduleEntryMutationBody = BodyType<MealScheduleEntryInput>
+    export type UpdateMealScheduleEntryMutationError = ErrorType<unknown>
+
+    export const useUpdateMealScheduleEntry = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMealScheduleEntry>>, TError,{id: number;data: BodyType<MealScheduleEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateMealScheduleEntry>>,
+        TError,
+        {id: number;data: BodyType<MealScheduleEntryInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateMealScheduleEntryMutationOptions(options));
+    }
+
+export const getDeleteMealScheduleEntryUrl = (id: number,) => {
+
+
+
+
+  return `/api/meal-schedule/${id}`
+}
+
+export const deleteMealScheduleEntry = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteMealScheduleEntryUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteMealScheduleEntryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMealScheduleEntry>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteMealScheduleEntry>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteMealScheduleEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMealScheduleEntry>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteMealScheduleEntry(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteMealScheduleEntryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMealScheduleEntry>>>
+
+    export type DeleteMealScheduleEntryMutationError = ErrorType<unknown>
+
+    export const useDeleteMealScheduleEntry = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMealScheduleEntry>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteMealScheduleEntry>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteMealScheduleEntryMutationOptions(options));
+    }
+
+export const getMoveMealScheduleEntryUrl = (id: number,) => {
+
+
+
+
+  return `/api/meal-schedule/${id}/move`
+}
+
+export const moveMealScheduleEntry = async (id: number,
+    mealScheduleMoveInput: MealScheduleMoveInput, options?: Parameters<typeof customFetch>[1]): Promise<MealScheduleEntry[]> => {
+
+  return customFetch<MealScheduleEntry[]>(getMoveMealScheduleEntryUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(mealScheduleMoveInput)
+  }
+);}
+
+
+
+
+
+export const getMoveMealScheduleEntryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof moveMealScheduleEntry>>, TError,{id: number;data: BodyType<MealScheduleMoveInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof moveMealScheduleEntry>>, TError,{id: number;data: BodyType<MealScheduleMoveInput>}, TContext> => {
+
+const mutationKey = ['moveMealScheduleEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof moveMealScheduleEntry>>, {id: number;data: BodyType<MealScheduleMoveInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  moveMealScheduleEntry(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MoveMealScheduleEntryMutationResult = NonNullable<Awaited<ReturnType<typeof moveMealScheduleEntry>>>
+    export type MoveMealScheduleEntryMutationBody = BodyType<MealScheduleMoveInput>
+    export type MoveMealScheduleEntryMutationError = ErrorType<unknown>
+
+    export const useMoveMealScheduleEntry = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof moveMealScheduleEntry>>, TError,{id: number;data: BodyType<MealScheduleMoveInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof moveMealScheduleEntry>>,
+        TError,
+        {id: number;data: BodyType<MealScheduleMoveInput>},
+        TContext
+      > => {
+      return useMutation(getMoveMealScheduleEntryMutationOptions(options));
     }
 
 export const getListInventoryPurchasesUrl = () => {

@@ -1844,6 +1844,367 @@ export const MarkTransactionUnclearParams = zod.object({
 export const MarkTransactionUnclearResponse = zod.void()
 
 
+export const ListMealsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "type": zod.enum(['single', 'set']),
+  "isActive": zod.boolean(),
+  "totalCalories": zod.number(),
+  "ingredients": zod.array(zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "inventoryItemName": zod.string(),
+  "quantity": zod.number(),
+  "unit": zod.string(),
+  "caloriesPerUnit": zod.number(),
+  "totalCalories": zod.number()
+})),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListMealsResponse = zod.array(ListMealsResponseItem)
+
+
+
+
+
+
+export const CreateMealBody = zod.object({
+  "name": zod.string().min(1),
+  "category": zod.string().min(1),
+  "type": zod.enum(['single', 'set']),
+  "isActive": zod.boolean()
+})
+
+export const CreateMealResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "type": zod.enum(['single', 'set']),
+  "isActive": zod.boolean(),
+  "totalCalories": zod.number(),
+  "ingredients": zod.array(zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "inventoryItemName": zod.string(),
+  "quantity": zod.number(),
+  "unit": zod.string(),
+  "caloriesPerUnit": zod.number(),
+  "totalCalories": zod.number()
+})),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const UpdateMealParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+
+
+export const UpdateMealBody = zod.object({
+  "name": zod.string().min(1),
+  "category": zod.string().min(1),
+  "type": zod.enum(['single', 'set']),
+  "isActive": zod.boolean()
+})
+
+export const UpdateMealResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "type": zod.enum(['single', 'set']),
+  "isActive": zod.boolean(),
+  "totalCalories": zod.number(),
+  "ingredients": zod.array(zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "inventoryItemName": zod.string(),
+  "quantity": zod.number(),
+  "unit": zod.string(),
+  "caloriesPerUnit": zod.number(),
+  "totalCalories": zod.number()
+})),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const DeleteMealParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteMealResponse = zod.void()
+
+
+export const CreateMealIngredientParams = zod.object({
+  "mealId": zod.coerce.number().int()
+})
+
+
+
+export const createMealIngredientBodyQuantityExclusiveMin = 0;
+
+
+export const createMealIngredientBodyCaloriesPerUnitMin = 0;
+
+
+
+export const CreateMealIngredientBody = zod.object({
+  "inventoryItemId": zod.number().int().nullish(),
+  "inventoryItemName": zod.string().min(1),
+  "inventoryItemCategory": zod.string().min(1),
+  "quantity": zod.number().gt(createMealIngredientBodyQuantityExclusiveMin),
+  "unit": zod.string().min(1),
+  "caloriesPerUnit": zod.number().min(createMealIngredientBodyCaloriesPerUnitMin)
+})
+
+export const CreateMealIngredientResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "type": zod.enum(['single', 'set']),
+  "isActive": zod.boolean(),
+  "totalCalories": zod.number(),
+  "ingredients": zod.array(zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "inventoryItemName": zod.string(),
+  "quantity": zod.number(),
+  "unit": zod.string(),
+  "caloriesPerUnit": zod.number(),
+  "totalCalories": zod.number()
+})),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const UpdateMealIngredientParams = zod.object({
+  "mealId": zod.coerce.number().int(),
+  "ingredientId": zod.coerce.number().int()
+})
+
+
+
+export const updateMealIngredientBodyQuantityExclusiveMin = 0;
+
+
+export const updateMealIngredientBodyCaloriesPerUnitMin = 0;
+
+
+
+export const UpdateMealIngredientBody = zod.object({
+  "inventoryItemId": zod.number().int().nullish(),
+  "inventoryItemName": zod.string().min(1),
+  "inventoryItemCategory": zod.string().min(1),
+  "quantity": zod.number().gt(updateMealIngredientBodyQuantityExclusiveMin),
+  "unit": zod.string().min(1),
+  "caloriesPerUnit": zod.number().min(updateMealIngredientBodyCaloriesPerUnitMin)
+})
+
+export const UpdateMealIngredientResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "type": zod.enum(['single', 'set']),
+  "isActive": zod.boolean(),
+  "totalCalories": zod.number(),
+  "ingredients": zod.array(zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "inventoryItemName": zod.string(),
+  "quantity": zod.number(),
+  "unit": zod.string(),
+  "caloriesPerUnit": zod.number(),
+  "totalCalories": zod.number()
+})),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const DeleteMealIngredientParams = zod.object({
+  "mealId": zod.coerce.number().int(),
+  "ingredientId": zod.coerce.number().int()
+})
+
+export const DeleteMealIngredientResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "type": zod.enum(['single', 'set']),
+  "isActive": zod.boolean(),
+  "totalCalories": zod.number(),
+  "ingredients": zod.array(zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "inventoryItemName": zod.string(),
+  "quantity": zod.number(),
+  "unit": zod.string(),
+  "caloriesPerUnit": zod.number(),
+  "totalCalories": zod.number()
+})),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const listMealScheduleSlotsResponseStartTimeRegExp = new RegExp('^([01]\\d|2[0-3]):[0-5]\\d$');
+export const listMealScheduleSlotsResponseEndTimeRegExp = new RegExp('^([01]\\d|2[0-3]):[0-5]\\d$');
+
+
+export const ListMealScheduleSlotsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "startTime": zod.string().regex(listMealScheduleSlotsResponseStartTimeRegExp),
+  "endTime": zod.string().regex(listMealScheduleSlotsResponseEndTimeRegExp),
+  "sortOrder": zod.number().int()
+})
+export const ListMealScheduleSlotsResponse = zod.array(ListMealScheduleSlotsResponseItem)
+
+
+export const listMealScheduleQueryWeekStartRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+export const ListMealScheduleQueryParams = zod.object({
+  "weekStart": zod.coerce.string().regex(listMealScheduleQueryWeekStartRegExp)
+})
+
+export const listMealScheduleResponseDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+export const ListMealScheduleResponseItem = zod.object({
+  "id": zod.number().int(),
+  "date": zod.string().regex(listMealScheduleResponseDateRegExp),
+  "slotId": zod.number().int(),
+  "slotName": zod.string(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
+  "kind": zod.enum(['meal', 'break']),
+  "mealId": zod.number().int().nullable(),
+  "mealName": zod.string().nullable(),
+  "mealType": zod.union([zod.literal('single'),zod.literal('set'),zod.literal(null)]).nullable(),
+  "totalCalories": zod.number().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListMealScheduleResponse = zod.array(ListMealScheduleResponseItem)
+
+
+export const createMealScheduleEntryBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+
+
+export const CreateMealScheduleEntryBody = zod.object({
+  "date": zod.string().regex(createMealScheduleEntryBodyDateRegExp),
+  "slotId": zod.number().int().min(1),
+  "kind": zod.enum(['meal', 'break']),
+  "mealId": zod.number().int().min(1).nullable()
+})
+
+export const createMealScheduleEntryResponseDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+export const CreateMealScheduleEntryResponse = zod.object({
+  "id": zod.number().int(),
+  "date": zod.string().regex(createMealScheduleEntryResponseDateRegExp),
+  "slotId": zod.number().int(),
+  "slotName": zod.string(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
+  "kind": zod.enum(['meal', 'break']),
+  "mealId": zod.number().int().nullable(),
+  "mealName": zod.string().nullable(),
+  "mealType": zod.union([zod.literal('single'),zod.literal('set'),zod.literal(null)]).nullable(),
+  "totalCalories": zod.number().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const UpdateMealScheduleEntryParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const updateMealScheduleEntryBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+
+
+export const UpdateMealScheduleEntryBody = zod.object({
+  "date": zod.string().regex(updateMealScheduleEntryBodyDateRegExp),
+  "slotId": zod.number().int().min(1),
+  "kind": zod.enum(['meal', 'break']),
+  "mealId": zod.number().int().min(1).nullable()
+})
+
+export const updateMealScheduleEntryResponseDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+export const UpdateMealScheduleEntryResponse = zod.object({
+  "id": zod.number().int(),
+  "date": zod.string().regex(updateMealScheduleEntryResponseDateRegExp),
+  "slotId": zod.number().int(),
+  "slotName": zod.string(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
+  "kind": zod.enum(['meal', 'break']),
+  "mealId": zod.number().int().nullable(),
+  "mealName": zod.string().nullable(),
+  "mealType": zod.union([zod.literal('single'),zod.literal('set'),zod.literal(null)]).nullable(),
+  "totalCalories": zod.number().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const DeleteMealScheduleEntryParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteMealScheduleEntryResponse = zod.void()
+
+
+export const MoveMealScheduleEntryParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const moveMealScheduleEntryBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+
+export const MoveMealScheduleEntryBody = zod.object({
+  "date": zod.string().regex(moveMealScheduleEntryBodyDateRegExp),
+  "slotId": zod.number().int().min(1)
+})
+
+export const moveMealScheduleEntryResponseDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+export const MoveMealScheduleEntryResponseItem = zod.object({
+  "id": zod.number().int(),
+  "date": zod.string().regex(moveMealScheduleEntryResponseDateRegExp),
+  "slotId": zod.number().int(),
+  "slotName": zod.string(),
+  "startTime": zod.string(),
+  "endTime": zod.string(),
+  "kind": zod.enum(['meal', 'break']),
+  "mealId": zod.number().int().nullable(),
+  "mealName": zod.string().nullable(),
+  "mealType": zod.union([zod.literal('single'),zod.literal('set'),zod.literal(null)]).nullable(),
+  "totalCalories": zod.number().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const MoveMealScheduleEntryResponse = zod.array(MoveMealScheduleEntryResponseItem)
+
+
 /**
  * @summary List inventory purchases
  */

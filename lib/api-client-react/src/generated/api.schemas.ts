@@ -1396,6 +1396,146 @@ export interface BankTransactionImportResult {
   transactionIds: number[];
 }
 
+export interface MealIngredient {
+  id: number;
+  inventoryItemId: number;
+  inventoryItemName: string;
+  quantity: number;
+  unit: string;
+  caloriesPerUnit: number;
+  totalCalories: number;
+}
+
+export type MealType = typeof MealType[keyof typeof MealType];
+
+
+export const MealType = {
+  single: 'single',
+  set: 'set',
+} as const;
+
+export interface Meal {
+  id: number;
+  name: string;
+  category: string;
+  type: MealType;
+  isActive: boolean;
+  totalCalories: number;
+  ingredients: MealIngredient[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MealInputType = typeof MealInputType[keyof typeof MealInputType];
+
+
+export const MealInputType = {
+  single: 'single',
+  set: 'set',
+} as const;
+
+export interface MealInput {
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 1 */
+  category: string;
+  type: MealInputType;
+  isActive: boolean;
+}
+
+export interface MealIngredientInput {
+  /** @nullable */
+  inventoryItemId?: number | null;
+  /** @minLength 1 */
+  inventoryItemName: string;
+  /** @minLength 1 */
+  inventoryItemCategory: string;
+  /** @exclusiveMinimum 0 */
+  quantity: number;
+  /** @minLength 1 */
+  unit: string;
+  /** @minimum 0 */
+  caloriesPerUnit: number;
+}
+
+export interface MealScheduleSlot {
+  id: number;
+  name: string;
+  /** @pattern ^([01]\d|2[0-3]):[0-5]\d$ */
+  startTime: string;
+  /** @pattern ^([01]\d|2[0-3]):[0-5]\d$ */
+  endTime: string;
+  sortOrder: number;
+}
+
+export type MealScheduleEntryKind = typeof MealScheduleEntryKind[keyof typeof MealScheduleEntryKind];
+
+
+export const MealScheduleEntryKind = {
+  meal: 'meal',
+  break: 'break',
+} as const;
+
+/**
+ * @nullable
+ */
+export type MealScheduleEntryMealType = typeof MealScheduleEntryMealType[keyof typeof MealScheduleEntryMealType] | null;
+
+
+export const MealScheduleEntryMealType = {
+  single: 'single',
+  set: 'set',
+} as const;
+
+export interface MealScheduleEntry {
+  id: number;
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
+  date: string;
+  slotId: number;
+  slotName: string;
+  startTime: string;
+  endTime: string;
+  kind: MealScheduleEntryKind;
+  /** @nullable */
+  mealId: number | null;
+  /** @nullable */
+  mealName: string | null;
+  /** @nullable */
+  mealType: MealScheduleEntryMealType;
+  /** @nullable */
+  totalCalories: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MealScheduleEntryInputKind = typeof MealScheduleEntryInputKind[keyof typeof MealScheduleEntryInputKind];
+
+
+export const MealScheduleEntryInputKind = {
+  meal: 'meal',
+  break: 'break',
+} as const;
+
+export interface MealScheduleEntryInput {
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
+  date: string;
+  /** @minimum 1 */
+  slotId: number;
+  kind: MealScheduleEntryInputKind;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  mealId: number | null;
+}
+
+export interface MealScheduleMoveInput {
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
+  date: string;
+  /** @minimum 1 */
+  slotId: number;
+}
+
 export interface InventoryPurchaseItem {
   id: number;
   inventoryItemId: number;
@@ -1720,6 +1860,13 @@ export type ImportKapitronBankTransactionsParams = {
  * @minimum 1
  */
 bankAccountId: number;
+};
+
+export type ListMealScheduleParams = {
+/**
+ * @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$
+ */
+weekStart: string;
 };
 
 export type ListJournalEntriesParams = {

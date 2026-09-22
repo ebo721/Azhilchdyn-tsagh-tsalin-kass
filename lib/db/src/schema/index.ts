@@ -307,6 +307,64 @@ export const inventoryItemsTable = pgTable("inventory_items", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const mealsTable = pgTable("meals", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  normalizedName: text("normalized_name").notNull().unique(),
+  category: text("category").notNull(),
+  type: text("type").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  totalCalories: numeric("total_calories", { precision: 14, scale: 3, mode: "number" }).notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const mealIngredientsTable = pgTable("meal_ingredients", {
+  id: serial("id").primaryKey(),
+  mealId: integer("meal_id").notNull().references(() => mealsTable.id, { onDelete: "cascade" }),
+  inventoryItemId: integer("inventory_item_id").notNull().references(() => inventoryItemsTable.id, { onDelete: "restrict" }),
+  quantity: numeric("quantity", { precision: 14, scale: 3, mode: "number" }).notNull(),
+  unit: text("unit").notNull(),
+  caloriesPerUnit: numeric("calories_per_unit", { precision: 14, scale: 3, mode: "number" }).notNull(),
+  totalCalories: numeric("total_calories", { precision: 14, scale: 3, mode: "number" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  index("meal_ingredients_meal_id_idx").on(table.mealId),
+  index("meal_ingredients_inventory_item_id_idx").on(table.inventoryItemId),
+]);
+
+export const mealScheduleSlotsTable = pgTable("meal_schedule_slots", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+  sortOrder: integer("sort_order").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  uniqueIndex("meal_schedule_slots_name_idx").on(table.name),
+  uniqueIndex("meal_schedule_slots_sort_order_idx").on(table.sortOrder),
+  check("meal_schedule_slots_sort_order_check", sql`${table.sortOrder} >= 0`),
+]);
+
+export const mealScheduleEntriesTable = pgTable("meal_schedule_entries", {
+  id: serial("id").primaryKey(),
+  date: date("date", { mode: "string" }).notNull(),
+  slotId: integer("slot_id").notNull().references(() => mealScheduleSlotsTable.id, { onDelete: "restrict" }),
+  kind: text("kind").notNull(),
+  mealId: integer("meal_id").references(() => mealsTable.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  uniqueIndex("meal_schedule_entries_date_slot_idx").on(table.date, table.slotId),
+  index("meal_schedule_entries_date_idx").on(table.date),
+  index("meal_schedule_entries_meal_id_idx").on(table.mealId),
+  check("meal_schedule_entries_kind_check", sql`${table.kind} IN ('meal', 'break')`),
+  check("meal_schedule_entries_meal_check", sql`(${table.kind} = 'meal' AND ${table.mealId} IS NOT NULL) OR (${table.kind} = 'break' AND ${table.mealId} IS NULL)`),
+]);
+
 export const inventoryPurchaseItemsTable = pgTable("inventory_purchase_items", {
   id: serial("id").primaryKey(),
   purchaseId: integer("purchase_id").notNull().references(() => inventoryPurchasesTable.id, { onDelete: "cascade" }),

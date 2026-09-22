@@ -2,7 +2,7 @@ import { type ReactNode, useState } from 'react';
 import { BriefcaseBusiness, ChevronRight, LogOut, Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { cn } from '@/lib/utils';
-import { Banknote, Clock3, Landmark, LayoutDashboard, PackageOpen, Receipt, ShieldCheck, Timer, UserRound, UsersRound, WalletCards, Library } from 'lucide-react';
+import { Banknote, Clock3, Landmark, LayoutDashboard, PackageOpen, Receipt, ShieldCheck, Timer, UserRound, UsersRound, WalletCards, Library, Utensils, CalendarDays } from 'lucide-react';
 
 export const nav = [
   { href: '/', label: 'Статистик', icon: LayoutDashboard },
@@ -14,6 +14,8 @@ export const nav = [
   { href: '/bank-transactions', label: 'Банкны гүйлгээ', icon: Landmark },
   { href: '/operating-expenses', label: 'Үйл ажиллагааны зардал', icon: Receipt },
   { href: '/inventory', label: 'Бараа материал', icon: PackageOpen },
+  { href: '/meals', label: 'Хоолны цэс', icon: Utensils },
+  { href: '/meal-schedule', label: 'Хоолны хуваарь', icon: CalendarDays },
   { href: '/fixed-assets', label: 'Эд хөрөнгө', icon: BriefcaseBusiness },
   { href: '/journal', label: 'Ерөнхий журнал', icon: Library },
   { href: '/deletion-requests', label: 'Устгах хүсэлт', icon: ShieldCheck },
@@ -28,9 +30,9 @@ export function AppShell({ children, role, onLogout }: { children: ReactNode; ro
     : role === 'accountant'
       ? nav.filter((item) => ['/employees', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/journal'].includes(item.href))
       : role === 'warehouse'
-        ? nav.filter((item) => ['/inventory', '/fixed-assets', '/operating-expenses'].includes(item.href))
+        ? nav.filter((item) => ['/inventory', '/fixed-assets', '/operating-expenses', '/meals', '/meal-schedule'].includes(item.href))
         : role === 'viewer'
-          ? nav.filter((item) => ['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/inventory', '/fixed-assets', '/journal'].includes(item.href))
+          ? nav.filter((item) => ['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/inventory', '/fixed-assets', '/journal', '/meals', '/meal-schedule'].includes(item.href))
           : nav;
   const active = visibleNav.find((item) => item.href === location || (item.href !== '/' && location.startsWith(`${item.href}/`)))?.label ?? 'Статистик';
   return (

@@ -347,9 +347,15 @@
 
   [data-role='viewer'] [data-testid^='select-attendance-'],
   [data-role='viewer'] [data-testid^='select-shift-plan-'],
-  [data-role='viewer'] [data-testid^='checkbox-inventory-payment-'] {
+  [data-role='viewer'] [data-testid^='checkbox-inventory-payment-'],
+  [data-role='viewer'] [data-testid^='select-meal'],
+  [data-role='viewer'] [data-testid^='button-kind-'] {
     pointer-events: none;
     opacity: 0.75;
+  }
+
+  [data-role='viewer'] .schedule-cell {
+    pointer-events: none;
   }
   .text-balance { text-wrap: balance; }
   .app-grid {
