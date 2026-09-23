@@ -1658,6 +1658,76 @@ export interface InventoryItemUpdate {
   category: string;
 }
 
+export interface InventoryMaterialRequestLineInput {
+  /** @minimum 1 */
+  inventoryItemId: number;
+  /**
+     * @maximum 99999999999.999
+     * @exclusiveMinimum 0
+     */
+  quantity: number;
+}
+
+export interface InventoryMaterialRequestInput {
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
+  requestedDate: string;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  mealScheduleEntryId?: number | null;
+  /** @nullable */
+  note?: string | null;
+  /** @minItems 1 */
+  lines: InventoryMaterialRequestLineInput[];
+}
+
+export type InventoryMaterialRequestStatusUpdateStatus = typeof InventoryMaterialRequestStatusUpdateStatus[keyof typeof InventoryMaterialRequestStatusUpdateStatus];
+
+
+export const InventoryMaterialRequestStatusUpdateStatus = {
+  approved: 'approved',
+  rejected: 'rejected',
+  fulfilled: 'fulfilled',
+} as const;
+
+export interface InventoryMaterialRequestStatusUpdate {
+  status: InventoryMaterialRequestStatusUpdateStatus;
+}
+
+export interface InventoryMaterialRequestLine {
+  id: number;
+  inventoryItemId: number;
+  itemName: string;
+  unit: string;
+  quantity: number;
+}
+
+export type InventoryMaterialRequestStatus = typeof InventoryMaterialRequestStatus[keyof typeof InventoryMaterialRequestStatus];
+
+
+export const InventoryMaterialRequestStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+  fulfilled: 'fulfilled',
+} as const;
+
+export interface InventoryMaterialRequest {
+  id: number;
+  requestedDate: string;
+  requesterId: number;
+  requesterName: string;
+  /** @nullable */
+  mealScheduleEntryId: number | null;
+  /** @nullable */
+  note: string | null;
+  status: InventoryMaterialRequestStatus;
+  createdAt: string;
+  updatedAt: string;
+  lines: InventoryMaterialRequestLine[];
+}
+
 export interface InventoryIssue {
   id: number;
   inventoryItemId: number;
