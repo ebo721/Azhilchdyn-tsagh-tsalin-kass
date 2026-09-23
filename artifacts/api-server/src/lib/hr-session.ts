@@ -17,8 +17,8 @@ function signature(payload: string) {
   return createHmac("sha256", secret()).update(payload).digest("base64url");
 }
 
-export type StaffRole = "admin" | "hr" | "accountant" | "warehouse" | "viewer";
-const roles: readonly StaffRole[] = ["admin", "hr", "accountant", "warehouse", "viewer"];
+export type StaffRole = "admin" | "hr" | "accountant" | "warehouse" | "viewer" | "technologist";
+const roles: readonly StaffRole[] = ["admin", "hr", "accountant", "warehouse", "viewer", "technologist"];
 const scrypt = promisify(scryptCallback);
 
 export function normalizeUsername(username: string) {

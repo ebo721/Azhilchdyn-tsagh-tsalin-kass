@@ -28,6 +28,7 @@ const MONGOLIAN_DAYS = ['Даваа', 'Мягмар', 'Лхагва', 'Пүрэ�
 export function MealSchedule() {
   const qc = useQueryClient();
   const session = useGetAuthSession();
+  const readOnly = String(session.data?.role) === 'technologist';
   const [slotsModalOpen, setSlotsModalOpen] = useState(false);
   const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [requestModalState, setRequestModalState] = useState<{open: boolean, date?: string, entryId?: number}>({open: false});
@@ -73,7 +74,7 @@ export function MealSchedule() {
   const [dragOverCell, setDragOverCell] = useState<{ date: string; slotId: number } | null>(null);
 
   const onDragStart = (e: React.DragEvent, id: number) => {
-    if (moveEntry.isPending) {
+    if (readOnly || moveEntry.isPending) {
       e.preventDefault();
       return;
     }
@@ -88,11 +89,13 @@ export function MealSchedule() {
   };
 
   const onDragOver = (e: React.DragEvent, date: string, slotId: number) => {
+    if (readOnly) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   };
 
   const onDragEnter = (e: React.DragEvent, date: string, slotId: number) => {
+    if (readOnly) return;
     e.preventDefault();
     setDragOverCell({ date, slotId });
   };
@@ -102,8 +105,9 @@ export function MealSchedule() {
   };
 
   const onDrop = (e: React.DragEvent, targetDate: string, targetSlotId: number) => {
+    if (readOnly) return;
     e.preventDefault();
-    if (moveEntry.isPending) return;
+    if (readOnly || moveEntry.isPending) return;
     setDragOverCell(null);
     setDraggingId(null);
     const idStr = e.dataTransfer.getData('text/plain');
@@ -205,8 +209,8 @@ export function MealSchedule() {
                             "schedule-cell border-b border-border border-l relative p-1.5 align-top transition-colors h-24 w-[12.5%]",
                             isDragOver ? "bg-orange-50 dark:bg-orange-900/20" : day.isToday ? "bg-orange-50/20 dark:bg-orange-900/5" : "hover:bg-secondary/20"
                           )}
-                          onDragOver={(e) => onDragOver(e, day.dateStr, slot.id)}
-                          onDragEnter={(e) => onDragEnter(e, day.dateStr, slot.id)}
+                           onDragOver={(e) => onDragOver(e, day.dateStr, slot.id)}
+                           onDragEnter={(e) => onDragEnter(e, day.dateStr, slot.id)}
                           onDragLeave={onDragLeave}
                           onDrop={(e) => onDrop(e, day.dateStr, slot.id)}
                           onClick={() => setModalCell({ date: day.dateStr, slot, entry })}
@@ -214,25 +218,29 @@ export function MealSchedule() {
                         >
                           {entry ? (
                             <div 
-                              draggable={!moveEntry.isPending}
+                               draggable={!readOnly && !moveEntry.isPending}
                               onDragStart={(e) => onDragStart(e, entry.id)}
                               onDragEnd={onDragEnd}
-                              onDragOver={(e) => {
+                               onDragOver={(e) => {
+                                 if (readOnly) return;
                                 e.preventDefault();
                                 e.stopPropagation();
                                 e.dataTransfer.dropEffect = 'move';
                               }}
-                              onDragEnter={(e) => {
+                               onDragEnter={(e) => {
+                                 if (readOnly) return;
                                 e.preventDefault();
                                 e.stopPropagation();
                                 setDragOverCell({ date: day.dateStr, slotId: slot.id });
                               }}
-                              onDrop={(e) => {
+                               onDrop={(e) => {
+                                 if (readOnly) return;
                                 e.stopPropagation();
                                 onDrop(e, day.dateStr, slot.id);
                               }}
-                              className={cn(
-                                "flex flex-col h-full rounded-lg border p-2 cursor-grab active:cursor-grabbing hover-elevate transition-all",
+                               className={cn(
+                                 "flex flex-col h-full rounded-lg border p-2 hover-elevate transition-all",
+                                 !readOnly && "cursor-grab active:cursor-grabbing",
                                 draggingId === entry.id ? "opacity-50 border-dashed" : "border-border shadow-sm",
                                 entry.kind === 'break' ? "bg-secondary text-secondary-foreground" : "bg-card text-card-foreground border-orange-200 dark:border-orange-900",
                                 moveEntry.isPending && moveEntry.variables?.id === entry.id && "animate-pulse"
@@ -268,8 +276,8 @@ export function MealSchedule() {
                               )}
                             </div>
                           ) : (
-                            <div className="h-full w-full rounded-lg border border-dashed border-transparent hover:border-border flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity cursor-pointer text-muted-foreground">
-                              <Plus className="size-4" />
+                             <div className={cn("h-full w-full rounded-lg border border-dashed border-transparent flex items-center justify-center transition-opacity text-muted-foreground", !readOnly && "hover:border-border opacity-0 group-hover/row:opacity-100 cursor-pointer")}>
+                               {!readOnly && <Plus className="size-4" />}
                             </div>
                           )}
                         </td>
@@ -288,7 +296,8 @@ export function MealSchedule() {
           cell={modalCell} 
           weekStart={weekStart}
           onClose={() => setModalCell(null)} 
-          onRequestMaterial={
+           readOnly={readOnly}
+           onRequestMaterial={
             session.data?.role === 'admin' || session.data?.role === 'warehouse'
               ? (date, entryId) => {
                   setModalCell(null);
@@ -315,7 +324,7 @@ export function MealSchedule() {
   );
 }
 
-function EntryModal({ cell, weekStart, onClose, onRequestMaterial }: { cell: { date: string; slot: MealScheduleSlot; entry?: MealScheduleEntry }; weekStart: string; onClose: () => void; onRequestMaterial?: (date: string, entryId: number) => void }) {
+function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: { cell: { date: string; slot: MealScheduleSlot; entry?: MealScheduleEntry }; weekStart: string; onClose: () => void; onRequestMaterial?: (date: string, entryId: number) => void; readOnly?: boolean }) {
   const qc = useQueryClient();
   const mealsQuery = useListMeals();
   const create = useCreateMealScheduleEntry();
@@ -327,6 +336,19 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial }: { cell: { d
   const [mealId, setMealId] = useState<number | ''>(cell.entry?.mealId || '');
 
   const meals = (mealsQuery.data || []).filter(m => m.isActive);
+
+  if (readOnly) {
+    return (
+      <Modal title="Хуваарийн мэдээлэл" detail={`${format(new Date(cell.date), 'yyyy.MM.dd')} өдрийн ${cell.slot.name} (${cell.slot.startTime}-${cell.slot.endTime})`} onClose={onClose}>
+        <div className="space-y-5">
+          <div className="rounded-xl border border-border bg-secondary/30 p-5 text-center">
+            {cell.entry?.kind === 'break' ? <><Coffee className="mx-auto mb-2 size-6 text-muted-foreground" /><p className="font-semibold">Завсарлага</p></> : cell.entry ? <><Utensils className="mx-auto mb-2 size-6 text-orange-500" /><p className="font-semibold">{cell.entry.mealName}</p><p className="mt-1 text-sm text-muted-foreground">{cell.entry.mealType === 'set' ? 'Сет хоол' : 'Дан хоол'} · {cell.entry.totalCalories || 0} ккал</p></> : <p className="text-sm text-muted-foreground">Энэ цагт хуваарь бүртгэгдээгүй байна.</p>}
+          </div>
+          <div className="flex justify-end border-t border-border pt-4"><Button variant="outline" onClick={onClose}>Хаах</Button></div>
+        </div>
+      </Modal>
+    );
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

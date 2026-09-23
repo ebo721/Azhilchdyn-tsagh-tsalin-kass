@@ -15,4 +15,5 @@ export const UserRole = {
   accountant: 'accountant',
   warehouse: 'warehouse',
   viewer: 'viewer',
+  technologist: 'technologist',
 } as const;

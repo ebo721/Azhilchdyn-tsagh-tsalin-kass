@@ -22,7 +22,7 @@ export const nav = [
   { href: '/users', label: 'Хэрэглэгчийн тохиргоо', icon: UserRound },
 ];
 
-export function AppShell({ children, role, onLogout }: { children: ReactNode; role: 'admin' | 'hr' | 'accountant' | 'warehouse' | 'viewer'; onLogout: () => void }) {
+export function AppShell({ children, role, onLogout }: { children: ReactNode; role: 'admin' | 'hr' | 'accountant' | 'warehouse' | 'viewer' | 'technologist'; onLogout: () => void }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const visibleNav = role === 'hr'
@@ -31,6 +31,8 @@ export function AppShell({ children, role, onLogout }: { children: ReactNode; ro
       ? nav.filter((item) => ['/employees', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/journal'].includes(item.href))
       : role === 'warehouse'
         ? nav.filter((item) => ['/inventory', '/fixed-assets', '/operating-expenses', '/meals', '/meal-schedule'].includes(item.href))
+        : role === 'technologist'
+          ? nav.filter((item) => ['/meals', '/meal-schedule'].includes(item.href))
         : role === 'viewer'
           ? nav.filter((item) => ['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/inventory', '/fixed-assets', '/journal', '/meals', '/meal-schedule'].includes(item.href))
           : nav;
@@ -57,7 +59,7 @@ export function AppShell({ children, role, onLogout }: { children: ReactNode; ro
       <main className="min-h-[100dvh] lg:pl-[248px]">
         <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-border/70 bg-background/90 px-5 backdrop-blur-md sm:px-8" data-testid="top-header">
           <div className="flex items-center gap-3"><button className="grid size-9 place-items-center rounded-xl border border-border bg-card lg:hidden" onClick={() => setMobileOpen(true)} data-testid="button-open-navigation"><Menu className="size-4" /></button><p className="text-sm font-semibold">{active}</p></div>
-          <div className="flex items-center gap-3"><span className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex"><span className="size-2 rounded-full bg-primary" />{role === 'hr' ? 'Хүний нөөцийн менежер' : role === 'accountant' ? 'Нягтлан' : role === 'warehouse' ? 'Нярав' : role === 'viewer' ? 'Статистик харах эрх' : 'Ерөнхий админ'}</span><button onClick={onLogout} className="grid size-9 place-items-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground" aria-label="Системээс гарах" data-testid="button-logout"><LogOut className="size-4" /></button><div className="grid size-9 place-items-center rounded-xl bg-primary text-xs font-bold text-primary-foreground" data-testid="avatar-owner">{role === 'hr' ? 'HR' : role === 'accountant' ? 'НТ' : role === 'warehouse' ? 'НЯ' : role === 'viewer' ? 'СТ' : 'АД'}</div></div>
+           <div className="flex items-center gap-3"><span className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex"><span className="size-2 rounded-full bg-primary" />{role === 'hr' ? 'Хүний нөөцийн менежер' : role === 'accountant' ? 'Нягтлан' : role === 'warehouse' ? 'Нярав' : role === 'viewer' ? 'Статистик харах эрх' : role === 'technologist' ? 'Хоолны технологич' : 'Ерөнхий админ'}</span><button onClick={onLogout} className="grid size-9 place-items-center rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground" aria-label="Системээс гарах" data-testid="button-logout"><LogOut className="size-4" /></button><div className="grid size-9 place-items-center rounded-xl bg-primary text-xs font-bold text-primary-foreground" data-testid="avatar-owner">{role === 'hr' ? 'HR' : role === 'accountant' ? 'НТ' : role === 'warehouse' ? 'НЯ' : role === 'viewer' ? 'СТ' : role === 'technologist' ? 'ХТ' : 'АД'}</div></div>
         </header>
         <div className="mx-auto max-w-[1440px] p-5 sm:p-8">{children}</div>
       </main>

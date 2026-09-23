@@ -18,4 +18,5 @@ export const AuthSessionRole = {
   accountant: 'accountant',
   warehouse: 'warehouse',
   viewer: 'viewer',
+  technologist: 'technologist',
 } as const;

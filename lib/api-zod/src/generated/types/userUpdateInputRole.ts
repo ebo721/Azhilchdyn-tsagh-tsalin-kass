@@ -15,4 +15,5 @@ export const UserUpdateInputRole = {
   accountant: 'accountant',
   warehouse: 'warehouse',
   viewer: 'viewer',
+  technologist: 'technologist',
 } as const;

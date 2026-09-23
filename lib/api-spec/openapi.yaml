@@ -2342,7 +2342,7 @@ components:
       properties:
         authenticated: { type: boolean }
         id: { type: [integer, "null"] }
-        role: { type: [string, "null"], enum: [admin, hr, accountant, warehouse, viewer, null] }
+        role: { type: [string, "null"], enum: [admin, hr, accountant, warehouse, viewer, technologist, null] }
         username: { type: [string, "null"] }
     User:
       type: object
@@ -2350,13 +2350,13 @@ components:
       properties:
         id: { type: integer }
         username: { type: string }
-        role: { type: string, enum: [admin, hr, accountant, warehouse, viewer] }
+        role: { type: string, enum: [admin, hr, accountant, warehouse, viewer, technologist] }
     UserUpdateInput:
       type: object
       required: [username, role]
       properties:
         username: { type: string, minLength: 1 }
-        role: { type: string, enum: [admin, hr, accountant, warehouse, viewer] }
+        role: { type: string, enum: [admin, hr, accountant, warehouse, viewer, technologist] }
         newPassword: { type: string, minLength: 1 }
     ChartOfAccount:
       type: object

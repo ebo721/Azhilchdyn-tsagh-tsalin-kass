@@ -20,6 +20,7 @@ const userRoleLabels: Record<string, string> = {
   accountant: 'Нягтлан',
   warehouse: 'Агуулах',
   viewer: 'Харах эрхтэй',
+  technologist: 'Хоолны технологич',
 };
 
 export function UserEditModal({ user, onClose }: { user: User; onClose: () => void }) {
