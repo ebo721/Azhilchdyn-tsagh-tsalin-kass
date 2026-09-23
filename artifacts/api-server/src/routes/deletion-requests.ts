@@ -121,6 +121,8 @@ import {
   UpdateChartOfAccountResponse,
   DeleteChartOfAccountParams,
 } from "@workspace/api-zod";
+import requireStaffAuth from "../middlewares/require-staff-auth.js";
+import mealScheduleRouter from "./meal-schedule.js";
 import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import {
   attendanceTable,
@@ -159,6 +161,8 @@ import * as shared from "../lib/route-shared.js";
 import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-shared.js";
 
 const router: IRouter = Router();
+const protectedMealScheduleRouter: IRouter = Router();
+protectedMealScheduleRouter.use(requireStaffAuth, mealScheduleRouter);
 const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, operatingExpenseAccountName, inventoryMaterialLabel, defaultChartOfAccounts, operatingExpenseAccountCodes, inventoryPurchaseAccountCodes, reservedAccountTypes, chartOfAccountResponse, ensureDefaultChartOfAccounts, inventoryPurchaseAccount, lockedExpenseAccount, fallbackExpenseAccount, today, currentMonth, money, InventoryBankPaymentConflictError, OperatingExpenseBankPaymentConflictError, calendarDateOffset, descriptionTokens, inventoryBankSuggestionScore, deletionTargetPatterns, roleCanRequestDeletion, deletionRequestResponse, monthlyIncomeTaxRelief, hoursBetween, previousMonth, nextMonth, daysInMonth, isValidCalendarDate, calendarDateText, weekdayCount, monthWeekdays, defaultPayrollSchedule, getPayrollSchedule, scheduleDate, payrollPeriod, selectPayrollScheduleVersion, scheduleVersionAffectsMonth, shiftDailyRate, weekdayDatesBetween, salaryAt, getPayrollSummary, getPayrollAdvanceSummary, calculatePayrollAdvanceLine, InventoryInsufficientStockError, planInventoryFifoConsumption, applyInventoryFifoConsumption, reverseInventoryFifoConsumption, inventoryPurchaseResponse } = shared;
 
 
@@ -230,7 +234,9 @@ router.post("/deletion-requests/:id/approve", async (req, res, next) => {
       request.targetPath,
       req.headers.cookie ?? "",
       id,
-      router,
+      request.targetPath.startsWith("/meal-schedule/")
+        ? protectedMealScheduleRouter
+        : router,
     );
     if (!execution.ok) {
       const errorBody = await execution.text();

@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
-import { ChevronLeft, ChevronRight, Plus, Trash2, Utensils, Flame, Coffee } from 'lucide-react';
+import { MealScheduleSlotsModal } from './MealScheduleSlotsModal';
+import { ChevronLeft, ChevronRight, Plus, Trash2, Utensils, Flame, Coffee, Settings2 } from 'lucide-react';
 import {
   useListMealScheduleSlots,
   useListMealSchedule,
@@ -14,6 +15,7 @@ import {
   useUpdateMealScheduleEntry,
   useMoveMealScheduleEntry,
   useListMeals,
+  useGetAuthSession,
   getListMealScheduleQueryKey,
   type MealScheduleEntry,
   type MealScheduleEntryInput,
@@ -24,6 +26,8 @@ const MONGOLIAN_DAYS = ['Даваа', 'Мягмар', 'Лхагва', 'Пүрэ�
 
 export function MealSchedule() {
   const qc = useQueryClient();
+  const session = useGetAuthSession();
+  const [slotsModalOpen, setSlotsModalOpen] = useState(false);
   const [currentDate, setCurrentDate] = useState(() => {
     const today = new Date();
     // Use noon to avoid timezone boundary issues
@@ -125,6 +129,11 @@ export function MealSchedule() {
         detail="Хоолны цаг болон цэсийг өдрөөр төлөвлөх"
         action={
           <div className="flex items-center gap-2">
+            {(session.data?.role === 'admin' || session.data?.role === 'warehouse') && (
+              <Button variant="outline" onClick={() => setSlotsModalOpen(true)} data-testid="button-manage-meal-slots">
+                <Settings2 className="mr-2 size-4" /> Хоолны цаг
+              </Button>
+            )}
             <Button variant="outline" onClick={currentWeek} data-testid="button-current-week">Өнөөдөр</Button>
             <div className="flex items-center rounded-md border border-input bg-card">
               <Button variant="ghost" size="icon" className="h-9 w-9 rounded-none border-r border-border hover:bg-secondary" onClick={prevWeek} data-testid="button-prev-week"><ChevronLeft className="size-4" /></Button>
@@ -272,6 +281,9 @@ export function MealSchedule() {
           weekStart={weekStart}
           onClose={() => setModalCell(null)} 
         />
+      )}
+      {slotsModalOpen && (
+        <MealScheduleSlotsModal slots={slots} onClose={() => setSlotsModalOpen(false)} />
       )}
     </div>
   );

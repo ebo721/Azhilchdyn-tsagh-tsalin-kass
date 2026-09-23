@@ -1468,6 +1468,20 @@ export interface MealScheduleSlot {
   sortOrder: number;
 }
 
+export interface MealScheduleSlotInput {
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  name: string;
+  /** @pattern ^([01]\d|2[0-3]):[0-5]\d$ */
+  startTime: string;
+  /** @pattern ^([01]\d|2[0-3]):[0-5]\d$ */
+  endTime: string;
+  /** @minimum 0 */
+  sortOrder: number;
+}
+
 export type MealScheduleEntryKind = typeof MealScheduleEntryKind[keyof typeof MealScheduleEntryKind];
 
 
