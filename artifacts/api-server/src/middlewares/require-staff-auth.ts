@@ -160,6 +160,17 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
     res.status(401).json({ error: "Нэвтрэх шаардлагатай" });
     return;
   }
+  // Meal technologists have a deliberately narrow, read-only API surface.
+  // Keep this before deletion-request and other method-specific exceptions.
+  if (session.role === "technologist") {
+    const mealPrefix = (prefix: string) => req.path === prefix || req.path.startsWith(`${prefix}/`);
+    if (req.method === "GET" && (mealPrefix("/meals") || mealPrefix("/meal-schedule"))) {
+      next();
+      return;
+    }
+    res.status(403).json({ error: "Энэ хэсэгт хандах эрхгүй" });
+    return;
+  }
   if (req.path === "/chart-of-accounts" || req.path.startsWith("/chart-of-accounts/")) {
     if (req.method === "GET" || session.role === "admin") {
       next();

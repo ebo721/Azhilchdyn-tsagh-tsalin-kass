@@ -23,6 +23,7 @@ import {
   useUpdateMealIngredient,
   useDeleteMealIngredient,
   useListInventoryItems,
+  useGetAuthSession,
   getListMealsQueryKey,
   getListInventoryItemsQueryKey,
   type Meal,
@@ -34,8 +35,12 @@ import {
 
 export function Meals() {
   const qc = useQueryClient();
+  const session = useGetAuthSession();
+  const readOnly = session.data?.role === 'technologist';
   const mealsQuery = useListMeals();
-  const catalogQuery = useListInventoryItems();
+  const catalogQuery = useListInventoryItems({
+    query: { queryKey: getListInventoryItemsQueryKey(), enabled: !readOnly },
+  });
   const deleteMeal = useDeleteMeal();
 
   const [search, setSearch] = useState('');
@@ -84,11 +89,11 @@ export function Meals() {
         eyebrow="Хоолны цэс"
         title="Хоолны орц, илчлэг"
         detail="Хоолны орцын норм хэмжээг тохируулах болон илчлэг тооцоолох хэсэг"
-        action={
+        action={!readOnly && (
           <Button onClick={openCreateMeal} data-testid="button-add-meal" className="bg-orange-600 hover:bg-orange-700 text-white border-transparent">
             <Plus className="size-4 mr-2" /> Хоол нэмэх
           </Button>
-        }
+        )}
       />
 
       <div className="grid lg:grid-cols-[1fr_400px] xl:grid-cols-[1fr_500px] items-start gap-6">
@@ -125,7 +130,7 @@ export function Meals() {
                     <th className="px-5 py-3">Төрөл</th>
                     <th className="px-5 py-3 text-right">Илчлэг</th>
                     <th className="px-5 py-3 text-center">Төлөв</th>
-                    <th className="px-5 py-3 text-right">Үйлдэл</th>
+                    {!readOnly && <th className="px-5 py-3 text-right">Үйлдэл</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -157,7 +162,7 @@ export function Meals() {
                       <td className="px-5 py-3 text-center">
                         <StatusPill value={meal.isActive ? 'active' : 'inactive'} />
                       </td>
-                      <td className="px-5 py-3 text-right">
+                      {!readOnly && <td className="px-5 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); openEditMealInfo(meal); }} data-testid={`button-edit-meal-${meal.id}`}>
                             <Pencil className="size-4" />
@@ -166,7 +171,7 @@ export function Meals() {
                             <Trash2 className="size-4" />
                           </Button>
                         </div>
-                      </td>
+                      </td>}
                     </tr>
                   ))}
                 </tbody>
@@ -180,6 +185,7 @@ export function Meals() {
             meal={meals.find(m => m.id === selectedMeal.id) || selectedMeal}
             catalog={catalog}
             onClose={() => setSelectedMeal(null)}
+            readOnly={readOnly}
             onUpdate={() => {
               qc.invalidateQueries({ queryKey: getListMealsQueryKey() });
               qc.invalidateQueries({ queryKey: getListInventoryItemsQueryKey() });
@@ -317,12 +323,14 @@ function MealDetailsPanel({
   meal,
   catalog,
   onClose,
-  onUpdate
+  onUpdate,
+  readOnly
 }: {
   meal: Meal;
   catalog: InventoryItem[];
   onClose: () => void;
   onUpdate: () => void;
+  readOnly: boolean;
 }) {
   const createIngredient = useCreateMealIngredient();
   const updateIngredient = useUpdateMealIngredient();
@@ -440,7 +448,7 @@ function MealDetailsPanel({
       <div className="flex-1 overflow-y-auto p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Орцын жагсаалт</h3>
-          {!isAddMode && (
+          {!readOnly && !isAddMode && (
             <Button size="sm" variant="outline" onClick={() => setIsAddMode(true)} data-testid="button-add-ingredient">
               <Plus className="size-3.5 mr-1" /> Орц нэмэх
             </Button>
@@ -456,7 +464,7 @@ function MealDetailsPanel({
                   <th className="px-3 py-2.5 text-right">Хэмжээ</th>
                   <th className="px-3 py-2.5 text-right">Илчлэг/Нэгж</th>
                   <th className="px-3 py-2.5 text-right">Нийт ккал</th>
-                  <th className="px-3 py-2.5 w-16"></th>
+                  {!readOnly && <th className="px-3 py-2.5 w-16"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -466,7 +474,7 @@ function MealDetailsPanel({
                     <td className="px-3 py-2.5 text-sm text-right font-mono">{ing.quantity} <span className="text-muted-foreground text-xs font-sans">{ing.unit}</span></td>
                     <td className="px-3 py-2.5 text-sm text-right font-mono text-muted-foreground">{ing.caloriesPerUnit}</td>
                     <td className="px-3 py-2.5 text-sm text-right font-mono font-bold text-orange-600 dark:text-orange-400">{ing.totalCalories}</td>
-                    <td className="px-3 py-2.5 text-right">
+                    {!readOnly && <td className="px-3 py-2.5 text-right">
                       <div className="flex items-center justify-end gap-0.5">
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(ing)} data-testid={`button-edit-ing-${ing.id}`}>
                           <Pencil className="size-3" />
@@ -475,7 +483,7 @@ function MealDetailsPanel({
                           <Trash2 className="size-3" />
                         </Button>
                       </div>
-                    </td>
+                    </td>}
                   </tr>
                 ))}
               </tbody>
@@ -489,7 +497,7 @@ function MealDetailsPanel({
           )
         )}
 
-        {isAddMode && (
+        {!readOnly && isAddMode && (
           <div className="rounded-xl border border-orange-200 dark:border-orange-900 bg-orange-50/50 dark:bg-orange-950/20 p-4 animate-in fade-in slide-in-from-top-2">
             <h4 className="text-sm font-bold mb-3">{editingIngredient ? 'Орц засах' : 'Шинэ орц нэмэх'}</h4>
             <form onSubmit={saveIngredient} className="space-y-4">
