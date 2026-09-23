@@ -110,6 +110,9 @@ import {
   useCreateInventoryIssue,
   useUpdateInventoryIssue,
   useDeleteInventoryIssue,
+  useListInventoryMaterialRequests,
+  useUpdateInventoryMaterialRequestStatus,
+  getListInventoryMaterialRequestsQueryKey,
   useListFixedAssets,
   useCreateFixedAsset,
   useUpdateFixedAsset,
@@ -156,6 +159,8 @@ import {
   type InventorySupplier,
   type InventoryItem,
   type InventoryIssue,
+  type InventoryMaterialRequest,
+  InventoryMaterialRequestStatus,
   type FixedAsset,
   type PayrollLine,
   type PayrollScheduleInput,
@@ -202,6 +207,8 @@ type InventoryForm = {
 };
 
 export function Inventory() {
+  const session = useGetAuthSession();
+  const canManageMaterialRequests = session.data?.role === 'admin' || session.data?.role === 'warehouse';
   const purchasesQuery = useListInventoryPurchases();
   const suppliers = useListInventorySuppliers();
   const updateSupplier = useUpdateInventorySupplier();
@@ -229,7 +236,7 @@ export function Inventory() {
   const [editingSupplier, setEditingSupplier] = useState<InventorySupplier | null>(null);
   const [stockSearch, setStockSearch] = useState('');
   const [materialTypeTab, setMaterialTypeTab] = useState<InventoryMaterialType>('food');
-  const [inventoryTab, setInventoryTab] = useState<'stock' | 'purchases' | 'suppliers' | 'issues'>('stock');
+  const [inventoryTab, setInventoryTab] = useState<'stock' | 'purchases' | 'suppliers' | 'issues' | 'requests'>('stock');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [categoryItem, setCategoryItem] = useState<InventoryItem | null>(null);
   const [issueOpen, setIssueOpen] = useState(false);
@@ -475,8 +482,22 @@ export function Inventory() {
     if (!window.confirm(`${issue.itemName} барааны ${issue.quantity} ${issue.unit} зарлагыг устгах уу?`)) return;
     deletion.request(`/inventory/issues/${issue.id}`, `${issue.itemName} · ${issue.quantity} ${issue.unit} зарлага`);
   };
+  const requestsQuery = useListInventoryMaterialRequests({ query: { enabled: inventoryTab === 'requests', queryKey: getListInventoryMaterialRequestsQueryKey() } });
+  const updateRequestStatus = useUpdateInventoryMaterialRequestStatus();
+
+  const handleRequestStatusChange = (request: InventoryMaterialRequest, status: 'approved' | 'rejected' | 'fulfilled') => {
+    updateRequestStatus.mutate(
+      { id: request.id, data: { status } },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getListInventoryMaterialRequestsQueryKey() });
+        }
+      }
+    );
+  };
+
   return <div className="page-enter">
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-3"><div className="inline-flex rounded-xl bg-secondary p-1"><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'stock' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('stock')} data-testid="tab-inventory-stock">Үлдэгдэл</button><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'purchases' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('purchases')} data-testid="tab-inventory-purchases">Худалдан авалт</button><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'suppliers' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('suppliers')} data-testid="tab-inventory-suppliers">Харилцагч</button><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'issues' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('issues')} data-testid="tab-inventory-issues">Зарлага</button></div>{inventoryTab === 'purchases' ? <Button onClick={openForm} data-testid="button-add-inventory-purchase"><Plus className="size-4" />Худалдан авалт бүртгэх</Button> : inventoryTab === 'issues' ? <Button onClick={openIssueForm} data-testid="button-add-inventory-issue"><Plus className="size-4" />Зарлага гаргах</Button> : null}</div>
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-3"><div className="inline-flex rounded-xl bg-secondary p-1"><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'stock' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('stock')} data-testid="tab-inventory-stock">Үлдэгдэл</button><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'purchases' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('purchases')} data-testid="tab-inventory-purchases">Худалдан авалт</button><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'suppliers' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('suppliers')} data-testid="tab-inventory-suppliers">Харилцагч</button><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'issues' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('issues')} data-testid="tab-inventory-issues">Зарлага</button><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'requests' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('requests')} data-testid="tab-inventory-requests">Захиалга</button></div>{inventoryTab === 'purchases' ? <Button onClick={openForm} data-testid="button-add-inventory-purchase"><Plus className="size-4" />Худалдан авалт бүртгэх</Button> : inventoryTab === 'issues' ? <Button onClick={openIssueForm} data-testid="button-add-inventory-issue"><Plus className="size-4" />Зарлага гаргах</Button> : null}</div>
     {(inventoryTab === 'stock' || inventoryTab === 'purchases') && <div className="mb-5 inline-flex rounded-xl border border-border bg-card p-1" role="tablist" aria-label="Бараа материалын төрөл">{inventoryMaterialTypes.map((type) => <button key={type.value} role="tab" aria-selected={materialTypeTab === type.value} className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', materialTypeTab === type.value ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-secondary')} onClick={() => setMaterialTypeTab(type.value)} data-testid={`tab-inventory-material-${type.value}`}>{type.label}</button>)}</div>}
     {inventoryTab === 'stock' && <section className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between"><h2 className="text-base font-bold">Барааны үлдэгдэл</h2><div className="relative w-full sm:w-72"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={stockSearch} onChange={(event) => setStockSearch(event.target.value)} className="pl-9" placeholder="Нэр эсвэл ангиллаар хайх" data-testid="input-search-inventory-stock" /></div></div>
@@ -534,6 +555,68 @@ export function Inventory() {
     {inventoryTab === 'issues' && <section className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-5 py-4"><h2 className="text-base font-bold">Зарлагын жагсаалт</h2><span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{issues.data?.length ?? 0} бүртгэл</span></div>
       {issues.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : issues.isError ? <ErrorBlock onRetry={() => issues.refetch()} /> : !issues.data?.length ? <EmptyState title="Зарлага бүртгэгдээгүй" detail="Бараа материалын зарлагыг энд бүртгэнэ." icon={PackageOpen} /> : <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Огноо</th><th className="px-5 py-3">Бараа материал</th><th className="px-5 py-3 text-right">Тоо хэмжээ</th><th className="px-5 py-3">Нэгж</th><th className="px-5 py-3 text-right">Өртөг</th><th className="px-5 py-3">Зориулалт</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{issues.data.map((issue) => <tr key={issue.id} data-testid={`row-inventory-issue-${issue.id}`}><td className="px-5 py-3 text-sm font-semibold">{dateLabel(issue.date)}</td><td className="px-5 py-3 text-sm font-semibold">{issue.itemName}</td><td className="px-5 py-3 text-right font-mono text-sm font-bold">{issue.quantity}</td><td className="px-5 py-3 text-sm text-muted-foreground">{issue.unit}</td><td className="px-5 py-3 text-right font-mono text-sm font-bold text-primary">{money(issue.totalCost)}</td><td className="px-5 py-3 text-sm">{issue.purpose}</td><td className="px-5 py-3"><div className="flex justify-end gap-1"><Button size="icon" variant="ghost" onClick={() => editIssue(issue)} data-testid={`button-edit-inventory-issue-${issue.id}`}><Pencil className="size-4" /></Button><Button size="icon" variant="ghost" disabled={removeIssue.isPending} onClick={() => deleteIssue(issue)} data-testid={`button-delete-inventory-issue-${issue.id}`}><Trash2 className="size-4" /></Button></div></td></tr>)}</tbody></table></div>}
+    </section>}
+    {inventoryTab === 'requests' && <section className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="flex items-center justify-between border-b border-border px-5 py-4"><h2 className="text-base font-bold">Захиалгын жагсаалт</h2></div>
+      {updateRequestStatus.isError && <p className="border-b border-border bg-destructive/10 px-5 py-3 text-sm font-semibold text-destructive">Захиалгын төлөвийг өөрчилж чадсангүй. Мэдээллийг шинэчлээд дахин оролдоно уу.</p>}
+      {requestsQuery.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-14" /><LoadingBlock className="h-14" /></div> : requestsQuery.isError ? <ErrorBlock onRetry={() => requestsQuery.refetch()} /> : !requestsQuery.data?.length ? <EmptyState title="Захиалга олдсонгүй" detail="Одоогоор бүртгэгдсэн материалын захиалга алга байна." icon={PackageOpen} /> : <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px] text-left">
+          <thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground">
+            <tr>
+              <th className="px-5 py-3">Огноо</th>
+              <th className="px-5 py-3">Захиалагч</th>
+              <th className="px-5 py-3">Жагсаалт</th>
+              <th className="px-5 py-3">Тэмдэглэл</th>
+              <th className="px-5 py-3">Төлөв</th>
+              <th className="px-5 py-3 text-right">Үйлдэл</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {requestsQuery.data.map((req) => (
+              <tr key={req.id} className="transition-colors hover:bg-secondary/40" data-testid={`row-inventory-request-${req.id}`}>
+                <td className="px-5 py-3 text-sm font-semibold">{dateLabel(req.requestedDate)}</td>
+                <td className="px-5 py-3 text-sm font-semibold">{req.requesterName}</td>
+                <td className="px-5 py-3 text-sm">
+                  <div className="flex flex-col gap-1">
+                    {req.lines.map(line => (
+                      <div key={line.id} className="flex items-center gap-2">
+                        <span className="font-medium text-foreground">{line.itemName}</span>
+                        <span className="text-xs text-muted-foreground font-mono bg-secondary/50 px-1.5 py-0.5 rounded">{line.quantity} {line.unit}</span>
+                      </div>
+                    ))}
+                  </div>
+                </td>
+                <td className="px-5 py-3 text-sm text-muted-foreground">{req.note || '-'}</td>
+                <td className="px-5 py-3">
+                  {req.status === 'pending' && <span className="inline-flex items-center rounded-full bg-orange-100 dark:bg-orange-900/30 px-2 py-1 text-[10px] font-bold text-orange-700 dark:text-orange-400">Хүлээгдэж буй</span>}
+                  {req.status === 'approved' && <span className="inline-flex items-center rounded-full bg-blue-100 dark:bg-blue-900/30 px-2 py-1 text-[10px] font-bold text-blue-700 dark:text-blue-400">Зөвшөөрсөн</span>}
+                  {req.status === 'rejected' && <span className="inline-flex items-center rounded-full bg-destructive/10 px-2 py-1 text-[10px] font-bold text-destructive">Татгалзсан</span>}
+                  {req.status === 'fulfilled' && <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">Олгосон</span>}
+                </td>
+                <td className="px-5 py-3 text-right">
+                  <div className="flex flex-wrap items-center justify-end gap-1">
+                    {canManageMaterialRequests && req.status === 'pending' && (
+                      <>
+                        <Button size="sm" variant="outline" className="h-8 border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-blue-900 dark:hover:bg-blue-900/30 dark:hover:text-blue-300" onClick={() => handleRequestStatusChange(req, 'approved')} disabled={updateRequestStatus.isPending} data-testid={`button-approve-request-${req.id}`}>
+                          <Check className="mr-1 size-3.5" /> Зөвшөөрөх
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-8 border-destructive/20 hover:bg-destructive/10 hover:text-destructive" onClick={() => { if (window.confirm('Энэхүү захиалгад татгалзах уу?')) handleRequestStatusChange(req, 'rejected'); }} disabled={updateRequestStatus.isPending} data-testid={`button-reject-request-${req.id}`}>
+                          <X className="mr-1 size-3.5" /> Татгалзах
+                        </Button>
+                      </>
+                    )}
+                    {canManageMaterialRequests && req.status === 'approved' && (
+                      <Button size="sm" variant="default" className="h-8" onClick={() => handleRequestStatusChange(req, 'fulfilled')} disabled={updateRequestStatus.isPending} data-testid={`button-fulfill-request-${req.id}`}>
+                        <Check className="mr-1 size-3.5" /> Олгох
+                      </Button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>}
     </section>}
     {selectedItem && <Modal title={selectedItem.name} detail={`${selectedItem.category} · Үлдэгдэл ${selectedItem.quantity} ${selectedItem.unit}`} onClose={() => setSelectedItem(null)}>
       {!selectedItemHistory.length ? <EmptyState title="Худалдан авалтын түүх алга" detail="Энэ бараанд холбогдох худалдан авалт олдсонгүй." icon={PackageOpen} /> : <div className="max-h-[60vh] overflow-y-auto"><div className="overflow-x-auto"><table className="w-full min-w-[560px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-3 py-2">Огноо</th><th className="px-3 py-2 text-right">Тоо</th><th className="px-3 py-2">Нэгж</th><th className="px-3 py-2 text-right">Нэгж үнэ</th><th className="px-3 py-2 text-right">Нийт үнэ</th></tr></thead><tbody className="divide-y divide-border">{selectedItemHistory.map((line) => <tr key={`${line.purchaseId}-${line.id}`}><td className="px-3 py-3 text-sm font-semibold">{dateLabel(line.date)}</td><td className="px-3 py-3 text-right font-mono text-sm">{line.quantity}</td><td className="px-3 py-3 text-sm text-muted-foreground">{line.unit}</td><td className="px-3 py-3 text-right font-mono text-sm">{money(line.unitPrice)}</td><td className="px-3 py-3 text-right font-mono text-sm font-bold">{money(line.totalAmount)}</td></tr>)}</tbody></table></div></div>}

@@ -338,7 +338,11 @@
   [data-role='viewer'] [data-testid='button-close-cash-day'],
   [data-role='viewer'] [data-testid='button-copy-previous-shift-plans'],
   [data-role='viewer'] [data-testid='button-pull-payroll-attendance'],
-  [data-role='viewer'] [data-testid='button-revert-payroll-advance'],
+  [data-role='viewer'] [data-testid^='button-revert-payroll-advance'],
+  [data-role='viewer'] [data-testid^='button-approve-request-'],
+  [data-role='viewer'] [data-testid^='button-reject-request-'],
+  [data-role='viewer'] [data-testid^='button-fulfill-request-'],
+  [data-role='viewer'] [data-testid='button-request-materials'],
   [data-role='viewer'] [data-testid='button-cash-expense'],
   [data-role='viewer'] [data-testid='button-cash-income'],
   [data-role='viewer'] [data-testid='button-shift-settings'] {

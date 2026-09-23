@@ -2841,6 +2841,104 @@ export const UpdateInventoryItemResponse = zod.object({
 
 
 /**
+ * @summary List inventory material requests
+ */
+export const ListInventoryMaterialRequestsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "requestedDate": zod.string(),
+  "requesterId": zod.number().int(),
+  "requesterName": zod.string(),
+  "mealScheduleEntryId": zod.number().int().nullable(),
+  "note": zod.string().nullable(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'fulfilled']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "lines": zod.array(zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "itemName": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number()
+}))
+})
+export const ListInventoryMaterialRequestsResponse = zod.array(ListInventoryMaterialRequestsResponseItem)
+
+
+/**
+ * @summary Create an inventory material request
+ */
+export const createInventoryMaterialRequestBodyRequestedDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+export const createInventoryMaterialRequestBodyLinesItemQuantityExclusiveMin = 0;
+export const createInventoryMaterialRequestBodyLinesItemQuantityMax = 99999999999.999;
+export const createInventoryMaterialRequestBodyLinesItemQuantityMultipleOf = 0.001;
+
+
+
+
+export const CreateInventoryMaterialRequestBody = zod.object({
+  "requestedDate": zod.string().regex(createInventoryMaterialRequestBodyRequestedDateRegExp),
+  "mealScheduleEntryId": zod.number().int().min(1).nullish(),
+  "note": zod.string().nullish(),
+  "lines": zod.array(zod.object({
+  "inventoryItemId": zod.number().int().min(1),
+  "quantity": zod.number().gt(createInventoryMaterialRequestBodyLinesItemQuantityExclusiveMin).max(createInventoryMaterialRequestBodyLinesItemQuantityMax).multipleOf(createInventoryMaterialRequestBodyLinesItemQuantityMultipleOf)
+})).min(1)
+})
+
+export const CreateInventoryMaterialRequestResponse = zod.object({
+  "id": zod.number().int(),
+  "requestedDate": zod.string(),
+  "requesterId": zod.number().int(),
+  "requesterName": zod.string(),
+  "mealScheduleEntryId": zod.number().int().nullable(),
+  "note": zod.string().nullable(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'fulfilled']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "lines": zod.array(zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "itemName": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number()
+}))
+})
+
+
+/**
+ * @summary Update material request status
+ */
+export const UpdateInventoryMaterialRequestStatusParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const UpdateInventoryMaterialRequestStatusBody = zod.object({
+  "status": zod.enum(['approved', 'rejected', 'fulfilled'])
+})
+
+export const UpdateInventoryMaterialRequestStatusResponse = zod.object({
+  "id": zod.number().int(),
+  "requestedDate": zod.string(),
+  "requesterId": zod.number().int(),
+  "requesterName": zod.string(),
+  "mealScheduleEntryId": zod.number().int().nullable(),
+  "note": zod.string().nullable(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'fulfilled']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "lines": zod.array(zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "itemName": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number()
+}))
+})
+
+
+/**
  * @summary List inventory issues
  */
 export const ListInventoryIssuesResponseItem = zod.object({

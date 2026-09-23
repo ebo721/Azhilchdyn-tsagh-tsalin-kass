@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
 import { MealScheduleSlotsModal } from './MealScheduleSlotsModal';
-import { ChevronLeft, ChevronRight, Plus, Trash2, Utensils, Flame, Coffee, Settings2 } from 'lucide-react';
+import { InventoryMaterialRequestModal } from './InventoryMaterialRequestModal';
+import { ChevronLeft, ChevronRight, Plus, Trash2, Utensils, Flame, Coffee, Settings2, PackageOpen } from 'lucide-react';
 import {
   useListMealScheduleSlots,
   useListMealSchedule,
@@ -28,6 +29,8 @@ export function MealSchedule() {
   const qc = useQueryClient();
   const session = useGetAuthSession();
   const [slotsModalOpen, setSlotsModalOpen] = useState(false);
+  const [requestModalOpen, setRequestModalOpen] = useState(false);
+  const [requestModalState, setRequestModalState] = useState<{open: boolean, date?: string, entryId?: number}>({open: false});
   const [currentDate, setCurrentDate] = useState(() => {
     const today = new Date();
     // Use noon to avoid timezone boundary issues
@@ -130,9 +133,14 @@ export function MealSchedule() {
         action={
           <div className="flex items-center gap-2">
             {(session.data?.role === 'admin' || session.data?.role === 'warehouse') && (
-              <Button variant="outline" onClick={() => setSlotsModalOpen(true)} data-testid="button-manage-meal-slots">
-                <Settings2 className="mr-2 size-4" /> Хоолны цаг
-              </Button>
+              <>
+                <Button variant="outline" onClick={() => setRequestModalOpen(true)} data-testid="button-request-materials">
+                  <PackageOpen className="mr-2 size-4" /> Материал захиалах
+                </Button>
+                <Button variant="outline" onClick={() => setSlotsModalOpen(true)} data-testid="button-manage-meal-slots">
+                  <Settings2 className="mr-2 size-4" /> Хоолны цаг
+                </Button>
+              </>
             )}
             <Button variant="outline" onClick={currentWeek} data-testid="button-current-week">Өнөөдөр</Button>
             <div className="flex items-center rounded-md border border-input bg-card">
@@ -280,16 +288,34 @@ export function MealSchedule() {
           cell={modalCell} 
           weekStart={weekStart}
           onClose={() => setModalCell(null)} 
+          onRequestMaterial={
+            session.data?.role === 'admin' || session.data?.role === 'warehouse'
+              ? (date, entryId) => {
+                  setModalCell(null);
+                  setRequestModalState({ open: true, date, entryId });
+                }
+              : undefined
+          }
         />
       )}
       {slotsModalOpen && (
         <MealScheduleSlotsModal slots={slots} onClose={() => setSlotsModalOpen(false)} />
       )}
+      {requestModalOpen && (
+        <InventoryMaterialRequestModal onClose={() => setRequestModalOpen(false)} />
+      )}
+      {requestModalState.open && (
+        <InventoryMaterialRequestModal
+          requestedDate={requestModalState.date}
+          mealScheduleEntryId={requestModalState.entryId}
+          onClose={() => setRequestModalState({ open: false })}
+        />
+      )}
     </div>
   );
 }
 
-function EntryModal({ cell, weekStart, onClose }: { cell: { date: string; slot: MealScheduleSlot; entry?: MealScheduleEntry }; weekStart: string; onClose: () => void }) {
+function EntryModal({ cell, weekStart, onClose, onRequestMaterial }: { cell: { date: string; slot: MealScheduleSlot; entry?: MealScheduleEntry }; weekStart: string; onClose: () => void; onRequestMaterial?: (date: string, entryId: number) => void }) {
   const qc = useQueryClient();
   const mealsQuery = useListMeals();
   const create = useCreateMealScheduleEntry();
@@ -404,11 +430,18 @@ function EntryModal({ cell, weekStart, onClose }: { cell: { date: string; slot: 
         </div>
 
         <div className="flex items-center justify-between pt-4 border-t border-border">
-          {isEdit ? (
-            <Button type="button" variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={handleDelete} disabled={deletion.isPending} data-testid="button-delete-entry">
-              <Trash2 className="size-4 mr-2" /> Устгах
-            </Button>
-          ) : <div></div>}
+          <div className="flex gap-2">
+            {isEdit && (
+              <Button type="button" variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={handleDelete} disabled={deletion.isPending} data-testid="button-delete-entry">
+                <Trash2 className="size-4 mr-2" /> Устгах
+              </Button>
+            )}
+            {isEdit && onRequestMaterial && (
+              <Button type="button" variant="outline" onClick={() => onRequestMaterial(cell.date, cell.entry!.id)} data-testid="button-request-material-entry">
+                <PackageOpen className="size-4 mr-2" /> Захиалга
+              </Button>
+            )}
+          </div>
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={onClose} data-testid="button-cancel-entry">Болих</Button>
             <Button type="submit" disabled={create.isPending || update.isPending} className="bg-orange-600 hover:bg-orange-700 text-white" data-testid="button-save-entry">

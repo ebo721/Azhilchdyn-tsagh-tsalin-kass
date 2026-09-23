@@ -77,6 +77,9 @@ import type {
   InventoryIssueInput,
   InventoryItem,
   InventoryItemUpdate,
+  InventoryMaterialRequest,
+  InventoryMaterialRequestInput,
+  InventoryMaterialRequestStatusUpdate,
   InventoryPurchase,
   InventoryPurchaseBankSuggestion,
   InventoryPurchaseInput,
@@ -7684,6 +7687,226 @@ export const useUpdateInventoryItem = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateInventoryItemMutationOptions(options));
+    }
+
+export const getListInventoryMaterialRequestsUrl = () => {
+
+
+
+
+  return `/api/inventory/material-requests`
+}
+
+/**
+ * @summary List inventory material requests
+ */
+export const listInventoryMaterialRequests = async ( options?: Parameters<typeof customFetch>[1]): Promise<InventoryMaterialRequest[]> => {
+
+  return customFetch<InventoryMaterialRequest[]>(getListInventoryMaterialRequestsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListInventoryMaterialRequestsQueryKey = () => {
+    return [
+    `/api/inventory/material-requests`
+    ] as const;
+    }
+
+
+export const getListInventoryMaterialRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listInventoryMaterialRequests>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInventoryMaterialRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListInventoryMaterialRequestsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listInventoryMaterialRequests>>> = ({ signal }) => listInventoryMaterialRequests({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listInventoryMaterialRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListInventoryMaterialRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listInventoryMaterialRequests>>>
+export type ListInventoryMaterialRequestsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List inventory material requests
+ */
+
+export function useListInventoryMaterialRequests<TData = Awaited<ReturnType<typeof listInventoryMaterialRequests>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInventoryMaterialRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListInventoryMaterialRequestsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateInventoryMaterialRequestUrl = () => {
+
+
+
+
+  return `/api/inventory/material-requests`
+}
+
+/**
+ * @summary Create an inventory material request
+ */
+export const createInventoryMaterialRequest = async (inventoryMaterialRequestInput: InventoryMaterialRequestInput, options?: Parameters<typeof customFetch>[1]): Promise<InventoryMaterialRequest> => {
+
+  return customFetch<InventoryMaterialRequest>(getCreateInventoryMaterialRequestUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(inventoryMaterialRequestInput)
+  }
+);}
+
+
+
+
+
+export const getCreateInventoryMaterialRequestMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createInventoryMaterialRequest>>, TError,{data: BodyType<InventoryMaterialRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createInventoryMaterialRequest>>, TError,{data: BodyType<InventoryMaterialRequestInput>}, TContext> => {
+
+const mutationKey = ['createInventoryMaterialRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createInventoryMaterialRequest>>, {data: BodyType<InventoryMaterialRequestInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createInventoryMaterialRequest(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateInventoryMaterialRequestMutationResult = NonNullable<Awaited<ReturnType<typeof createInventoryMaterialRequest>>>
+    export type CreateInventoryMaterialRequestMutationBody = BodyType<InventoryMaterialRequestInput>
+    export type CreateInventoryMaterialRequestMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create an inventory material request
+ */
+export const useCreateInventoryMaterialRequest = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createInventoryMaterialRequest>>, TError,{data: BodyType<InventoryMaterialRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createInventoryMaterialRequest>>,
+        TError,
+        {data: BodyType<InventoryMaterialRequestInput>},
+        TContext
+      > => {
+      return useMutation(getCreateInventoryMaterialRequestMutationOptions(options));
+    }
+
+export const getUpdateInventoryMaterialRequestStatusUrl = (id: number,) => {
+
+
+
+
+  return `/api/inventory/material-requests/${id}/status`
+}
+
+/**
+ * @summary Update material request status
+ */
+export const updateInventoryMaterialRequestStatus = async (id: number,
+    inventoryMaterialRequestStatusUpdate: InventoryMaterialRequestStatusUpdate, options?: Parameters<typeof customFetch>[1]): Promise<InventoryMaterialRequest> => {
+
+  return customFetch<InventoryMaterialRequest>(getUpdateInventoryMaterialRequestStatusUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(inventoryMaterialRequestStatusUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateInventoryMaterialRequestStatusMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInventoryMaterialRequestStatus>>, TError,{id: number;data: BodyType<InventoryMaterialRequestStatusUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateInventoryMaterialRequestStatus>>, TError,{id: number;data: BodyType<InventoryMaterialRequestStatusUpdate>}, TContext> => {
+
+const mutationKey = ['updateInventoryMaterialRequestStatus'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateInventoryMaterialRequestStatus>>, {id: number;data: BodyType<InventoryMaterialRequestStatusUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateInventoryMaterialRequestStatus(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateInventoryMaterialRequestStatusMutationResult = NonNullable<Awaited<ReturnType<typeof updateInventoryMaterialRequestStatus>>>
+    export type UpdateInventoryMaterialRequestStatusMutationBody = BodyType<InventoryMaterialRequestStatusUpdate>
+    export type UpdateInventoryMaterialRequestStatusMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update material request status
+ */
+export const useUpdateInventoryMaterialRequestStatus = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInventoryMaterialRequestStatus>>, TError,{id: number;data: BodyType<InventoryMaterialRequestStatusUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateInventoryMaterialRequestStatus>>,
+        TError,
+        {id: number;data: BodyType<InventoryMaterialRequestStatusUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateInventoryMaterialRequestStatusMutationOptions(options));
     }
 
 export const getListInventoryIssuesUrl = () => {

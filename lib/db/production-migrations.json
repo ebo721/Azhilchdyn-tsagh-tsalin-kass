@@ -32,7 +32,11 @@
     {
       "filename": "20260928_meal_weekly_schedule.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20260929_inventory_material_requests.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "941a3d11d85f0a914beaedff4eda2b9276f49f36085d9b4c243761187e7a4a3f"
+  "schemaFingerprint": "e34bc6753ab4a8fe5bcfcd80bcc52068ebee5dfecba7e0df1b7741c44cdd02f0"
 }

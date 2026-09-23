@@ -390,6 +390,33 @@ export const inventoryIssuesTable = pgTable("inventory_issues", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const inventoryMaterialRequestsTable = pgTable("inventory_material_requests", {
+  id: serial("id").primaryKey(),
+  requestedDate: date("requested_date", { mode: "string" }).notNull(),
+  requesterId: integer("requester_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
+  mealScheduleEntryId: integer("meal_schedule_entry_id").references(() => mealScheduleEntriesTable.id, { onDelete: "set null" }),
+  note: text("note"),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  index("inventory_material_requests_requester_id_idx").on(table.requesterId),
+  index("inventory_material_requests_requested_date_idx").on(table.requestedDate),
+  check("inventory_material_requests_status_check", sql`${table.status} IN ('pending', 'approved', 'rejected', 'fulfilled')`),
+]);
+
+export const inventoryMaterialRequestItemsTable = pgTable("inventory_material_request_items", {
+  id: serial("id").primaryKey(),
+  requestId: integer("request_id").notNull().references(() => inventoryMaterialRequestsTable.id, { onDelete: "cascade" }),
+  inventoryItemId: integer("inventory_item_id").notNull().references(() => inventoryItemsTable.id, { onDelete: "restrict" }),
+  itemName: text("item_name").notNull(),
+  unit: text("unit").notNull(),
+  quantity: numeric("quantity", { precision: 14, scale: 3, mode: "number" }).notNull(),
+}, (table) => [
+  uniqueIndex("inventory_material_request_items_request_item_unique").on(table.requestId, table.inventoryItemId),
+  check("inventory_material_request_items_quantity_check", sql`${table.quantity} > 0`),
+]);
+
 // Records exactly which purchase lot(s) an issue drew stock from, and at what
 // unit cost -- this is the FIFO consumption ledger. One issue can span multiple
 // lots if the oldest lot didn't have enough quantity left. Editing or deleting
@@ -478,6 +505,8 @@ export type InventoryPurchaseItem = typeof inventoryPurchaseItemsTable.$inferSel
 export type InventoryItem = typeof inventoryItemsTable.$inferSelect;
 export type InventoryIssue = typeof inventoryIssuesTable.$inferSelect;
 export type InventoryIssueConsumption = typeof inventoryIssueConsumptionsTable.$inferSelect;
+export type InventoryMaterialRequest = typeof inventoryMaterialRequestsTable.$inferSelect;
+export type InventoryMaterialRequestItem = typeof inventoryMaterialRequestItemsTable.$inferSelect;
 export type FixedAsset = typeof fixedAssetsTable.$inferSelect;
 export type OperatingExpense = typeof operatingExpensesTable.$inferSelect;
 export type DeletionRequest = typeof deletionRequestsTable.$inferSelect;
