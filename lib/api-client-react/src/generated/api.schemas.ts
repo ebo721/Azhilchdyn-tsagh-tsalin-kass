@@ -219,6 +219,7 @@ export const AuthSessionRole = {
   accountant: 'accountant',
   warehouse: 'warehouse',
   viewer: 'viewer',
+  technologist: 'technologist',
 } as const;
 
 export interface AuthSession {
@@ -240,6 +241,7 @@ export const UserRole = {
   accountant: 'accountant',
   warehouse: 'warehouse',
   viewer: 'viewer',
+  technologist: 'technologist',
 } as const;
 
 export interface User {
@@ -257,6 +259,7 @@ export const UserUpdateInputRole = {
   accountant: 'accountant',
   warehouse: 'warehouse',
   viewer: 'viewer',
+  technologist: 'technologist',
 } as const;
 
 export interface UserUpdateInput {

@@ -19,12 +19,17 @@ const canonicalUsers = [
   { username: "saacc", role: "accountant", passwordVariable: "ACCOUNTANT_PASSWORD" },
   { username: "satre", role: "warehouse", passwordVariable: "WAREHOUSE_PASSWORD" },
   { username: "sasta", role: "viewer", passwordVariable: "SASTA_PASSWORD" },
+  { username: "sate", role: "technologist", passwordVariable: "SATE_PASSWORD" },
 ] as const;
 
 export async function bootstrapCanonicalUsers() {
   const [{ total }] = await db.select({ total: count() }).from(usersTable);
-  if (total > 0) return;
-  for (const canonical of canonicalUsers) {
+  // Preserve the historical empty-database bootstrap, but on populated
+  // databases only reconcile sate. This must not resurrect deleted accounts.
+  const usersToBootstrap = total > 0
+    ? canonicalUsers.filter((canonical) => canonical.username === "sate")
+    : canonicalUsers;
+  for (const canonical of usersToBootstrap) {
     const password = process.env[canonical.passwordVariable];
     if (!password) continue;
     const normalizedUsername = normalizeUsername(canonical.username);
