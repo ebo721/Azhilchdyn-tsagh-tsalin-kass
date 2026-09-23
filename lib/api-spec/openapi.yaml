@@ -1299,6 +1299,60 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/MealScheduleSlot"
+    post:
+      operationId: createMealScheduleSlot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MealScheduleSlotInput"
+      responses:
+        "201":
+          description: Created meal-time row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MealScheduleSlot"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /meal-schedule/slots/{id}:
+    put:
+      operationId: updateMealScheduleSlot
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MealScheduleSlotInput"
+      responses:
+        "200":
+          description: Updated meal-time row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MealScheduleSlot"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      operationId: deleteMealScheduleSlot
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Deleted unused meal-time row
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /meal-schedule:
     get:
       operationId: listMealSchedule
@@ -2976,6 +3030,14 @@ components:
         startTime: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
         endTime: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
         sortOrder: { type: integer }
+    MealScheduleSlotInput:
+      type: object
+      required: [name, startTime, endTime, sortOrder]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        startTime: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+        endTime: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+        sortOrder: { type: integer, minimum: 0 }
     MealScheduleEntry:
       type: object
       required: [id, date, slotId, slotName, startTime, endTime, kind, mealId, mealName, mealType, totalCalories, createdAt, updatedAt]

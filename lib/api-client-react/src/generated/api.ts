@@ -105,6 +105,7 @@ import type {
   MealScheduleEntryInput,
   MealScheduleMoveInput,
   MealScheduleSlot,
+  MealScheduleSlotInput,
   NotFoundResponse,
   OperatingExpense,
   OperatingExpenseBankSuggestion,
@@ -5727,6 +5728,202 @@ export function useListMealScheduleSlots<TData = Awaited<ReturnType<typeof listM
 
 
 
+
+export const getCreateMealScheduleSlotUrl = () => {
+
+
+
+
+  return `/api/meal-schedule/slots`
+}
+
+export const createMealScheduleSlot = async (mealScheduleSlotInput: MealScheduleSlotInput, options?: Parameters<typeof customFetch>[1]): Promise<MealScheduleSlot> => {
+
+  return customFetch<MealScheduleSlot>(getCreateMealScheduleSlotUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(mealScheduleSlotInput)
+  }
+);}
+
+
+
+
+
+export const getCreateMealScheduleSlotMutationOptions = <TError = ErrorType<BadRequestResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMealScheduleSlot>>, TError,{data: BodyType<MealScheduleSlotInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createMealScheduleSlot>>, TError,{data: BodyType<MealScheduleSlotInput>}, TContext> => {
+
+const mutationKey = ['createMealScheduleSlot'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createMealScheduleSlot>>, {data: BodyType<MealScheduleSlotInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createMealScheduleSlot(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateMealScheduleSlotMutationResult = NonNullable<Awaited<ReturnType<typeof createMealScheduleSlot>>>
+    export type CreateMealScheduleSlotMutationBody = BodyType<MealScheduleSlotInput>
+    export type CreateMealScheduleSlotMutationError = ErrorType<BadRequestResponse | ConflictResponse>
+
+    export const useCreateMealScheduleSlot = <TError = ErrorType<BadRequestResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMealScheduleSlot>>, TError,{data: BodyType<MealScheduleSlotInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createMealScheduleSlot>>,
+        TError,
+        {data: BodyType<MealScheduleSlotInput>},
+        TContext
+      > => {
+      return useMutation(getCreateMealScheduleSlotMutationOptions(options));
+    }
+
+export const getUpdateMealScheduleSlotUrl = (id: number,) => {
+
+
+
+
+  return `/api/meal-schedule/slots/${id}`
+}
+
+export const updateMealScheduleSlot = async (id: number,
+    mealScheduleSlotInput: MealScheduleSlotInput, options?: Parameters<typeof customFetch>[1]): Promise<MealScheduleSlot> => {
+
+  return customFetch<MealScheduleSlot>(getUpdateMealScheduleSlotUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(mealScheduleSlotInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateMealScheduleSlotMutationOptions = <TError = ErrorType<BadRequestResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMealScheduleSlot>>, TError,{id: number;data: BodyType<MealScheduleSlotInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateMealScheduleSlot>>, TError,{id: number;data: BodyType<MealScheduleSlotInput>}, TContext> => {
+
+const mutationKey = ['updateMealScheduleSlot'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMealScheduleSlot>>, {id: number;data: BodyType<MealScheduleSlotInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateMealScheduleSlot(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateMealScheduleSlotMutationResult = NonNullable<Awaited<ReturnType<typeof updateMealScheduleSlot>>>
+    export type UpdateMealScheduleSlotMutationBody = BodyType<MealScheduleSlotInput>
+    export type UpdateMealScheduleSlotMutationError = ErrorType<BadRequestResponse | NotFoundResponse | ConflictResponse>
+
+    export const useUpdateMealScheduleSlot = <TError = ErrorType<BadRequestResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMealScheduleSlot>>, TError,{id: number;data: BodyType<MealScheduleSlotInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateMealScheduleSlot>>,
+        TError,
+        {id: number;data: BodyType<MealScheduleSlotInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateMealScheduleSlotMutationOptions(options));
+    }
+
+export const getDeleteMealScheduleSlotUrl = (id: number,) => {
+
+
+
+
+  return `/api/meal-schedule/slots/${id}`
+}
+
+export const deleteMealScheduleSlot = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteMealScheduleSlotUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteMealScheduleSlotMutationOptions = <TError = ErrorType<NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMealScheduleSlot>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteMealScheduleSlot>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteMealScheduleSlot'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMealScheduleSlot>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteMealScheduleSlot(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteMealScheduleSlotMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMealScheduleSlot>>>
+
+    export type DeleteMealScheduleSlotMutationError = ErrorType<NotFoundResponse | ConflictResponse>
+
+    export const useDeleteMealScheduleSlot = <TError = ErrorType<NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMealScheduleSlot>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteMealScheduleSlot>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteMealScheduleSlotMutationOptions(options));
+    }
 
 export const getListMealScheduleUrl = (params: ListMealScheduleParams,) => {
   const normalizedParams = new URLSearchParams();

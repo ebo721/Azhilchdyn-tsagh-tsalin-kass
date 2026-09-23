@@ -157,6 +157,7 @@ export * from './mealScheduleEntryKind';
 export * from './mealScheduleEntryMealType';
 export * from './mealScheduleMoveInput';
 export * from './mealScheduleSlot';
+export * from './mealScheduleSlotInput';
 export * from './mealType';
 export * from './newFixedAssetBankPurchaseInput';
 export * from './notFoundResponse';

@@ -7,6 +7,7 @@ import express from "express";
 import { eq, inArray } from "drizzle-orm";
 import {
   db,
+  deletionRequestsTable,
   mealScheduleEntriesTable,
   mealScheduleSlotsTable,
   mealsTable,
@@ -14,6 +15,7 @@ import {
 } from "@workspace/db";
 import { createStaffSession, hrCookie } from "../lib/hr-session.js";
 import requireStaffAuth from "../middlewares/require-staff-auth.js";
+import deletionRequestsRouter from "./deletion-requests.js";
 import mealScheduleRouter from "./meal-schedule.js";
 
 function nextMonday(offsetWeeks = 0) {
@@ -33,9 +35,13 @@ describe("weekly meal schedule", () => {
   let server: Server;
   let baseUrl: string;
   let cookie: string;
+  let warehouseCookie: string;
   let userId: number;
+  let warehouseUserId: number;
   let mealId: number;
   const entryIds: number[] = [];
+  const slotIds: number[] = [];
+  const deletionRequestIds: number[] = [];
 
   before(async () => {
     process.env.SESSION_SECRET = "meal-schedule-test-secret";
@@ -53,6 +59,19 @@ describe("weekly meal schedule", () => {
     });
     userId = user.id;
     cookie = `${hrCookie.name}=${createStaffSession(user)}`;
+    const [warehouseUser] = await db.insert(usersTable).values({
+      username: `meal-schedule-warehouse-${suffix}`,
+      normalizedUsername: `meal-schedule-warehouse-${suffix}`,
+      role: "warehouse",
+      passwordHash: "not-used",
+    }).returning({
+      id: usersTable.id,
+      username: usersTable.username,
+      role: usersTable.role,
+      tokenVersion: usersTable.tokenVersion,
+    });
+    warehouseUserId = warehouseUser.id;
+    warehouseCookie = `${hrCookie.name}=${createStaffSession(warehouseUser)}`;
     const [meal] = await db.insert(mealsTable).values({
       name: `Хуваарийн тест ${suffix}`,
       normalizedName: `хуваарийн тест ${suffix}`,
@@ -64,24 +83,130 @@ describe("weekly meal schedule", () => {
     mealId = meal.id;
     const app = express();
     app.use(express.json());
-    app.use("/api", requireStaffAuth, mealScheduleRouter);
+    app.use("/api", requireStaffAuth, deletionRequestsRouter, mealScheduleRouter);
     server = app.listen(0);
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   });
 
   after(async () => {
     server.close();
+    if (deletionRequestIds.length) await db.delete(deletionRequestsTable).where(inArray(deletionRequestsTable.id, deletionRequestIds));
     if (entryIds.length) await db.delete(mealScheduleEntriesTable).where(inArray(mealScheduleEntriesTable.id, entryIds));
+    if (slotIds.length) await db.delete(mealScheduleSlotsTable).where(inArray(mealScheduleSlotsTable.id, slotIds));
     await db.delete(mealsTable).where(eq(mealsTable.id, mealId));
     await db.delete(usersTable).where(eq(usersTable.id, userId));
+    await db.delete(usersTable).where(eq(usersTable.id, warehouseUserId));
   });
 
   async function request(path: string, init: RequestInit = {}) {
+    return requestAs(cookie, path, init);
+  }
+
+  async function requestAs(sessionCookie: string, path: string, init: RequestInit = {}) {
     return fetch(`${baseUrl}/api${path}`, {
       ...init,
-      headers: { cookie, "content-type": "application/json", ...init.headers },
+      headers: { cookie: sessionCookie, "content-type": "application/json", ...init.headers },
     });
   }
+
+  it("creates, validates, edits and deletes meal-time rows", async () => {
+    const suffix = randomUUID();
+    const sortOrder = 100_000 + Math.floor(Math.random() * 100_000);
+    const createdResponse = await request("/meal-schedule/slots", {
+      method: "POST",
+      body: JSON.stringify({
+        name: `Зууш ${suffix}`,
+        startTime: "15:00",
+        endTime: "15:30",
+        sortOrder,
+      }),
+    });
+    assert.equal(createdResponse.status, 201);
+    const created = await createdResponse.json() as { id: number; name: string; startTime: string; sortOrder: number };
+    slotIds.push(created.id);
+    assert.equal(created.startTime, "15:00");
+    assert.equal(created.sortOrder, sortOrder);
+
+    const invalidRange = await request("/meal-schedule/slots", {
+      method: "POST",
+      body: JSON.stringify({
+        name: `Буруу ${suffix}`,
+        startTime: "16:00",
+        endTime: "15:00",
+        sortOrder: sortOrder + 1,
+      }),
+    });
+    assert.equal(invalidRange.status, 400);
+
+    const duplicateOrder = await request("/meal-schedule/slots", {
+      method: "POST",
+      body: JSON.stringify({
+        name: `Давхардсан ${suffix}`,
+        startTime: "16:00",
+        endTime: "16:30",
+        sortOrder,
+      }),
+    });
+    assert.equal(duplicateOrder.status, 409);
+
+    const updatedResponse = await request(`/meal-schedule/slots/${created.id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        name: `Зууш зассан ${suffix}`,
+        startTime: "15:30",
+        endTime: "16:00",
+        sortOrder: sortOrder + 2,
+      }),
+    });
+    assert.equal(updatedResponse.status, 200);
+    const updated = await updatedResponse.json() as { name: string; startTime: string; endTime: string };
+    assert.equal(updated.name, `Зууш зассан ${suffix}`);
+    assert.equal(updated.startTime, "15:30");
+    assert.equal(updated.endTime, "16:00");
+
+    const deleted = await request(`/meal-schedule/slots/${created.id}`, { method: "DELETE" });
+    assert.equal(deleted.status, 204);
+    slotIds.splice(slotIds.indexOf(created.id), 1);
+  });
+
+  it("lets warehouse request slot deletion and admin approve it", async () => {
+    const suffix = randomUUID();
+    const createdResponse = await requestAs(warehouseCookie, "/meal-schedule/slots", {
+      method: "POST",
+      body: JSON.stringify({
+        name: `Няравын устгал ${suffix}`,
+        startTime: "16:00",
+        endTime: "16:30",
+        sortOrder: 300_000 + Math.floor(Math.random() * 100_000),
+      }),
+    });
+    assert.equal(createdResponse.status, 201);
+    const slot = await createdResponse.json() as { id: number };
+    slotIds.push(slot.id);
+
+    const queuedResponse = await requestAs(warehouseCookie, "/deletion-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        targetPath: `/meal-schedule/slots/${slot.id}`,
+        label: "Тест хоолны цаг",
+      }),
+    });
+    assert.equal(queuedResponse.status, 201);
+    const queued = await queuedResponse.json() as { id: number; status: string };
+    deletionRequestIds.push(queued.id);
+    assert.equal(queued.status, "pending");
+
+    const approvedResponse = await request(`/deletion-requests/${queued.id}/approve`, { method: "POST" });
+    const approvedBody = await approvedResponse.text();
+    assert.equal(approvedResponse.status, 200, approvedBody);
+    const approved = JSON.parse(approvedBody) as { status: string };
+    assert.equal(approved.status, "completed");
+    slotIds.splice(slotIds.indexOf(slot.id), 1);
+
+    const listedResponse = await request("/meal-schedule/slots");
+    const listed = await listedResponse.json() as { id: number }[];
+    assert.ok(!listed.some((candidate) => candidate.id === slot.id));
+  });
 
   it("creates, edits, swaps and deletes meal and break cells", async () => {
     const slotsResponse = await request("/meal-schedule/slots");
@@ -103,6 +228,9 @@ describe("weekly meal schedule", () => {
     entryIds.push(mealEntry.id);
     assert.equal(mealEntry.kind, "meal");
     assert.equal(mealEntry.totalCalories, 420);
+
+    const usedSlotDelete = await request(`/meal-schedule/slots/${slots[0].id}`, { method: "DELETE" });
+    assert.equal(usedSlotDelete.status, 409);
 
     const breakResponse = await request("/meal-schedule", {
       method: "POST",

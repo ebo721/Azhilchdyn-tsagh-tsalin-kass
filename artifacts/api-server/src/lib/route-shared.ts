@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { Router, type IRouter } from "express";
+import express, { Router, type IRouter } from "express";
 import {
   CreateAttendanceBody,
   CreateShiftBody,
@@ -173,17 +173,9 @@ export function dispatchApprovedDeletion(
   targetRouter: IRouter,
 ): Promise<{ ok: boolean; status: number; text(): Promise<string> }> {
   return new Promise((resolve, reject) => {
-    const server = createServer((req, res) => {
-      targetRouter(req as never, res as never, (err?: unknown) => {
-        if (err) {
-          res.statusCode = 500;
-          res.end();
-          return;
-        }
-        res.statusCode = 404;
-        res.end();
-      });
-    });
+    const app = express();
+    app.use(targetRouter);
+    const server = createServer(app);
     server.on("error", reject);
     server.listen(0, "127.0.0.1", () => {
       const address = server.address();
@@ -368,11 +360,13 @@ export const deletionTargetPatterns = [
   /^\/inventory\/issues\/\d+$/,
   /^\/inventory\/purchases\/\d+$/,
   /^\/inventory\/suppliers\/\d+$/,
+  /^\/meal-schedule\/\d+$/,
+  /^\/meal-schedule\/slots\/\d+$/,
 ];
 export const roleCanRequestDeletion = (role: StaffRole, targetPath: string) => role === "admin"
   || (role === "hr" && (targetPath.startsWith("/employees/") || targetPath.startsWith("/attendance")))
   || (role === "accountant" && (targetPath.startsWith("/payroll-advance/") || targetPath.startsWith("/payroll-adjustments/") || targetPath.startsWith("/bank-transactions/")))
-  || (role === "warehouse" && (targetPath.startsWith("/inventory/") || targetPath.startsWith("/fixed-assets/")));
+  || (role === "warehouse" && (targetPath.startsWith("/inventory/") || targetPath.startsWith("/fixed-assets/") || targetPath.startsWith("/meal-schedule/")));
 export const deletionRequestResponse = (request: typeof deletionRequestsTable.$inferSelect) => ({
   ...request,
   requestedAt: request.requestedAt.toISOString(),

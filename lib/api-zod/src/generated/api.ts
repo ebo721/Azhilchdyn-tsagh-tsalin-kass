@@ -2068,6 +2068,73 @@ export const ListMealScheduleSlotsResponseItem = zod.object({
 export const ListMealScheduleSlotsResponse = zod.array(ListMealScheduleSlotsResponseItem)
 
 
+export const createMealScheduleSlotBodyNameMax = 100;
+
+export const createMealScheduleSlotBodyStartTimeRegExp = new RegExp('^([01]\\d|2[0-3]):[0-5]\\d$');
+export const createMealScheduleSlotBodyEndTimeRegExp = new RegExp('^([01]\\d|2[0-3]):[0-5]\\d$');
+export const createMealScheduleSlotBodySortOrderMin = 0;
+
+
+
+export const CreateMealScheduleSlotBody = zod.object({
+  "name": zod.string().min(1).max(createMealScheduleSlotBodyNameMax),
+  "startTime": zod.string().regex(createMealScheduleSlotBodyStartTimeRegExp),
+  "endTime": zod.string().regex(createMealScheduleSlotBodyEndTimeRegExp),
+  "sortOrder": zod.number().int().min(createMealScheduleSlotBodySortOrderMin)
+})
+
+export const createMealScheduleSlotResponseStartTimeRegExp = new RegExp('^([01]\\d|2[0-3]):[0-5]\\d$');
+export const createMealScheduleSlotResponseEndTimeRegExp = new RegExp('^([01]\\d|2[0-3]):[0-5]\\d$');
+
+
+export const CreateMealScheduleSlotResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "startTime": zod.string().regex(createMealScheduleSlotResponseStartTimeRegExp),
+  "endTime": zod.string().regex(createMealScheduleSlotResponseEndTimeRegExp),
+  "sortOrder": zod.number().int()
+})
+
+
+export const UpdateMealScheduleSlotParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const updateMealScheduleSlotBodyNameMax = 100;
+
+export const updateMealScheduleSlotBodyStartTimeRegExp = new RegExp('^([01]\\d|2[0-3]):[0-5]\\d$');
+export const updateMealScheduleSlotBodyEndTimeRegExp = new RegExp('^([01]\\d|2[0-3]):[0-5]\\d$');
+export const updateMealScheduleSlotBodySortOrderMin = 0;
+
+
+
+export const UpdateMealScheduleSlotBody = zod.object({
+  "name": zod.string().min(1).max(updateMealScheduleSlotBodyNameMax),
+  "startTime": zod.string().regex(updateMealScheduleSlotBodyStartTimeRegExp),
+  "endTime": zod.string().regex(updateMealScheduleSlotBodyEndTimeRegExp),
+  "sortOrder": zod.number().int().min(updateMealScheduleSlotBodySortOrderMin)
+})
+
+export const updateMealScheduleSlotResponseStartTimeRegExp = new RegExp('^([01]\\d|2[0-3]):[0-5]\\d$');
+export const updateMealScheduleSlotResponseEndTimeRegExp = new RegExp('^([01]\\d|2[0-3]):[0-5]\\d$');
+
+
+export const UpdateMealScheduleSlotResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "startTime": zod.string().regex(updateMealScheduleSlotResponseStartTimeRegExp),
+  "endTime": zod.string().regex(updateMealScheduleSlotResponseEndTimeRegExp),
+  "sortOrder": zod.number().int()
+})
+
+
+export const DeleteMealScheduleSlotParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteMealScheduleSlotResponse = zod.void()
+
+
 export const listMealScheduleQueryWeekStartRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
 
 
