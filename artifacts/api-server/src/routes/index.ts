@@ -16,6 +16,7 @@ import dashboardRouter from "./dashboard.js";
 import journalRouter from "./journal.js";
 import mealsRouter from "./meals.js";
 import mealScheduleRouter from "./meal-schedule.js";
+import inventoryMaterialRequestsRouter from "./inventory-material-requests.js";
 
 const router: IRouter = Router();
 
@@ -29,6 +30,7 @@ router.use(hourBalanceRouter);
 router.use(payrollRouter);
 router.use(cashRouter);
 router.use(inventoryRouter);
+router.use(inventoryMaterialRequestsRouter);
 router.use(operatingExpensesRouter);
 router.use(chartOfAccountsRouter);
 router.use(deletionRequestsRouter);
