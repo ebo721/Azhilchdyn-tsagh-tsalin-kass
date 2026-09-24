@@ -12,6 +12,7 @@ import { useQueueDeletion } from '@/hooks/useQueueDeletion';
 import { Modal } from '@/components/ui-primitives';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { formatMealSlotTimeRange } from './mealSlotTime';
 
 type SlotDraft = MealScheduleSlotInput & { id?: number };
 
@@ -50,6 +51,7 @@ export function MealScheduleSlotsModal({
 
   const save = (event: React.FormEvent) => {
     event.preventDefault();
+    if (!draft.startTime || !draft.endTime || draft.startTime === draft.endTime) return;
     const data: MealScheduleSlotInput = {
       name: draft.name.trim(),
       startTime: draft.startTime,
@@ -93,7 +95,7 @@ export function MealScheduleSlotsModal({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold">{slot.name}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {slot.startTime}-{slot.endTime} · Дараалал {slot.sortOrder}
+                  {formatMealSlotTimeRange(slot.startTime, slot.endTime)} · Дараалал {slot.sortOrder}
                 </p>
               </div>
               <Button
@@ -157,6 +159,16 @@ export function MealScheduleSlotsModal({
                 />
               </div>
             </div>
+            {draft.startTime && draft.endTime && draft.startTime === draft.endTime && (
+              <p className="text-sm text-destructive" role="alert">
+                Эхлэх, дуусах цаг ижил байж болохгүй.
+              </p>
+            )}
+            {draft.startTime && draft.endTime && draft.endTime < draft.startTime && (
+              <p className="text-sm text-muted-foreground" data-testid="meal-slot-overnight-hint">
+                Хоног дамнана: хуваарийн огноо нь эхлэх өдөр, дуусах цаг нь дараагийн өдөр.
+              </p>
+            )}
             <div>
               <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Дараалал</label>
               <Input
@@ -175,7 +187,7 @@ export function MealScheduleSlotsModal({
             )}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setShowForm(false)}>Болих</Button>
-              <Button type="submit" disabled={pending || draft.startTime >= draft.endTime} data-testid="button-save-meal-slot">
+              <Button type="submit" disabled={pending || !draft.startTime || !draft.endTime || draft.startTime === draft.endTime} data-testid="button-save-meal-slot">
                 {draft.id ? 'Хадгалах' : 'Нэмэх'}
               </Button>
             </div>

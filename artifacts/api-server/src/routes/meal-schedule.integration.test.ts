@@ -116,15 +116,16 @@ describe("weekly meal schedule", () => {
       method: "POST",
       body: JSON.stringify({
         name: `Зууш ${suffix}`,
-        startTime: "15:00",
-        endTime: "15:30",
+        startTime: "23:00",
+        endTime: "02:00",
         sortOrder,
       }),
     });
     assert.equal(createdResponse.status, 201);
-    const created = await createdResponse.json() as { id: number; name: string; startTime: string; sortOrder: number };
+    const created = await createdResponse.json() as { id: number; name: string; startTime: string; endTime: string; sortOrder: number };
     slotIds.push(created.id);
-    assert.equal(created.startTime, "15:00");
+    assert.equal(created.startTime, "23:00");
+    assert.equal(created.endTime, "02:00");
     assert.equal(created.sortOrder, sortOrder);
 
     const invalidRange = await request("/meal-schedule/slots", {
@@ -132,7 +133,7 @@ describe("weekly meal schedule", () => {
       body: JSON.stringify({
         name: `Буруу ${suffix}`,
         startTime: "16:00",
-        endTime: "15:00",
+        endTime: "16:00",
         sortOrder: sortOrder + 1,
       }),
     });
@@ -163,6 +164,27 @@ describe("weekly meal schedule", () => {
     assert.equal(updated.name, `Зууш зассан ${suffix}`);
     assert.equal(updated.startTime, "15:30");
     assert.equal(updated.endTime, "16:00");
+
+    const overnightResponse = await request(`/meal-schedule/slots/${created.id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        name: `Зууш зассан ${suffix}`,
+        startTime: "23:00",
+        endTime: "02:00",
+        sortOrder: sortOrder + 2,
+      }),
+    });
+    assert.equal(overnightResponse.status, 200);
+    const overnight = await overnightResponse.json() as { startTime: string; endTime: string };
+    assert.equal(overnight.startTime, "23:00");
+    assert.equal(overnight.endTime, "02:00");
+    const listed = await request("/meal-schedule/slots");
+    assert.equal(listed.status, 200);
+    const savedSlots = await listed.json() as { id: number; startTime: string; endTime: string }[];
+    assert.deepEqual(
+      savedSlots.find((slot) => slot.id === created.id),
+      { id: created.id, startTime: "23:00", endTime: "02:00", name: `Зууш зассан ${suffix}`, sortOrder: sortOrder + 2 },
+    );
 
     const deleted = await request(`/meal-schedule/slots/${created.id}`, { method: "DELETE" });
     assert.equal(deleted.status, 204);
