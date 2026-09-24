@@ -18,3 +18,9 @@ If the checkout's HTTPS remote rejects its stored GitHub credential, use the con
 **Why:** The workspace remote credential can be stale even when the GitHub integration is healthy; an expected-head atomic commit prevents overwriting concurrent changes or briefly deploying a partial update.
 
 **How to apply:** Require the remote `main` head to equal the local commit's parent, commit all changed files together, then sync local `main` only after confirming the remote and local trees are identical.
+
+Once a PR is merged, later commits to its source branch are not included in that merge and do not reach production. Treat follow-on fixes as a new branch from current `main`, a new PR, and a separate release check.
+
+**Why:** A merged feature PR had further fixes pushed to its source branch afterward. Vercel successfully deployed the merge, but the fixes remained absent from `main` and production.
+
+**How to apply:** Check the PR's merged state and exact merged head SHA before explaining a production discrepancy. If the source branch contains newer commits, cherry-pick the intended fixes onto current `main` in a fresh review branch rather than reusing the closed PR.
