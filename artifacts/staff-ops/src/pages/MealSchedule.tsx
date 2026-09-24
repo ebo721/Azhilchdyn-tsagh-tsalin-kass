@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
 import { MealScheduleSlotsModal } from './MealScheduleSlotsModal';
+import { formatMealSlotTimeRange } from './mealSlotTime';
 import { InventoryMaterialRequestModal } from './InventoryMaterialRequestModal';
 import { ChevronLeft, ChevronRight, Plus, Trash2, Utensils, Flame, Coffee, Settings2, PackageOpen } from 'lucide-react';
 import {
@@ -196,7 +197,7 @@ export function MealSchedule() {
                   <tr key={slot.id} className="group/row">
                     <td className="border-b border-r border-border bg-card px-2 py-3 text-center sticky left-0 z-10 shadow-[1px_0_0_0_hsl(var(--border))]">
                       <div className="text-xs font-bold text-foreground">{slot.name}</div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">{slot.startTime}-{slot.endTime}</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">{formatMealSlotTimeRange(slot.startTime, slot.endTime)}</div>
                     </td>
                     {weekDays.map(day => {
                       const entry = entries.find(e => e.date === day.dateStr && e.slotId === slot.id);
@@ -338,7 +339,7 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
   // remain strictly read-only.
   if (readOnly && cell.entry) {
     return (
-      <Modal title="Хуваарийн мэдээлэл" detail={`${format(new Date(cell.date), 'yyyy.MM.dd')} өдрийн ${cell.slot.name} (${cell.slot.startTime}-${cell.slot.endTime})`} onClose={onClose}>
+      <Modal title="Хуваарийн мэдээлэл" detail={`${format(new Date(cell.date), 'yyyy.MM.dd')} өдрийн ${cell.slot.name} (${formatMealSlotTimeRange(cell.slot.startTime, cell.slot.endTime)})`} onClose={onClose}>
         <div className="space-y-5">
           <div className="rounded-xl border border-border bg-secondary/30 p-5 text-center">
             {cell.entry?.kind === 'break' ? <><Coffee className="mx-auto mb-2 size-6 text-muted-foreground" /><p className="font-semibold">Завсарлага</p></> : cell.entry ? <><Utensils className="mx-auto mb-2 size-6 text-orange-500" /><p className="font-semibold">{cell.entry.mealName}</p><p className="mt-1 text-sm text-muted-foreground">{cell.entry.mealType === 'set' ? 'Сет хоол' : 'Дан хоол'} · {cell.entry.totalCalories || 0} ккал</p></> : <p className="text-sm text-muted-foreground">Энэ цагт хуваарь бүртгэгдээгүй байна.</p>}
@@ -388,7 +389,7 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
   return (
     <Modal
       title={isEdit ? 'Хуваарь засах' : 'Хуваарь нэмэх'}
-      detail={`${format(new Date(cell.date), 'yyyy.MM.dd')} өдрийн ${cell.slot.name} (${cell.slot.startTime}-${cell.slot.endTime})`}
+      detail={`${format(new Date(cell.date), 'yyyy.MM.dd')} өдрийн ${cell.slot.name} (${formatMealSlotTimeRange(cell.slot.startTime, cell.slot.endTime)})`}
       onClose={onClose}
     >
       <form onSubmit={handleSubmit} className="space-y-5">
