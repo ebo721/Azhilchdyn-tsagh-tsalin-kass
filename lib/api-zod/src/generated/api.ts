@@ -3000,6 +3000,18 @@ export const CreateInventoryMaterialRequestResponse = zod.object({
 
 
 /**
+ * @summary List materials available for ordering without stock or pricing details
+ */
+export const ListMaterialRequestCatalogResponseItem = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "unit": zod.string()
+})
+export const ListMaterialRequestCatalogResponse = zod.array(ListMaterialRequestCatalogResponseItem)
+
+
+/**
  * @summary Update material request status
  */
 export const UpdateInventoryMaterialRequestStatusParams = zod.object({

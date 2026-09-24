@@ -10,12 +10,23 @@ import {
 } from "@workspace/db";
 import { getStaffRole, getStaffSession } from "../lib/hr-session.js";
 import { isValidCalendarDate } from "../lib/route-shared.js";
+import { ListMaterialRequestCatalogResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 const datePattern = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const statuses = ["pending", "approved", "rejected", "fulfilled"] as const;
 type RequestStatus = typeof statuses[number];
 const maxQuantity = 99_999_999_999.999;
+
+router.get("/inventory/material-requests/catalog", async (_req, res): Promise<void> => {
+  const items = await db.select({
+    id: inventoryItemsTable.id,
+    name: inventoryItemsTable.name,
+    category: inventoryItemsTable.category,
+    unit: inventoryItemsTable.unit,
+  }).from(inventoryItemsTable).orderBy(inventoryItemsTable.category, inventoryItemsTable.name);
+  res.json(ListMaterialRequestCatalogResponse.parse(items));
+});
 
 async function expandedRequest(id: number) {
   const [request] = await db.select({
@@ -68,7 +79,7 @@ router.get("/inventory/material-requests", async (_req, res): Promise<void> => {
 
 router.post("/inventory/material-requests", async (req, res): Promise<void> => {
   const role = await getStaffRole(req);
-  if (role !== "admin" && role !== "warehouse") {
+  if (role !== "admin" && role !== "warehouse" && role !== "technologist") {
     res.status(403).json({ error: "Материалын хүсэлт үүсгэх эрхгүй" });
     return;
   }
