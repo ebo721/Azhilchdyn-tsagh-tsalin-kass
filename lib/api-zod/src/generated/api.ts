@@ -1941,6 +1941,98 @@ export const DeleteMealParams = zod.object({
 export const DeleteMealResponse = zod.void()
 
 
+/**
+ * @summary Submit name/category changes for administrator approval
+ */
+export const RequestMealEditParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+
+
+export const RequestMealEditBody = zod.object({
+  "name": zod.string().min(1),
+  "category": zod.string().min(1)
+})
+
+export const RequestMealEditResponse = zod.object({
+  "id": zod.number().int(),
+  "mealId": zod.number().int(),
+  "requesterId": zod.number().int(),
+  "requesterName": zod.string().nullish(),
+  "previousName": zod.string(),
+  "previousCategory": zod.string(),
+  "proposedName": zod.string(),
+  "proposedCategory": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "approvedBy": zod.number().int().nullish(),
+  "requestedAt": zod.coerce.date(),
+  "decidedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary List meal edit approval requests (admin)
+ */
+export const ListMealEditRequestsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "mealId": zod.number().int(),
+  "requesterId": zod.number().int(),
+  "requesterName": zod.string().nullish(),
+  "previousName": zod.string(),
+  "previousCategory": zod.string(),
+  "proposedName": zod.string(),
+  "proposedCategory": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "approvedBy": zod.number().int().nullish(),
+  "requestedAt": zod.coerce.date(),
+  "decidedAt": zod.coerce.date().nullable()
+})
+export const ListMealEditRequestsResponse = zod.array(ListMealEditRequestsResponseItem)
+
+
+export const ApproveMealEditRequestParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const ApproveMealEditRequestResponse = zod.object({
+  "id": zod.number().int(),
+  "mealId": zod.number().int(),
+  "requesterId": zod.number().int(),
+  "requesterName": zod.string().nullish(),
+  "previousName": zod.string(),
+  "previousCategory": zod.string(),
+  "proposedName": zod.string(),
+  "proposedCategory": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "approvedBy": zod.number().int().nullish(),
+  "requestedAt": zod.coerce.date(),
+  "decidedAt": zod.coerce.date().nullable()
+})
+
+
+export const RejectMealEditRequestParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const RejectMealEditRequestResponse = zod.object({
+  "id": zod.number().int(),
+  "mealId": zod.number().int(),
+  "requesterId": zod.number().int(),
+  "requesterName": zod.string().nullish(),
+  "previousName": zod.string(),
+  "previousCategory": zod.string(),
+  "proposedName": zod.string(),
+  "proposedCategory": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "approvedBy": zod.number().int().nullish(),
+  "requestedAt": zod.coerce.date(),
+  "decidedAt": zod.coerce.date().nullable()
+})
+
+
 export const CreateMealIngredientParams = zod.object({
   "mealId": zod.coerce.number().int()
 })
@@ -3136,7 +3228,7 @@ export const ListDeletionRequestsResponseItem = zod.object({
   "id": zod.number().int(),
   "targetPath": zod.string(),
   "label": zod.string(),
-  "requesterRole": zod.enum(['admin', 'hr', 'accountant', 'warehouse']),
+  "requesterRole": zod.enum(['admin', 'hr', 'accountant', 'warehouse', 'technologist']),
   "status": zod.enum(['pending', 'executing', 'completed', 'failed', 'cancelled']),
   "requestedAt": zod.string(),
   "approvedAt": zod.string().nullish(),
@@ -3162,7 +3254,7 @@ export const CreateDeletionRequestResponse = zod.object({
   "id": zod.number().int(),
   "targetPath": zod.string(),
   "label": zod.string(),
-  "requesterRole": zod.enum(['admin', 'hr', 'accountant', 'warehouse']),
+  "requesterRole": zod.enum(['admin', 'hr', 'accountant', 'warehouse', 'technologist']),
   "status": zod.enum(['pending', 'executing', 'completed', 'failed', 'cancelled']),
   "requestedAt": zod.string(),
   "approvedAt": zod.string().nullish(),
@@ -3182,7 +3274,7 @@ export const ApproveDeletionRequestResponse = zod.object({
   "id": zod.number().int(),
   "targetPath": zod.string(),
   "label": zod.string(),
-  "requesterRole": zod.enum(['admin', 'hr', 'accountant', 'warehouse']),
+  "requesterRole": zod.enum(['admin', 'hr', 'accountant', 'warehouse', 'technologist']),
   "status": zod.enum(['pending', 'executing', 'completed', 'failed', 'cancelled']),
   "requestedAt": zod.string(),
   "approvedAt": zod.string().nullish(),
@@ -3202,7 +3294,7 @@ export const CancelDeletionRequestResponse = zod.object({
   "id": zod.number().int(),
   "targetPath": zod.string(),
   "label": zod.string(),
-  "requesterRole": zod.enum(['admin', 'hr', 'accountant', 'warehouse']),
+  "requesterRole": zod.enum(['admin', 'hr', 'accountant', 'warehouse', 'technologist']),
   "status": zod.enum(['pending', 'executing', 'completed', 'failed', 'cancelled']),
   "requestedAt": zod.string(),
   "approvedAt": zod.string().nullish(),

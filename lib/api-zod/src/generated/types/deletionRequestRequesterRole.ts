@@ -14,4 +14,5 @@ export const DeletionRequestRequesterRole = {
   hr: 'hr',
   accountant: 'accountant',
   warehouse: 'warehouse',
+  technologist: 'technologist',
 } as const;

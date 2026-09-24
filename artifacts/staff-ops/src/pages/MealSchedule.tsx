@@ -209,10 +209,10 @@ export function MealSchedule() {
                             "schedule-cell border-b border-border border-l relative p-1.5 align-top transition-colors h-24 w-[12.5%]",
                             isDragOver ? "bg-orange-50 dark:bg-orange-900/20" : day.isToday ? "bg-orange-50/20 dark:bg-orange-900/5" : "hover:bg-secondary/20"
                           )}
-                           onDragOver={(e) => onDragOver(e, day.dateStr, slot.id)}
-                           onDragEnter={(e) => onDragEnter(e, day.dateStr, slot.id)}
-                          onDragLeave={onDragLeave}
-                          onDrop={(e) => onDrop(e, day.dateStr, slot.id)}
+                           onDragOver={!readOnly ? (e) => onDragOver(e, day.dateStr, slot.id) : undefined}
+                           onDragEnter={!readOnly ? (e) => onDragEnter(e, day.dateStr, slot.id) : undefined}
+                           onDragLeave={!readOnly ? onDragLeave : undefined}
+                           onDrop={!readOnly ? (e) => onDrop(e, day.dateStr, slot.id) : undefined}
                           onClick={() => setModalCell({ date: day.dateStr, slot, entry })}
                           data-testid={`cell-${day.dateStr}-${slot.id}`}
                         >
@@ -221,23 +221,20 @@ export function MealSchedule() {
                                draggable={!readOnly && !moveEntry.isPending}
                               onDragStart={(e) => onDragStart(e, entry.id)}
                               onDragEnd={onDragEnd}
-                               onDragOver={(e) => {
-                                 if (readOnly) return;
+                               onDragOver={!readOnly ? (e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
                                 e.dataTransfer.dropEffect = 'move';
-                              }}
-                               onDragEnter={(e) => {
-                                 if (readOnly) return;
+                               } : undefined}
+                                onDragEnter={!readOnly ? (e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
                                 setDragOverCell({ date: day.dateStr, slotId: slot.id });
-                              }}
-                               onDrop={(e) => {
-                                 if (readOnly) return;
+                               } : undefined}
+                                onDrop={!readOnly ? (e) => {
                                 e.stopPropagation();
                                 onDrop(e, day.dateStr, slot.id);
-                              }}
+                               } : undefined}
                                className={cn(
                                  "flex flex-col h-full rounded-lg border p-2 hover-elevate transition-all",
                                  !readOnly && "cursor-grab active:cursor-grabbing",
@@ -276,8 +273,8 @@ export function MealSchedule() {
                               )}
                             </div>
                           ) : (
-                             <div className={cn("h-full w-full rounded-lg border border-dashed border-transparent flex items-center justify-center transition-opacity text-muted-foreground", !readOnly && "hover:border-border opacity-0 group-hover/row:opacity-100 cursor-pointer")}>
-                               {!readOnly && <Plus className="size-4" />}
+                             <div className={cn("h-full w-full rounded-lg border border-dashed border-transparent flex items-center justify-center transition-opacity text-muted-foreground", readOnly ? "cursor-pointer hover:border-border hover:bg-secondary/20" : "hover:border-border opacity-0 group-hover/row:opacity-100 cursor-pointer")}>
+                               <Plus className="size-4" />
                             </div>
                           )}
                         </td>
@@ -337,7 +334,9 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
 
   const meals = (mealsQuery.data || []).filter(m => m.isActive);
 
-  if (readOnly) {
+  // Technologists may create entries in empty cells, but existing entries
+  // remain strictly read-only.
+  if (readOnly && cell.entry) {
     return (
       <Modal title="Хуваарийн мэдээлэл" detail={`${format(new Date(cell.date), 'yyyy.MM.dd')} өдрийн ${cell.slot.name} (${cell.slot.startTime}-${cell.slot.endTime})`} onClose={onClose}>
         <div className="space-y-5">

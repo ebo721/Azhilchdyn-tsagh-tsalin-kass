@@ -38,6 +38,7 @@ describe("technologist staff auth", () => {
     app.get("/api/meal-schedule/week", (_req, res) => res.sendStatus(200));
     app.get("/api/employees", (_req, res) => res.sendStatus(200));
     app.post("/api/meals", (_req, res) => res.sendStatus(200));
+    app.use("/api", (_req, res) => res.sendStatus(200));
     server = app.listen(0);
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   });
@@ -59,9 +60,25 @@ describe("technologist staff auth", () => {
     assert.equal((await request("/meal-schedule/week")).status, 200);
   });
 
-  it("denies writes and unrelated GET APIs", async () => {
-    assert.equal((await request("/meals", "POST")).status, 403);
+  it("allows technologist meal creation, ingredient writes, edit requests, and deletion requests", async () => {
+    assert.equal((await request("/meals", "POST")).status, 200);
+    assert.equal((await request("/meal-schedule", "POST")).status, 200);
+    assert.equal((await request("/meals/1/ingredients", "POST")).status, 200);
+    assert.equal((await request("/meals/1/ingredients/2", "PUT")).status, 200);
+    assert.equal((await request("/meals/1/ingredients/2", "DELETE")).status, 200);
+    assert.equal((await request("/meals/1/edit-request", "POST")).status, 200);
+    assert.equal((await request("/deletion-requests", "POST")).status, 200);
+  });
+
+  it("denies protected writes and unrelated GET APIs", async () => {
+    assert.equal((await request("/meals/1", "PUT")).status, 403);
+    assert.equal((await request("/meals/1", "DELETE")).status, 403);
     assert.equal((await request("/meal-schedule/week", "PUT")).status, 403);
+    assert.equal((await request("/meal-schedule/week", "DELETE")).status, 403);
+    assert.equal((await request("/meal-schedule/1/move", "POST")).status, 403);
+    assert.equal((await request("/meal-schedule/slots", "POST")).status, 403);
+    assert.equal((await request("/meal-schedule/slots/1", "PUT")).status, 403);
+    assert.equal((await request("/meal-schedule/slots/1", "DELETE")).status, 403);
     assert.equal((await request("/employees")).status, 403);
   });
 });

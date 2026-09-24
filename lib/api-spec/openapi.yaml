@@ -1223,6 +1223,60 @@ paths:
       responses:
         "204":
           description: Deleted
+  /meals/{id}/edit-request:
+    post:
+      operationId: requestMealEdit
+      summary: Submit name/category changes for administrator approval
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MealEditRequestInput" }
+      responses:
+        "201":
+          description: Pending edit request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MealEditRequest" }
+        "404": { description: Meal not found }
+        "409": { description: Pending request or name collision }
+  /meal-edit-requests:
+    get:
+      operationId: listMealEditRequests
+      summary: List meal edit approval requests (admin)
+      responses:
+        "200":
+          description: Meal edit requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MealEditRequest" }
+  /meal-edit-requests/{id}/approve:
+    post:
+      operationId: approveMealEditRequest
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Approved request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MealEditRequest" }
+        "409": { description: Stale meal or name collision }
+  /meal-edit-requests/{id}/reject:
+    post:
+      operationId: rejectMealEditRequest
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Rejected request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MealEditRequest" }
   /meals/{mealId}/ingredients:
     post:
       operationId: createMealIngredient
@@ -3061,6 +3115,28 @@ components:
           type: string
           enum: [single, set]
         isActive: { type: boolean }
+    MealEditRequestInput:
+      type: object
+      required: [name, category]
+      properties:
+        name: { type: string, minLength: 1 }
+        category: { type: string, minLength: 1 }
+    MealEditRequest:
+      type: object
+      required: [id, mealId, requesterId, previousName, previousCategory, proposedName, proposedCategory, status, requestedAt, decidedAt]
+      properties:
+        id: { type: integer }
+        mealId: { type: integer }
+        requesterId: { type: integer }
+        requesterName: { type: string, nullable: true }
+        previousName: { type: string }
+        previousCategory: { type: string }
+        proposedName: { type: string }
+        proposedCategory: { type: string }
+        status: { type: string, enum: [pending, approved, rejected] }
+        approvedBy: { type: integer, nullable: true }
+        requestedAt: { type: string, format: date-time }
+        decidedAt: { type: string, format: date-time, nullable: true }
     MealIngredientInput:
       type: object
       required: [inventoryItemName, inventoryItemCategory, quantity, unit, caloriesPerUnit]
@@ -3404,7 +3480,7 @@ components:
         id: { type: integer }
         targetPath: { type: string }
         label: { type: string }
-        requesterRole: { type: string, enum: [admin, hr, accountant, warehouse] }
+        requesterRole: { type: string, enum: [admin, hr, accountant, warehouse, technologist] }
         status: { type: string, enum: [pending, executing, completed, failed, cancelled] }
         requestedAt: { type: string }
         approvedAt: { type: ["string", "null"] }

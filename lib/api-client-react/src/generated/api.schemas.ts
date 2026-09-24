@@ -1446,6 +1446,37 @@ export interface MealInput {
   isActive: boolean;
 }
 
+export interface MealEditRequestInput {
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 1 */
+  category: string;
+}
+
+export type MealEditRequestStatus = typeof MealEditRequestStatus[keyof typeof MealEditRequestStatus];
+
+
+export const MealEditRequestStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export interface MealEditRequest {
+  id: number;
+  mealId: number;
+  requesterId: number;
+  requesterName?: string | null;
+  previousName: string;
+  previousCategory: string;
+  proposedName: string;
+  proposedCategory: string;
+  status: MealEditRequestStatus;
+  approvedBy?: number | null;
+  requestedAt: string;
+  decidedAt: string | null;
+}
+
 export interface MealIngredientInput {
   /** @nullable */
   inventoryItemId?: number | null;
@@ -1827,6 +1858,7 @@ export const DeletionRequestRequesterRole = {
   hr: 'hr',
   accountant: 'accountant',
   warehouse: 'warehouse',
+  technologist: 'technologist',
 } as const;
 
 export type DeletionRequestStatus = typeof DeletionRequestStatus[keyof typeof DeletionRequestStatus];

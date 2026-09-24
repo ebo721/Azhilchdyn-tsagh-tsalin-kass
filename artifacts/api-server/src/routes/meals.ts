@@ -5,7 +5,10 @@ import {
   inventoryItemsTable,
   mealIngredientsTable,
   mealsTable,
+  mealEditRequestsTable,
+  usersTable,
 } from "@workspace/db";
+import { getStaffRole, getStaffSession } from "../lib/hr-session.js";
 import {
   CreateMealBody,
   CreateMealIngredientBody,
@@ -29,6 +32,19 @@ const router: IRouter = Router();
 const clean = (value: string) => value.normalize("NFKC").trim().replace(/\s+/g, " ");
 const normalized = (value: string) => clean(value).toLocaleLowerCase("mn-MN");
 const calorie = (quantity: number, caloriesPerUnit: number) => Math.round(quantity * caloriesPerUnit * 1000) / 1000;
+const MealEditBody = (value: unknown) => {
+  const body = value as { name?: unknown; category?: unknown };
+  if (typeof body?.name !== "string" || typeof body?.category !== "string" || !body.name.trim() || !body.category.trim()) {
+    throw new Error("INVALID_EDIT");
+  }
+  return { name: body.name, category: body.category };
+};
+const editRequestView = (row: typeof mealEditRequestsTable.$inferSelect, requesterName: string | null = null) => ({
+  ...row,
+  requesterName,
+  requestedAt: row.requestedAt.toISOString(),
+  decidedAt: row.decidedAt?.toISOString() ?? null,
+});
 
 type DbClient = Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db;
 
@@ -176,6 +192,92 @@ router.put("/meals/:id", async (req, res, next): Promise<void> => {
   } catch (error) {
     next(error);
   }
+});
+
+router.post("/meals/:id/edit-request", async (req, res, next): Promise<void> => {
+  try {
+    const role = await getStaffRole(req);
+    if (role !== "technologist") { res.status(403).json({ error: "Зөвхөн технологич хүсэлт илгээнэ" }); return; }
+    const session = await getStaffSession(req);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1) { res.status(400).json({ error: "ID буруу байна" }); return; }
+    const input = MealEditBody(req.body);
+    const name = clean(input.name), category = clean(input.category);
+    const result = await db.transaction(async (tx) => {
+      const [meal] = await tx.select().from(mealsTable).where(eq(mealsTable.id, id)).for("update");
+      if (!meal) throw new Error("MEAL_NOT_FOUND");
+      const [pending] = await tx.select({ id: mealEditRequestsTable.id }).from(mealEditRequestsTable)
+        .where(sql`${mealEditRequestsTable.mealId} = ${id} and ${mealEditRequestsTable.status} = 'pending'`);
+      if (pending) throw new Error("PENDING");
+      const [collision] = await tx.select({ id: mealsTable.id }).from(mealsTable)
+        .where(eq(mealsTable.normalizedName, normalized(name)));
+      if (collision && collision.id !== id) throw new Error("COLLISION");
+      return tx.insert(mealEditRequestsTable).values({
+        mealId: id, requesterId: session!.id, previousName: meal.name, previousCategory: meal.category,
+        proposedName: name, proposedCategory: category,
+      }).returning();
+    });
+    res.status(201).json(editRequestView(result[0]));
+  } catch (error) {
+    if (error instanceof Error && error.message === "MEAL_NOT_FOUND") { res.status(404).json({ error: "Хоол олдсонгүй" }); return; }
+    if (error instanceof Error && error.message === "INVALID_EDIT") { res.status(400).json({ error: "Нэр болон ангилал шаардлагатай" }); return; }
+    if (error instanceof Error && error.message === "PENDING") { res.status(409).json({ error: "Энэ хоолны өөрчлөлтийн хүсэлт хүлээгдэж байна" }); return; }
+    if (error instanceof Error && error.message === "COLLISION") { res.status(409).json({ error: "Ийм нэртэй хоол аль хэдийн байна" }); return; }
+    if ((error as { code?: string })?.code === "23505") { res.status(409).json({ error: "Энэ хоолны өөрчлөлтийн хүсэлт аль хэдийн байна" }); return; }
+    next(error);
+  }
+});
+
+router.get("/meal-edit-requests", async (req, res, next): Promise<void> => {
+  try {
+    if (await getStaffRole(req) !== "admin") { res.status(403).json({ error: "Зөвхөн админ хүсэлт харна" }); return; }
+    const rows = await db.select({ request: mealEditRequestsTable, requesterName: usersTable.username })
+      .from(mealEditRequestsTable).leftJoin(usersTable, eq(usersTable.id, mealEditRequestsTable.requesterId))
+      .orderBy(sql`${mealEditRequestsTable.requestedAt} desc`);
+    res.json(rows.map(({ request, requesterName }) => editRequestView(request, requesterName)));
+  } catch (error) { next(error); }
+});
+
+router.post("/meal-edit-requests/:id/approve", async (req, res, next): Promise<void> => {
+  try {
+    const session = await getStaffSession(req);
+    if (session?.role !== "admin") { res.status(403).json({ error: "Зөвхөн админ батална" }); return; }
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1) { res.status(400).json({ error: "ID буруу байна" }); return; }
+    const result = await db.transaction(async (tx) => {
+      const [request] = await tx.select().from(mealEditRequestsTable).where(eq(mealEditRequestsTable.id, id)).for("update");
+      if (!request) throw new Error("REQUEST_NOT_FOUND");
+      if (request.status !== "pending") throw new Error("RESOLVED");
+      const [meal] = await tx.select().from(mealsTable).where(eq(mealsTable.id, request.mealId)).for("update");
+      if (!meal) throw new Error("MEAL_NOT_FOUND");
+      if (meal.name !== request.previousName || meal.category !== request.previousCategory) throw new Error("STALE");
+      const [collision] = await tx.select({ id: mealsTable.id }).from(mealsTable).where(eq(mealsTable.normalizedName, normalized(request.proposedName)));
+      if (collision && collision.id !== meal.id) throw new Error("COLLISION");
+      await tx.update(mealsTable).set({ name: request.proposedName, normalizedName: normalized(request.proposedName), category: request.proposedCategory, updatedAt: new Date() }).where(eq(mealsTable.id, meal.id));
+      return tx.update(mealEditRequestsTable).set({ status: "approved", approvedBy: session.id, decidedAt: new Date() }).where(eq(mealEditRequestsTable.id, id)).returning();
+    });
+    res.json(editRequestView(result[0]));
+  } catch (error) {
+    if (error instanceof Error && error.message === "REQUEST_NOT_FOUND") { res.status(404).json({ error: "Хүсэлт олдсонгүй" }); return; }
+    if (error instanceof Error && error.message === "MEAL_NOT_FOUND") { res.status(404).json({ error: "Хоол олдсонгүй" }); return; }
+    if (error instanceof Error && error.message === "RESOLVED") { res.status(409).json({ error: "Хүсэлт аль хэдийн шийдэгдсэн" }); return; }
+    if (error instanceof Error && error.message === "COLLISION") { res.status(409).json({ error: "Ийм нэртэй хоол аль хэдийн байна" }); return; }
+    if (error instanceof Error && error.message === "STALE") { res.status(409).json({ error: "Хоол өөрчлөгдсөн тул хүсэлт хуучирсан байна" }); return; }
+    next(error);
+  }
+});
+
+router.post("/meal-edit-requests/:id/reject", async (req, res, next): Promise<void> => {
+  try {
+    const session = await getStaffSession(req);
+    if (session?.role !== "admin") { res.status(403).json({ error: "Зөвхөн админ татгалзана" }); return; }
+    const requestId = Number(req.params.id);
+    if (!Number.isInteger(requestId) || requestId < 1) { res.status(400).json({ error: "ID буруу байна" }); return; }
+    const [updated] = await db.update(mealEditRequestsTable).set({ status: "rejected", approvedBy: session.id, decidedAt: new Date() })
+      .where(sql`${mealEditRequestsTable.id} = ${requestId} and ${mealEditRequestsTable.status} = 'pending'`).returning();
+    if (!updated) { res.status(409).json({ error: "Хүлээгдэж буй хүсэлт олдсонгүй" }); return; }
+    res.json(editRequestView(updated));
+  } catch (error) { next(error); }
 });
 
 router.delete("/meals/:id", async (req, res, next): Promise<void> => {

@@ -160,11 +160,31 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
     res.status(401).json({ error: "Нэвтрэх шаардлагатай" });
     return;
   }
-  // Meal technologists have a deliberately narrow, read-only API surface.
+  // Meal technologists have a deliberately narrow meal workflow surface.
   // Keep this before deletion-request and other method-specific exceptions.
   if (session.role === "technologist") {
     const mealPrefix = (prefix: string) => req.path === prefix || req.path.startsWith(`${prefix}/`);
+    if (req.method === "DELETE" && /^\/meals\/\d+$/.test(req.path)) {
+      const requestId = Number(req.header("x-deletion-request-id"));
+      if (!Number.isInteger(requestId)) { res.status(403).json({ error: "Устгах үйлдэлд админы баталсан хүсэлт шаардлагатай" }); return; }
+      const [request] = await db.select().from(deletionRequestsTable).where(eq(deletionRequestsTable.id, requestId));
+      if (!request || request.status !== "executing" || request.targetPath !== req.url) {
+        res.status(403).json({ error: "Устгах хүсэлт хүчинтэй биш байна" }); return;
+      }
+      next();
+      return;
+    }
     if (req.method === "GET" && (mealPrefix("/meals") || mealPrefix("/meal-schedule"))) {
+      next();
+      return;
+    }
+    if (
+      (req.method === "POST" && (req.path === "/meals" || req.path === "/meal-schedule"
+        || /^\/meals\/\d+\/ingredients$/.test(req.path)
+        || /^\/meals\/\d+\/edit-request$/.test(req.path)))
+      || ((req.method === "PUT" || req.method === "DELETE") && /^\/meals\/\d+\/ingredients\/\d+$/.test(req.path))
+      || (req.method === "POST" && req.path === "/deletion-requests")
+    ) {
       next();
       return;
     }
