@@ -15,6 +15,16 @@ import { Input } from '@/components/ui/input';
 
 type SlotDraft = MealScheduleSlotInput & { id?: number };
 
+function timeMinutes(value: string): number | null {
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return null;
+  const [hours, minutes] = value.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+function clockTime(minutes: number): string {
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
 function emptyDraft(slots: MealScheduleSlot[]): SlotDraft {
   return {
     name: '',
@@ -48,8 +58,30 @@ export function MealScheduleSlotsModal({
     setShowForm(true);
   };
 
+  const changeTime = (field: 'startTime' | 'endTime', value: string) => {
+    setDraft((current) => {
+      const next = { ...current, [field]: value };
+      const changed = timeMinutes(value);
+      const other = timeMinutes(current[field === 'startTime' ? 'endTime' : 'startTime']);
+      const previousStart = timeMinutes(current.startTime);
+      const previousEnd = timeMinutes(current.endTime);
+      if (changed === null || other === null) return next;
+      const duration = previousStart !== null && previousEnd !== null
+        ? Math.max(1, previousEnd - previousStart)
+        : 60;
+      if (field === 'startTime' && changed >= other && changed + duration <= 1439) {
+        next.endTime = clockTime(changed + duration);
+      }
+      if (field === 'endTime' && changed <= other && changed - duration >= 0) {
+        next.startTime = clockTime(changed - duration);
+      }
+      return next;
+    });
+  };
+
   const save = (event: React.FormEvent) => {
     event.preventDefault();
+    if (!draft.startTime || !draft.endTime || draft.startTime >= draft.endTime) return;
     const data: MealScheduleSlotInput = {
       name: draft.name.trim(),
       startTime: draft.startTime,
@@ -141,7 +173,7 @@ export function MealScheduleSlotsModal({
                 <Input
                   type="time"
                   value={draft.startTime}
-                  onChange={(event) => setDraft((current) => ({ ...current, startTime: event.target.value }))}
+                  onChange={(event) => changeTime('startTime', event.target.value)}
                   required
                   data-testid="input-meal-slot-start-time"
                 />
@@ -151,12 +183,17 @@ export function MealScheduleSlotsModal({
                 <Input
                   type="time"
                   value={draft.endTime}
-                  onChange={(event) => setDraft((current) => ({ ...current, endTime: event.target.value }))}
+                  onChange={(event) => changeTime('endTime', event.target.value)}
                   required
                   data-testid="input-meal-slot-end-time"
                 />
               </div>
             </div>
+            {draft.startTime && draft.endTime && draft.startTime >= draft.endTime && (
+              <p className="text-sm text-destructive" role="alert">
+                Дуусах цаг эхлэх цагаас хойш байх ёстой. Хоёр цагийг тохируулна уу.
+              </p>
+            )}
             <div>
               <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Дараалал</label>
               <Input
