@@ -164,6 +164,11 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
   // Keep this before deletion-request and other method-specific exceptions.
   if (session.role === "technologist") {
     const mealPrefix = (prefix: string) => req.path === prefix || req.path.startsWith(`${prefix}/`);
+    if ((req.method === "GET" && req.path === "/inventory/material-requests/catalog")
+      || (req.method === "POST" && req.path === "/inventory/material-requests")) {
+      next();
+      return;
+    }
     if (req.method === "DELETE" && /^\/meals\/\d+$/.test(req.path)) {
       const requestId = Number(req.header("x-deletion-request-id"));
       if (!Number.isInteger(requestId)) { res.status(403).json({ error: "Устгах үйлдэлд админы баталсан хүсэлт шаардлагатай" }); return; }

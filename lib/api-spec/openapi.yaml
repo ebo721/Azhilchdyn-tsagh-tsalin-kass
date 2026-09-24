@@ -1805,6 +1805,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InventoryMaterialRequest"
+  /inventory/material-requests/catalog:
+    get:
+      operationId: listMaterialRequestCatalog
+      tags: [inventory]
+      summary: List materials available for ordering without stock or pricing details
+      responses:
+        "200":
+          description: Orderable materials
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MaterialRequestCatalogItem"
   /inventory/material-requests/{id}/status:
     patch:
       operationId: updateInventoryMaterialRequestStatus
@@ -3338,6 +3352,14 @@ components:
       properties:
         inventoryItemId: { type: integer, minimum: 1 }
         quantity: { type: number, exclusiveMinimum: 0, maximum: 99999999999.999, multipleOf: 0.001 }
+    MaterialRequestCatalogItem:
+      type: object
+      required: [id, name, category, unit]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        category: { type: string }
+        unit: { type: string }
     InventoryMaterialRequestInput:
       type: object
       required: [requestedDate, lines]

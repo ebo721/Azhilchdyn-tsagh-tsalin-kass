@@ -152,6 +152,7 @@ export * from './listJournalReceivablesStatus';
 export * from './listMealScheduleParams';
 export * from './listShiftPlansParams';
 export * from './loginInput';
+export * from './materialRequestCatalogItem';
 export * from './meal';
 export * from './mealEditRequest';
 export * from './mealEditRequestInput';

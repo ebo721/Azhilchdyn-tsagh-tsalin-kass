@@ -137,15 +137,15 @@ export function MealSchedule() {
         detail="Хоолны цаг болон цэсийг өдрөөр төлөвлөх"
         action={
           <div className="flex items-center gap-2">
+            {(session.data?.role === 'admin' || session.data?.role === 'warehouse' || session.data?.role === 'technologist') && (
+              <Button variant="outline" onClick={() => setRequestModalOpen(true)} data-testid="button-request-materials">
+                <PackageOpen className="mr-2 size-4" /> Материал захиалах
+              </Button>
+            )}
             {(session.data?.role === 'admin' || session.data?.role === 'warehouse') && (
-              <>
-                <Button variant="outline" onClick={() => setRequestModalOpen(true)} data-testid="button-request-materials">
-                  <PackageOpen className="mr-2 size-4" /> Материал захиалах
-                </Button>
-                <Button variant="outline" onClick={() => setSlotsModalOpen(true)} data-testid="button-manage-meal-slots">
-                  <Settings2 className="mr-2 size-4" /> Хоолны цаг
-                </Button>
-              </>
+              <Button variant="outline" onClick={() => setSlotsModalOpen(true)} data-testid="button-manage-meal-slots">
+                <Settings2 className="mr-2 size-4" /> Хоолны цаг
+              </Button>
             )}
             <Button variant="outline" onClick={currentWeek} data-testid="button-current-week">Өнөөдөр</Button>
             <div className="flex items-center rounded-md border border-input bg-card">

@@ -1702,6 +1702,13 @@ export interface InventoryMaterialRequestLineInput {
   quantity: number;
 }
 
+export interface MaterialRequestCatalogItem {
+  id: number;
+  name: string;
+  category: string;
+  unit: string;
+}
+
 export interface InventoryMaterialRequestInput {
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
   requestedDate: string;
