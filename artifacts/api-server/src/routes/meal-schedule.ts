@@ -51,7 +51,7 @@ function validateEntryInput(input: {
 
 function validateSlotInput(input: { name: string; startTime: string; endTime: string; sortOrder: number }) {
   if (!input.name.trim()) return "INVALID_NAME";
-  if (input.startTime >= input.endTime) return "INVALID_TIME_RANGE";
+  if (input.startTime === input.endTime) return "INVALID_TIME_RANGE";
   return null;
 }
 
