@@ -4,6 +4,7 @@ import { PageHeading, LoadingBlock, ErrorBlock, EmptyState, Modal, StatusPill } 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { useQueueDeletion } from '@/hooks/useQueueDeletion';
 import {
   Search,
   Plus,
@@ -42,6 +43,7 @@ export function Meals() {
     query: { queryKey: getListInventoryItemsQueryKey(), enabled: !readOnly },
   });
   const deleteMeal = useDeleteMeal();
+  const deletion = useQueueDeletion();
 
   const [search, setSearch] = useState('');
   const [selectedMeal, setSelectedMeal] = useState<Meal | null>(null);
@@ -74,12 +76,16 @@ export function Meals() {
 
   const handleDeleteMeal = (meal: Meal) => {
     if (window.confirm(`"${meal.name}" хоолыг устгах уу?`)) {
-      deleteMeal.mutate({ id: meal.id }, {
-        onSuccess: () => {
-          qc.invalidateQueries({ queryKey: getListMealsQueryKey() });
-          if (selectedMeal?.id === meal.id) setSelectedMeal(null);
-        }
-      });
+      if (readOnly) {
+        void deletion.request(`/meals/${meal.id}`, meal.name);
+      } else {
+        deleteMeal.mutate({ id: meal.id }, {
+          onSuccess: () => {
+            qc.invalidateQueries({ queryKey: getListMealsQueryKey() });
+            if (selectedMeal?.id === meal.id) setSelectedMeal(null);
+          }
+        });
+      }
     }
   };
 
@@ -89,7 +95,7 @@ export function Meals() {
         eyebrow="Хоолны цэс"
         title="Хоолны орц, илчлэг"
         detail="Хоолны орцын норм хэмжээг тохируулах болон илчлэг тооцоолох хэсэг"
-        action={!readOnly && (
+        action={(
           <Button onClick={openCreateMeal} data-testid="button-add-meal" className="bg-orange-600 hover:bg-orange-700 text-white border-transparent">
             <Plus className="size-4 mr-2" /> Хоол нэмэх
           </Button>
@@ -130,7 +136,7 @@ export function Meals() {
                     <th className="px-5 py-3">Төрөл</th>
                     <th className="px-5 py-3 text-right">Илчлэг</th>
                     <th className="px-5 py-3 text-center">Төлөв</th>
-                    {!readOnly && <th className="px-5 py-3 text-right">Үйлдэл</th>}
+                    <th className="px-5 py-3 text-right">Үйлдэл</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -162,7 +168,7 @@ export function Meals() {
                       <td className="px-5 py-3 text-center">
                         <StatusPill value={meal.isActive ? 'active' : 'inactive'} />
                       </td>
-                      {!readOnly && <td className="px-5 py-3 text-right">
+                      <td className="px-5 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); openEditMealInfo(meal); }} data-testid={`button-edit-meal-${meal.id}`}>
                             <Pencil className="size-4" />
@@ -171,7 +177,7 @@ export function Meals() {
                             <Trash2 className="size-4" />
                           </Button>
                         </div>
-                      </td>}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -185,7 +191,6 @@ export function Meals() {
             meal={meals.find(m => m.id === selectedMeal.id) || selectedMeal}
             catalog={catalog}
             onClose={() => setSelectedMeal(null)}
-            readOnly={readOnly}
             onUpdate={() => {
               qc.invalidateQueries({ queryKey: getListMealsQueryKey() });
               qc.invalidateQueries({ queryKey: getListInventoryItemsQueryKey() });
@@ -206,6 +211,7 @@ export function Meals() {
         <MealFormModal
           meal={editingMealInfo}
           categories={categories}
+          requestOnly={readOnly}
           onClose={() => setIsMealFormOpen(false)}
           onSuccess={(savedMeal) => {
             qc.invalidateQueries({ queryKey: getListMealsQueryKey() });
@@ -221,11 +227,13 @@ export function Meals() {
 function MealFormModal({
   meal,
   categories,
+  requestOnly,
   onClose,
   onSuccess
 }: {
   meal: Meal | null;
   categories: string[];
+  requestOnly: boolean;
   onClose: () => void;
   onSuccess: (meal: Meal) => void;
 }) {
@@ -235,12 +243,39 @@ function MealFormModal({
   const [category, setCategory] = useState(meal?.category || '');
   const [type, setType] = useState<'single' | 'set'>(meal?.type || 'single');
   const [isActive, setIsActive] = useState(meal ? meal.isActive : true);
+  const [requestPending, setRequestPending] = useState(false);
+  const [requestStatus, setRequestStatus] = useState<'success' | 'error' | null>(null);
+  const [requestError, setRequestError] = useState('');
+  const [requestSubmitted, setRequestSubmitted] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !category) return;
     const data: MealInput = { name, category, type, isActive };
-    if (meal) {
+    if (meal && requestOnly) {
+      setRequestPending(true);
+      setRequestStatus(null);
+      setRequestError('');
+      fetch(`/api/meals/${meal.id}/edit-request`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, category }),
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            const body = await response.json().catch(() => null) as { error?: string } | null;
+            throw new Error(body?.error || 'Засварын хүсэлт илгээхэд алдаа гарлаа.');
+          }
+          setRequestStatus('success');
+          setRequestSubmitted(true);
+        })
+        .catch((error: unknown) => {
+          setRequestStatus('error');
+          setRequestError(error instanceof Error ? error.message : 'Засварын хүсэлт илгээхэд алдаа гарлаа.');
+        })
+        .finally(() => setRequestPending(false));
+    } else if (meal) {
       update.mutate({ id: meal.id, data }, { onSuccess });
     } else {
       create.mutate({ data }, { onSuccess });
@@ -249,8 +284,8 @@ function MealFormModal({
 
   return (
     <Modal
-      title={meal ? 'Хоолны мэдээлэл засах' : 'Шинэ хоол бүртгэх'}
-      detail={meal ? 'Хоолны үндсэн мэдээллийг өөрчлөх' : 'Цэсэнд шинэ хоол нэмэх'}
+      title={meal ? (requestOnly ? 'Хоолны мэдээлэл өөрчлөх хүсэлт' : 'Хоолны мэдээлэл засах') : 'Шинэ хоол бүртгэх'}
+      detail={meal ? (requestOnly ? 'Өөрчлөлтийг админы зөвшөөрөлд илгээнэ' : 'Хоолны үндсэн мэдээллийг өөрчлөх') : 'Цэсэнд шинэ хоол нэмэх'}
       onClose={onClose}
     >
       <form onSubmit={handleSubmit} className="space-y-5">
@@ -260,6 +295,7 @@ function MealFormModal({
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
+              disabled={requestSubmitted}
               placeholder="Жишээ: Үхрийн махтай хуурга"
               data-testid="input-meal-name"
               required
@@ -270,6 +306,7 @@ function MealFormModal({
             <Input
               value={category}
               onChange={(e) => setCategory(e.target.value)}
+              disabled={requestSubmitted}
               list="meal-categories"
               placeholder="Жишээ: Үндсэн хоол"
               data-testid="input-meal-category"
@@ -279,12 +316,13 @@ function MealFormModal({
               {categories.map((c) => <option key={c} value={c} />)}
             </datalist>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          {(!requestOnly || !meal) && <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Төрөл</label>
               <select
                 value={type}
-                onChange={(e) => setType(e.target.value as 'single' | 'set')}
+                 onChange={(e) => setType(e.target.value as 'single' | 'set')}
+                 disabled={requestSubmitted}
                 className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 data-testid="select-meal-type"
               >
@@ -296,7 +334,8 @@ function MealFormModal({
               <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Төлөв</label>
               <button
                 type="button"
-                onClick={() => setIsActive(!isActive)}
+                 onClick={() => setIsActive(!isActive)}
+                 disabled={requestSubmitted}
                 className={cn(
                   "flex h-10 w-full items-center justify-between rounded-md border px-3 py-2 text-sm font-medium transition-colors",
                   isActive ? "border-primary bg-primary/5 text-primary" : "border-input text-muted-foreground hover:bg-secondary"
@@ -307,13 +346,15 @@ function MealFormModal({
                 <ToggleRight className={cn("size-5", isActive ? "text-primary" : "text-muted-foreground rotate-180")} />
               </button>
             </div>
-          </div>
+          </div>}
         </div>
         <div className="flex justify-end gap-3 pt-4 border-t border-border">
           <Button type="button" variant="outline" onClick={onClose} data-testid="button-cancel-meal">Болих</Button>
-          <Button type="submit" disabled={create.isPending || update.isPending} data-testid="button-save-meal" className="bg-orange-600 hover:bg-orange-700 text-white">{meal ? 'Хадгалах' : 'Үүсгэх'}</Button>
+          <Button type="submit" disabled={create.isPending || update.isPending || requestPending || requestSubmitted} data-testid="button-save-meal" className="bg-orange-600 hover:bg-orange-700 text-white">{meal ? (requestOnly ? (requestSubmitted ? 'Хүсэлт илгээгдсэн' : 'Хүсэлт илгээх') : 'Хадгалах') : 'Үүсгэх'}</Button>
         </div>
         {(create.isError || update.isError) && <p className="text-sm text-destructive" data-testid="status-meal-save-error">Хоол хадгалахад алдаа гарлаа. Нэр давхардсан эсэхийг шалгана уу.</p>}
+        {requestStatus === 'success' && <p className="text-sm text-green-600" data-testid="status-meal-edit-request-success">Өөрчлөлтийн хүсэлт админд илгээгдлээ.</p>}
+        {requestStatus === 'error' && <p className="text-sm text-destructive" data-testid="status-meal-edit-request-error">{requestError || 'Өөрчлөлтийн хүсэлт илгээхэд алдаа гарлаа. Дахин оролдоно уу.'}</p>}
       </form>
     </Modal>
   );
@@ -323,14 +364,12 @@ function MealDetailsPanel({
   meal,
   catalog,
   onClose,
-  onUpdate,
-  readOnly
+  onUpdate
 }: {
   meal: Meal;
   catalog: InventoryItem[];
   onClose: () => void;
   onUpdate: () => void;
-  readOnly: boolean;
 }) {
   const createIngredient = useCreateMealIngredient();
   const updateIngredient = useUpdateMealIngredient();
@@ -448,7 +487,7 @@ function MealDetailsPanel({
       <div className="flex-1 overflow-y-auto p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Орцын жагсаалт</h3>
-          {!readOnly && !isAddMode && (
+           {!isAddMode && (
             <Button size="sm" variant="outline" onClick={() => setIsAddMode(true)} data-testid="button-add-ingredient">
               <Plus className="size-3.5 mr-1" /> Орц нэмэх
             </Button>
@@ -464,7 +503,7 @@ function MealDetailsPanel({
                   <th className="px-3 py-2.5 text-right">Хэмжээ</th>
                   <th className="px-3 py-2.5 text-right">Илчлэг/Нэгж</th>
                   <th className="px-3 py-2.5 text-right">Нийт ккал</th>
-                  {!readOnly && <th className="px-3 py-2.5 w-16"></th>}
+                   <th className="px-3 py-2.5 w-16"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -474,7 +513,7 @@ function MealDetailsPanel({
                     <td className="px-3 py-2.5 text-sm text-right font-mono">{ing.quantity} <span className="text-muted-foreground text-xs font-sans">{ing.unit}</span></td>
                     <td className="px-3 py-2.5 text-sm text-right font-mono text-muted-foreground">{ing.caloriesPerUnit}</td>
                     <td className="px-3 py-2.5 text-sm text-right font-mono font-bold text-orange-600 dark:text-orange-400">{ing.totalCalories}</td>
-                    {!readOnly && <td className="px-3 py-2.5 text-right">
+                     <td className="px-3 py-2.5 text-right">
                       <div className="flex items-center justify-end gap-0.5">
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(ing)} data-testid={`button-edit-ing-${ing.id}`}>
                           <Pencil className="size-3" />
@@ -483,7 +522,7 @@ function MealDetailsPanel({
                           <Trash2 className="size-3" />
                         </Button>
                       </div>
-                    </td>}
+                     </td>
                   </tr>
                 ))}
               </tbody>
@@ -497,7 +536,7 @@ function MealDetailsPanel({
           )
         )}
 
-        {!readOnly && isAddMode && (
+         {isAddMode && (
           <div className="rounded-xl border border-orange-200 dark:border-orange-900 bg-orange-50/50 dark:bg-orange-950/20 p-4 animate-in fade-in slide-in-from-top-2">
             <h4 className="text-sm font-bold mb-3">{editingIngredient ? 'Орц засах' : 'Шинэ орц нэмэх'}</h4>
             <form onSubmit={saveIngredient} className="space-y-4">

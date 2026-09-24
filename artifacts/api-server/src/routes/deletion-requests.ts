@@ -144,6 +144,7 @@ import {
   fixedAssetsTable,
   operatingExpensesTable,
   deletionRequestsTable,
+  mealsTable,
   shiftTemplatesTable,
   chartOfAccountsTable,
   payrollScheduleSettingsTable,
@@ -225,11 +226,73 @@ router.post("/deletion-requests/:id/approve", async (req, res, next) => {
       res.status(409).json({ error: "Энэ хүсэлт аль хэдийн шийдвэрлэгдсэн байна" });
       return;
     }
-    const [executing] = await db.update(deletionRequestsTable).set({
-      status: "executing",
-      approvedAt: new Date(),
-      error: null,
-    }).where(eq(deletionRequestsTable.id, id)).returning();
+
+    // Meal deletion is kept in the same transaction as approval.  Locking the
+    // request first makes concurrent approvals serialize before either can
+    // remove the meal or mark the request completed.
+    const mealMatch = request.targetPath.match(/^\/meals\/(\d+)$/);
+    if (mealMatch) {
+      try {
+        const completed = await db.transaction(async (tx) => {
+          const [lockedRequest] = await tx.select().from(deletionRequestsTable)
+            .where(eq(deletionRequestsTable.id, id)).for("update");
+          if (!lockedRequest) throw new Error("REQUEST_NOT_FOUND");
+          if (lockedRequest.status !== "pending") throw new Error("RESOLVED");
+          const mealId = Number(mealMatch[1]);
+          const [meal] = await tx.select({ id: mealsTable.id }).from(mealsTable)
+            .where(eq(mealsTable.id, mealId)).for("update");
+          if (!meal) throw new Error("MEAL_NOT_FOUND");
+          await tx.delete(mealsTable).where(eq(mealsTable.id, mealId));
+          const [updated] = await tx.update(deletionRequestsTable).set({
+            status: "completed",
+            approvedAt: new Date(),
+            completedAt: new Date(),
+            error: null,
+          }).where(eq(deletionRequestsTable.id, id)).returning();
+          if (!updated) throw new Error("REQUEST_NOT_FOUND");
+          return updated;
+        });
+        res.json(ApproveDeletionRequestResponse.parse(deletionRequestResponse(completed)));
+      } catch (error) {
+        if (error instanceof Error && error.message === "REQUEST_NOT_FOUND") {
+          res.status(404).json({ error: "Устгах хүсэлт олдсонгүй" });
+          return;
+        }
+        if (error instanceof Error && error.message === "RESOLVED") {
+          res.status(409).json({ error: "Энэ хүсэлт аль хэдийн шийдвэрлэгдсэн байна" });
+          return;
+        }
+        if (error instanceof Error && error.message === "MEAL_NOT_FOUND") {
+          res.status(404).json({ error: "Хоол олдсонгүй" });
+          return;
+        }
+        let databaseError: unknown = error;
+        let databaseCode: string | undefined;
+        for (let depth = 0; depth < 6 && databaseError && typeof databaseError === "object"; depth++) {
+          databaseCode = (databaseError as { code?: string }).code;
+          if (databaseCode) break;
+          databaseError = (databaseError as { cause?: unknown }).cause;
+        }
+        if (databaseCode === "23503" || databaseCode === "23001") {
+          res.status(409).json({ error: "Энэ хоол хуваарьт ашиглагдаж байгаа тул эхлээд хуваарийн бичлэгийг устгана уу" });
+          return;
+        }
+        throw error;
+      }
+      return;
+    }
+
+    const [executing] = await db.transaction(async (tx) => {
+      const [lockedRequest] = await tx.select().from(deletionRequestsTable)
+        .where(eq(deletionRequestsTable.id, id)).for("update");
+      if (!lockedRequest) throw new Error("REQUEST_NOT_FOUND");
+      if (lockedRequest.status !== "pending") throw new Error("RESOLVED");
+      return tx.update(deletionRequestsTable).set({
+        status: "executing",
+        approvedAt: new Date(),
+        error: null,
+      }).where(eq(deletionRequestsTable.id, id)).returning();
+    });
     const execution = await dispatchApprovedDeletion(
       request.targetPath,
       req.headers.cookie ?? "",
@@ -253,6 +316,14 @@ router.post("/deletion-requests/:id/approve", async (req, res, next) => {
     }).where(eq(deletionRequestsTable.id, id)).returning();
     res.json(ApproveDeletionRequestResponse.parse(deletionRequestResponse(completed ?? executing)));
   } catch (error) {
+    if (error instanceof Error && error.message === "REQUEST_NOT_FOUND") {
+      res.status(404).json({ error: "Устгах хүсэлт олдсонгүй" });
+      return;
+    }
+    if (error instanceof Error && error.message === "RESOLVED") {
+      res.status(409).json({ error: "Энэ хүсэлт аль хэдийн шийдвэрлэгдсэн байна" });
+      return;
+    }
     next(error);
   }
 });

@@ -36,7 +36,11 @@
     {
       "filename": "20260929_inventory_material_requests.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20260930_meal_edit_requests.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "e34bc6753ab4a8fe5bcfcd80bcc52068ebee5dfecba7e0df1b7741c44cdd02f0"
+  "schemaFingerprint": "f99f25e0deb4aada3114a5b4577996bf87a1dd23e7b31818b4b4e468b597ef4e"
 }

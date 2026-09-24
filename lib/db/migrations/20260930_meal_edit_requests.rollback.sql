@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS meal_edit_requests;

@@ -362,11 +362,13 @@ export const deletionTargetPatterns = [
   /^\/inventory\/suppliers\/\d+$/,
   /^\/meal-schedule\/\d+$/,
   /^\/meal-schedule\/slots\/\d+$/,
+  /^\/meals\/\d+$/,
 ];
 export const roleCanRequestDeletion = (role: StaffRole, targetPath: string) => role === "admin"
   || (role === "hr" && (targetPath.startsWith("/employees/") || targetPath.startsWith("/attendance")))
   || (role === "accountant" && (targetPath.startsWith("/payroll-advance/") || targetPath.startsWith("/payroll-adjustments/") || targetPath.startsWith("/bank-transactions/")))
-  || (role === "warehouse" && (targetPath.startsWith("/inventory/") || targetPath.startsWith("/fixed-assets/") || targetPath.startsWith("/meal-schedule/")));
+  || (role === "warehouse" && (targetPath.startsWith("/inventory/") || targetPath.startsWith("/fixed-assets/") || targetPath.startsWith("/meal-schedule/")))
+  || (role === "technologist" && /^\/meals\/\d+$/.test(targetPath));
 export const deletionRequestResponse = (request: typeof deletionRequestsTable.$inferSelect) => ({
   ...request,
   requestedAt: request.requestedAt.toISOString(),

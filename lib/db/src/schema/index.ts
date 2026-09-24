@@ -319,6 +319,24 @@ export const mealsTable = pgTable("meals", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
+/** Explicit approval queue for technologist name/category edits. */
+export const mealEditRequestsTable = pgTable("meal_edit_requests", {
+  id: serial("id").primaryKey(),
+  mealId: integer("meal_id").notNull().references(() => mealsTable.id, { onDelete: "cascade" }),
+  requesterId: integer("requester_id").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
+  previousName: text("previous_name").notNull(),
+  previousCategory: text("previous_category").notNull(),
+  proposedName: text("proposed_name").notNull(),
+  proposedCategory: text("proposed_category").notNull(),
+  status: text("status").notNull().default("pending"),
+  approvedBy: integer("approved_by").references(() => usersTable.id, { onDelete: "set null" }),
+  requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+}, (table) => [
+  check("meal_edit_requests_status_check", sql`${table.status} IN ('pending', 'approved', 'rejected')`),
+  uniqueIndex("meal_edit_requests_pending_meal_idx").on(table.mealId).where(sql`${table.status} = 'pending'`),
+]);
+
 export const mealIngredientsTable = pgTable("meal_ingredients", {
   id: serial("id").primaryKey(),
   mealId: integer("meal_id").notNull().references(() => mealsTable.id, { onDelete: "cascade" }),
@@ -510,3 +528,4 @@ export type InventoryMaterialRequestItem = typeof inventoryMaterialRequestItemsT
 export type FixedAsset = typeof fixedAssetsTable.$inferSelect;
 export type OperatingExpense = typeof operatingExpensesTable.$inferSelect;
 export type DeletionRequest = typeof deletionRequestsTable.$inferSelect;
+export type MealEditRequest = typeof mealEditRequestsTable.$inferSelect;
