@@ -1394,6 +1394,42 @@ export interface BankTransactionImportResult {
   transactionIds: number[];
 }
 
+/**
+ * @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$
+ */
+export type MealCountDate = string;
+
+export interface MealCount {
+  date: MealCountDate;
+  /** @minLength 1 */
+  mealType: string;
+  /** @minimum 0 */
+  count: number;
+  syncedAt: string;
+}
+
+export interface ReaderMealCountInput {
+  date: MealCountDate;
+  /** @minLength 1 */
+  mealType: string;
+  /** @minimum 0 */
+  count: number;
+}
+
+export interface ReaderMealCountsInput {
+  /**
+     * @minItems 1
+     * @maxItems 5000
+     */
+  records: ReaderMealCountInput[];
+}
+
+export interface ReaderMealCountsResult {
+  /** @minimum 1 */
+  received: number;
+  updatedAt: string;
+}
+
 export interface MealIngredient {
   id: number;
   inventoryItemId: number;
@@ -1928,6 +1964,10 @@ export const JournalStatusParameter = {
   void: 'void',
 } as const;
 
+export type MealCountsDateFromParameter = MealCountDate;
+
+export type MealCountsDateToParameter = MealCountDate;
+
 export type ListAttendanceParams = {
 date?: string;
 /**
@@ -1981,6 +2021,17 @@ export type ImportKapitronBankTransactionsParams = {
  * @minimum 1
  */
 bankAccountId: number;
+};
+
+export type ListMealCountsParams = {
+/**
+ * @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$
+ */
+dateFrom: MealCountsDateFromParameter;
+/**
+ * @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$
+ */
+dateTo: MealCountsDateToParameter;
 };
 
 export type ListMealScheduleParams = {

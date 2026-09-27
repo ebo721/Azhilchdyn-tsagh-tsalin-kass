@@ -383,6 +383,19 @@ export const mealScheduleEntriesTable = pgTable("meal_schedule_entries", {
   check("meal_schedule_entries_meal_check", sql`(${table.kind} = 'meal' AND ${table.mealId} IS NOT NULL) OR (${table.kind} = 'break' AND ${table.mealId} IS NULL)`),
 ]);
 
+export const mealCountsTable = pgTable("meal_counts", {
+  id: serial("id").primaryKey(),
+  date: date("date", { mode: "string" }).notNull(),
+  mealType: text("meal_type").notNull(),
+  normalizedMealType: text("normalized_meal_type").notNull(),
+  count: integer("count").notNull(),
+  syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("meal_counts_date_normalized_meal_type_idx").on(table.date, table.normalizedMealType),
+  check("meal_counts_count_check", sql`${table.count} >= 0`),
+  check("meal_counts_meal_type_check", sql`${table.mealType} <> '' AND ${table.normalizedMealType} <> ''`),
+]);
+
 export const inventoryPurchaseItemsTable = pgTable("inventory_purchase_items", {
   id: serial("id").primaryKey(),
   purchaseId: integer("purchase_id").notNull().references(() => inventoryPurchasesTable.id, { onDelete: "cascade" }),

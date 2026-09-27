@@ -1841,6 +1841,61 @@ export const MarkTransactionUnclearParams = zod.object({
 export const MarkTransactionUnclearResponse = zod.void()
 
 
+/**
+ * @summary List synchronized meal counts for a date range
+ */
+export const listMealCountsQueryDateFromRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const listMealCountsQueryDateToRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+export const ListMealCountsQueryParams = zod.object({
+  "dateFrom": zod.coerce.string().regex(listMealCountsQueryDateFromRegExp),
+  "dateTo": zod.coerce.string().regex(listMealCountsQueryDateToRegExp)
+})
+
+export const listMealCountsResponseDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+export const listMealCountsResponseCountMin = 0;
+
+
+
+export const ListMealCountsResponseItem = zod.object({
+  "date": zod.string().regex(listMealCountsResponseDateRegExp),
+  "mealType": zod.string().min(1),
+  "count": zod.number().int().min(listMealCountsResponseCountMin),
+  "syncedAt": zod.coerce.date()
+})
+export const ListMealCountsResponse = zod.array(ListMealCountsResponseItem)
+
+
+/**
+ * @summary Push absolute meal counts from a reader
+ */
+export const pushReaderMealCountsBodyRecordsItemDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+export const pushReaderMealCountsBodyRecordsItemCountMin = 0;
+
+export const pushReaderMealCountsBodyRecordsMax = 5000;
+
+
+
+export const PushReaderMealCountsBody = zod.object({
+  "records": zod.array(zod.object({
+  "date": zod.string().regex(pushReaderMealCountsBodyRecordsItemDateRegExp),
+  "mealType": zod.string().min(1),
+  "count": zod.number().int().min(pushReaderMealCountsBodyRecordsItemCountMin)
+})).min(1).max(pushReaderMealCountsBodyRecordsMax)
+})
+
+
+
+
+export const PushReaderMealCountsResponse = zod.object({
+  "received": zod.number().int().min(1),
+  "updatedAt": zod.coerce.date()
+})
+
+
 export const ListMealsResponseItem = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
