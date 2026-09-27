@@ -8,11 +8,6 @@
 
 export interface BankTransactionCashTransferInput {
   /**
-     * @minLength 1
-     * @maxLength 200
-     */
-  category: string;
-  /**
      * @nullable
      * @pattern ^\d{4}-(0[1-9]|1[0-2])$
      */

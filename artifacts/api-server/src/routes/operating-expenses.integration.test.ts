@@ -316,6 +316,7 @@ describe("operating expenses", () => {
         transactionAt: new Date("2099-05-20T10:00:00Z"),
         type: "expense",
         amount: 4500,
+        accountId: expenseAccountId,
         description: "шатахуун",
         fingerprint: `operating-future-${process.pid}`,
       }).returning({ id: bankTransactionsTable.id });
@@ -323,12 +324,13 @@ describe("operating expenses", () => {
       const transfer = await fetch(`${baseUrl}/api/bank-transactions/${futureBank.id}/transfer-to-cash`, {
         method: "POST",
         headers: { "content-type": "application/json", cookie: adminCookie },
-        body: JSON.stringify({ category: "Шатахуун", incomeMonth: null }),
+        body: JSON.stringify({ incomeMonth: null }),
       });
       assert.equal(transfer.status, 200);
       const [futureExpense] = await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.bankTransactionId, futureBank.id));
       assert.ok(futureExpense);
       assert.ok(futureExpense.cashTransactionId);
+      assert.equal(futureExpense.accountId, expenseAccountId);
       cashIds.push(futureExpense.cashTransactionId);
 
       const [linkBank] = await db.insert(bankTransactionsTable).values({
