@@ -784,12 +784,8 @@ router.post("/bank-transactions/import", raw({ type: "application/octet-stream",
 router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) => {
   try {
     const { id } = TransferBankTransactionToCashParams.parse(req.params);
-    const { category, incomeMonth } = TransferBankTransactionToCashBody.parse(req.body);
-    const managedPayrollSource = category === "Цалин" ? "payroll" : null;
+    const { incomeMonth } = TransferBankTransactionToCashBody.parse(req.body);
     const result = await db.transaction(async (tx) => {
-      if (managedPayrollSource) {
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
-      }
       const [bank] = await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id)).for("update");
       if (!bank) return null;
       if (bank.cashTransactionId !== null || bank.transferredAt !== null) {
@@ -803,6 +799,21 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
       }
       if (bank.journalEntryId !== null || bank.unclearAt !== null) return "resolved" as const;
       if (bank.type === "income" && incomeMonth === null) return "income_month_required" as const;
+      const [account] = bank.accountId === null ? [] : await tx.select().from(chartOfAccountsTable)
+        .where(eq(chartOfAccountsTable.id, bank.accountId));
+      if (!account?.isActive || (bank.type === "income"
+        ? account.type !== "revenue"
+        : account.type !== "expense" && !(account.type === "asset" && ["1500", "1510", "1800"].includes(account.code)))) {
+        return "account-required" as const;
+      }
+      const category = bank.type === "income" ? account.name
+        : account.code === "1500" ? "Бараа материал"
+        : account.code === "1510" ? "Хангамжийн материал"
+        : account.code === "1800" ? "Эд хөрөнгө"
+        : account.code === "6000" ? "Цалин"
+        : "Үйл ажиллагааны зардал";
+      const managedPayrollSource = bank.type === "expense" && account.code === "6000";
+      if (managedPayrollSource) await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
       const date = bank.transactionAt.toISOString().slice(0, 10);
       const [managedCash] = managedPayrollSource
         ? await tx.select({ id: cashTransactionsTable.id })
@@ -811,7 +822,7 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
             eq(cashTransactionsTable.type, bank.type),
             eq(cashTransactionsTable.amount, bank.amount),
             eq(cashTransactionsTable.date, date),
-            eq(cashTransactionsTable.sourceType, managedPayrollSource),
+            inArray(cashTransactionsTable.sourceType, ["payroll", "payroll_advance"]),
             isNull(cashTransactionsTable.bankTransactionId),
             isNull(cashTransactionsTable.unclearAt),
           ))
@@ -821,11 +832,10 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
       const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, date));
       if (closed) return "closed" as const;
       const verifiedAt = new Date();
-      const account = await cashAccountForCategory(tx, category);
       const [cash] = await tx.insert(cashTransactionsTable).values({
         type: bank.type,
         category,
-        accountId: account?.id ?? null,
+        accountId: account.id,
         description: bank.description,
         amount: bank.amount,
         date,
@@ -841,8 +851,7 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
         .where(and(eq(bankTransactionsTable.id, id), isNull(bankTransactionsTable.cashTransactionId), isNull(bankTransactionsTable.transferredAt)))
         .returning();
       if (!updated) throw new BankCashLinkConflictError();
-      const linkedCounter = await counterAccount(tx, cash.type, category, account);
-      const journalEntryId = await postBankCashJournal(tx, bank, cash, linkedCounter);
+      const journalEntryId = await postBankCashJournal(tx, bank, cash, account);
       await tx.update(cashTransactionsTable).set({ journalEntryId }).where(eq(cashTransactionsTable.id, cash.id));
       const [postedBank] = await tx.update(bankTransactionsTable)
         .set({ journalEntryId })
@@ -861,6 +870,10 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
     }
     if (result === "income_month_required") {
       res.status(400).json({ error: "Орлогын хамаарах сар шаардлагатай" });
+      return;
+    }
+    if (result === "account-required") {
+      res.status(400).json({ error: "Энэ банкны гүйлгээнд тохирох идэвхтэй GL данс онооно уу" });
       return;
     }
     if (result === "managed-cash-exists") {

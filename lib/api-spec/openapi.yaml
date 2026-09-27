@@ -2862,9 +2862,8 @@ components:
       items: { $ref: "#/components/schemas/UnclearTransaction" }
     BankTransactionCashTransferInput:
       type: object
-      required: [category, incomeMonth]
+      required: [incomeMonth]
       properties:
-        category: { type: string, minLength: 1, maxLength: 200 }
         incomeMonth: { type: ["string", "null"], pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
     BankTransactionCashLinkInput:
       type: object
