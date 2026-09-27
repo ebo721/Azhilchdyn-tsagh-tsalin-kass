@@ -13,6 +13,12 @@ Before any destructive production SQL, show the exact SQL, explain its impact an
 
 **How to apply:** Before pushing, verify dumps and backups are excluded from Git history. Validate development and Neon production separately, use reversible migrations, then push GitHub to trigger Vercel. Stop at a production migration gate until the user explicitly approves the displayed SQL.
 
+In this workspace, the connected GitHub integration can make repository API calls even when `git push` and `gh` have no usable authentication. If a review branch is published through the GitHub Git Trees/Commits/Refs API, its remote commit can differ from the equivalent local commit despite identical files.
+
+**Why:** Git's credential helper rejected a branch push, while the connected integration successfully created the review branch and pull request. Assuming the local branch tracks that remote commit would make later updates confusing.
+
+**How to apply:** Before extending a branch published via the API, compare the local and remote refs/trees and base the next remote commit on the actual remote head. Never ask for or expose the integration's token to work around Git authentication.
+
 If the checkout's HTTPS remote rejects its stored GitHub credential, use the connected GitHub integration to create one atomic commit with an expected-head guard instead of force-pushing or writing files as separate commits.
 
 **Why:** The workspace remote credential can be stale even when the GitHub integration is healthy; an expected-head atomic commit prevents overwriting concurrent changes or briefly deploying a partial update.
