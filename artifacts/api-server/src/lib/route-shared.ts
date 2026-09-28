@@ -1,7 +1,9 @@
+export * from "./payroll-calc-helpers.js";
 export * from "./chart-of-accounts-helpers.js";
 export * from "./date-utils.js";
 
-import { currentMonth, daysInMonth, money, nextMonth, previousMonth, today } from "./date-utils.js";
+import { getPayrollSchedule, monthlyIncomeTaxRelief, payrollPeriod, shiftDailyRate } from "./payroll-calc-helpers.js";
+import { daysInMonth, money, previousMonth } from "./date-utils.js";
 import { createServer } from "node:http";
 import express, { Router, type IRouter } from "express";
 import {
@@ -302,16 +304,6 @@ export const deletionRequestResponse = (request: typeof deletionRequestsTable.$i
   approvedAt: request.approvedAt?.toISOString() ?? null,
   completedAt: request.completedAt?.toISOString() ?? null,
 });
-export const monthlyIncomeTaxRelief = (socialInsuranceSalary: number) => {
-  if (socialInsuranceSalary <= 500_000) return 20_000;
-  if (socialInsuranceSalary <= 1_000_000) return 18_000;
-  if (socialInsuranceSalary <= 1_500_000) return 16_000;
-  if (socialInsuranceSalary <= 2_000_000) return 14_000;
-  if (socialInsuranceSalary <= 2_500_000) return 12_000;
-  if (socialInsuranceSalary <= 3_000_000) return 10_000;
-  return 0;
-};
-
 export function calendarDateText(value: string | Date) {
   return typeof value === "string" ? value : value.toISOString().slice(0, 10);
 }
@@ -324,43 +316,8 @@ export const defaultPayrollSchedule = {
   finalPayDay: 31,
 };
 
-export async function getPayrollSchedule(month = currentMonth()) {
-  let [row] = await db.select().from(payrollScheduleSettingsTable)
-    .where(lte(payrollScheduleSettingsTable.effectiveFromMonth, month))
-    .orderBy(desc(payrollScheduleSettingsTable.effectiveFromMonth))
-    .limit(1);
-  if (!row) {
-    [row] = await db.insert(payrollScheduleSettingsTable)
-      .values({ ...defaultPayrollSchedule, effectiveFromMonth: "0001-01" })
-      .onConflictDoNothing({ target: payrollScheduleSettingsTable.effectiveFromMonth })
-      .returning();
-    if (!row) {
-      [row] = await db.select().from(payrollScheduleSettingsTable)
-        .where(eq(payrollScheduleSettingsTable.effectiveFromMonth, "0001-01")).limit(1);
-    }
-  }
-  return row;
-}
-
 export function scheduleDate(month: string, day: number) {
   return `${month}-${String(Math.min(day, daysInMonth(month))).padStart(2, "0")}`;
-}
-
-export function payrollPeriod(month: string, schedule: typeof defaultPayrollSchedule) {
-  const startMonth = schedule.periodStartDay > schedule.periodEndDay ? previousMonth(month) : month;
-  const finalPaymentMonth = schedule.finalPayDay < schedule.advancePayDay ? nextMonth(month) : month;
-  const periodStart = scheduleDate(startMonth, schedule.periodStartDay);
-  const periodEnd = scheduleDate(month, schedule.periodEndDay);
-  const advancePeriodEnd = schedule.advanceCutoffDay >= schedule.periodStartDay
-    ? scheduleDate(startMonth, schedule.advanceCutoffDay)
-    : scheduleDate(month, schedule.advanceCutoffDay);
-  return {
-    periodStart,
-    advancePeriodEnd,
-    periodEnd,
-    advancePaymentDate: scheduleDate(month, schedule.advancePayDay),
-    finalPaymentDate: scheduleDate(finalPaymentMonth, schedule.finalPayDay),
-  };
 }
 
 export function selectPayrollScheduleVersion<T extends { effectiveFromMonth: string }>(
@@ -379,12 +336,6 @@ export function scheduleVersionAffectsMonth(
 ) {
   return month >= effectiveFromMonth
     && (!nextEffectiveFromMonth || month < nextEffectiveFromMonth);
-}
-
-export function shiftDailyRate(salary: Pick<SalaryHistoryRow, "salaryType" | "baseSalary" | "monthlyExpectedWorkDays">) {
-  return salary.salaryType === "monthly"
-    ? Number(salary.baseSalary) / Math.max(1, salary.monthlyExpectedWorkDays)
-    : Number(salary.baseSalary);
 }
 
 export function weekdayDatesBetween(start: string, end: string) {
