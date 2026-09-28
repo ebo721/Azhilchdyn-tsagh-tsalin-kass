@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { after, before, describe, it } from "node:test";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
@@ -86,6 +87,50 @@ describe("fixed asset journal posting", () => {
     assert.ok(cash);
     return cash;
   }
+
+  it("preserves viewer read-only and warehouse write access to fixed assets", async () => {
+    const username = `fixed-asset-access-${randomUUID()}`;
+    const [viewer, warehouse] = await db.insert(usersTable).values([
+      { username: `${username}-viewer`, normalizedUsername: `${username}-viewer`, role: "viewer", passwordHash: "not-used" },
+      { username: `${username}-warehouse`, normalizedUsername: `${username}-warehouse`, role: "warehouse", passwordHash: "not-used" },
+    ]).returning();
+    try {
+      const viewerCookie = `${hrCookie.name}=${createStaffSession(viewer)}`;
+      const warehouseCookie = `${hrCookie.name}=${createStaffSession(warehouse)}`;
+      const list = await fetch(`${baseUrl}/api/fixed-assets`, { headers: { cookie: viewerCookie } });
+      assert.equal(list.status, 200);
+      const denied = await fetch(`${baseUrl}/api/fixed-assets`, {
+        method: "POST",
+        headers: { cookie: viewerCookie, "content-type": "application/json" },
+        body: JSON.stringify({ name: "Denied asset", unitPrice: 1, quantity: 1, date: "2098-01-15", purchased: false }),
+      });
+      assert.equal(denied.status, 403);
+
+      const created = await fetch(`${baseUrl}/api/fixed-assets`, {
+        method: "POST",
+        headers: { cookie: warehouseCookie, "content-type": "application/json" },
+        body: JSON.stringify({ name: "Warehouse asset", unitPrice: 1, quantity: 1, date: "2098-01-15", purchased: false }),
+      });
+      assert.equal(created.status, 201);
+      const { id } = await created.json() as { id: number };
+      assetIds.push(id);
+      const updated = await fetch(`${baseUrl}/api/fixed-assets/${id}`, {
+        method: "PUT",
+        headers: { cookie: warehouseCookie, "content-type": "application/json" },
+        body: JSON.stringify({ name: "Updated warehouse asset", unitPrice: 1, quantity: 1, date: "2098-01-15", purchased: false }),
+      });
+      assert.equal(updated.status, 200);
+      const deniedDelete = await fetch(`${baseUrl}/api/fixed-assets/${id}`, {
+        method: "DELETE",
+        headers: { cookie: warehouseCookie },
+      });
+      assert.equal(deniedDelete.status, 403);
+      const deleted = await request(`/fixed-assets/${id}`, { method: "DELETE" });
+      assert.equal(deleted.status, 204);
+    } finally {
+      await db.delete(usersTable).where(inArray(usersTable.id, [viewer.id, warehouse.id]));
+    }
+  });
 
   it("posts a purchased asset with linked balanced journal", async () => {
     const id = await create(true);
