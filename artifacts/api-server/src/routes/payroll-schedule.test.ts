@@ -5,7 +5,7 @@ import {
   scheduleVersionAffectsMonth,
   selectPayrollScheduleVersion,
   shiftDailyRate,
-} from "./operations.js";
+} from "../lib/payroll-calc.js";
 
 const defaults = {
   periodStartDay: 1,
