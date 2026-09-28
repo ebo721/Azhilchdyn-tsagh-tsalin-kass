@@ -1408,7 +1408,12 @@ export interface MealCount {
   syncedAt: string;
 }
 
-export interface ReaderMealCountInput {
+export interface MealCountsImportInput {
+  dateFrom: MealCountDate;
+  dateTo: MealCountDate;
+}
+
+export interface ReaderMealCount {
   date: MealCountDate;
   /** @minLength 1 */
   mealType: string;
@@ -1416,16 +1421,13 @@ export interface ReaderMealCountInput {
   count: number;
 }
 
-export interface ReaderMealCountsInput {
-  /**
-     * @minItems 1
-     * @maxItems 5000
-     */
-  records: ReaderMealCountInput[];
+export interface ReaderMealCountsExport {
+  /** @maxItems 5000 */
+  records: ReaderMealCount[];
 }
 
-export interface ReaderMealCountsResult {
-  /** @minimum 1 */
+export interface MealCountsImportResult {
+  /** @minimum 0 */
   received: number;
   updatedAt: string;
 }

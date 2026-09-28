@@ -1183,30 +1183,33 @@ paths:
                 items: { $ref: "#/components/schemas/MealCount" }
         "400":
           $ref: "#/components/responses/BadRequest"
-  /reader/meal-counts:
+  /meal-counts/import:
     post:
-      operationId: pushReaderMealCounts
+      operationId: importMealCounts
       tags: [meals]
-      summary: Push absolute meal counts from a reader
-      security:
-        - ReaderBearerAuth: []
+      summary: Manually import Reader meal counts for a date range
+      description: Staff-session authenticated. Only admins and warehouse staff may import. Dates are inclusive and must be real calendar dates spanning no more than 366 days. The server fetches absolute totals from the configured Reader endpoint; repeated imports replace matching date/meal-type values.
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/ReaderMealCountsInput" }
+            schema: { $ref: "#/components/schemas/MealCountsImportInput" }
       responses:
         "200":
-          description: Meal counts received
+          description: Reader meal counts imported as absolute values
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ReaderMealCountsResult" }
+              schema: { $ref: "#/components/schemas/MealCountsImportResult" }
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
-          description: Invalid reader token
+          description: Staff authentication required
+        "403":
+          description: Only admins and warehouse staff may import
         "503":
-          description: Reader push authentication is not configured
+          description: Reader integration is not configured
+        "502":
+          description: Reader request failed or returned an invalid payload
   /meals:
     get:
       operationId: listMeals
@@ -2232,10 +2235,6 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/JournalTrialBalance" }
 components:
-  securitySchemes:
-    ReaderBearerAuth:
-      type: http
-      scheme: bearer
   parameters:
     Id:
       in: path
@@ -3156,27 +3155,32 @@ components:
         mealType: { type: string, minLength: 1 }
         count: { type: integer, minimum: 0 }
         syncedAt: { type: string, format: date-time }
-    ReaderMealCountInput:
+    MealCountsImportInput:
+      type: object
+      required: [dateFrom, dateTo]
+      properties:
+        dateFrom: { $ref: "#/components/schemas/MealCountDate" }
+        dateTo: { $ref: "#/components/schemas/MealCountDate" }
+    ReaderMealCount:
       type: object
       required: [date, mealType, count]
       properties:
         date: { $ref: "#/components/schemas/MealCountDate" }
         mealType: { type: string, minLength: 1 }
         count: { type: integer, minimum: 0 }
-    ReaderMealCountsInput:
+    ReaderMealCountsExport:
       type: object
       required: [records]
       properties:
         records:
           type: array
-          minItems: 1
           maxItems: 5000
-          items: { $ref: "#/components/schemas/ReaderMealCountInput" }
-    ReaderMealCountsResult:
+          items: { $ref: "#/components/schemas/ReaderMealCount" }
+    MealCountsImportResult:
       type: object
       required: [received, updatedAt]
       properties:
-        received: { type: integer, minimum: 1 }
+        received: { type: integer, minimum: 0 }
         updatedAt: { type: string, format: date-time }
     MealIngredient:
       type: object

@@ -1,15 +1,19 @@
 import { useMemo, useState, type FormEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { format, startOfMonth } from 'date-fns';
 import {
   ArrowDownRight,
   CalendarDays,
   Clock3,
+  Download,
   RefreshCw,
   Search,
   UtensilsCrossed,
 } from 'lucide-react';
 import {
   getListMealCountsQueryKey,
+  useGetAuthSession,
+  useImportMealCounts,
   useListMealCounts,
   type MealCount,
 } from '@workspace/api-client-react';
@@ -27,6 +31,20 @@ function isValidDate(value: string) {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
+function validateInterval(dateFrom: string, dateTo: string) {
+  if (!isValidDate(dateFrom) || !isValidDate(dateTo)) {
+    return 'Эхлэх болон дуусах өдрийг зөв оруулна уу.';
+  }
+  if (dateFrom > dateTo) {
+    return 'Эхлэх өдөр дуусах өдрөөс хойш байж болохгүй.';
+  }
+  const daysInclusive = (Date.parse(`${dateTo}T12:00:00Z`) - Date.parse(`${dateFrom}T12:00:00Z`)) / 86_400_000 + 1;
+  if (daysInclusive > 366) {
+    return 'Нэг удаад 366 хүртэл хоногийн мэдээлэл сонгох боломжтой.';
+  }
+  return '';
+}
+
 function displayDate(value: string) {
   if (!isValidDate(value)) return value;
   return format(new Date(`${value}T12:00:00`), 'yyyy.MM.dd');
@@ -38,6 +56,10 @@ function displaySync(value: string) {
 }
 
 export function MealCounts() {
+  const queryClient = useQueryClient();
+  const session = useGetAuthSession();
+  const canImport = session.data?.role === 'admin' || session.data?.role === 'warehouse';
+  const importCounts = useImportMealCounts();
   const [initialInterval] = useState<Interval>(() => {
     const today = new Date();
     return {
@@ -49,6 +71,7 @@ export function MealCounts() {
   const [dateTo, setDateTo] = useState(initialInterval.dateTo);
   const [applied, setApplied] = useState<Interval>(initialInterval);
   const [validation, setValidation] = useState('');
+  const [importFeedback, setImportFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
   const [search, setSearch] = useState('');
   const [mealType, setMealType] = useState('');
 
@@ -87,19 +110,10 @@ export function MealCounts() {
 
   function applyInterval(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!isValidDate(dateFrom) || !isValidDate(dateTo)) {
-      setValidation('Эхлэх болон дуусах өдрийг зөв оруулна уу.');
-      return;
-    }
-    if (dateFrom > dateTo) {
-      setValidation('Эхлэх өдөр дуусах өдрөөс хойш байж болохгүй.');
-      return;
-    }
-    if ((Date.parse(`${dateTo}T12:00:00Z`) - Date.parse(`${dateFrom}T12:00:00Z`)) / 86_400_000 >= 366) {
-      setValidation('Нэг удаад 366 хүртэл хоногийн мэдээлэл харах боломжтой.');
-      return;
-    }
+    const error = validateInterval(dateFrom, dateTo);
+    if (error) { setValidation(error); return; }
     setValidation('');
+    setImportFeedback(null);
     if (dateFrom === applied.dateFrom && dateTo === applied.dateTo) {
       void query.refetch();
     } else {
@@ -108,12 +122,38 @@ export function MealCounts() {
     }
   }
 
+  function pullFromReader() {
+    if (!canImport || importCounts.isPending) return;
+    const error = validateInterval(dateFrom, dateTo);
+    if (error) { setValidation(error); setImportFeedback(null); return; }
+    const interval = { dateFrom, dateTo };
+    setValidation('');
+    setImportFeedback(null);
+    importCounts.mutate({ data: interval }, {
+      onSuccess: (result) => {
+        setApplied(interval);
+        setMealType('');
+        void queryClient.invalidateQueries({ queryKey: getListMealCountsQueryKey(interval), exact: true });
+        setImportFeedback({
+          kind: 'success',
+          message: `Reader-ээс ${numberFormat.format(result.received)} мөр хүлээн авлаа. ${displayDate(interval.dateFrom)} — ${displayDate(interval.dateTo)} хугацааны бүртгэлийг шинэчилж байна.`,
+        });
+      },
+      onError: () => {
+        setImportFeedback({
+          kind: 'error',
+          message: 'Reader-ээс мэдээлэл татаж чадсангүй. Reader-ийн тохиргоо, холболт болон хандах эрхийг шалгаад дахин оролдоно уу. Бүртгэл шинэчлэгдээгүй.',
+        });
+      },
+    });
+  }
+
   return (
     <div className="page-enter space-y-6 pb-8" data-testid="page-meal-counts">
       <PageHeading
-        eyebrow="Reader · Синк"
+        eyebrow="Reader · Хоолны бүртгэл"
         title="Хоолны тоо"
-        detail="Reader-ээс илгээсэн хоолны тоог өдрөөр болон хоолны төрлөөр харах хэсэг."
+        detail="Хадгалсан хоолны тоог өдрөөр болон төрлөөр харна. Reader-ээс мэдээлэл зөвхөн эрх бүхий ажилтан товч дарсан үед татагдана."
         action={
           <Button
             type="button"
@@ -134,7 +174,7 @@ export function MealCounts() {
             <CalendarDays className="size-4 text-primary" aria-hidden="true" />
             Хугацаа сонгох
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">Огноогоо тохируулаад “Харах” товчийг дарна уу.</p>
+           <p className="mt-1 text-xs text-muted-foreground">Хугацаагаа сонгоод хадгалсан бүртгэлийг харах эсвэл Reader-ээс гараар татах боломжтой. Дээд тал нь 366 хоног.</p>
         </div>
         <form onSubmit={applyInterval} noValidate className="flex flex-col gap-4 p-5 sm:flex-row sm:items-end sm:p-6">
           <div className="min-w-0 flex-1">
@@ -143,7 +183,8 @@ export function MealCounts() {
               id="meal-count-date-from"
               type="date"
               value={dateFrom}
-              onChange={(event) => { setDateFrom(event.target.value); setValidation(''); }}
+              onChange={(event) => { setDateFrom(event.target.value); setValidation(''); setImportFeedback(null); }}
+              disabled={importCounts.isPending}
               aria-invalid={Boolean(validation)}
               aria-describedby={validation ? 'meal-count-date-error' : undefined}
               data-testid="input-meal-count-date-from"
@@ -155,20 +196,34 @@ export function MealCounts() {
               id="meal-count-date-to"
               type="date"
               value={dateTo}
-              onChange={(event) => { setDateTo(event.target.value); setValidation(''); }}
+              onChange={(event) => { setDateTo(event.target.value); setValidation(''); setImportFeedback(null); }}
+              disabled={importCounts.isPending}
               aria-invalid={Boolean(validation)}
               aria-describedby={validation ? 'meal-count-date-error' : undefined}
               data-testid="input-meal-count-date-to"
             />
           </div>
-          <Button type="submit" className="w-full sm:w-auto sm:min-w-32" data-testid="button-apply-meal-count-dates">
-            Харах <ArrowDownRight className="ml-2 size-4" aria-hidden="true" />
-          </Button>
+           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+             <Button type="submit" variant="outline" disabled={importCounts.isPending} className="w-full sm:w-auto sm:min-w-28" data-testid="button-apply-meal-count-dates">
+               Харах <ArrowDownRight className="ml-2 size-4" aria-hidden="true" />
+             </Button>
+             {canImport && (
+               <Button type="button" onClick={pullFromReader} disabled={importCounts.isPending} className="w-full sm:w-auto sm:min-w-40" data-testid="button-import-meal-counts">
+                 <Download className="mr-2 size-4" aria-hidden="true" />
+                 {importCounts.isPending ? 'Татаж байна…' : 'Reader-ээс татах'}
+               </Button>
+             )}
+           </div>
         </form>
         {validation && <p id="meal-count-date-error" role="alert" className="px-5 pb-5 text-sm font-medium text-destructive sm:px-6" data-testid="status-meal-count-date-error">{validation}</p>}
+         {importFeedback && (
+           <div role={importFeedback.kind === 'error' ? 'alert' : 'status'} aria-live="polite" className={`mx-5 mb-5 rounded-xl border px-4 py-3 text-sm font-medium sm:mx-6 ${importFeedback.kind === 'error' ? 'border-destructive/30 bg-destructive/5 text-destructive' : 'border-primary/25 bg-primary/5 text-foreground'}`} data-testid={`status-meal-count-import-${importFeedback.kind}`}>
+             {importFeedback.message}
+           </div>
+         )}
         {intervalChanged && !validation && (
           <p className="px-5 pb-5 text-xs text-muted-foreground sm:px-6" data-testid="status-meal-count-unapplied">
-            Огноо өөрчлөгдсөн байна. Шинэ хугацааг харахын тулд “Харах” товчийг дарна уу.
+             Огноо өөрчлөгдсөн байна. “Харах” нь хадгалсан бүртгэлийг харуулна{canImport ? ', “Reader-ээс татах” нь сонгосон хугацааны мэдээллийг гараар татна' : ''}.
           </p>
         )}
       </section>
@@ -179,7 +234,7 @@ export function MealCounts() {
         </p>
         <span className="inline-flex items-center gap-1.5" data-testid="status-meal-count-sync">
           <span className={`size-1.5 rounded-full ${query.isFetching ? 'bg-accent' : 'bg-primary'}`} />
-          {query.isFetching ? 'Мэдээлэл шинэчилж байна' : latestSync ? `Сүүлд синк хийсэн: ${displaySync(new Date(latestSync).toISOString())}` : 'Reader-ийн мэдээлэл хүлээж байна'}
+           {query.isFetching ? 'Жагсаалт шинэчилж байна' : latestSync ? `Сүүлд татсан бүртгэл: ${displaySync(new Date(latestSync).toISOString())}` : 'Энэ хугацаанд хадгалсан бүртгэл алга'}
         </span>
       </div>
 
@@ -253,7 +308,9 @@ export function MealCounts() {
                 title={filtersActive ? 'Илэрц олдсонгүй' : 'Одоогоор бүртгэл алга'}
                 detail={filtersActive
                   ? 'Хайлтын үг эсвэл хоолны төрлийн шүүлтүүрээ өөрчилж үзнэ үү.'
-                  : 'Энэ хугацаанд Reader-ээс хоолны тоо ирээгүй байна. Дараа нь шинэчлэх товчийг дарж шалгана уу.'}
+                   : canImport
+                     ? 'Энэ хугацаанд хадгалсан бүртгэл алга. Огноогоо шалгаад Reader-ээс татах товчийг дарна уу.'
+                     : 'Энэ хугацаанд хадгалсан бүртгэл алга. Эрх бүхий ажилтнаас Reader-ийн мэдээллийг татахыг хүснэ үү.'}
                 icon={UtensilsCrossed}
               />
             ) : (

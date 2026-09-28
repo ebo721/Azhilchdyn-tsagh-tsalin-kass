@@ -160,6 +160,14 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
     res.status(401).json({ error: "Нэвтрэх шаардлагатай" });
     return;
   }
+  if (req.method === "POST" && req.path === "/meal-counts/import") {
+    if (session.role === "admin" || session.role === "warehouse") {
+      next();
+      return;
+    }
+    res.status(403).json({ error: "Зөвхөн админ эсвэл агуулахын ажилтан импорт хийнэ" });
+    return;
+  }
   // Meal technologists have a deliberately narrow meal workflow surface.
   // Keep this before deletion-request and other method-specific exceptions.
   if (session.role === "technologist") {

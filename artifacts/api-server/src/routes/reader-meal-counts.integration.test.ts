@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { createServer } from "node:http";
 import { after, before, describe, it } from "node:test";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
@@ -8,123 +9,213 @@ import { eq, inArray } from "drizzle-orm";
 import { db, mealCountsTable, usersTable } from "@workspace/db";
 import { createStaffSession, hrCookie } from "../lib/hr-session.js";
 import requireStaffAuth from "../middlewares/require-staff-auth.js";
-import { readerMealCountsPushRouter, readerMealCountsStaffRouter } from "./reader-meal-counts.js";
+import { readerMealCountsStaffRouter } from "./reader-meal-counts.js";
 
-describe("reader meal-count push and staff read", () => {
-  let server: Server;
-  let baseUrl: string;
-  let staffCookie: string;
-  let userId: number;
+describe("manual Reader meal-count import", () => {
+  let apiServer: Server;
+  let readerServer: Server;
+  let apiUrl: string;
+  let readerUrl: string;
+  let adminCookie: string;
+  let warehouseCookie: string;
+  let viewerCookie: string;
+  let technologistCookie: string;
+  let hrCookieValue: string;
+  let accountantCookie: string;
   let readerToken: string;
-  let tokenBefore: string | undefined;
+  let payload: unknown;
+  let upstreamStatus = 200;
+  let forwardedAuthorization = "";
+  let forwardedAccept = "";
+  let forwardedQuery = "";
+  const userIds: number[] = [];
   const suffix = randomUUID();
-  const normalizedTypes = [`Morning ${suffix}`, `Midday ${suffix}`, `Evening ${suffix}`];
-  const date = "2098-06-10";
+  const mealTypes = [`Morning ${suffix}`, `Midday ${suffix}`, `Evening ${suffix}`, `Partial ${suffix}`];
+  const dateFrom = "2098-06-10";
+  const dateTo = "2098-06-11";
+  const envBefore: Record<string, string | undefined> = {};
+  const envKeys = ["NODE_ENV", "SESSION_SECRET", "READER_MEAL_EXPORT_URL", "READER_MEAL_READ_TOKEN"];
 
   before(async () => {
+    for (const key of envKeys) envBefore[key] = process.env[key];
+    process.env.NODE_ENV = "test";
     process.env.SESSION_SECRET = "reader-meal-counts-test-session-secret";
-    tokenBefore = process.env.READER_MEAL_PUSH_TOKEN;
     readerToken = `reader-meal-test-${suffix}`;
-    process.env.READER_MEAL_PUSH_TOKEN = readerToken;
-    const [user] = await db.insert(usersTable).values({
-      username: `reader-meal-${suffix}`,
-      normalizedUsername: `reader-meal-${suffix}`,
-      role: "admin",
+
+    const roles = ["admin", "warehouse", "viewer", "technologist", "hr", "accountant"] as const;
+    const users = await db.insert(usersTable).values(roles.map((role) => ({
+      username: `meal-import-${role}-${suffix}`,
+      normalizedUsername: `meal-import-${role}-${suffix}`,
+      role,
       passwordHash: "not-used",
-    }).returning({
+    }))).returning({
       id: usersTable.id,
       username: usersTable.username,
       role: usersTable.role,
       tokenVersion: usersTable.tokenVersion,
     });
-    userId = user.id;
-    staffCookie = `${hrCookie.name}=${createStaffSession(user)}`;
+    userIds.push(...users.map((user) => user.id));
+    const cookieForRole = (role: string) => {
+      const user = users.find((entry) => entry.role === role);
+      assert.ok(user);
+      return `${hrCookie.name}=${createStaffSession(user)}`;
+    };
+    adminCookie = cookieForRole("admin");
+    warehouseCookie = cookieForRole("warehouse");
+    viewerCookie = cookieForRole("viewer");
+    technologistCookie = cookieForRole("technologist");
+    hrCookieValue = cookieForRole("hr");
+    accountantCookie = cookieForRole("accountant");
+
+    readerServer = await new Promise<Server>((resolve) => {
+      const server = createServer((req, res) => {
+        forwardedAuthorization = req.headers.authorization ?? "";
+        forwardedAccept = req.headers.accept ?? "";
+        forwardedQuery = req.url ?? "";
+        res.statusCode = upstreamStatus;
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify(payload));
+      });
+      server.listen(0, "127.0.0.1", () => resolve(server));
+    });
+    readerUrl = `http://127.0.0.1:${(readerServer.address() as AddressInfo).port}/export`;
+    process.env.READER_MEAL_EXPORT_URL = readerUrl;
+    process.env.READER_MEAL_READ_TOKEN = readerToken;
 
     const app = express();
     app.use(express.json());
-    app.use("/api", readerMealCountsPushRouter);
     app.use("/api", requireStaffAuth, readerMealCountsStaffRouter);
-    server = app.listen(0);
-    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    apiServer = app.listen(0, "127.0.0.1");
+    await new Promise<void>((resolve) => apiServer.once("listening", resolve));
+    apiUrl = `http://127.0.0.1:${(apiServer.address() as AddressInfo).port}/api`;
   });
 
   after(async () => {
-    server?.close();
+    await Promise.all([apiServer, readerServer].map((server) => new Promise<void>((resolve) => server?.close(() => resolve()))));
     await db.delete(mealCountsTable).where(inArray(
       mealCountsTable.normalizedMealType,
-      normalizedTypes.map((type) => type.toLocaleLowerCase("mn-MN")),
+      mealTypes.map((type) => type.toLocaleLowerCase("mn-MN")),
     ));
-    if (userId) await db.delete(usersTable).where(eq(usersTable.id, userId));
-    if (tokenBefore === undefined) delete process.env.READER_MEAL_PUSH_TOKEN;
-    else process.env.READER_MEAL_PUSH_TOKEN = tokenBefore;
+    if (userIds.length) await db.delete(usersTable).where(inArray(usersTable.id, userIds));
+    for (const key of envKeys) {
+      const value = envBefore[key];
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
   });
 
-  async function push(body: unknown, token = readerToken) {
-    return fetch(`${baseUrl}/api/reader/meal-counts`, {
+  async function importCounts(
+    dateRange: { dateFrom: string; dateTo: string } = { dateFrom, dateTo },
+    cookie = adminCookie,
+  ) {
+    return fetch(`${apiUrl}/meal-counts/import`, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(body),
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify(dateRange),
     });
   }
 
-  it("authenticates, validates and idempotently upserts absolute counts without deleting other types", async () => {
-    delete process.env.READER_MEAL_PUSH_TOKEN;
-    assert.equal((await push({ records: [] })).status, 503);
-    process.env.READER_MEAL_PUSH_TOKEN = readerToken;
-    assert.equal((await push({ records: [] }, "wrong-token")).status, 401);
-    assert.equal((await fetch(`${baseUrl}/api/reader/meal-counts`, {
+  async function readCounts() {
+    const result = await db.select({
+      date: mealCountsTable.date,
+      mealType: mealCountsTable.mealType,
+      count: mealCountsTable.count,
+    }).from(mealCountsTable).where(inArray(
+      mealCountsTable.normalizedMealType,
+      mealTypes.map((type) => type.toLocaleLowerCase("mn-MN")),
+    ));
+    return result;
+  }
+
+  it("validates ranges and roles, then fetches and atomically upserts absolute Reader totals", async () => {
+    const request = { dateFrom, dateTo };
+    delete process.env.READER_MEAL_EXPORT_URL;
+    assert.equal((await importCounts(request)).status, 503);
+    process.env.READER_MEAL_EXPORT_URL = readerUrl;
+    delete process.env.READER_MEAL_READ_TOKEN;
+    assert.equal((await importCounts(request)).status, 503);
+    process.env.READER_MEAL_READ_TOKEN = readerToken;
+
+    for (const cookie of [viewerCookie, technologistCookie, hrCookieValue, accountantCookie]) {
+      assert.equal((await importCounts(request, cookie)).status, 403);
+    }
+    for (const cookie of [hrCookieValue, accountantCookie]) {
+      assert.equal((await fetch(`${apiUrl}/meal-counts/import/`, {
+        method: "POST",
+        headers: { cookie, "content-type": "application/json" },
+        body: JSON.stringify(request),
+      })).status, 403);
+    }
+    assert.equal((await fetch(`${apiUrl}/meal-counts/import`, {
       method: "POST",
-      headers: { cookie: staffCookie, "content-type": "application/json" },
-      body: JSON.stringify({ records: [{ date, mealType: normalizedTypes[0], count: 1 }] }),
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(request),
     })).status, 401);
-    assert.equal((await push({ records: [{ date: "2098-02-30", mealType: normalizedTypes[0], count: 1 }] })).status, 400);
-    assert.equal((await push({ records: [
-      { date, mealType: `  Morning   ${suffix} `, count: 1 },
-      { date, mealType: normalizedTypes[0].toLocaleLowerCase("mn-MN"), count: 2 },
-    ] })).status, 400);
+
+    assert.equal((await importCounts({ dateFrom: "2098-02-30", dateTo })).status, 400);
+    assert.equal((await importCounts({ dateFrom: "2098-06-12", dateTo })).status, 400);
+    assert.equal((await importCounts({ dateFrom: "2098-01-01", dateTo: "2099-01-02" })).status, 400);
+    payload = { records: [] };
+    assert.equal((await importCounts({ dateFrom: "2098-01-01", dateTo: "2099-01-01" })).status, 200);
 
     const records = [
-      { date, mealType: normalizedTypes[0], count: 4 },
-      { date, mealType: normalizedTypes[1], count: 9 },
-      { date: "2098-06-11", mealType: normalizedTypes[2], count: 2 },
+      { date: dateFrom, mealType: mealTypes[0], count: 4 },
+      { date: dateFrom, mealType: mealTypes[1], count: 9 },
+      { date: dateTo, mealType: mealTypes[2], count: 2 },
     ];
-    const first = await push({ records });
+    payload = { records };
+    upstreamStatus = 200;
+    const first = await importCounts(request, warehouseCookie);
     assert.equal(first.status, 200);
     const firstResult = await first.json() as { received: number; updatedAt: string };
     assert.equal(firstResult.received, records.length);
     assert.ok(Number.isFinite(Date.parse(firstResult.updatedAt)));
+    assert.equal(forwardedAuthorization, `Bearer ${readerToken}`);
+    assert.equal(forwardedAccept, "application/json");
+    assert.equal(forwardedQuery, `/export?dateFrom=${dateFrom}&dateTo=${dateTo}`);
+    assert.deepEqual((await readCounts()).map(({ date, mealType, count }) => [date, mealType, count]), [
+      [dateFrom, mealTypes[0], 4],
+      [dateFrom, mealTypes[1], 9],
+      [dateTo, mealTypes[2], 2],
+    ]);
 
-    const replay = await push({ records });
+    const replay = await importCounts(request);
     assert.equal(replay.status, 200);
     assert.equal((await replay.json() as { received: number }).received, records.length);
+    assert.equal((await readCounts()).length, records.length);
 
-    const correction = await push({ records: [{ ...records[0], count: 6 }] });
-    assert.equal(correction.status, 200);
+    payload = { records: [{ ...records[0], count: 6 }] };
+    assert.equal((await importCounts(request)).status, 200);
+    assert.deepEqual((await readCounts()).find((row) => row.mealType === mealTypes[0])?.count, 6);
 
-    assert.equal((await fetch(`${baseUrl}/api/meal-counts?dateFrom=2098-02-30&dateTo=2098-06-11`, {
-      headers: { cookie: staffCookie },
-    })).status, 400);
-    assert.equal((await fetch(`${baseUrl}/api/meal-counts?dateFrom=2098-01-01&dateTo=2099-01-02`, {
-      headers: { cookie: staffCookie },
-    })).status, 400);
-    assert.equal((await fetch(`${baseUrl}/api/meal-counts?dateFrom=${date}&dateTo=2098-06-11`)).status, 401);
-    assert.equal((await fetch(`${baseUrl}/api/meal-counts?dateFrom=${date}&dateTo=2098-06-11`, {
-      headers: { authorization: `Bearer ${readerToken}` },
-    })).status, 401);
+    payload = { records: [] };
+    const empty = await importCounts(request);
+    assert.equal(empty.status, 200);
+    assert.equal((await empty.json() as { received: number }).received, 0);
 
-    const response = await fetch(`${baseUrl}/api/meal-counts?dateFrom=${date}&dateTo=2098-06-11`, {
-      headers: { cookie: staffCookie },
-    });
-    assert.equal(response.status, 200);
-    const rows = await response.json() as Array<{ date: string; mealType: string; count: number; syncedAt: string }>;
-    assert.deepEqual(rows.map(({ date: rowDate, mealType, count }) => [rowDate, mealType, count]), [
-      ["2098-06-11", normalizedTypes[2], 2],
-      [date, normalizedTypes[1], 9],
-      [date, normalizedTypes[0], 6],
-    ]);
-    assert.ok(rows.every((row) => Number.isFinite(Date.parse(row.syncedAt))));
+    payload = { records: [
+      { date: dateFrom, mealType: mealTypes[3], count: 1 },
+      { date: "2098-06-12", mealType: mealTypes[1], count: 2 },
+    ] };
+    const invalid = await importCounts(request);
+    assert.equal(invalid.status, 502);
+    assert.equal((await readCounts()).some((row) => row.mealType === mealTypes[3]), false);
+
+    payload = { records: [
+      { date: dateFrom, mealType: ` ${mealTypes[0]} `, count: 1 },
+      { date: dateFrom, mealType: mealTypes[0].toLocaleLowerCase("mn-MN"), count: 2 },
+    ] };
+    assert.equal((await importCounts(request)).status, 502);
+    assert.equal((await readCounts()).find((row) => row.mealType === mealTypes[0])?.count, 6);
+
+    payload = { records: [{ date: dateFrom, mealType: mealTypes[3], count: -1 }] };
+    assert.equal((await importCounts(request)).status, 502);
+    upstreamStatus = 502;
+    payload = "upstream secret content";
+    const upstreamFailure = await importCounts(request);
+    assert.equal(upstreamFailure.status, 502);
+    assert.doesNotMatch(await upstreamFailure.text(), /secret|reader-meal-test/);
+    assert.equal((await readCounts()).some((row) => row.mealType === mealTypes[3]), false);
+    upstreamStatus = 200;
   });
 });

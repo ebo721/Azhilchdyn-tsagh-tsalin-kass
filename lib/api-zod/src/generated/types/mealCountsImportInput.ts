@@ -7,10 +7,7 @@
  */
 import type { MealCountDate } from './mealCountDate';
 
-export interface ReaderMealCountInput {
-  date: MealCountDate;
-  /** @minLength 1 */
-  mealType: string;
-  /** @minimum 0 */
-  count: number;
+export interface MealCountsImportInput {
+  dateFrom: MealCountDate;
+  dateTo: MealCountDate;
 }

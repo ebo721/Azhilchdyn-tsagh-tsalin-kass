@@ -1869,29 +1869,24 @@ export const ListMealCountsResponse = zod.array(ListMealCountsResponseItem)
 
 
 /**
- * @summary Push absolute meal counts from a reader
+ * Staff-session authenticated. Only admins and warehouse staff may import. Dates are inclusive and must be real calendar dates spanning no more than 366 days. The server fetches absolute totals from the configured Reader endpoint; repeated imports replace matching date/meal-type values.
+ * @summary Manually import Reader meal counts for a date range
  */
-export const pushReaderMealCountsBodyRecordsItemDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
-
-export const pushReaderMealCountsBodyRecordsItemCountMin = 0;
-
-export const pushReaderMealCountsBodyRecordsMax = 5000;
+export const importMealCountsBodyDateFromRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const importMealCountsBodyDateToRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
 
 
-
-export const PushReaderMealCountsBody = zod.object({
-  "records": zod.array(zod.object({
-  "date": zod.string().regex(pushReaderMealCountsBodyRecordsItemDateRegExp),
-  "mealType": zod.string().min(1),
-  "count": zod.number().int().min(pushReaderMealCountsBodyRecordsItemCountMin)
-})).min(1).max(pushReaderMealCountsBodyRecordsMax)
+export const ImportMealCountsBody = zod.object({
+  "dateFrom": zod.string().regex(importMealCountsBodyDateFromRegExp),
+  "dateTo": zod.string().regex(importMealCountsBodyDateToRegExp)
 })
 
+export const importMealCountsResponseReceivedMin = 0;
 
 
 
-export const PushReaderMealCountsResponse = zod.object({
-  "received": zod.number().int().min(1),
+export const ImportMealCountsResponse = zod.object({
+  "received": zod.number().int().min(importMealCountsResponseReceivedMin),
   "updatedAt": zod.coerce.date()
 })
 

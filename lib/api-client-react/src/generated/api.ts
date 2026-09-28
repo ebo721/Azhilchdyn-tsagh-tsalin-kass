@@ -105,6 +105,8 @@ import type {
   MaterialRequestCatalogItem,
   Meal,
   MealCount,
+  MealCountsImportInput,
+  MealCountsImportResult,
   MealEditRequest,
   MealEditRequestInput,
   MealIngredientInput,
@@ -127,8 +129,6 @@ import type {
   PayrollSchedule,
   PayrollScheduleInput,
   PayrollSummary,
-  ReaderMealCountsInput,
-  ReaderMealCountsResult,
   ReclassifyInventoryPurchaseAsExpenseInput,
   RevertPayrollAdvanceApprovalParams,
   Shift,
@@ -5284,25 +5284,26 @@ export function useListMealCounts<TData = Awaited<ReturnType<typeof listMealCoun
 
 
 
-export const getPushReaderMealCountsUrl = () => {
+export const getImportMealCountsUrl = () => {
 
 
 
 
-  return `/api/reader/meal-counts`
+  return `/api/meal-counts/import`
 }
 
 /**
- * @summary Push absolute meal counts from a reader
+ * Staff-session authenticated. Only admins and warehouse staff may import. Dates are inclusive and must be real calendar dates spanning no more than 366 days. The server fetches absolute totals from the configured Reader endpoint; repeated imports replace matching date/meal-type values.
+ * @summary Manually import Reader meal counts for a date range
  */
-export const pushReaderMealCounts = async (readerMealCountsInput: ReaderMealCountsInput, options?: Parameters<typeof customFetch>[1]): Promise<ReaderMealCountsResult> => {
+export const importMealCounts = async (mealCountsImportInput: MealCountsImportInput, options?: Parameters<typeof customFetch>[1]): Promise<MealCountsImportResult> => {
 
-  return customFetch<ReaderMealCountsResult>(getPushReaderMealCountsUrl(),
+  return customFetch<MealCountsImportResult>(getImportMealCountsUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(readerMealCountsInput)
+    body: JSON.stringify(mealCountsImportInput)
   }
 );}
 
@@ -5310,11 +5311,11 @@ export const pushReaderMealCounts = async (readerMealCountsInput: ReaderMealCoun
 
 
 
-export const getPushReaderMealCountsMutationOptions = <TError = ErrorType<BadRequestResponse | void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pushReaderMealCounts>>, TError,{data: BodyType<ReaderMealCountsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof pushReaderMealCounts>>, TError,{data: BodyType<ReaderMealCountsInput>}, TContext> => {
+export const getImportMealCountsMutationOptions = <TError = ErrorType<BadRequestResponse | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importMealCounts>>, TError,{data: BodyType<MealCountsImportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importMealCounts>>, TError,{data: BodyType<MealCountsImportInput>}, TContext> => {
 
-const mutationKey = ['pushReaderMealCounts'];
+const mutationKey = ['importMealCounts'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -5324,10 +5325,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof pushReaderMealCounts>>, {data: BodyType<ReaderMealCountsInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importMealCounts>>, {data: BodyType<MealCountsImportInput>}> = (props) => {
           const {data} = props ?? {};
 
-          return  pushReaderMealCounts(data,requestOptions)
+          return  importMealCounts(data,requestOptions)
         }
 
 
@@ -5337,22 +5338,22 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type PushReaderMealCountsMutationResult = NonNullable<Awaited<ReturnType<typeof pushReaderMealCounts>>>
-    export type PushReaderMealCountsMutationBody = BodyType<ReaderMealCountsInput>
-    export type PushReaderMealCountsMutationError = ErrorType<BadRequestResponse | void>
+    export type ImportMealCountsMutationResult = NonNullable<Awaited<ReturnType<typeof importMealCounts>>>
+    export type ImportMealCountsMutationBody = BodyType<MealCountsImportInput>
+    export type ImportMealCountsMutationError = ErrorType<BadRequestResponse | void>
 
     /**
- * @summary Push absolute meal counts from a reader
+ * @summary Manually import Reader meal counts for a date range
  */
-export const usePushReaderMealCounts = <TError = ErrorType<BadRequestResponse | void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pushReaderMealCounts>>, TError,{data: BodyType<ReaderMealCountsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useImportMealCounts = <TError = ErrorType<BadRequestResponse | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importMealCounts>>, TError,{data: BodyType<MealCountsImportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof pushReaderMealCounts>>,
+        Awaited<ReturnType<typeof importMealCounts>>,
         TError,
-        {data: BodyType<ReaderMealCountsInput>},
+        {data: BodyType<MealCountsImportInput>},
         TContext
       > => {
-      return useMutation(getPushReaderMealCountsMutationOptions(options));
+      return useMutation(getImportMealCountsMutationOptions(options));
     }
 
 export const getListMealsUrl = () => {

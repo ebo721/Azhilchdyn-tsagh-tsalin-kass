@@ -6,8 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface ReaderMealCountsResult {
-  /** @minimum 1 */
+export interface MealCountsImportResult {
+  /** @minimum 0 */
   received: number;
   updatedAt: Date;
 }
