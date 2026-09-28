@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, PackageOpen, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import { 
-  useListInventoryItems, 
+  useListMaterialRequestCatalog,
   useCreateInventoryMaterialRequest,
   getListInventoryMaterialRequestsQueryKey
 } from '@workspace/api-client-react';
@@ -38,7 +38,7 @@ export function InventoryMaterialRequestModal({
 }) {
   const qc = useQueryClient();
   const create = useCreateInventoryMaterialRequest();
-  const catalogQuery = useListInventoryItems();
+  const catalogQuery = useListMaterialRequestCatalog();
   const catalog = catalogQuery.data || [];
 
   const form = useForm<MaterialRequestForm>({

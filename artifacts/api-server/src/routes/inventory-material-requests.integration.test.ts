@@ -17,10 +17,12 @@ describe("inventory material requests", () => {
   let viewerCookie: string;
   let warehouseCookie: string;
   let accountantCookie: string;
+  let technologistCookie: string;
   let adminId: number;
   let viewerId: number;
   let warehouseId: number;
   let accountantId: number;
+  let technologistId: number;
   let itemId: number;
   let slotId: number;
   let scheduleEntryId: number;
@@ -33,14 +35,17 @@ describe("inventory material requests", () => {
     const [viewer] = await db.insert(usersTable).values({ username: `material-viewer-${suffix}`, normalizedUsername: `material-viewer-${suffix}`, role: "viewer", passwordHash: "not-used" }).returning();
     const [warehouse] = await db.insert(usersTable).values({ username: `material-warehouse-${suffix}`, normalizedUsername: `material-warehouse-${suffix}`, role: "warehouse", passwordHash: "not-used" }).returning();
     const [accountant] = await db.insert(usersTable).values({ username: `material-accountant-${suffix}`, normalizedUsername: `material-accountant-${suffix}`, role: "accountant", passwordHash: "not-used" }).returning();
+    const [technologist] = await db.insert(usersTable).values({ username: `material-technologist-${suffix}`, normalizedUsername: `material-technologist-${suffix}`, role: "technologist", passwordHash: "not-used" }).returning();
     adminId = admin.id;
     viewerId = viewer.id;
     warehouseId = warehouse.id;
     accountantId = accountant.id;
+    technologistId = technologist.id;
     adminCookie = `${hrCookie.name}=${createStaffSession(admin)}`;
     viewerCookie = `${hrCookie.name}=${createStaffSession(viewer)}`;
     warehouseCookie = `${hrCookie.name}=${createStaffSession(warehouse)}`;
     accountantCookie = `${hrCookie.name}=${createStaffSession(accountant)}`;
+    technologistCookie = `${hrCookie.name}=${createStaffSession(technologist)}`;
     const [item] = await db.insert(inventoryItemsTable).values({ name: `Тест материал ${suffix}`, normalizedName: `тест материал ${suffix}`, category: "Тест", unit: "кг", quantity: 0 }).returning();
     itemId = item.id;
     const [slot] = await db.insert(mealScheduleSlotsTable).values({ name: `Тест цаг ${suffix}`, startTime: "08:00", endTime: "08:30", sortOrder: 900000 + Math.floor(Math.random() * 1000), isActive: true }).returning();
@@ -64,6 +69,7 @@ describe("inventory material requests", () => {
     await db.delete(usersTable).where(eq(usersTable.id, viewerId));
     await db.delete(usersTable).where(eq(usersTable.id, warehouseId));
     await db.delete(usersTable).where(eq(usersTable.id, accountantId));
+    await db.delete(usersTable).where(eq(usersTable.id, technologistId));
   });
 
   async function request(cookie: string, path: string, init: RequestInit = {}) {
@@ -110,6 +116,34 @@ describe("inventory material requests", () => {
     assert.equal(warehouseResponse.status, 201);
     const warehouseRequest = await warehouseResponse.json() as { id: number };
     requestIds.push(warehouseRequest.id);
+  });
+
+  it("lets technologists order from a limited catalog without managing stock or statuses", async () => {
+    const catalogResponse = await request(technologistCookie, "/inventory/material-requests/catalog");
+    assert.equal(catalogResponse.status, 200);
+    const catalog = await catalogResponse.json() as Array<Record<string, unknown>>;
+    const item = catalog.find((candidate) => candidate.id === itemId);
+    assert.ok(item);
+    assert.deepEqual(Object.keys(item).sort(), ["category", "id", "name", "unit"]);
+
+    const createdResponse = await request(technologistCookie, "/inventory/material-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        requestedDate: "2099-04-03",
+        mealScheduleEntryId: scheduleEntryId,
+        lines: [{ inventoryItemId: itemId, quantity: 1.5 }],
+      }),
+    });
+    assert.equal(createdResponse.status, 201);
+    const created = await createdResponse.json() as { id: number; requesterId: number; mealScheduleEntryId: number };
+    requestIds.push(created.id);
+    assert.equal(created.requesterId, technologistId);
+    assert.equal(created.mealScheduleEntryId, scheduleEntryId);
+    assert.equal((await request(technologistCookie, "/inventory/material-requests")).status, 403);
+    assert.equal((await request(technologistCookie, `/inventory/material-requests/${created.id}/status`, {
+      method: "PATCH", body: JSON.stringify({ status: "approved" }),
+    })).status, 403);
+    assert.equal((await request(technologistCookie, "/inventory/items")).status, 403);
   });
 
   it("rejects impossible dates and numeric overflow or precision", async () => {

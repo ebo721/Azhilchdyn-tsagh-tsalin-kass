@@ -1712,13 +1712,10 @@ export const TransferBankTransactionToCashParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
-export const transferBankTransactionToCashBodyCategoryMax = 200;
-
 export const transferBankTransactionToCashBodyIncomeMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
 
 
 export const TransferBankTransactionToCashBody = zod.object({
-  "category": zod.string().min(1).max(transferBankTransactionToCashBodyCategoryMax),
   "incomeMonth": zod.string().regex(transferBankTransactionToCashBodyIncomeMonthRegExp).nullable()
 })
 
@@ -2997,6 +2994,18 @@ export const CreateInventoryMaterialRequestResponse = zod.object({
   "quantity": zod.number()
 }))
 })
+
+
+/**
+ * @summary List materials available for ordering without stock or pricing details
+ */
+export const ListMaterialRequestCatalogResponseItem = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "unit": zod.string()
+})
+export const ListMaterialRequestCatalogResponse = zod.array(ListMaterialRequestCatalogResponseItem)
 
 
 /**

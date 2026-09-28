@@ -1,4 +1,4 @@
-import { type ChangeEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type ChangeEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -177,12 +177,6 @@ import {
   type OperatingExpenseBankSuggestion,
 } from '@workspace/api-client-react';
 
-const automaticJournalCashCategory = (accountCode: string | null | undefined) => ({
-  '1500': 'Бараа материал',
-  '1510': 'Хангамжийн материал',
-  '1800': 'Эд хөрөнгө',
-  '6000': 'Цалин',
-} as Record<string, string>)[accountCode ?? ''] ?? null;
 import { EmptyState, ErrorBlock, LoadingBlock, Modal, PageHeading, StatCard } from '@/components/ui-primitives';
 import { currentMonth, dateLabel, money, shiftMonth, today } from '@/lib/app-shared';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
@@ -418,7 +412,6 @@ export function BankTransactions() {
   const chartAccounts = useListChartOfAccounts();
   const createBankAccount = useCreateBankAccount();
   const updateTransactionAccount = useUpdateBankTransactionAccount();
-  const cashTransactions = useListCashTransactions();
   const importStatement = useImportKapitronBankTransactions();
   const transfer = useTransferBankTransactionToCash();
   const linkToCash = useLinkBankTransactionToCash();
@@ -437,26 +430,23 @@ export function BankTransactions() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [importResult, setImportResult] = useState<BankTransactionImportResult | null>(null);
   const [selectedBank, setSelectedBank] = useState<BankTransaction | null>(null);
-  const [category, setCategory] = useState('');
   const [incomeMonth, setIncomeMonth] = useState(currentMonth());
   const [filterMonth, setFilterMonth] = useState(currentMonth());
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
-  const automaticCashCategory = selectedBank?.type === 'expense'
-    ? automaticJournalCashCategory(selectedBank.accountCode)
-    : null;
+  const transferAccount = chartAccounts.data?.find((account) => account.id === selectedBank?.accountId);
+  const canTransferWithAccount = Boolean(transferAccount?.isActive && (
+    selectedBank?.type === 'income' ? transferAccount.type === 'revenue'
+      : transferAccount.type === 'expense' || (transferAccount.type === 'asset' && ['1500', '1510', '1800'].includes(transferAccount.code))
+  ));
   const suggestions = useListBankTransactionCashSuggestions(selectedBank?.id ?? 0, { query: { queryKey: getListBankTransactionCashSuggestionsQueryKey(selectedBank?.id ?? 0), enabled: Boolean(selectedBank) } });
   const pendingJournalReviewCount = journalReview.data?.length ?? 0;
   const filteredBankTransactions = list.data?.filter((transaction) => transaction.transactionAt.slice(0, 7) === filterMonth) ?? [];
   useEffect(() => {
     if (selectedAccountId === null && bankAccounts.data?.length) setSelectedAccountId(bankAccounts.data[0].id);
   }, [bankAccounts.data, selectedAccountId]);
-  const categories = useMemo(() => [...new Set((cashTransactions.data ?? [])
-    .map((transaction) => transaction.type === CashTransactionType.expense ? transaction.subcategory : transaction.category)
-    .filter((value): value is string => Boolean(value?.trim()))
-    .map((value) => value.trim()))].sort((a, b) => a.localeCompare(b, 'mn')), [cashTransactions.data]);
   const refreshBankTransactions = () => {
     qc.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
     qc.invalidateQueries({ queryKey: getListBankTransactionJournalReviewQueryKey() });
@@ -503,22 +493,16 @@ export function BankTransactions() {
     });
   };
   const openCashTransfer = (row: BankTransaction) => {
-    const recognizedCategory = row.type === 'expense'
-      ? automaticJournalCashCategory(row.accountCode)
-      : null;
-    setCategory(recognizedCategory ?? '');
     setIncomeMonth(row.transactionAt.slice(0, 7));
     setSelectedBank(row);
   };
   const closeCashTransfer = () => {
-    setCategory('');
     setIncomeMonth(currentMonth());
     setSelectedBank(null);
   };
   const createCashTransaction = () => {
-    const trimmedCategory = category.trim();
-    if (!selectedBank || !trimmedCategory) return;
-    transfer.mutate({ id: selectedBank.id, data: { category: trimmedCategory, incomeMonth: selectedBank.type === 'income' ? incomeMonth : null } }, {
+    if (!selectedBank || !canTransferWithAccount) return;
+    transfer.mutate({ id: selectedBank.id, data: { incomeMonth: selectedBank.type === 'income' ? incomeMonth : null } }, {
       onSuccess: () => {
         refreshAfterTransfer();
         closeCashTransfer();
@@ -596,18 +580,11 @@ export function BankTransactions() {
         <div className="flex items-center gap-3" aria-label="эсвэл"><div className="h-px flex-1 bg-border" /><span className="text-xs font-semibold text-muted-foreground">эсвэл</span><div className="h-px flex-1 bg-border" /></div>
         <section aria-labelledby="create-cash-title">
           <h3 id="create-cash-title" className="text-sm font-bold">Касс шинээр үүсгээд журнал бичих</h3>
-          {automaticCashCategory ? (
-            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3" data-testid="bank-transfer-automatic-category">
-              <p className="text-xs font-semibold text-emerald-700">Гүйлгээний утгаар санал болгосон төрөл</p>
-              <p className="mt-1 text-sm font-bold text-emerald-900">{automaticCashCategory}</p>
-            </div>
-          ) : (
-            <label className="mt-3 block space-y-2 text-xs font-semibold">{selectedBank.type === 'expense' ? 'Үйл ажиллагааны зардлын дэд ангилал' : 'Ангилал'}<input value={category} onChange={(event) => setCategory(event.target.value)} list="cash-category-options" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" placeholder={selectedBank.type === 'expense' ? 'Жишээ: Түрээс' : 'Ангилал сонгох эсвэл шинээр бичих'} aria-label="Шинэ кассын гүйлгээний ангилал" data-testid="input-bank-transfer-category" required /></label>
-          )}
+          <p className="mt-3 text-sm text-muted-foreground">Касс болон журналын дансыг дээр оноосон GL данснаас авна.</p>
+          {!canTransferWithAccount && <p className="mt-2 text-sm font-semibold text-destructive" role="alert">Касс үүсгэхээс өмнө энэ гүйлгээнд тохирох идэвхтэй GL данс онооно уу.</p>}
           {selectedBank.type === 'income' && <label className="mt-3 block space-y-2 text-xs font-semibold">Хамаарах сар<input type="month" value={incomeMonth} onChange={(event) => setIncomeMonth(event.target.value)} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="input-bank-transfer-income-month" required /></label>}
-          <datalist id="cash-category-options">{[...new Set([...categories, 'Захирал'])].map((existingCategory) => <option key={existingCategory} value={existingCategory} />)}</datalist>
         </section>
-        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={closeCashTransfer} disabled={transfer.isPending || linkToCash.isPending} data-testid="button-cancel-bank-transfer">Болих</Button><Button type="submit" disabled={!category.trim() || (selectedBank.type === 'income' && !incomeMonth) || transfer.isPending || linkToCash.isPending} data-testid="button-confirm-bank-transfer">{transfer.isPending ? 'Журнал бичиж байна...' : 'Касс үүсгээд журнал бичих'}</Button></div>
+        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={closeCashTransfer} disabled={transfer.isPending || linkToCash.isPending} data-testid="button-cancel-bank-transfer">Болих</Button><Button type="submit" disabled={!canTransferWithAccount || (selectedBank.type === 'income' && !incomeMonth) || transfer.isPending || linkToCash.isPending} data-testid="button-confirm-bank-transfer">{transfer.isPending ? 'Журнал бичиж байна...' : 'Касс үүсгээд журнал бичих'}</Button></div>
       </form>
     </Modal>}
   </div>;

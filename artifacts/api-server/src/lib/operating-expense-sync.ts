@@ -21,8 +21,11 @@ export async function syncOperatingExpenseForBankCash(tx: any, bankId: number, c
     tx.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, cashId)).for("update"),
   ]);
   if (!bank || !cash || bank.type !== "expense" || (cash.sourceType && SYSTEM_SOURCES.includes(cash.sourceType))) return null;
+  const usesBankAccount = cash.sourceType === "bank_transaction"
+    && cash.category === OPERATING_EXPENSE_CATEGORY
+    && bank.accountId !== null && cash.accountId === bank.accountId;
   const canonicalCashAccount = await cashAccountForCategory(tx, cash.category);
-  if (canonicalCashAccount && cash.accountId !== canonicalCashAccount.id) {
+  if (!usesBankAccount && canonicalCashAccount && cash.accountId !== canonicalCashAccount.id) {
     await tx.update(cashTransactionsTable).set({
       accountId: canonicalCashAccount.id,
     }).where(eq(cashTransactionsTable.id, cashId));
@@ -48,7 +51,7 @@ export async function syncOperatingExpenseForBankCash(tx: any, bankId: number, c
     ? (linkedAccount?.name ?? "Бусад")
     : cash.category;
   const accountCode = expenseAccountCode(subcategory);
-  if (!byCash) {
+  if (!byCash && !usesBankAccount) {
     const defaults: Record<string, string> = {
       "6100": "Түрээсийн зардал",
       "6200": "Тээврийн зардал",
@@ -64,13 +67,13 @@ export async function syncOperatingExpenseForBankCash(tx: any, bankId: number, c
       normalBalance: "debit",
     }).onConflictDoNothing({ target: chartOfAccountsTable.code });
   }
-  const [fallbackAccount] = byCash ? [null] : await tx.select().from(chartOfAccountsTable).where(and(
+  const [fallbackAccount] = byCash || usesBankAccount ? [null] : await tx.select().from(chartOfAccountsTable).where(and(
     eq(chartOfAccountsTable.code, accountCode),
     eq(chartOfAccountsTable.type, "expense"),
   ));
-  if (!byCash && !fallbackAccount) throw new Error(`Operating expense account ${accountCode} is missing`);
+  if (!byCash && !usesBankAccount && !fallbackAccount) throw new Error(`Operating expense account ${accountCode} is missing`);
   const values = {
-    description: cash.description, accountId: byCash?.accountId ?? fallbackAccount.id, date: String(cash.date), amount: Number(cash.amount),
+    description: cash.description, accountId: byCash?.accountId ?? (usesBankAccount ? bank.accountId! : fallbackAccount!.id), date: String(cash.date), amount: Number(cash.amount),
     paymentDate: String(cash.date), paymentAmount: Number(cash.amount), bankTransactionId: bankId, cashTransactionId: cashId,
   };
   if (byCash) return (await tx.update(operatingExpensesTable).set(values).where(eq(operatingExpensesTable.id, byCash.id)).returning())[0];

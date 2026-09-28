@@ -68,6 +68,8 @@ describe("technologist staff auth", () => {
     assert.equal((await request("/meals/1/ingredients/2", "DELETE")).status, 200);
     assert.equal((await request("/meals/1/edit-request", "POST")).status, 200);
     assert.equal((await request("/deletion-requests", "POST")).status, 200);
+    assert.equal((await request("/inventory/material-requests/catalog")).status, 200);
+    assert.equal((await request("/inventory/material-requests", "POST")).status, 200);
   });
 
   it("denies protected writes and unrelated GET APIs", async () => {
@@ -80,5 +82,8 @@ describe("technologist staff auth", () => {
     assert.equal((await request("/meal-schedule/slots/1", "PUT")).status, 403);
     assert.equal((await request("/meal-schedule/slots/1", "DELETE")).status, 403);
     assert.equal((await request("/employees")).status, 403);
+    assert.equal((await request("/inventory/items")).status, 403);
+    assert.equal((await request("/inventory/material-requests")).status, 403);
+    assert.equal((await request("/inventory/material-requests/1/status", "PATCH")).status, 403);
   });
 });

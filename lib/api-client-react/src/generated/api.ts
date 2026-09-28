@@ -101,6 +101,7 @@ import type {
   ListMealScheduleParams,
   ListShiftPlansParams,
   LoginInput,
+  MaterialRequestCatalogItem,
   Meal,
   MealEditRequest,
   MealEditRequestInput,
@@ -8117,6 +8118,83 @@ export const useCreateInventoryMaterialRequest = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getCreateInventoryMaterialRequestMutationOptions(options));
     }
+
+export const getListMaterialRequestCatalogUrl = () => {
+
+
+
+
+  return `/api/inventory/material-requests/catalog`
+}
+
+/**
+ * @summary List materials available for ordering without stock or pricing details
+ */
+export const listMaterialRequestCatalog = async ( options?: Parameters<typeof customFetch>[1]): Promise<MaterialRequestCatalogItem[]> => {
+
+  return customFetch<MaterialRequestCatalogItem[]>(getListMaterialRequestCatalogUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMaterialRequestCatalogQueryKey = () => {
+    return [
+    `/api/inventory/material-requests/catalog`
+    ] as const;
+    }
+
+
+export const getListMaterialRequestCatalogQueryOptions = <TData = Awaited<ReturnType<typeof listMaterialRequestCatalog>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMaterialRequestCatalog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMaterialRequestCatalogQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMaterialRequestCatalog>>> = ({ signal }) => listMaterialRequestCatalog({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMaterialRequestCatalog>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMaterialRequestCatalogQueryResult = NonNullable<Awaited<ReturnType<typeof listMaterialRequestCatalog>>>
+export type ListMaterialRequestCatalogQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List materials available for ordering without stock or pricing details
+ */
+
+export function useListMaterialRequestCatalog<TData = Awaited<ReturnType<typeof listMaterialRequestCatalog>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMaterialRequestCatalog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMaterialRequestCatalogQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getUpdateInventoryMaterialRequestStatusUrl = (id: number,) => {
 

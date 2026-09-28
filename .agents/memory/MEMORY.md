@@ -15,3 +15,4 @@
 - [Production migration ordering](production-migration-ordering.md) — New external-Neon migrations must append after the latest applied filename; backdated names are rejected.
 - [Internal Express dispatch](internal-express-dispatch.md) — Run protected in-process HTTP dispatch through an Express app, not a bare Router with raw Node request/response objects.
 - [PostgreSQL RESTRICT errors](postgres-restrict-errors.md) — A RESTRICT foreign key may raise SQLSTATE 23001 rather than 23503; handle both in deletion conflicts.
+- [Bank cash account precedence](bank-cash-account-precedence.md) — An assigned bank GL account governs new cash and journal postings; a separate expense subcategory is redundant.
