@@ -1,3 +1,4 @@
+export * from "./operating-expense-helpers.js";
 export * from "./deletion-request-helpers.js";
 export * from "./inventory-fifo-helpers.js";
 export * from "./payroll-calc-helpers.js";
@@ -130,7 +131,6 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull } from "drizzle-orm
 import {
   attendanceTable,
   cashTransactionsTable,
-  cashClosuresTable,
   db,
   employeesTable,
   employeeSalaryHistoryTable,
@@ -140,7 +140,6 @@ import {
   inventorySuppliersTable,
   inventoryIssuesTable,
   fixedAssetsTable,
-  operatingExpensesTable,
   deletionRequestsTable,
   shiftTemplatesTable,
   chartOfAccountsTable,
@@ -155,29 +154,6 @@ import {
   shouldMirrorCashAsOperatingExpense,
 } from "../lib/cash-account.js";
 
-
-export async function isCashDateClosed(date: string) {
-  const [closure] = await db
-    .select({ id: cashClosuresTable.id })
-    .from(cashClosuresTable)
-    .where(eq(cashClosuresTable.date, date));
-  return Boolean(closure);
-}
-
-export function operatingExpenseResponse(row: typeof operatingExpensesTable.$inferSelect, category: string) {
-  return { ...row, category, date: String(row.date), amount: Number(row.amount), paymentDate: row.paymentDate ? String(row.paymentDate) : null,
-    paymentAmount: row.paymentAmount === null ? null : Number(row.paymentAmount), bankTransactionId: row.bankTransactionId,
-    cashTransactionId: row.cashTransactionId, createdAt: String(row.createdAt) };
-}
-
-export async function operatingExpenseAccountName(accountId: number) {
-  const [account] = await db
-    .select({ name: chartOfAccountsTable.name })
-    .from(chartOfAccountsTable)
-    .where(eq(chartOfAccountsTable.id, accountId));
-  if (!account) throw new Error(`Operating expense account ${accountId} is missing`);
-  return account.name;
-}
 
 export const inventoryMaterialLabel = (materialType: string) =>
   materialType === "food" ? "Хүнсний бараа материал" : "Хангамжийн материал";
