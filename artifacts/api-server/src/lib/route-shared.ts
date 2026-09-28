@@ -1,3 +1,6 @@
+export * from "./date-utils.js";
+
+import { currentMonth, money, today } from "./date-utils.js";
 import { createServer } from "node:http";
 import express, { Router, type IRouter } from "express";
 import {
@@ -321,9 +324,6 @@ export async function fallbackExpenseAccount(tx: DbClient, category: string) {
   return account;
 }
 
-export const today = () => new Date().toISOString().slice(0, 10);
-export const currentMonth = () => today().slice(0, 7);
-export const money = (value: number) => Math.round(value * 100) / 100;
 export class InventoryBankPaymentConflictError extends Error {}
 export class OperatingExpenseBankPaymentConflictError extends Error {}
 export const calendarDateOffset = (date: string, offset: number) => {
