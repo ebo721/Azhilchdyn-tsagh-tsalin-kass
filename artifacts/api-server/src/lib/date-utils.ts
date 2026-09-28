@@ -26,3 +26,32 @@ export function isValidCalendarDate(value: string) {
     && date.getUTCMonth() === month - 1
     && date.getUTCDate() === day;
 }
+
+export function hoursBetween(clockIn: string, clockOut: string) {
+  const [inHour, inMinute] = clockIn.split(":").map(Number);
+  const [outHour, outMinute] = clockOut.split(":").map(Number);
+  const start = inHour * 60 + inMinute;
+  const end = outHour * 60 + outMinute;
+  return Math.max(0, money((end - start) / 60));
+}
+
+export function weekdayCount(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const daysInMonth = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  let count = 0;
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const weekDay = new Date(Date.UTC(year, monthNumber - 1, day)).getUTCDay();
+    if (weekDay >= 1 && weekDay <= 5) count += 1;
+  }
+  return count;
+}
+
+export function monthWeekdays(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const dates: string[] = [];
+  for (let day = 1; day <= daysInMonth(month); day += 1) {
+    const weekDay = new Date(Date.UTC(year, monthNumber - 1, day)).getUTCDay();
+    if (weekDay >= 1 && weekDay <= 5) dates.push(`${month}-${String(day).padStart(2, "0")}`);
+  }
+  return dates;
+}
