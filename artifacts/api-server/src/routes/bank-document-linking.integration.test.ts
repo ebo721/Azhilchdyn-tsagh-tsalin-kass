@@ -172,6 +172,15 @@ describe("bank document linking", () => {
     const [linkedBank] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankId));
     assert.equal(linkedBank.cashTransactionId, cashBefore.id);
 
+    const protectedDelete = await fetch(`${baseUrl}/api/journal/entries/${result.journalEntryId}`, {
+      method: "DELETE", headers: { cookie },
+    });
+    assert.equal(protectedDelete.status, 409);
+    const protectedVoid = await fetch(`${baseUrl}/api/journal/entries/${result.journalEntryId}/void`, {
+      method: "POST", headers: { cookie, "content-type": "application/json" }, body: "{}",
+    });
+    assert.equal(protectedVoid.status, 409);
+
     const update = await fetch(`${baseUrl}/api/fixed-assets/${asset.id}`, {
       method: "PUT",
       headers: { cookie, "content-type": "application/json" },
@@ -197,6 +206,20 @@ describe("bank document linking", () => {
     const [replacedBankJournal] = await db.select().from(journalEntriesTable)
       .where(eq(journalEntriesTable.id, result.journalEntryId));
     assert.equal(replacedBankJournal.status, "void");
+    const [bankJournalReversal] = await db.select().from(journalEntriesTable).where(and(
+      eq(journalEntriesTable.sourceType, "reversal"),
+      eq(journalEntriesTable.sourceId, result.journalEntryId),
+    ));
+    assert.ok(bankJournalReversal);
+    journalIds.push(bankJournalReversal.id);
+    const protectedReversalDelete = await fetch(`${baseUrl}/api/journal/entries/${bankJournalReversal.id}`, {
+      method: "DELETE", headers: { cookie },
+    });
+    assert.equal(protectedReversalDelete.status, 409);
+    const protectedReversalVoid = await fetch(`${baseUrl}/api/journal/entries/${bankJournalReversal.id}/void`, {
+      method: "POST", headers: { cookie, "content-type": "application/json" }, body: "{}",
+    });
+    assert.equal(protectedReversalVoid.status, 409);
     const updatedLines = await db.select({
       code: chartOfAccountsTable.code,
       debit: journalLinesTable.debit,
@@ -264,6 +287,154 @@ describe("bank document linking", () => {
     assert.equal(mismatch.status, 400);
     const [unclaimed] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, mismatchBankId));
     assert.equal(unclaimed.cashTransactionId, null);
+  });
+
+  it("rejects a bank-funded fixed asset with a fractional-cent unit price atomically", async () => {
+    const date = "2099-08-21";
+    const name = `Fractional-cent bank asset ${randomUUID()}`;
+    const bankId = await bank(date, 1, "fractional-cent-fixed-asset");
+    const response = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-fixed-asset`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ name, unitPrice: 0.333, quantity: 3, date }),
+    });
+    const assets = await db.select().from(fixedAssetsTable).where(eq(fixedAssetsTable.name, name));
+    fixedAssetIds.push(...assets.map((asset) => asset.id));
+    const cashByBank = await db.select().from(cashTransactionsTable)
+      .where(eq(cashTransactionsTable.bankTransactionId, bankId));
+    const assetCash = assets.length
+      ? await db.select().from(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "fixed_asset_purchase"),
+        inArray(cashTransactionsTable.sourceKey, assets.map((asset) => `fixed-asset:${asset.id}`)),
+      ))
+      : [];
+    const cashRows = [...new Map([...cashByBank, ...assetCash].map((cash) => [cash.id, cash])).values()];
+    cashIds.push(...cashRows.map((cash) => cash.id));
+    const assetJournals = assets.length
+      ? await db.select().from(journalEntriesTable).where(and(
+        eq(journalEntriesTable.sourceType, "fixed_asset"),
+        inArray(journalEntriesTable.sourceId, assets.map((asset) => asset.id)),
+      ))
+      : [];
+    const descriptionJournals = await db.select().from(journalEntriesTable)
+      .where(eq(journalEntriesTable.description, `${name} (3 ширхэг)`));
+    const [savedBank] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankId));
+    if (savedBank.journalEntryId) journalIds.push(savedBank.journalEntryId);
+    journalIds.push(...assetJournals.map((entry) => entry.id), ...descriptionJournals.map((entry) => entry.id));
+    journalIds.push(...cashRows.flatMap((cash) => cash.journalEntryId ? [cash.journalEntryId] : []));
+
+    assert.equal(response.status, 400);
+    assert.equal(assets.length, 0);
+    assert.equal(cashRows.length, 0);
+    assert.equal(assetJournals.length, 0);
+    assert.equal(descriptionJournals.length, 0);
+    assert.equal(savedBank.cashTransactionId, null);
+    assert.equal(savedBank.transferredAt, null);
+    assert.equal(savedBank.journalEntryId, null);
+  });
+
+  it("requires a fixed-asset document for GL 1800 bank expenses across documentless flows", async () => {
+    const [fixedAssetAccount] = await db.select({ id: chartOfAccountsTable.id })
+      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1800"));
+    assert.ok(fixedAssetAccount);
+    const date = "2099-08-20";
+    const amount = 12_000;
+    const bankRows = await Promise.all([
+      bank(date, amount, "fixed-asset-document-required-journal"),
+      bank(date, amount, "fixed-asset-document-required-transfer"),
+      bank(date, amount, "fixed-asset-document-required-cash"),
+      bank(date, amount, "fixed-asset-document-required-expense"),
+      bank(date, amount, "fixed-asset-document-required-purchase"),
+      bank(date, amount, "fixed-asset-document-required-purchases"),
+    ]);
+    await db.update(bankTransactionsTable).set({ accountId: fixedAssetAccount.id })
+      .where(inArray(bankTransactionsTable.id, bankRows));
+
+    const [purchaseAccount] = await db.select({ id: chartOfAccountsTable.id })
+      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1500"));
+    assert.ok(purchaseAccount);
+    const [purchase] = await db.insert(inventoryPurchasesTable).values({
+      materialType: "food", accountId: purchaseAccount.id, documentName: "Documentless protection purchase",
+      date, totalAmount: amount,
+    }).returning();
+    purchaseIds.push(purchase.id);
+    const [firstGroupedPurchase] = await db.insert(inventoryPurchasesTable).values({
+      materialType: "food", accountId: purchaseAccount.id, documentName: "Documentless protection group A",
+      date, totalAmount: amount / 2,
+    }).returning();
+    const [secondGroupedPurchase] = await db.insert(inventoryPurchasesTable).values({
+      materialType: "food", accountId: purchaseAccount.id, documentName: "Documentless protection group B",
+      date, totalAmount: amount / 2,
+    }).returning();
+    purchaseIds.push(firstGroupedPurchase.id, secondGroupedPurchase.id);
+    const [manualCash] = await db.insert(cashTransactionsTable).values({
+      type: "expense", category: "Miscellaneous", description: "Manual cash for fixed-asset protection",
+      amount, date, accountId,
+    }).returning();
+    cashIds.push(manualCash.id);
+
+    const headers = { cookie, "content-type": "application/json" };
+    const responses = await Promise.all([
+      fetch(`${baseUrl}/api/bank-transactions/${bankRows[0]}/post-journal`, {
+        method: "POST", headers, body: JSON.stringify({ accountId: fixedAssetAccount.id }),
+      }),
+      fetch(`${baseUrl}/api/bank-transactions/${bankRows[1]}/transfer-to-cash`, {
+        method: "POST", headers, body: JSON.stringify({ incomeMonth: null }),
+      }),
+      fetch(`${baseUrl}/api/bank-transactions/${bankRows[2]}/link-cash`, {
+        method: "POST", headers, body: JSON.stringify({ cashTransactionId: manualCash.id }),
+      }),
+      fetch(`${baseUrl}/api/bank-transactions/${bankRows[3]}/link-expense`, {
+        method: "POST", headers,
+        body: JSON.stringify({ description: "Documentless fixed-asset expense", accountId, date, amount }),
+      }),
+      fetch(`${baseUrl}/api/bank-transactions/${bankRows[4]}/link-purchase`, {
+        method: "POST", headers, body: JSON.stringify({ inventoryPurchaseId: purchase.id }),
+      }),
+      fetch(`${baseUrl}/api/bank-transactions/${bankRows[5]}/link-purchases`, {
+        method: "POST", headers,
+        body: JSON.stringify({ inventoryPurchaseIds: [firstGroupedPurchase.id, secondGroupedPurchase.id] }),
+      }),
+    ]);
+
+    for (const [index, response] of responses.entries()) {
+      const bankId = bankRows[index];
+      const [savedBank] = await db.select().from(bankTransactionsTable)
+        .where(eq(bankTransactionsTable.id, bankId));
+      const linkedCash = await db.select().from(cashTransactionsTable)
+        .where(eq(cashTransactionsTable.bankTransactionId, bankId));
+      const directJournals = await db.select().from(journalEntriesTable).where(and(
+        inArray(journalEntriesTable.sourceType, ["bank", "bank_transaction"]),
+        eq(journalEntriesTable.sourceId, bankId),
+      ));
+      if (savedBank?.journalEntryId) journalIds.push(savedBank.journalEntryId);
+      for (const cash of linkedCash) {
+        cashIds.push(cash.id);
+        if (cash.journalEntryId) journalIds.push(cash.journalEntryId);
+      }
+      journalIds.push(...directJournals.map((entry) => entry.id));
+      const linkedExpenses = await db.select({ id: operatingExpensesTable.id })
+        .from(operatingExpensesTable).where(eq(operatingExpensesTable.bankTransactionId, bankId));
+      expenseIds.push(...linkedExpenses.map((expense) => expense.id));
+      const groups = await db.select({ id: inventoryPurchasePaymentGroupsTable.id })
+        .from(inventoryPurchasePaymentGroupsTable)
+        .where(eq(inventoryPurchasePaymentGroupsTable.bankTransactionId, bankId));
+      paymentGroupIds.push(...groups.map((group) => group.id));
+
+      assert.equal(response.status, 409);
+      assert.equal(savedBank.cashTransactionId, null);
+      assert.equal(savedBank.transferredAt, null);
+      assert.equal(savedBank.journalEntryId, null);
+      assert.equal(savedBank.accountId, fixedAssetAccount.id);
+      assert.equal(linkedCash.length, 0);
+      assert.equal(directJournals.length, 0);
+      assert.equal(groups.length, 0);
+      assert.equal(linkedExpenses.length, 0);
+    }
+    const [cashAfter] = await db.select().from(cashTransactionsTable)
+      .where(eq(cashTransactionsTable.id, manualCash.id));
+    assert.equal(cashAfter.bankTransactionId, null);
+    assert.equal(cashAfter.journalEntryId, null);
   });
 
   it("links an existing unpaid purchase, posts a balanced journal, and removes review row", async () => {

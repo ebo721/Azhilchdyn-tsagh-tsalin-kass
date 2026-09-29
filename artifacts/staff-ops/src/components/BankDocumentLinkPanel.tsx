@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { Link } from 'wouter';
 import {
   getListBankTransactionJournalReviewQueryKey,
   getListBankTransactionsQueryKey,
@@ -32,14 +33,16 @@ export function BankDocumentLinkPanel({
   onClose,
   initialExpenseAccountId,
   initialPurchaseMaterialType,
+  initialFixedAsset,
 }: {
   row: BankTransactionJournalReviewItem;
   onClose: () => void;
   initialExpenseAccountId?: number;
   initialPurchaseMaterialType?: 'food' | 'supply';
+  initialFixedAsset?: boolean;
 }) {
   const qc = useQueryClient();
-  const [type, setType] = useState<LinkType>(initialPurchaseMaterialType ? 'purchase' : 'expense');
+  const [type, setType] = useState<LinkType>(initialFixedAsset ? 'fixed-asset' : initialPurchaseMaterialType ? 'purchase' : 'expense');
   const [existingId, setExistingId] = useState('');
   const [selectedPurchaseIds, setSelectedPurchaseIds] = useState<number[]>([]);
   const [description, setDescription] = useState(row.description);
@@ -157,11 +160,18 @@ export function BankDocumentLinkPanel({
       </div>
       {loading ? <p className="text-sm text-muted-foreground">Баримтуудыг уншиж байна...</p> : (
         <>
-          <div className="mb-3 flex gap-2">
-             <Button type="button" size="sm" variant={type === 'expense' ? 'default' : 'outline'} disabled={!!initialPurchaseMaterialType} onClick={() => { setType('expense'); setExistingId(''); setSelectedPurchaseIds([]); }}>Зардал</Button>
-            <Button type="button" size="sm" variant={type === 'purchase' ? 'default' : 'outline'} onClick={() => { setType('purchase'); setExistingId(''); setSelectedPurchaseIds([]); }}>Худалдан авалт</Button>
-             <Button type="button" size="sm" variant={type === 'fixed-asset' ? 'default' : 'outline'} disabled={!!initialPurchaseMaterialType} onClick={() => { setType('fixed-asset'); setExistingId(''); setSelectedPurchaseIds([]); }}>Эд хөрөнгө</Button>
-          </div>
+          {initialFixedAsset ? (
+            <div className="mb-3 rounded-lg border border-primary/20 bg-background p-3">
+              <p className="text-sm font-semibold">1800 дансны зарлагад эд хөрөнгийн баримт заавал холбоно.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Энэ гүйлгээгээр шинэ хөрөнгө үүсгэх эсвэл ижил огноо, нийт дүнтэй бүртгэлтэй хөрөнгийг сонгоно. Урьдчилан бүртгэх бол <Link href="/fixed-assets" className="font-semibold text-primary underline">Эд хөрөнгө</Link> хэсэгт нэмээд энд буцаж холбоно. Холболт банк, касс, журналыг нэг үйлдлээр бичнэ.</p>
+            </div>
+          ) : (
+            <div className="mb-3 flex gap-2">
+              <Button type="button" size="sm" variant={type === 'expense' ? 'default' : 'outline'} disabled={!!initialPurchaseMaterialType} onClick={() => { setType('expense'); setExistingId(''); setSelectedPurchaseIds([]); }}>Зардал</Button>
+              <Button type="button" size="sm" variant={type === 'purchase' ? 'default' : 'outline'} onClick={() => { setType('purchase'); setExistingId(''); setSelectedPurchaseIds([]); }}>Худалдан авалт</Button>
+              <Button type="button" size="sm" variant={type === 'fixed-asset' ? 'default' : 'outline'} disabled={!!initialPurchaseMaterialType} onClick={() => { setType('fixed-asset'); setExistingId(''); setSelectedPurchaseIds([]); }}>Эд хөрөнгө</Button>
+            </div>
+          )}
           {(type === 'expense' ? unpaidExpenses.length > 0 : type === 'fixed-asset' && matchingFixedAssets.length > 0) && (
             <div className="mb-4 flex gap-2">
               <select value={existingId} onChange={(event) => setExistingId(event.target.value)} className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm" data-testid={`select-existing-document-${row.id}`}>
@@ -244,7 +254,7 @@ export function BankDocumentLinkPanel({
             </form>
           ) : (
             <form onSubmit={submitFixedAsset} className="space-y-3 border-t border-border/60 pt-3">
-              <p className="text-xs font-semibold text-muted-foreground">Шинэ эд хөрөнгө</p>
+              <p className="text-xs font-semibold text-muted-foreground">Шинэ эд хөрөнгө үүсгэж банкны гүйлгээтэй холбох</p>
               <input value={assetName} onChange={(event) => setAssetName(event.target.value)} required className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" placeholder="Хөрөнгийн нэр" data-testid={`input-link-fixed-asset-name-${row.id}`} />
               <div className="grid grid-cols-2 gap-2">
                 <label className="text-xs font-semibold">Тоо ширхэг<input value={assetQuantity} onChange={(event) => setAssetQuantity(event.target.value)} required type="number" min="1" step="1" className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm" /></label>

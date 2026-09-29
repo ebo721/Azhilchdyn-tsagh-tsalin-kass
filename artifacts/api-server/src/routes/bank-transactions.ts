@@ -64,6 +64,7 @@ const router: IRouter = Router();
 const isInventoryPurchaseAccount = (code: string | null | undefined) =>
   inventoryPurchaseAccountCodes.some((purchaseCode) => purchaseCode === code);
 const inventoryCashCategories = ["Бараа материал", "Хүнсний бараа материал", "Хангамжийн материал"];
+const fixedAssetDocumentMessage = "Үндсэн хөрөнгийн банкны зарлагыг эд хөрөнгийн бүртгэлтэй холбох эсвэл шинээр хөрөнгө үүсгэнэ үү. Өөр төрлийн гүйлгээ бол GL дансыг эхлээд өөрчилнө үү";
 const maxUploadBytes = 10 * 1024 * 1024;
 const maxXmlBytes = 8 * 1024 * 1024;
 const maxRows = 20_000;
@@ -427,8 +428,8 @@ router.post("/bank-transactions/:id/link-purchase", async (req, res, next) => {
     const { id } = LinkBankTransactionPurchaseParams.parse(req.params);
     const result = await linkBankPurchase(id, LinkBankTransactionPurchaseBody.parse(req.body));
     if (typeof result === "string") {
-      const status = result === "missing_bank" || result === "missing_purchase" ? 404 : result === "bank_resolved" || result === "purchase_conflict" || result === "closed" ? 409 : 400;
-      return res.status(status).json({ error: result });
+      const status = result === "missing_bank" || result === "missing_purchase" ? 404 : result === "bank_resolved" || result === "purchase_conflict" || result === "fixed_asset_document_required" || result === "closed" ? 409 : 400;
+      return res.status(status).json({ error: result === "fixed_asset_document_required" ? fixedAssetDocumentMessage : result });
     }
     return res.json(LinkBankTransactionPurchaseResponse.parse(result));
   } catch (error) {
@@ -450,10 +451,10 @@ router.post("/bank-transactions/:id/link-purchases", async (req, res, next) => {
     if (typeof result === "string") {
       const status = result === "missing_bank" || result === "missing_purchase"
         ? 404
-        : result === "bank_resolved" || result === "purchase_conflict" || result === "purchase_mixed_material_types" || result === "closed"
+        : result === "bank_resolved" || result === "purchase_conflict" || result === "purchase_mixed_material_types" || result === "fixed_asset_document_required" || result === "closed"
           ? 409
           : 400;
-      res.status(status).json({ error: result === "purchase_mixed_material_types"
+      res.status(status).json({ error: result === "fixed_asset_document_required" ? fixedAssetDocumentMessage : result === "purchase_mixed_material_types"
         ? "Нэг банкны төлбөрт зөвхөн ижил төрлийн бараа материал эсвэл хангамжийн баримтуудыг нэгтгэнэ үү"
         : result });
       return;
@@ -494,8 +495,8 @@ router.post("/bank-transactions/:id/link-expense", async (req, res, next) => {
     const { id } = LinkBankTransactionExpenseParams.parse(req.params);
     const result = await linkBankExpense(id, LinkBankTransactionExpenseBody.parse(req.body));
     if (typeof result === "string") {
-      const status = result === "missing_bank" || result === "missing_expense" ? 404 : result === "bank_resolved" || result === "expense_conflict" || result === "purchase_document_required" || result === "closed" ? 409 : 400;
-      return res.status(status).json({ error: result === "purchase_document_required"
+      const status = result === "missing_bank" || result === "missing_expense" ? 404 : result === "bank_resolved" || result === "expense_conflict" || result === "purchase_document_required" || result === "fixed_asset_document_required" || result === "closed" ? 409 : 400;
+      return res.status(status).json({ error: result === "fixed_asset_document_required" ? fixedAssetDocumentMessage : result === "purchase_document_required"
         ? "Бараа материал, хангамжийн банкны зарлагыг худалдан авалтын баримтаар холбоно уу. Өөр төрлийн гүйлгээ бол GL дансыг эхлээд өөрчилнө үү"
         : result });
     }
@@ -517,7 +518,9 @@ router.post("/bank-transactions/:id/link-fixed-asset", async (req, res, next) =>
         : result === "bank_resolved" || result === "fixed_asset_conflict" || result === "purchase_document_required" || result === "closed"
           ? 409
           : 400;
-      return res.status(status).json({ error: result === "purchase_document_required"
+      return res.status(status).json({ error: result === "invalid_unit_price"
+        ? "Хөрөнгийн нэгж үнэ 2 орны нарийвчлалтай байх ёстой"
+        : result === "purchase_document_required"
         ? "Бараа материал, хангамжийн банкны зарлагыг худалдан авалтын баримтаар холбоно уу. Өөр төрлийн гүйлгээ бол GL дансыг эхлээд өөрчилнө үү"
         : result });
     }
@@ -551,6 +554,12 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
       ));
       if (bank.type === "expense" && isInventoryPurchaseAccount(account?.code)) {
         return "purchase-document-required" as const;
+      }
+      if (bank.type === "expense") {
+        const [assignedAccount] = bank.accountId === null || bank.accountId === accountId
+          ? [] : await tx.select({ code: chartOfAccountsTable.code })
+            .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, bank.accountId));
+        if (account?.code === "1800" || assignedAccount?.code === "1800") return "fixed-asset-document-required" as const;
       }
       const allowed = bank.type === "income"
         ? account?.type === "revenue"
@@ -589,6 +598,10 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
     }
     if (result === "purchase-document-required") {
       res.status(409).json({ error: "Бараа материал, хангамжийн зарлагыг худалдан авалтын баримттай холбох эсвэл шинэ худалдан авалт үүсгэж бүртгэнэ үү" });
+      return;
+    }
+    if (result === "fixed-asset-document-required") {
+      res.status(409).json({ error: fixedAssetDocumentMessage });
       return;
     }
     res.json(PostBankTransactionJournalResponse.parse(result));
@@ -891,6 +904,9 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
       if (bank.type === "expense" && isInventoryPurchaseAccount(account.code)) {
         return "purchase-document-required" as const;
       }
+      if (bank.type === "expense" && account.code === "1800") {
+        return "fixed-asset-document-required" as const;
+      }
       const category = bank.type === "income" ? account.name
         : account.code === "1500" ? "Бараа материал"
         : account.code === "1510" ? "Хангамжийн материал"
@@ -963,6 +979,10 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
     }
     if (result === "purchase-document-required") {
       res.status(409).json({ error: "Бараа материал, хангамжийн зарлагыг касс руу шууд шилжүүлэхгүй. Худалдан авалтын баримттай холбох эсвэл шинээр үүсгэнэ үү" });
+      return;
+    }
+    if (result === "fixed-asset-document-required") {
+      res.status(409).json({ error: fixedAssetDocumentMessage });
       return;
     }
     if (result === "managed-cash-exists") {
@@ -1055,6 +1075,10 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
           || (cash.sourceType === null && (isInventoryPurchaseAccount(cashAccount?.code) || inventoryCashCategories.includes(cash.category)))) {
           return "purchase-document-required" as const;
         }
+        if (bankAccount?.code === "1800"
+          || (cash.sourceType === null && (cashAccount?.code === "1800" || cash.category === "Эд хөрөнгө"))) {
+          return "fixed-asset-document-required" as const;
+        }
       }
       if (!bankAndCashAmountsMatch(bank, cash)) return "amount-mismatch" as const;
       if (cash.bankTransactionId !== null) return "cash-linked" as const;
@@ -1104,6 +1128,7 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
          "amount-mismatch": "Банк болон кассын гүйлгээний дүн таарахгүй байна",
          "cash-source-managed": "Энэ автомат кассын гүйлгээг банкны гүйлгээтэй шууд холбох боломжгүй",
           "purchase-document-required": "Бараа материал, хангамжийн кассын гүйлгээг шууд холбохгүй. Худалдан авалтын баримттай холбох эсвэл шинээр үүсгэнэ үү",
+          "fixed-asset-document-required": fixedAssetDocumentMessage,
         "cash-linked": "Кассын гүйлгээ аль хэдийн банкны гүйлгээнд холбогдсон байна",
         closed: "Өндөрлөсөн өдрийн кассын гүйлгээг холбох боломжгүй",
       };

@@ -438,6 +438,8 @@ export function BankTransactions() {
   const [accountNumber, setAccountNumber] = useState('');
   const transferAccount = chartAccounts.data?.find((account) => account.id === selectedBank?.accountId);
   const requiresPurchaseDocument = selectedBank?.type === 'expense' && ['1500', '1510'].includes(transferAccount?.code ?? '');
+  const requiresFixedAssetDocument = selectedBank?.type === 'expense' && transferAccount?.code === '1800';
+  const requiresBankDocumentFlow = requiresPurchaseDocument || requiresFixedAssetDocument;
   const canTransferWithAccount = Boolean(transferAccount?.isActive && (
     selectedBank?.type === 'income' ? transferAccount.type === 'revenue'
       : transferAccount.type === 'expense' || (transferAccount.type === 'asset' && transferAccount.code === '1800')
@@ -502,7 +504,7 @@ export function BankTransactions() {
     setSelectedBank(null);
   };
   const createCashTransaction = () => {
-    if (!selectedBank || !canTransferWithAccount) return;
+    if (!selectedBank || !canTransferWithAccount || requiresFixedAssetDocument) return;
     transfer.mutate({ id: selectedBank.id, data: { incomeMonth: selectedBank.type === 'income' ? incomeMonth : null } }, {
       onSuccess: () => {
         refreshAfterTransfer();
@@ -512,7 +514,7 @@ export function BankTransactions() {
     });
   };
   const linkCashTransaction = (cashTransaction: CashTransactionSuggestion) => {
-    if (!selectedBank || requiresPurchaseDocument) return;
+    if (!selectedBank || requiresBankDocumentFlow) return;
     linkToCash.mutate({ id: selectedBank.id, data: { cashTransactionId: cashTransaction.id } }, {
       onSuccess: () => {
         refreshAfterTransfer();
@@ -571,26 +573,28 @@ export function BankTransactions() {
           <label className="space-y-2 text-xs font-semibold sm:col-span-2">Гүйлгээний утга<input readOnly value={selectedBank.description} className="h-10 w-full rounded-lg border border-input bg-muted px-3 text-sm" aria-label="Банкны гүйлгээний утга" data-testid="input-bank-transfer-description" /></label>
           <label className="space-y-2 text-xs font-semibold">Дүн<input readOnly value={money(selectedBank.amount)} className="h-10 w-full rounded-lg border border-input bg-muted px-3 font-mono text-sm" aria-label="Банкны гүйлгээний дүн" data-testid="input-bank-transfer-amount" /></label>
         </div>
-        {!requiresPurchaseDocument && <section aria-labelledby="cash-suggestions-title" data-testid="section-bank-cash-suggestions">
+        {!requiresBankDocumentFlow && <section aria-labelledby="cash-suggestions-title" data-testid="section-bank-cash-suggestions">
           <h3 id="cash-suggestions-title" className="text-sm font-bold">Ижил төстэй кассын гүйлгээ</h3>
           <p className="mt-1 text-xs text-muted-foreground">Огноо, төрөл, тайлбар, дүнгээр санал болгосон холбогдоогүй кассын мөрүүд.</p>
           <div className="mt-3 space-y-3">
             {suggestions.isLoading ? <><LoadingBlock className="h-24" /><LoadingBlock className="h-24" /></> : suggestions.isError ? <ErrorBlock onRetry={() => suggestions.refetch()} /> : !suggestions.data?.length ? <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground" data-testid="empty-bank-cash-suggestions">Холбох ижил төстэй кассын гүйлгээ олдсонгүй.</p> : suggestions.data.map((suggestion) => <article key={suggestion.id} className="rounded-xl border border-border bg-secondary/25 p-4" data-testid={`card-bank-cash-suggestion-${suggestion.id}`}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{suggestion.description}</p>{suggestion.transactionKind === 'payroll' && <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-800">Сүүл цалин</span>}{suggestion.transactionKind === 'payroll_advance' && <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-800">Урьдчилгаа цалин</span>}{suggestion.journalEntryId && <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-800">Одоогийн журнал #{suggestion.journalEntryId}-г солино</span>}{(suggestion.bankVerifiedAt || suggestion.bankTransactionId) && <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">Банкны хуулгаар баталгаажсан</span>}</div><p className="mt-1 text-xs text-muted-foreground">{dateLabel(suggestion.date)} · {suggestion.type === 'income' ? 'Орлого' : 'Зарлага'} · {suggestion.category}</p><p className="mt-1 text-xs text-muted-foreground">Тохирц: {suggestion.score.toFixed(2)}% ({suggestion.score >= 80 ? 'өндөр' : suggestion.score >= 50 ? 'дунд' : 'бага'})</p></div><div className="shrink-0 text-right"><p className={cn('font-mono text-sm font-bold', suggestion.type === 'income' ? 'text-primary' : 'text-orange-800')}>{suggestion.type === 'income' ? '+' : '−'}{money(suggestion.amount)}</p><Button type="button" size="sm" className="mt-2" disabled={transfer.isPending || linkToCash.isPending} onClick={() => linkCashTransaction(suggestion)} aria-label={`${suggestion.description} кассын гүйлгээтэй холбох`} data-testid={`button-link-bank-transaction-to-cash-${suggestion.id}`}>{linkToCash.isPending ? 'Холбож байна...' : 'Энэ гүйлгээтэй холбох'}</Button></div></div></article>)}
           </div>
         </section>}
-        {!requiresPurchaseDocument && <div className="flex items-center gap-3" aria-label="эсвэл"><div className="h-px flex-1 bg-border" /><span className="text-xs font-semibold text-muted-foreground">эсвэл</span><div className="h-px flex-1 bg-border" /></div>}
+        {!requiresBankDocumentFlow && <div className="flex items-center gap-3" aria-label="эсвэл"><div className="h-px flex-1 bg-border" /><span className="text-xs font-semibold text-muted-foreground">эсвэл</span><div className="h-px flex-1 bg-border" /></div>}
         <section aria-labelledby="create-cash-title">
-          <h3 id="create-cash-title" className="text-sm font-bold">{requiresPurchaseDocument ? 'Худалдан авалтын баримт шаардлагатай' : 'Касс шинээр үүсгээд журнал бичих'}</h3>
-          {requiresPurchaseDocument ? <div className="mt-3 space-y-3 text-sm">
-            <p>Бараа материал, хангамжийн банкны зарлагыг шууд касс, журналд шивэхгүй. Өмнөх худалдан авалттай холбох эсвэл шинэ худалдан авалт үүсгэвэл касс, журнал хамт бүртгэгдэнэ.</p>
-            <Link href="/bank-transactions/journal-review" onClick={closeCashTransfer} className="inline-flex rounded-md bg-primary px-3 py-2 font-semibold text-primary-foreground">Худалдан авалт холбох</Link>
+          <h3 id="create-cash-title" className="text-sm font-bold">{requiresPurchaseDocument ? 'Худалдан авалтын баримт шаардлагатай' : requiresFixedAssetDocument ? 'Эд хөрөнгийн баримт шаардлагатай' : 'Касс шинээр үүсгээд журнал бичих'}</h3>
+          {requiresBankDocumentFlow ? <div className="mt-3 space-y-3 text-sm">
+            <p>{requiresFixedAssetDocument
+              ? '1800 дансны банкны зарлагыг шууд касс, журналд шивэхгүй. Журналд шивэх хэсэгт эд хөрөнгө үүсгэх эсвэл ижил огноо, дүнтэй бүртгэлтэй хөрөнгийг холбоход банк, касс, журнал хамт бүртгэгдэнэ.'
+              : 'Бараа материал, хангамжийн банкны зарлагыг шууд касс, журналд шивэхгүй. Өмнөх худалдан авалттай холбох эсвэл шинэ худалдан авалт үүсгэвэл касс, журнал хамт бүртгэгдэнэ.'}</p>
+            <Link href="/bank-transactions/journal-review" onClick={closeCashTransfer} className="inline-flex rounded-md bg-primary px-3 py-2 font-semibold text-primary-foreground">{requiresFixedAssetDocument ? 'Эд хөрөнгө холбох' : 'Худалдан авалт холбох'}</Link>
           </div> : <>
             <p className="mt-3 text-sm text-muted-foreground">Касс болон журналын дансыг дээр оноосон GL данснаас авна.</p>
             {!canTransferWithAccount && <p className="mt-2 text-sm font-semibold text-destructive" role="alert">Касс үүсгэхээс өмнө энэ гүйлгээнд тохирох идэвхтэй GL данс онооно уу.</p>}
           </>}
           {selectedBank.type === 'income' && <label className="mt-3 block space-y-2 text-xs font-semibold">Хамаарах сар<input type="month" value={incomeMonth} onChange={(event) => setIncomeMonth(event.target.value)} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="input-bank-transfer-income-month" required /></label>}
         </section>
-        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={closeCashTransfer} disabled={transfer.isPending || linkToCash.isPending} data-testid="button-cancel-bank-transfer">Болих</Button>{!requiresPurchaseDocument && <Button type="submit" disabled={!canTransferWithAccount || (selectedBank.type === 'income' && !incomeMonth) || transfer.isPending || linkToCash.isPending} data-testid="button-confirm-bank-transfer">{transfer.isPending ? 'Журнал бичиж байна...' : 'Касс үүсгээд журнал бичих'}</Button>}</div>
+        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={closeCashTransfer} disabled={transfer.isPending || linkToCash.isPending} data-testid="button-cancel-bank-transfer">Болих</Button>{!requiresBankDocumentFlow && <Button type="submit" disabled={!canTransferWithAccount || (selectedBank.type === 'income' && !incomeMonth) || transfer.isPending || linkToCash.isPending} data-testid="button-confirm-bank-transfer">{transfer.isPending ? 'Журнал бичиж байна...' : 'Касс үүсгээд журнал бичих'}</Button>}</div>
       </form>
     </Modal>}
   </div>;
