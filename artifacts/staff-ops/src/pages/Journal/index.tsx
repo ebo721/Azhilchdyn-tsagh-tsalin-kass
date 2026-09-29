@@ -10,6 +10,21 @@ import { LedgerView } from './components/LedgerView';
 import { TrialBalance } from './components/TrialBalance';
 
 export function Journal() {
+  return <JournalContent />;
+}
+
+export function JournalNew({ initialAccountCode, onClose }: {
+  initialAccountCode?: '1200' | '2000';
+  onClose: () => void;
+}) {
+  return <JournalContent openNew initialAccountCode={initialAccountCode} onCloseNew={onClose} />;
+}
+
+function JournalContent({ openNew = false, initialAccountCode, onCloseNew }: {
+  openNew?: boolean;
+  initialAccountCode?: '1200' | '2000';
+  onCloseNew?: () => void;
+}) {
   const { data: session } = useGetAuthSession();
   const role = session?.role || 'viewer';
   
@@ -30,7 +45,7 @@ export function Journal() {
   });
 
   const [detailId, setDetailId] = useState<number | null>(null);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(openNew);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
   const [showLedger, setShowLedger] = useState(false);
   const [showTrialBalance, setShowTrialBalance] = useState(false);
@@ -154,7 +169,10 @@ export function Journal() {
       )}
       
       {showForm && (
-        <JournalEntryForm onClose={() => setShowForm(false)} />
+        <JournalEntryForm
+          initialAccountCode={openNew ? initialAccountCode : undefined}
+          onClose={() => { setShowForm(false); if (openNew) onCloseNew?.(); }}
+        />
       )}
 
       {editingEntry && (
