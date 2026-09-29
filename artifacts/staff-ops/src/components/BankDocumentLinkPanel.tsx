@@ -31,18 +31,20 @@ export function BankDocumentLinkPanel({
   row,
   onClose,
   initialExpenseAccountId,
+  initialPurchaseMaterialType,
 }: {
   row: BankTransactionJournalReviewItem;
   onClose: () => void;
   initialExpenseAccountId?: number;
+  initialPurchaseMaterialType?: 'food' | 'supply';
 }) {
   const qc = useQueryClient();
-  const [type, setType] = useState<LinkType>('expense');
+  const [type, setType] = useState<LinkType>(initialPurchaseMaterialType ? 'purchase' : 'expense');
   const [existingId, setExistingId] = useState('');
   const [selectedPurchaseIds, setSelectedPurchaseIds] = useState<number[]>([]);
   const [description, setDescription] = useState(row.description);
   const [accountId, setAccountId] = useState(initialExpenseAccountId ? String(initialExpenseAccountId) : '');
-  const [materialType, setMaterialType] = useState<'food' | 'supply'>('food');
+  const [materialType, setMaterialType] = useState<'food' | 'supply'>(initialPurchaseMaterialType ?? 'food');
   const [supplierName, setSupplierName] = useState(row.counterparty || '');
   const [hasReceipt, setHasReceipt] = useState(false);
   const [assetName, setAssetName] = useState(row.description);
@@ -74,8 +76,13 @@ export function BankDocumentLinkPanel({
   const selectedPurchaseTotalCents = unpaidPurchases
     .filter((item) => selectedPurchaseIds.includes(item.id))
     .reduce((total, item) => total + Math.round(item.totalAmount * 100), 0);
+  const selectedPurchaseMaterialTypes = new Set(unpaidPurchases
+    .filter((item) => selectedPurchaseIds.includes(item.id))
+    .map((item) => item.materialType));
   const bankAmountCents = Math.round(row.amount * 100);
-  const selectedPurchasesMatch = selectedPurchaseIds.length > 0 && selectedPurchaseTotalCents === bankAmountCents;
+  const selectedPurchasesMatch = selectedPurchaseIds.length > 0
+    && selectedPurchaseTotalCents === bankAmountCents
+    && selectedPurchaseMaterialTypes.size === 1;
   const matchingFixedAssets = useMemo(
     () => (fixedAssets.data ?? []).filter((item) =>
       item.date === row.date
@@ -151,9 +158,9 @@ export function BankDocumentLinkPanel({
       {loading ? <p className="text-sm text-muted-foreground">Баримтуудыг уншиж байна...</p> : (
         <>
           <div className="mb-3 flex gap-2">
-            <Button type="button" size="sm" variant={type === 'expense' ? 'default' : 'outline'} onClick={() => { setType('expense'); setExistingId(''); setSelectedPurchaseIds([]); }}>Зардал</Button>
+             <Button type="button" size="sm" variant={type === 'expense' ? 'default' : 'outline'} disabled={!!initialPurchaseMaterialType} onClick={() => { setType('expense'); setExistingId(''); setSelectedPurchaseIds([]); }}>Зардал</Button>
             <Button type="button" size="sm" variant={type === 'purchase' ? 'default' : 'outline'} onClick={() => { setType('purchase'); setExistingId(''); setSelectedPurchaseIds([]); }}>Худалдан авалт</Button>
-            <Button type="button" size="sm" variant={type === 'fixed-asset' ? 'default' : 'outline'} onClick={() => { setType('fixed-asset'); setExistingId(''); setSelectedPurchaseIds([]); }}>Эд хөрөнгө</Button>
+             <Button type="button" size="sm" variant={type === 'fixed-asset' ? 'default' : 'outline'} disabled={!!initialPurchaseMaterialType} onClick={() => { setType('fixed-asset'); setExistingId(''); setSelectedPurchaseIds([]); }}>Эд хөрөнгө</Button>
           </div>
           {(type === 'expense' ? unpaidExpenses.length > 0 : type === 'fixed-asset' && matchingFixedAssets.length > 0) && (
             <div className="mb-4 flex gap-2">
@@ -170,7 +177,7 @@ export function BankDocumentLinkPanel({
             <div className="mb-4 space-y-3 rounded-lg border border-border/70 bg-background p-3">
               <div>
                 <p className="text-xs font-semibold">Төлөгдөөгүй худалдан авалтуудаас сонгох</p>
-                 <p className="text-xs text-muted-foreground">Нэг буюу хэд хэдэн баримтыг бүтнээр нь холбоно. Баримтын огноо банкны төлбөрийн өдрөөс хойш биш, нийлбэр нь банкны дүнтэй яг тэнцүү байх ёстой.</p>
+                  <p className="text-xs text-muted-foreground">Нэг төрлийн материалын нэг буюу хэд хэдэн баримтыг бүтнээр нь холбоно. Баримтын огноо банкны төлбөрийн өдрөөс хойш биш, нийлбэр нь банкны дүнтэй яг тэнцүү байх ёстой.</p>
               </div>
               {unpaidPurchases.length === 0 ? (
                  <p className="text-xs text-muted-foreground">Энэ өдөр эсвэл өмнө нь бүртгэсэн тохирох төлөгдөөгүй худалдан авалт алга.</p>
@@ -186,7 +193,7 @@ export function BankDocumentLinkPanel({
                           event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))}
                         data-testid={`checkbox-link-purchase-${row.id}-${item.id}`}
                       />
-                       <span className="min-w-0 flex-1 truncate">{item.date} · #{item.id} · {item.supplierName}</span>
+                       <span className="min-w-0 flex-1 truncate">{item.date} · #{item.id} · {item.materialType === 'supply' ? 'Хангамж' : 'Бараа'} · {item.supplierName}</span>
                       <span className="shrink-0 font-mono">{money(item.totalAmount)}</span>
                     </label>
                   ))}
@@ -200,6 +207,7 @@ export function BankDocumentLinkPanel({
                   {linking ? 'Холбож байна...' : `${selectedPurchaseIds.length} худалдан авалт холбох`}
                 </Button>
               </div>
+               {selectedPurchaseMaterialTypes.size > 1 && <p className="text-xs text-destructive">Бараа материал, хангамжийн баримтыг нэг төлбөрт холих боломжгүй.</p>}
             </div>
           )}
           {type === 'expense' ? (

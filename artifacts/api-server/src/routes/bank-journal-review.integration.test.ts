@@ -24,7 +24,7 @@ describe("bank journal review routes", () => {
   let cookie: string;
   let expenseAccountId: number;
   let revenueAccountId: number;
-  let inventoryAccountId: number;
+  let fixedAssetAccountId: number;
   let liabilityAccountId: number;
   let suggestedBankId: number;
   let unknownBankId: number;
@@ -77,9 +77,9 @@ describe("bank journal review routes", () => {
     liabilityAccountId = liabilityAccount.id;
     revenueAccountId = revenueAccount.id;
     accountIds.push(expenseAccount.id, liabilityAccount.id, revenueAccount.id);
-    const [inventoryAccount] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1500"));
-    assert.ok(inventoryAccount);
-    inventoryAccountId = inventoryAccount.id;
+    const [fixedAssetAccount] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1800"));
+    assert.ok(fixedAssetAccount);
+    fixedAssetAccountId = fixedAssetAccount.id;
 
     const [matchedExpense] = await db.insert(operatingExpensesTable).values({
       description: "Тест нийлүүлэгчийн худалдан авалт",
@@ -134,7 +134,7 @@ describe("bank journal review routes", () => {
         transactionAt: new Date("2099-03-05T11:00:00.000Z"),
         type: "expense",
         amount: 42_000,
-        accountId: inventoryAccountId,
+        accountId: fixedAssetAccountId,
         account: "6677889900",
         counterparty: "Касс",
         description: "Касс руу шилжүүлэх туршилт",
@@ -207,6 +207,79 @@ describe("bank journal review routes", () => {
     });
     assert.equal(unknown?.suggestedAccountId, null);
     assert.equal(unknown?.suggestedAccountName, null);
+  });
+
+  it("requires a purchase document before posting inventory or supply bank payments", async () => {
+    for (const code of ["1500", "1510"]) {
+      const [account] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, code));
+      assert.ok(account);
+      const [bank] = await db.insert(bankTransactionsTable).values({
+        transactionAt: new Date("2099-03-11T11:00:00.000Z"),
+        type: "expense",
+        amount: 25_000,
+        accountId: account.id,
+        description: `Баримтгүй ${code} худалдан авалт`,
+        fingerprint: `review-purchase-required-${code}-${randomUUID()}`,
+      }).returning();
+      bankIds.push(bank.id);
+      const [cash] = await db.insert(cashTransactionsTable).values({
+        type: "expense",
+        category: code === "1500" ? "Бараа материал" : "Хангамжийн материал",
+        accountId: account.id,
+        description: `Баримтгүй ${code} касс`,
+        date: "2099-03-11",
+        amount: 25_000,
+      }).returning();
+      cashIds.push(cash.id);
+
+      for (const [path, body] of [
+        ["post-journal", { accountId: account.id }],
+        ["transfer-to-cash", { incomeMonth: null }],
+        ["link-cash", { cashTransactionId: cash.id }],
+        ["link-expense", { description: "Буруу төрлийн зардал", accountId: expenseAccountId, date: "2099-03-11", amount: 25_000 }],
+        ["link-fixed-asset", { name: "Буруу төрлийн хөрөнгө", date: "2099-03-11", unitPrice: 25_000, quantity: 1 }],
+      ] as const) {
+        const response = await fetch(`${baseUrl}/api/bank-transactions/${bank.id}/${path}`, {
+          method: "POST",
+          headers: { cookie, "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        assert.equal(response.status, 409, `${code} ${path} must require a purchase document`);
+      }
+      const [[unchangedBank], [unchangedCash], bankJournals, bankCash] = await Promise.all([
+        db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bank.id)),
+        db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, cash.id)),
+        db.select().from(journalEntriesTable).where(and(
+          eq(journalEntriesTable.sourceType, "bank"),
+          eq(journalEntriesTable.sourceId, bank.id),
+        )),
+        db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.bankTransactionId, bank.id)),
+      ]);
+      assert.equal(unchangedBank.cashTransactionId, null);
+      assert.equal(unchangedBank.journalEntryId, null);
+      assert.equal(unchangedBank.transferredAt, null);
+      assert.equal(unchangedCash.bankTransactionId, null);
+      assert.equal(bankJournals.length, 0);
+      assert.equal(bankCash.length, 0);
+
+      if (code === "1500") {
+        const [otherBank] = await db.insert(bankTransactionsTable).values({
+          transactionAt: new Date("2099-03-11T11:00:00.000Z"),
+          type: "expense",
+          amount: 25_000,
+          accountId: expenseAccountId,
+          description: "Зардлын дансаар бараа материалын касстай холбох туршилт",
+          fingerprint: `review-purchase-cash-required-${randomUUID()}`,
+        }).returning();
+        bankIds.push(otherBank.id);
+        const response = await fetch(`${baseUrl}/api/bank-transactions/${otherBank.id}/link-cash`, {
+          method: "POST",
+          headers: { cookie, "content-type": "application/json" },
+          body: JSON.stringify({ cashTransactionId: cash.id }),
+        });
+        assert.equal(response.status, 409);
+      }
+    }
   });
 
   it("posts a balanced journal once and removes the row from review", async () => {
@@ -371,8 +444,8 @@ describe("bank journal review routes", () => {
     ]);
     assert.ok(bank.journalEntryId);
     assert.equal(cash.journalEntryId, bank.journalEntryId);
-    assert.equal(cash.accountId, inventoryAccountId);
-    assert.equal(cash.category, "Бараа материал");
+    assert.equal(cash.accountId, fixedAssetAccountId);
+    assert.equal(cash.category, "Эд хөрөнгө");
     journalEntryIds.push(bank.journalEntryId);
 
     const [entry] = await db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, bank.journalEntryId));
@@ -383,7 +456,7 @@ describe("bank journal review routes", () => {
     const lines = await db.select().from(journalLinesTable)
       .where(eq(journalLinesTable.journalEntryId, bank.journalEntryId));
     assert.equal(lines.length, 2);
-    assert.equal(lines.find((line) => Number(line.debit) > 0)?.accountId, inventoryAccountId);
+    assert.equal(lines.find((line) => Number(line.debit) > 0)?.accountId, fixedAssetAccountId);
     assert.equal(lines.reduce((sum, line) => sum + Number(line.debit), 0), 42_000);
     assert.equal(lines.reduce((sum, line) => sum + Number(line.credit), 0), 42_000);
     const mirrored = await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.bankTransactionId, transferBankId));
@@ -503,9 +576,9 @@ describe("bank journal review routes", () => {
 
   it("suggests and links payroll cash with sub-tugrik bank rounding while preserving its employee source key", async () => {
     const [payrollAccount] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "6000"));
-    const [inventoryAccount] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1500"));
+    const [otherAssetAccount] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1800"));
     assert.ok(payrollAccount);
-    assert.ok(inventoryAccount);
+    assert.ok(otherAssetAccount);
     const [bank] = await db.insert(bankTransactionsTable).values({
       transactionAt: new Date("2099-03-08T11:00:00.000Z"),
       type: "expense",
@@ -547,7 +620,7 @@ describe("bank journal review routes", () => {
       transactionAt: new Date("2099-03-08T12:00:00.000Z"),
       type: "expense",
       amount: 44_000,
-      accountId: inventoryAccount.id,
+      accountId: otherAssetAccount.id,
       account: "9988776655",
       counterparty: "Цалинтай ижил дүнтэй нийлүүлэгч",
       description: "Цалинтай давхцсан дүнтэй бараа материал",

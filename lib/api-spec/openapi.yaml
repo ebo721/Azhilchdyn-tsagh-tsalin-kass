@@ -1073,7 +1073,7 @@ paths:
         "404":
           description: Bank transaction not found
         "409":
-          description: Bank transaction was already resolved
+          description: Bank transaction already resolved or inventory purchase document required
   /bank-transactions/{id}/journal:
     delete:
       operationId: deleteBankTransactionJournal
@@ -1312,6 +1312,8 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BankTransaction" }
+        "409":
+          description: Transaction cannot be transferred directly, including inventory purchases that require a document
   /bank-transactions/{id}/cash-suggestions:
     get:
       operationId: listBankTransactionCashSuggestions
@@ -1345,6 +1347,8 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BankTransaction" }
+        "409":
+          description: Cash cannot be linked directly, including inventory purchases that require a document
   /bank-transactions/{id}:
     delete:
       operationId: deleteBankTransaction

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { after, before, describe, it } from "node:test";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
@@ -6,7 +7,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import {
   bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db,
   fixedAssetsTable, inventoryPurchasePaymentGroupMembersTable, inventoryPurchasePaymentGroupsTable,
-  inventoryPurchasesTable, journalEntriesTable, journalLinesTable,
+  inventoryItemsTable, inventoryPurchaseItemsTable, inventoryPurchasesTable,
+  inventorySuppliersTable, journalEntriesTable, journalLinesTable,
   operatingExpensesTable, usersTable,
 } from "@workspace/db";
 import app from "../app";
@@ -19,6 +21,8 @@ describe("bank document linking", () => {
   const bankIds: number[] = [];
   const cashIds: number[] = [];
   const purchaseIds: number[] = [];
+  const inventoryItemIds: number[] = [];
+  const supplierIds: number[] = [];
   const expenseIds: number[] = [];
   const fixedAssetIds: number[] = [];
   const journalIds: number[] = [];
@@ -63,9 +67,12 @@ describe("bank document linking", () => {
       await db.delete(journalEntriesTable).where(inArray(journalEntriesTable.id, journalIds));
     }
     if (expenseIds.length) await db.delete(operatingExpensesTable).where(inArray(operatingExpensesTable.id, expenseIds));
+    if (purchaseIds.length) await db.delete(inventoryPurchaseItemsTable).where(inArray(inventoryPurchaseItemsTable.purchaseId, purchaseIds));
+    if (inventoryItemIds.length) await db.delete(inventoryItemsTable).where(inArray(inventoryItemsTable.id, inventoryItemIds));
     if (purchaseIds.length) await db.delete(inventoryPurchasesTable).where(inArray(inventoryPurchasesTable.id, purchaseIds));
     if (fixedAssetIds.length) await db.delete(fixedAssetsTable).where(inArray(fixedAssetsTable.id, fixedAssetIds));
     if (bankIds.length) await db.delete(bankTransactionsTable).where(inArray(bankTransactionsTable.id, bankIds));
+    if (supplierIds.length) await db.delete(inventorySuppliersTable).where(inArray(inventorySuppliersTable.id, supplierIds));
     if (userIds.length) await db.delete(usersTable).where(inArray(usersTable.id, userIds));
   });
 
@@ -286,6 +293,114 @@ describe("bank document linking", () => {
     assert.equal((await fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-purchase`, { method: "POST", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ inventoryPurchaseId: purchase.id }) })).status, 409);
   });
 
+  it("creates and links a new supply purchase with account 1510 without duplicating it on retry", async () => {
+    const suffix = randomUUID();
+    const date = "2099-08-18";
+    const amount = 86_420;
+    const supplierName = `Тест хангамж нийлүүлэгч ${suffix}`;
+    const itemName = `Тест хангамж ${suffix}`;
+    const normalizedSupplierName = supplierName.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("mn-MN");
+    const normalizedItemName = itemName.toLocaleLowerCase("mn-MN");
+    const bankId = await bank(date, amount, `new-supply-${suffix}`);
+    const input = {
+      materialType: "supply",
+      supplierName,
+      hasReceipt: true,
+      date,
+      items: [{ name: itemName, category: "Тестийн хангамж", unit: "ширхэг", quantity: 2, unitPrice: 43_210 }],
+    };
+    const response = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-purchase`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json() as {
+      inventoryPurchaseId: number;
+      cashTransactionId: number;
+      journalEntryId: number;
+    };
+    purchaseIds.push(result.inventoryPurchaseId);
+    cashIds.push(result.cashTransactionId);
+    journalIds.push(result.journalEntryId);
+
+    const [supplier] = await db.select().from(inventorySuppliersTable)
+      .where(eq(inventorySuppliersTable.normalizedName, normalizedSupplierName));
+    if (supplier) supplierIds.push(supplier.id);
+    const [item] = await db.select().from(inventoryItemsTable)
+      .where(eq(inventoryItemsTable.normalizedName, normalizedItemName));
+    if (item) inventoryItemIds.push(item.id);
+    const [[purchase], [bankTransaction], [cash], [journal], purchaseItems, lines, [supplyAccount], [bankAccount]] = await Promise.all([
+      db.select().from(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, result.inventoryPurchaseId)),
+      db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankId)),
+      db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, result.cashTransactionId)),
+      db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, result.journalEntryId)),
+      db.select().from(inventoryPurchaseItemsTable).where(eq(inventoryPurchaseItemsTable.purchaseId, result.inventoryPurchaseId)),
+      db.select().from(journalLinesTable).where(eq(journalLinesTable.journalEntryId, result.journalEntryId)),
+      db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1510")),
+      db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1010")),
+    ]);
+    assert.ok(supplier);
+    assert.ok(item);
+    assert.ok(supplyAccount);
+    assert.ok(bankAccount);
+    assert.equal(purchase.materialType, "supply");
+    assert.equal(purchase.accountId, supplyAccount.id);
+    assert.equal(supplyAccount.code, "1510");
+    assert.equal(purchase.date, date);
+    assert.equal(Number(purchase.totalAmount), amount);
+    assert.equal(purchase.paymentDate, date);
+    assert.equal(Number(purchase.paymentAmount), amount);
+    assert.equal(purchase.hasReceipt, true);
+    assert.equal(bankTransaction.cashTransactionId, result.cashTransactionId);
+    assert.ok(bankTransaction.transferredAt);
+    assert.equal(cash.category, "Хангамжийн материал");
+    assert.equal(cash.accountId, supplyAccount.id);
+    assert.equal(cash.bankTransactionId, bankId);
+    assert.equal(cash.journalEntryId, result.journalEntryId);
+    assert.ok(cash.bankVerifiedAt);
+    assert.equal(journal.sourceType, "inventory_purchase");
+    assert.equal(journal.sourceId, result.inventoryPurchaseId);
+    assert.equal(lines.length, 2);
+    assert.equal(lines.find((line) => Number(line.debit) > 0)?.accountId, supplyAccount.id);
+    assert.equal(lines.find((line) => Number(line.credit) > 0)?.accountId, bankAccount.id);
+    assert.equal(lines.reduce((sum, line) => sum + Number(line.debit), 0), amount);
+    assert.equal(lines.reduce((sum, line) => sum + Number(line.credit), 0), amount);
+    assert.equal(supplier.normalizedName, normalizedSupplierName);
+    assert.equal(item.materialType, "supply");
+    assert.equal(item.name, itemName);
+    assert.equal(Number(item.quantity), 2);
+    assert.equal(purchaseItems.length, 1);
+    assert.equal(purchaseItems[0].inventoryItemId, item.id);
+    assert.equal(Number(purchaseItems[0].totalAmount), amount);
+
+    const retry = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-purchase`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    assert.equal(retry.status, 409);
+    const [[savedBank], savedPurchases, savedCash, savedJournals, savedItems, savedSuppliers, savedPurchaseItems] = await Promise.all([
+      db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankId)),
+      db.select().from(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.documentName, supplierName)),
+      db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.bankTransactionId, bankId)),
+      db.select().from(journalEntriesTable).where(and(
+        eq(journalEntriesTable.sourceType, "inventory_purchase"),
+        eq(journalEntriesTable.sourceId, result.inventoryPurchaseId),
+      )),
+      db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.normalizedName, normalizedItemName)),
+      db.select().from(inventorySuppliersTable).where(eq(inventorySuppliersTable.normalizedName, normalizedSupplierName)),
+      db.select().from(inventoryPurchaseItemsTable).where(eq(inventoryPurchaseItemsTable.purchaseId, result.inventoryPurchaseId)),
+    ]);
+    assert.equal(savedBank.cashTransactionId, result.cashTransactionId);
+    assert.equal(savedPurchases.length, 1);
+    assert.equal(savedCash.length, 1);
+    assert.equal(savedJournals.length, 1);
+    assert.equal(savedItems.length, 1);
+    assert.equal(savedSuppliers.length, 1);
+    assert.equal(savedPurchaseItems.length, 1);
+  });
+
   it("links distinct unpaid purchases as one atomic bank payment and cancels the group atomically", async () => {
     const [inventoryAccount] = await db.select({ id: chartOfAccountsTable.id })
       .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1500"));
@@ -482,6 +597,112 @@ describe("bank document linking", () => {
     assert.equal(unclaimed.cashTransactionId, null);
     assert.equal(unclaimed.transferredAt, null);
     assert.equal((await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.bankTransactionId, bankId))).length, 0);
+    assert.equal((await db.select().from(inventoryPurchasePaymentGroupsTable)
+      .where(eq(inventoryPurchasePaymentGroupsTable.bankTransactionId, bankId))).length, 0);
+    assert.equal((await db.select().from(journalEntriesTable).where(and(
+      eq(journalEntriesTable.sourceType, "inventory_purchase_group"),
+      eq(journalEntriesTable.sourceId, bankId),
+    ))).length, 0);
+  });
+
+  it("links a group of supply purchases using supply cash category and GL 1510", async () => {
+    const [supplyAccount] = await db.select({ id: chartOfAccountsTable.id, code: chartOfAccountsTable.code })
+      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1510"));
+    assert.ok(supplyAccount);
+    const [first] = await db.insert(inventoryPurchasesTable).values({
+      materialType: "supply", accountId: supplyAccount.id, documentName: "Grouped supply purchase A",
+      date: "2099-08-11", totalAmount: 24_000,
+    }).returning();
+    const [second] = await db.insert(inventoryPurchasesTable).values({
+      materialType: "supply", accountId: supplyAccount.id, documentName: "Grouped supply purchase B",
+      date: "2099-08-12", totalAmount: 36_000,
+    }).returning();
+    purchaseIds.push(first.id, second.id);
+    const bankId = await bank("2099-08-13", 60_000, `grouped-supply-${randomUUID()}`);
+    const response = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-purchases`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ inventoryPurchaseIds: [second.id, first.id] }),
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json() as { cashTransactionId: number; journalEntryId: number };
+    cashIds.push(result.cashTransactionId);
+    journalIds.push(result.journalEntryId);
+    const [group] = await db.select({ id: inventoryPurchasePaymentGroupsTable.id })
+      .from(inventoryPurchasePaymentGroupsTable)
+      .where(eq(inventoryPurchasePaymentGroupsTable.bankTransactionId, bankId));
+    assert.ok(group);
+    paymentGroupIds.push(group.id);
+
+    const [cash] = await db.select().from(cashTransactionsTable)
+      .where(eq(cashTransactionsTable.id, result.cashTransactionId));
+    assert.equal(cash.category, "Хангамжийн материал");
+    assert.equal(cash.accountId, supplyAccount.id);
+    assert.equal(cash.amount, 60_000);
+    const cashListResponse = await fetch(`${baseUrl}/api/cash/transactions`, { headers: { cookie } });
+    assert.equal(cashListResponse.status, 200);
+    const cashRows = await cashListResponse.json() as Array<{
+      id: number; category: string; accountCode: string | null;
+    }>;
+    const listedCash = cashRows.find((row) => row.id === result.cashTransactionId);
+    assert.equal(listedCash?.category, "Хангамжийн материал");
+    assert.equal(listedCash?.accountCode, "1510");
+
+    const [bankAccount] = await db.select({ id: chartOfAccountsTable.id })
+      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1010"));
+    assert.ok(bankAccount);
+    const lines = await db.select({
+      accountId: journalLinesTable.accountId,
+      debit: journalLinesTable.debit,
+      credit: journalLinesTable.credit,
+    }).from(journalLinesTable).where(eq(journalLinesTable.journalEntryId, result.journalEntryId));
+    const debitLines = lines.filter((line) => Number(line.debit) > 0);
+    const creditLines = lines.filter((line) => Number(line.credit) > 0);
+    assert.equal(debitLines.length, 2);
+    assert.deepEqual(debitLines.map((line) => line.accountId), [supplyAccount.id, supplyAccount.id]);
+    assert.equal(supplyAccount.code, "1510");
+    assert.deepEqual(creditLines.map((line) => line.accountId), [bankAccount.id]);
+    assert.equal(lines.reduce((sum, line) => sum + Number(line.debit), 0), 60_000);
+    assert.equal(lines.reduce((sum, line) => sum + Number(line.credit), 0), 60_000);
+  });
+
+  it("rejects a mixed food and supply purchase group without claiming bank or purchases", async () => {
+    const [foodAccount] = await db.select({ id: chartOfAccountsTable.id })
+      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1500"));
+    const [supplyAccount] = await db.select({ id: chartOfAccountsTable.id })
+      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1510"));
+    assert.ok(foodAccount);
+    assert.ok(supplyAccount);
+    const [food] = await db.insert(inventoryPurchasesTable).values({
+      materialType: "food", accountId: foodAccount.id, documentName: "Mixed group food purchase",
+      date: "2099-08-14", totalAmount: 25_000,
+    }).returning();
+    const [supply] = await db.insert(inventoryPurchasesTable).values({
+      materialType: "supply", accountId: supplyAccount.id, documentName: "Mixed group supply purchase",
+      date: "2099-08-14", totalAmount: 35_000,
+    }).returning();
+    purchaseIds.push(food.id, supply.id);
+    const bankId = await bank("2099-08-15", 60_000, `mixed-purchase-group-${randomUUID()}`);
+    const response = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-purchases`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ inventoryPurchaseIds: [food.id, supply.id] }),
+    });
+    assert.equal(response.status, 409);
+
+    const [unclaimed] = await db.select().from(bankTransactionsTable)
+      .where(eq(bankTransactionsTable.id, bankId));
+    assert.equal(unclaimed.cashTransactionId, null);
+    assert.equal(unclaimed.journalEntryId, null);
+    assert.equal(unclaimed.transferredAt, null);
+    const unchangedPurchases = await db.select().from(inventoryPurchasesTable)
+      .where(inArray(inventoryPurchasesTable.id, [food.id, supply.id]))
+      .orderBy(inventoryPurchasesTable.id);
+    assert.deepEqual(unchangedPurchases.map((purchase) => [purchase.paymentDate, purchase.paymentAmount]), [
+      [null, null], [null, null],
+    ]);
+    assert.equal((await db.select().from(cashTransactionsTable)
+      .where(eq(cashTransactionsTable.bankTransactionId, bankId))).length, 0);
     assert.equal((await db.select().from(inventoryPurchasePaymentGroupsTable)
       .where(eq(inventoryPurchasePaymentGroupsTable.bankTransactionId, bankId))).length, 0);
     assert.equal((await db.select().from(journalEntriesTable).where(and(
