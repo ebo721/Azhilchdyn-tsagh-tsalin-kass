@@ -31,7 +31,7 @@ export function AppShell({ children, role, onLogout }: { children: ReactNode; ro
     : role === 'accountant'
       ? nav.filter((item) => ['/employees', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/journal', '/meal-counts'].includes(item.href))
       : role === 'warehouse'
-        ? nav.filter((item) => ['/inventory', '/fixed-assets', '/operating-expenses', '/meals', '/meal-schedule', '/meal-counts'].includes(item.href))
+        ? nav.filter((item) => ['/inventory', '/fixed-assets', '/meals', '/meal-schedule', '/meal-counts'].includes(item.href))
         : role === 'technologist'
           ? nav.filter((item) => ['/meals', '/meal-schedule', '/meal-counts'].includes(item.href))
         : role === 'viewer'
