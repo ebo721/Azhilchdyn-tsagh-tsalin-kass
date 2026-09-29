@@ -102,6 +102,10 @@ router.post("/fixed-assets", async (req, res, next) => {
       res.status(400).json({ error: "Хөрөнгийн нэр хоосон байж болохгүй" });
       return;
     }
+    if (money(input.unitPrice) !== input.unitPrice) {
+      res.status(400).json({ error: "Хөрөнгийн нэгж үнэ 2 орны нарийвчлалтай байх ёстой" });
+      return;
+    }
     if (input.purchased && await isCashDateClosed(input.date)) {
       res.status(409).json({ error: "Өндөрлөсөн өдөр худалдан авсан хөрөнгө бүртгэх боломжгүй" });
       return;
@@ -163,6 +167,10 @@ router.put("/fixed-assets/:id", async (req, res, next) => {
     const name = input.name.trim();
     if (!name) {
       res.status(400).json({ error: "Хөрөнгийн нэр хоосон байж болохгүй" });
+      return;
+    }
+    if (money(input.unitPrice) !== input.unitPrice) {
+      res.status(400).json({ error: "Хөрөнгийн нэгж үнэ 2 орны нарийвчлалтай байх ёстой" });
       return;
     }
     const [existing] = await db.select().from(fixedAssetsTable).where(eq(fixedAssetsTable.id, id));

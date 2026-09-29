@@ -13,8 +13,17 @@ import { getStaffSession } from "../lib/hr-session.js";
 import {
   JournalValidationError, postJournalEntry, voidJournalEntry,
 } from "../lib/journal-posting.js";
+import type { Tx } from "../lib/route-shared.js";
 
 const router: IRouter = Router();
+
+async function isFixedAssetJournal(tx: Tx, entry: { sourceType: string; sourceId: number | null }): Promise<boolean> {
+  if (entry.sourceType === "fixed_asset") return true;
+  if (entry.sourceType !== "reversal" || entry.sourceId === null) return false;
+  const [original] = await tx.select({ sourceType: journalEntriesTable.sourceType })
+    .from(journalEntriesTable).where(eq(journalEntriesTable.id, entry.sourceId));
+  return original?.sourceType === "fixed_asset";
+}
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : "Invalid journal entry";
 function journalDate(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -211,11 +220,16 @@ router.delete("/journal/entries/:id", async (req, res, next) => {
   try {
     const { id } = DeleteJournalEntryParams.parse(req.params);
     const result = await db.transaction(async (tx) => {
-      const [entry] = await tx.select({ id: journalEntriesTable.id })
+      const [entry] = await tx.select({
+        id: journalEntriesTable.id,
+        sourceType: journalEntriesTable.sourceType,
+        sourceId: journalEntriesTable.sourceId,
+      })
         .from(journalEntriesTable)
         .where(eq(journalEntriesTable.id, id))
         .for("update");
       if (!entry) return "missing" as const;
+      if (await isFixedAssetJournal(tx, entry)) return "fixed_asset_owned" as const;
       const [link] = await tx.select({ linked: sql<boolean>`
         EXISTS (SELECT 1 FROM ${receivablesTable} WHERE ${receivablesTable.originJournalEntryId} = ${id})
         OR EXISTS (SELECT 1 FROM ${receivableAllocationsTable} WHERE ${receivableAllocationsTable.settlementJournalEntryId} = ${id})
@@ -227,6 +241,9 @@ router.delete("/journal/entries/:id", async (req, res, next) => {
       return "deleted" as const;
     });
     if (result === "missing") return res.status(404).json({ error: "Journal entry not found" });
+    if (result === "fixed_asset_owned") {
+      return res.status(409).json({ error: "Эд хөрөнгийн журналыг шууд устгахгүй. Эд хөрөнгийн бүртгэлээс засна уу" });
+    }
     if (result === "allocation_linked") {
       return res.status(409).json({ error: "Авлага эсвэл өглөгтэй холбоотой журналыг шууд устгах боломжгүй" });
     }
@@ -247,7 +264,17 @@ router.post("/journal/entries/:id/void", async (req, res, next) => {
       return res.status(409).json({ error: "Энэ журнал банк эсвэл кассын гүйлгээтэй холбоотой тул эх үүсвэр цэснээс өөрчилнө үү" });
     }
     const session = await getStaffSession(req);
-    const result = await db.transaction((tx) => voidJournalEntry(tx, { journalEntryId: id, voidedBy: session?.id ?? null }));
+    const result = await db.transaction(async (tx) => {
+      const [entry] = await tx.select({
+        sourceType: journalEntriesTable.sourceType,
+        sourceId: journalEntriesTable.sourceId,
+      }).from(journalEntriesTable).where(eq(journalEntriesTable.id, id)).for("update");
+      if (entry && await isFixedAssetJournal(tx, entry)) return "fixed_asset_owned" as const;
+      return voidJournalEntry(tx, { journalEntryId: id, voidedBy: session?.id ?? null });
+    });
+    if (result === "fixed_asset_owned") {
+      return res.status(409).json({ error: "Эд хөрөнгийн журналыг шууд буцаахгүй. Эд хөрөнгийн бүртгэлээс засна уу" });
+    }
     return res.json(VoidJournalEntryResponse.parse(result));
   } catch (error) {
     const message = errorMessage(error);

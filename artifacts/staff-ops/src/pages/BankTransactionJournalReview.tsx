@@ -48,21 +48,32 @@ export function BankTransactionJournalReview() {
   const [linkingRowId, setLinkingRowId] = useState<number | null>(null);
   const [linkingExpenseAccountId, setLinkingExpenseAccountId] = useState<number | undefined>();
   const [linkingPurchaseMaterialType, setLinkingPurchaseMaterialType] = useState<'food' | 'supply' | undefined>();
+  const [linkingFixedAsset, setLinkingFixedAsset] = useState(false);
   const purchaseMaterialType = (accountId: number | null | undefined) => {
     const account = accounts.data?.find((item) => item.id === accountId && item.isActive);
     return account?.code === '1500' ? 'food' : account?.code === '1510' ? 'supply' : undefined;
   };
+  const isFixedAssetAccount = (accountId: number | null | undefined) =>
+    accounts.data?.some((account) => account.id === accountId && account.code === '1800') ?? false;
   const isOperatingExpenseAccount = (accountId: number | null | undefined) =>
     accounts.data?.some((account) => account.id === accountId && account.isActive
       && account.type === 'expense' && !['6000', '6010'].includes(account.code)) ?? false;
   const openExpenseLink = (rowId: number, accountId: number) => {
     setLinkingPurchaseMaterialType(undefined);
+    setLinkingFixedAsset(false);
     setLinkingExpenseAccountId(accountId);
     setLinkingRowId(rowId);
   };
   const openPurchaseLink = (rowId: number, materialType: 'food' | 'supply') => {
     setLinkingExpenseAccountId(undefined);
+    setLinkingFixedAsset(false);
     setLinkingPurchaseMaterialType(materialType);
+    setLinkingRowId(rowId);
+  };
+  const openFixedAssetLink = (rowId: number) => {
+    setLinkingExpenseAccountId(undefined);
+    setLinkingPurchaseMaterialType(undefined);
+    setLinkingFixedAsset(true);
     setLinkingRowId(rowId);
   };
   const invalidateLinkedDocumentViews = () => {
@@ -81,6 +92,10 @@ export function BankTransactionJournalReview() {
 
   const handleApprove = (item: BankTransactionJournalReviewItem) => {
     if (!item.suggestedAccountId) return;
+    if (item.type === BankTransactionJournalReviewItemType.expense && isFixedAssetAccount(item.suggestedAccountId)) {
+      openFixedAssetLink(item.id);
+      return;
+    }
     if (item.existingPurchaseMatch?.type === 'inventory_purchase') {
       linkPurchase.mutate({ id: item.id, data: { inventoryPurchaseId: item.existingPurchaseMatch.id } }, {
         onSuccess: invalidateLinkedDocumentViews,
@@ -120,6 +135,10 @@ export function BankTransactionJournalReview() {
     if (!accountId) return;
     const selectedPurchaseType = item.type === BankTransactionJournalReviewItemType.expense
       ? purchaseMaterialType(accountId) : undefined;
+    if (item.type === BankTransactionJournalReviewItemType.expense && isFixedAssetAccount(accountId)) {
+      openFixedAssetLink(item.id);
+      return;
+    }
     if (selectedPurchaseType) {
       openPurchaseLink(item.id, selectedPurchaseType);
       return;
@@ -242,12 +261,12 @@ export function BankTransactionJournalReview() {
                           <Button 
                             size="sm" 
                             variant="outline" 
-                            className="flex-1 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+                             className="flex-1 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
                             onClick={() => handleApprove(row)}
                             disabled={isPending}
                             data-testid={`button-approve-suggestion-${row.id}`}
                           >
-                             <Check className="mr-1.5 size-3.5" /> {!isIncome && !row.existingPurchaseMatch && purchaseMaterialType(row.suggestedAccountId) ? 'Худалдан авалт холбох' : !isIncome && !row.existingPurchaseMatch && isOperatingExpenseAccount(row.suggestedAccountId) ? 'Зардал холбох' : 'Зөвшөөрөх'}
+                              <Check className="mr-1.5 size-3.5" /> {!isIncome && isFixedAssetAccount(row.suggestedAccountId) ? 'Эд хөрөнгө холбох' : !isIncome && !row.existingPurchaseMatch && purchaseMaterialType(row.suggestedAccountId) ? 'Худалдан авалт холбох' : !isIncome && !row.existingPurchaseMatch && isOperatingExpenseAccount(row.suggestedAccountId) ? 'Зардал холбох' : 'Зөвшөөрөх'}
                           </Button>
                           <Button 
                             size="sm" 
@@ -285,12 +304,14 @@ export function BankTransactionJournalReview() {
                             onClick={() => handleCustomPost(row)}
                             data-testid={`button-post-custom-${row.id}`}
                           >
-                             {!isIncome && purchaseMaterialType(selectedAccounts[row.id]) ? 'Худалдан авалт холбох' : !isIncome && isOperatingExpenseAccount(selectedAccounts[row.id]) ? 'Зардал холбох' : 'Зөвхөн журналд'}
+                              {!isIncome && isFixedAssetAccount(selectedAccounts[row.id]) ? 'Эд хөрөнгө холбох' : !isIncome && purchaseMaterialType(selectedAccounts[row.id]) ? 'Худалдан авалт холбох' : !isIncome && isOperatingExpenseAccount(selectedAccounts[row.id]) ? 'Зардал холбох' : 'Зөвхөн журналд'}
                           </Button>
                         </div>
                         {!isIncome && (
-                          <p className="text-xs text-muted-foreground">
-                             Бараа материал, хангамжийн зарлагад худалдан авалтын баримт заавал холбох эсвэл шинээр үүсгэнэ. Ингэснээр касс, худалдан авалт, журнал хамт бүртгэгдэнэ. Бусад ангиллыг зөвхөн журналд шивэхэд эдгээр жагсаалтад мөр нэмэгдэхгүй.
+                          isFixedAssetAccount(selectedAccounts[row.id] || row.suggestedAccountId) ? (
+                            <p className="text-xs text-muted-foreground">1800 дансны зарлагыг эд хөрөнгийн баримтаар холбох шаардлагатай. Энд хөрөнгө үүсгэх эсвэл Эд хөрөнгө хэсэгт урьдчилан бүртгэнэ; холбосноор банк, касс, журнал хамт бичигдэнэ.</p>
+                          ) : <p className="text-xs text-muted-foreground">
+                            Бараа материал, хангамжийн зарлагад худалдан авалтын баримт заавал холбох эсвэл шинээр үүсгэнэ. Ингэснээр касс, худалдан авалт, журнал хамт бүртгэгдэнэ. Бусад ангиллыг зөвхөн журналд шивэхэд эдгээр жагсаалтад мөр нэмэгдэхгүй.
                           </p>
                         )}
                         {isIncome === false && (
@@ -299,9 +320,11 @@ export function BankTransactionJournalReview() {
                             size="sm"
                             variant="outline"
                              onClick={() => {
-                                const purchaseType = purchaseMaterialType(selectedAccounts[row.id] || row.suggestedAccountId);
+                                 const accountId = selectedAccounts[row.id] || row.suggestedAccountId;
+                                 const purchaseType = purchaseMaterialType(accountId);
                                 setLinkingPurchaseMaterialType(purchaseType);
-                                setLinkingExpenseAccountId(!purchaseType && isOperatingExpenseAccount(selectedAccounts[row.id]) ? selectedAccounts[row.id] : undefined);
+                                 setLinkingFixedAsset(isFixedAssetAccount(accountId));
+                                 setLinkingExpenseAccountId(!purchaseType && isOperatingExpenseAccount(accountId) ? accountId! : undefined);
                                setLinkingRowId(linkingRowId === row.id ? null : row.id);
                              }}
                             disabled={isPending}
@@ -315,7 +338,7 @@ export function BankTransactionJournalReview() {
                   </div>
                   {isIncome === false && linkingRowId === row.id && (
                     <div className="w-full basis-full">
-                       <BankDocumentLinkPanel key={`${row.id}-${linkingExpenseAccountId ?? 'manual'}-${linkingPurchaseMaterialType ?? 'other'}`} row={row} initialExpenseAccountId={linkingExpenseAccountId} initialPurchaseMaterialType={linkingPurchaseMaterialType} onClose={() => setLinkingRowId(null)} />
+                        <BankDocumentLinkPanel key={`${row.id}-${linkingExpenseAccountId ?? 'manual'}-${linkingPurchaseMaterialType ?? 'other'}-${linkingFixedAsset}`} row={row} initialExpenseAccountId={linkingExpenseAccountId} initialPurchaseMaterialType={linkingPurchaseMaterialType} initialFixedAsset={linkingFixedAsset} onClose={() => setLinkingRowId(null)} />
                     </div>
                   )}
                 </div>

@@ -52,6 +52,9 @@ export async function linkBankPurchases(id: number, purchaseIds: number[]) {
       .where(eq(bankTransactionsTable.id, id)).for("update");
     if (!bank) return "missing_bank";
     if (bank.type !== "expense" || bank.cashTransactionId !== null || bank.transferredAt !== null || bank.unclearAt !== null || bank.journalEntryId !== null) return "bank_resolved";
+    const [assignedAccount] = bank.accountId === null ? [] : await tx.select({ code: chartOfAccountsTable.code })
+      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, bank.accountId));
+    if (assignedAccount?.code === "1800") return "fixed_asset_document_required";
 
     const date = bank.transactionAt.toISOString().slice(0, 10);
     const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable)
@@ -279,6 +282,9 @@ export async function linkBankPurchase(id: number, input: PurchaseInput): Promis
     const [bank] = await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id)).for("update");
     if (!bank) return "missing_bank";
     if (bank.type !== "expense" || bank.cashTransactionId !== null || bank.transferredAt !== null || bank.unclearAt !== null || bank.journalEntryId !== null) return "bank_resolved";
+    const [assignedAccount] = bank.accountId === null ? [] : await tx.select({ code: chartOfAccountsTable.code })
+      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, bank.accountId));
+    if (assignedAccount?.code === "1800") return "fixed_asset_document_required";
     const date = bank.transactionAt.toISOString().slice(0, 10);
     const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, date));
     if (closed) return "closed";
@@ -350,6 +356,7 @@ export async function linkBankExpense(id: number, input: ExpenseInput): Promise<
     const [assignedAccount] = bank.accountId === null ? [] : await tx.select({ code: chartOfAccountsTable.code })
       .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, bank.accountId));
     if (inventoryPurchaseAccountCodes.some((code) => code === assignedAccount?.code)) return "purchase_document_required";
+    if (assignedAccount?.code === "1800") return "fixed_asset_document_required";
     const date = bank.transactionAt.toISOString().slice(0, 10);
     const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, date));
     if (closed) return "closed";
@@ -407,6 +414,7 @@ export async function linkBankFixedAsset(id: number, input: FixedAssetInput): Pr
       }
     } else {
       const name = input.name.trim();
+      if (money(input.unitPrice) !== input.unitPrice) return "invalid_unit_price";
       const total = money(input.unitPrice * input.quantity);
       if (!name || input.date !== date || total !== amount) return "bank_mismatch";
       [asset] = await tx.insert(fixedAssetsTable).values({
@@ -470,7 +478,7 @@ export async function linkBankFixedAsset(id: number, input: FixedAssetInput): Pr
     }
 
     const [claimed] = await tx.update(bankTransactionsTable)
-      .set({ cashTransactionId: cash.id, transferredAt: verifiedAt })
+      .set({ accountId: fixedAssetAccount.id, cashTransactionId: cash.id, transferredAt: verifiedAt })
       .where(and(
         eq(bankTransactionsTable.id, id),
         isNull(bankTransactionsTable.cashTransactionId),

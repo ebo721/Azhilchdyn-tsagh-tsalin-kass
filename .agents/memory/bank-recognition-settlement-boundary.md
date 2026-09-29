@@ -9,7 +9,7 @@ Bank recognition may suggest the GL account from a matching unpaid purchase or o
 
 **How to apply:** Keep generic GL classification and explicit document linking as separate actions. Source-backed approval must call the dedicated link flow; never make the generic post-journal endpoint settle documents.
 
-When an accountant selects an operating-expense GL account for a bank expense in the journal-review UI, guide them to confirm an existing or new operating-expense document before posting. Salary and social-insurance accounts belong to payroll, not operating expenses. Keep direct GL-only posting available for classifications that are neither operating expenses nor inventory/supply purchases, and label it clearly as journal-only.
+When an accountant selects an operating-expense GL account for a bank expense in the journal-review UI, guide them to confirm an existing or new operating-expense document before posting. Salary and social-insurance accounts belong to payroll, not operating expenses. Keep direct GL-only posting available for classifications that are neither operating expenses nor inventory/supply or fixed-asset purchases, and label it clearly as journal-only.
 
 **Why:** The user expects a bank-funded operating expense to appear in Cash and Operating Expenses as well as the journal. Automatically creating an expense from every GL suggestion could duplicate an existing unpaid document or misclassify a purchase, while an unqualified journal-only action leaves those source lists empty.
 
