@@ -56,7 +56,11 @@
     {
       "filename": "20261004_attendance_concurrency_and_cancellation.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20261005_inventory_purchase_payment_groups.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "845d92ac5359140216c6b427ccf68a147354ceca3e1a0fedef208b7fab83c1b9"
+  "schemaFingerprint": "d48d6ee8ec6989ba1721c8f0d9e5f1cf8af321dc1c7d48042a9914329bf92b3c"
 }

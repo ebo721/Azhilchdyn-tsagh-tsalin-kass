@@ -13,6 +13,7 @@ import {
   useLinkBankTransactionExpense,
   useLinkBankTransactionFixedAsset,
   useLinkBankTransactionPurchase,
+  useLinkBankTransactionPurchases,
   useListChartOfAccounts,
   useListFixedAssets,
   useListInventoryPurchases,
@@ -36,6 +37,7 @@ export function BankDocumentLinkPanel({
   const qc = useQueryClient();
   const [type, setType] = useState<LinkType>('expense');
   const [existingId, setExistingId] = useState('');
+  const [selectedPurchaseIds, setSelectedPurchaseIds] = useState<number[]>([]);
   const [description, setDescription] = useState(row.description);
   const [accountId, setAccountId] = useState('');
   const [materialType, setMaterialType] = useState<'food' | 'supply'>('food');
@@ -53,6 +55,7 @@ export function BankDocumentLinkPanel({
   const accounts = useListChartOfAccounts();
   const linkExpense = useLinkBankTransactionExpense();
   const linkPurchase = useLinkBankTransactionPurchase();
+  const linkPurchases = useLinkBankTransactionPurchases();
   const linkFixedAsset = useLinkBankTransactionFixedAsset();
 
   const unpaidExpenses = useMemo(
@@ -60,9 +63,17 @@ export function BankDocumentLinkPanel({
     [expenses.data, row.date, row.amount],
   );
   const unpaidPurchases = useMemo(
-    () => (purchases.data ?? []).filter((item) => !item.paymentDate && item.date === row.date && item.totalAmount === row.amount),
+    () => (purchases.data ?? []).filter((item) =>
+      !item.paymentDate && item.date === row.date
+      && Math.round(item.totalAmount * 100) > 0
+      && Math.round(item.totalAmount * 100) <= Math.round(row.amount * 100)),
     [purchases.data, row.date, row.amount],
   );
+  const selectedPurchaseTotalCents = unpaidPurchases
+    .filter((item) => selectedPurchaseIds.includes(item.id))
+    .reduce((total, item) => total + Math.round(item.totalAmount * 100), 0);
+  const bankAmountCents = Math.round(row.amount * 100);
+  const selectedPurchasesMatch = selectedPurchaseIds.length > 0 && selectedPurchaseTotalCents === bankAmountCents;
   const matchingFixedAssets = useMemo(
     () => (fixedAssets.data ?? []).filter((item) =>
       item.date === row.date
@@ -77,7 +88,8 @@ export function BankDocumentLinkPanel({
   const purchaseMatchesBank = Math.round(purchaseTotal * 100) === Math.round(row.amount * 100);
   const assetTotal = Number(assetQuantity || 0) * Number(assetUnitPrice || 0);
   const assetMatchesBank = Math.round(assetTotal * 100) === Math.round(row.amount * 100);
-  const error = linkExpense.error ?? linkPurchase.error ?? linkFixedAsset.error;
+  const error = linkExpense.error ?? linkPurchase.error ?? linkPurchases.error ?? linkFixedAsset.error;
+  const linking = linkExpense.isPending || linkPurchase.isPending || linkPurchases.isPending || linkFixedAsset.isPending;
   const loading = expenses.isLoading || purchases.isLoading || fixedAssets.isLoading || accounts.isLoading;
   const invalidate = () => {
     [getListBankTransactionJournalReviewQueryKey(), getListBankTransactionsQueryKey(), getListCashTransactionsQueryKey(),
@@ -89,8 +101,15 @@ export function BankDocumentLinkPanel({
   const submitExisting = () => {
     if (!existingId) return;
     if (type === 'expense') linkExpense.mutate({ id: row.id, data: { operatingExpenseId: Number(existingId) } }, { onSuccess: done });
-    else if (type === 'purchase') linkPurchase.mutate({ id: row.id, data: { inventoryPurchaseId: Number(existingId) } }, { onSuccess: done });
     else linkFixedAsset.mutate({ id: row.id, data: { fixedAssetId: Number(existingId) } }, { onSuccess: done });
+  };
+  const submitSelectedPurchases = () => {
+    if (!selectedPurchasesMatch || linking) return;
+    if (selectedPurchaseIds.length === 1) {
+      linkPurchase.mutate({ id: row.id, data: { inventoryPurchaseId: selectedPurchaseIds[0] } }, { onSuccess: done });
+    } else {
+      linkPurchases.mutate({ id: row.id, data: { inventoryPurchaseIds: selectedPurchaseIds } }, { onSuccess: done });
+    }
   };
   const submitExpense = (event: FormEvent) => {
     event.preventDefault();
@@ -130,21 +149,55 @@ export function BankDocumentLinkPanel({
       {loading ? <p className="text-sm text-muted-foreground">Баримтуудыг уншиж байна...</p> : (
         <>
           <div className="mb-3 flex gap-2">
-            <Button type="button" size="sm" variant={type === 'expense' ? 'default' : 'outline'} onClick={() => { setType('expense'); setExistingId(''); }}>Зардал</Button>
-            <Button type="button" size="sm" variant={type === 'purchase' ? 'default' : 'outline'} onClick={() => { setType('purchase'); setExistingId(''); }}>Худалдан авалт</Button>
-            <Button type="button" size="sm" variant={type === 'fixed-asset' ? 'default' : 'outline'} onClick={() => { setType('fixed-asset'); setExistingId(''); }}>Эд хөрөнгө</Button>
+            <Button type="button" size="sm" variant={type === 'expense' ? 'default' : 'outline'} onClick={() => { setType('expense'); setExistingId(''); setSelectedPurchaseIds([]); }}>Зардал</Button>
+            <Button type="button" size="sm" variant={type === 'purchase' ? 'default' : 'outline'} onClick={() => { setType('purchase'); setExistingId(''); setSelectedPurchaseIds([]); }}>Худалдан авалт</Button>
+            <Button type="button" size="sm" variant={type === 'fixed-asset' ? 'default' : 'outline'} onClick={() => { setType('fixed-asset'); setExistingId(''); setSelectedPurchaseIds([]); }}>Эд хөрөнгө</Button>
           </div>
-          {(type === 'expense' ? unpaidExpenses.length > 0 : type === 'purchase' ? unpaidPurchases.length > 0 : matchingFixedAssets.length > 0) && (
+          {(type === 'expense' ? unpaidExpenses.length > 0 : type === 'fixed-asset' && matchingFixedAssets.length > 0) && (
             <div className="mb-4 flex gap-2">
               <select value={existingId} onChange={(event) => setExistingId(event.target.value)} className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm" data-testid={`select-existing-document-${row.id}`}>
                 <option value="">Таарсан төлөгдөөгүй баримт сонгох...</option>
                 {type === 'expense'
                   ? unpaidExpenses.map((item) => <option key={item.id} value={item.id}>{item.description} · {money(item.amount)}</option>)
-                  : type === 'purchase'
-                    ? unpaidPurchases.map((item) => <option key={item.id} value={item.id}>{item.supplierName} · {money(item.totalAmount)}</option>)
-                    : matchingFixedAssets.map((item) => <option key={item.id} value={item.id}>{item.name} · {money(item.totalAmount)} · {item.purchased ? 'Худалдан авсан' : 'Бүртгэсэн'}</option>)}
+                  : matchingFixedAssets.map((item) => <option key={item.id} value={item.id}>{item.name} · {money(item.totalAmount)} · {item.purchased ? 'Худалдан авсан' : 'Бүртгэсэн'}</option>)}
               </select>
-              <Button type="button" size="sm" disabled={!existingId || linkExpense.isPending || linkPurchase.isPending || linkFixedAsset.isPending} onClick={submitExisting}>Холбох</Button>
+              <Button type="button" size="sm" disabled={!existingId || linking} onClick={submitExisting}>Холбох</Button>
+            </div>
+          )}
+          {type === 'purchase' && (
+            <div className="mb-4 space-y-3 rounded-lg border border-border/70 bg-background p-3">
+              <div>
+                <p className="text-xs font-semibold">Төлөгдөөгүй худалдан авалтуудаас сонгох</p>
+                <p className="text-xs text-muted-foreground">Нэг буюу хэд хэдэн баримтыг бүтнээр нь холбоно. Огноо ижил, нийлбэр нь банкны дүнтэй яг тэнцүү байх ёстой.</p>
+              </div>
+              {unpaidPurchases.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Энэ өдөр тохирох төлөгдөөгүй худалдан авалт алга.</p>
+              ) : (
+                <div className="max-h-48 space-y-1 overflow-y-auto">
+                  {unpaidPurchases.map((item) => (
+                    <label key={item.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-secondary/60">
+                      <input
+                        type="checkbox"
+                        checked={selectedPurchaseIds.includes(item.id)}
+                        disabled={linking}
+                        onChange={(event) => setSelectedPurchaseIds((current) =>
+                          event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))}
+                        data-testid={`checkbox-link-purchase-${row.id}-${item.id}`}
+                      />
+                      <span className="min-w-0 flex-1 truncate">#{item.id} · {item.supplierName}</span>
+                      <span className="shrink-0 font-mono">{money(item.totalAmount)}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-2">
+                <p className={selectedPurchasesMatch ? 'text-xs font-semibold text-emerald-700' : 'text-xs text-muted-foreground'}>
+                  Сонгосон: {money(selectedPurchaseTotalCents / 100)} · Зөрүү: {money((bankAmountCents - selectedPurchaseTotalCents) / 100)}
+                </p>
+                <Button type="button" size="sm" disabled={!selectedPurchasesMatch || linking} onClick={submitSelectedPurchases} data-testid={`button-link-selected-purchases-${row.id}`}>
+                  {linking ? 'Холбож байна...' : `${selectedPurchaseIds.length} худалдан авалт холбох`}
+                </Button>
+              </div>
             </div>
           )}
           {type === 'expense' ? (

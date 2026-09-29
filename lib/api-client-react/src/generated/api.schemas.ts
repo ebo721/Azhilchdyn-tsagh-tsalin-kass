@@ -968,6 +968,7 @@ export const CashTransactionTransactionKind = {
   payroll: 'payroll',
   payroll_advance: 'payroll_advance',
   inventory_purchase: 'inventory_purchase',
+  inventory_purchase_group: 'inventory_purchase_group',
   fixed_asset_purchase: 'fixed_asset_purchase',
   operating_expense: 'operating_expense',
   bank_transaction: 'bank_transaction',
@@ -1085,6 +1086,7 @@ export const CashTransactionSuggestionTransactionKind = {
   payroll: 'payroll',
   payroll_advance: 'payroll_advance',
   inventory_purchase: 'inventory_purchase',
+  inventory_purchase_group: 'inventory_purchase_group',
   fixed_asset_purchase: 'fixed_asset_purchase',
   operating_expense: 'operating_expense',
   bank_transaction: 'bank_transaction',
@@ -1340,6 +1342,39 @@ export interface BankPurchaseLinkResult {
   cashTransactionId: number;
   /** @minimum 1 */
   journalEntryId: number;
+}
+
+export interface BankPurchasesLinkInput {
+  /**
+     * @minItems 2
+     * @items.minimum 1
+     */
+  inventoryPurchaseIds: number[];
+}
+
+export interface BankPurchasesLinkResult {
+  /** @minimum 1 */
+  bankTransactionId: number;
+  /**
+     * @minItems 2
+     * @items.minimum 1
+     */
+  inventoryPurchaseIds: number[];
+  /** @minimum 1 */
+  cashTransactionId: number;
+  /** @minimum 1 */
+  journalEntryId: number;
+}
+
+export interface BankPurchaseGroupCancellationResult {
+  /** @minimum 1 */
+  bankTransactionId: number;
+  /**
+     * @minItems 2
+     * @items.minimum 1
+     */
+  inventoryPurchaseIds: number[];
+  cancelled: true;
 }
 
 export interface ExistingOperatingExpenseLink {
@@ -1691,6 +1726,11 @@ export interface InventoryPurchase {
   paid: boolean;
   paymentDate?: string | null;
   paymentAmount?: number | null;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  paymentGroupBankTransactionId: number | null;
   createdAt: string;
   editable: boolean;
   items: InventoryPurchaseItem[];

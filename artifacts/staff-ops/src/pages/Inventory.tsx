@@ -104,6 +104,7 @@ import {
   useUpdateInventoryPurchase,
   useConfirmInventoryPurchasePayment,
   useCancelInventoryPurchasePayment,
+  useCancelBankTransactionPurchaseGroup,
   useDeleteInventoryPurchase,
   useReclassifyInventoryPurchaseAsExpense,
   useListInventoryIssues,
@@ -221,6 +222,7 @@ export function Inventory() {
   const chartOfAccounts = useListChartOfAccounts();
   const confirmPurchasePayment = useConfirmInventoryPurchasePayment();
   const cancelPurchasePayment = useCancelInventoryPurchasePayment();
+  const cancelPurchaseGroup = useCancelBankTransactionPurchaseGroup();
   const deletion = useQueueDeletion();
   const remove = deletion;
   const removeIssue = deletion;
@@ -384,10 +386,25 @@ export function Inventory() {
     });
   };
   const togglePurchasePayment = (purchase: InventoryPurchase, checked: boolean) => {
+    if (cancelPurchaseGroup.isPending) return;
     if (checked) {
       setSelectedPaymentBank(null);
       setPaymentPurchase(purchase);
       paymentForm.reset({ date: today(), amount: String(purchase.totalAmount) });
+      return;
+    }
+    if (purchase.paymentGroupBankTransactionId !== null) {
+      const bankId = purchase.paymentGroupBankTransactionId;
+      const count = purchasesQuery.data?.filter((item) => item.paymentGroupBankTransactionId === bankId).length ?? 0;
+      if (!window.confirm(`Банкны #${bankId} гүйлгээгээр хамт төлөгдсөн ${count} худалдан авалтын БҮХ төлбөрийг цуцлах уу? Кассын бүртгэл ба журналын бичилт хамт буцаагдана.`)) return;
+      cancelPurchaseGroup.mutate({ id: bankId }, {
+        onSuccess: () => {
+          [getListInventoryPurchasesQueryKey(), getListCashTransactionsQueryKey(),
+            getListBankTransactionsQueryKey(), getGetCashSummaryQueryKey()]
+            .forEach((queryKey) => qc.invalidateQueries({ queryKey }));
+        },
+        onError: (error) => window.alert(error instanceof Error ? error.message : 'Багц төлбөрийг цуцалж чадсангүй.'),
+      });
       return;
     }
     if (!window.confirm(`"${purchase.supplierName}" худалдан авалтын төлбөрийг цуцлах уу? Кассын зарлага хамт устна.`)) return;

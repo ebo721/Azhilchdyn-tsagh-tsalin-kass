@@ -4,8 +4,9 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { and, eq, inArray } from "drizzle-orm";
 import {
-  bankTransactionsTable, cashTransactionsTable, chartOfAccountsTable, db,
-  fixedAssetsTable, inventoryPurchasesTable, journalEntriesTable, journalLinesTable,
+  bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db,
+  fixedAssetsTable, inventoryPurchasePaymentGroupMembersTable, inventoryPurchasePaymentGroupsTable,
+  inventoryPurchasesTable, journalEntriesTable, journalLinesTable,
   operatingExpensesTable, usersTable,
 } from "@workspace/db";
 import app from "../app";
@@ -21,6 +22,8 @@ describe("bank document linking", () => {
   const expenseIds: number[] = [];
   const fixedAssetIds: number[] = [];
   const journalIds: number[] = [];
+  const paymentGroupIds: number[] = [];
+  const closureIds: number[] = [];
   const userIds: number[] = [];
   let accountId: number;
 
@@ -44,6 +47,11 @@ describe("bank document linking", () => {
   after(async () => {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     if (bankIds.length) await db.update(bankTransactionsTable).set({ cashTransactionId: null, transferredAt: null }).where(inArray(bankTransactionsTable.id, bankIds));
+    if (paymentGroupIds.length) {
+      await db.delete(inventoryPurchasePaymentGroupMembersTable).where(inArray(inventoryPurchasePaymentGroupMembersTable.groupId, paymentGroupIds));
+      await db.delete(inventoryPurchasePaymentGroupsTable).where(inArray(inventoryPurchasePaymentGroupsTable.id, paymentGroupIds));
+    }
+    if (closureIds.length) await db.delete(cashClosuresTable).where(inArray(cashClosuresTable.id, closureIds));
     if (expenseIds.length) await db.update(operatingExpensesTable).set({ bankTransactionId: null, cashTransactionId: null }).where(inArray(operatingExpensesTable.id, expenseIds));
     if (cashIds.length) await db.delete(cashTransactionsTable).where(inArray(cashTransactionsTable.id, cashIds));
     if (journalIds.length) {
@@ -275,6 +283,261 @@ describe("bank document linking", () => {
     const review = await fetch(`${baseUrl}/api/bank-transactions/journal-review`, { headers: { cookie } });
     assert.equal((await review.json() as Array<{ id: number }>).some((row) => row.id === bankId), false);
     assert.equal((await fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-purchase`, { method: "POST", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ inventoryPurchaseId: purchase.id }) })).status, 409);
+  });
+
+  it("links distinct unpaid purchases as one atomic bank payment and cancels the group atomically", async () => {
+    const [inventoryAccount] = await db.select({ id: chartOfAccountsTable.id })
+      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1500"));
+    assert.ok(inventoryAccount);
+    const [first] = await db.insert(inventoryPurchasesTable).values({
+      materialType: "food", accountId: inventoryAccount.id, documentName: "Grouped purchase A",
+      date: "2099-08-09", totalAmount: 42_000,
+    }).returning();
+    const [second] = await db.insert(inventoryPurchasesTable).values({
+      materialType: "food", accountId: inventoryAccount.id, documentName: "Grouped purchase B",
+      date: "2099-08-09", totalAmount: 18_000,
+    }).returning();
+    purchaseIds.push(first.id, second.id);
+    const bankId = await bank("2099-08-09", 60_000, "grouped-purchases");
+    const response = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-purchases`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ inventoryPurchaseIds: [second.id, first.id] }),
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json() as {
+      bankTransactionId: number; inventoryPurchaseIds: number[]; cashTransactionId: number; journalEntryId: number;
+    };
+    assert.deepEqual(result.inventoryPurchaseIds, [first.id, second.id]);
+    cashIds.push(result.cashTransactionId);
+    journalIds.push(result.journalEntryId);
+    const [cash] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, result.cashTransactionId));
+    assert.equal(cash.amount, 60_000);
+    assert.equal(cash.sourceType, "inventory_purchase_group");
+    const cashListResponse = await fetch(`${baseUrl}/api/cash/transactions`, { headers: { cookie } });
+    assert.equal(cashListResponse.status, 200);
+    const cashRows = await cashListResponse.json() as Array<{ id: number; transactionKind: string }>;
+    assert.equal(cashRows.find((row) => row.id === result.cashTransactionId)?.transactionKind, "inventory_purchase_group");
+    const entries = await db.select().from(journalEntriesTable)
+      .where(eq(journalEntriesTable.id, result.journalEntryId));
+    assert.equal(entries.length, 1);
+    const lines = await db.select({
+      accountId: journalLinesTable.accountId,
+      debit: journalLinesTable.debit,
+      credit: journalLinesTable.credit,
+    }).from(journalLinesTable).where(eq(journalLinesTable.journalEntryId, result.journalEntryId));
+    assert.equal(lines.length, 3);
+    const debitLines = lines.filter((line) => Number(line.debit) > 0);
+    assert.deepEqual(debitLines.map((line) => Number(line.debit)), [42_000, 18_000]);
+    assert.deepEqual(debitLines.map((line) => line.accountId), [inventoryAccount.id, inventoryAccount.id]);
+    const [bankAccount] = await db.select({ id: chartOfAccountsTable.id })
+      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1010"));
+    assert.deepEqual(lines.filter((line) => Number(line.credit) > 0).map((line) => line.accountId), [bankAccount.id]);
+    assert.equal(lines.reduce((sum, line) => sum + Number(line.debit), 0), 60_000);
+    assert.equal(lines.reduce((sum, line) => sum + Number(line.credit), 0), 60_000);
+    const [claimedBank] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankId));
+    assert.equal(claimedBank.cashTransactionId, result.cashTransactionId);
+    assert.equal(claimedBank.journalEntryId, result.journalEntryId);
+    const paidPurchases = await db.select().from(inventoryPurchasesTable)
+      .where(inArray(inventoryPurchasesTable.id, [first.id, second.id]))
+      .orderBy(inventoryPurchasesTable.id);
+    assert.deepEqual(paidPurchases.map((purchase) => [purchase.paymentDate, Number(purchase.paymentAmount)]), [
+      ["2099-08-09", 42_000], ["2099-08-09", 18_000],
+    ]);
+    const members = await db.select().from(inventoryPurchasePaymentGroupMembersTable)
+      .where(inArray(inventoryPurchasePaymentGroupMembersTable.purchaseId, [first.id, second.id]));
+    assert.equal(members.length, 2);
+    const [group] = await db.select().from(inventoryPurchasePaymentGroupsTable)
+      .where(eq(inventoryPurchasePaymentGroupsTable.bankTransactionId, bankId));
+    paymentGroupIds.push(group.id);
+    const purchaseList = await fetch(`${baseUrl}/api/inventory/purchases`, { headers: { cookie } });
+    const purchaseRows = await purchaseList.json() as Array<{ id: number; paymentGroupBankTransactionId: number | null }>;
+    assert.equal(purchaseRows.find((purchase) => purchase.id === first.id)?.paymentGroupBankTransactionId, bankId);
+    assert.equal(purchaseRows.find((purchase) => purchase.id === second.id)?.paymentGroupBankTransactionId, bankId);
+    const protectedEdit = await fetch(`${baseUrl}/api/inventory/purchases/${first.id}`, {
+      method: "PUT",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({
+        materialType: "food", supplierName: "Changed supplier", hasReceipt: false, date: "2099-08-09",
+        items: [{ name: "Changed item", category: "Food", unit: "ширхэг", quantity: 1, unitPrice: 42_000 }],
+      }),
+    });
+    assert.equal(protectedEdit.status, 409);
+    const protectedReclassification = await fetch(`${baseUrl}/api/inventory/purchases/${second.id}/reclassify-as-expense`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ accountId }),
+    });
+    assert.equal(protectedReclassification.status, 409);
+    const protectedJournalUnlink = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/journal`, {
+      method: "DELETE", headers: { cookie },
+    });
+    assert.equal(protectedJournalUnlink.status, 409);
+    const [closure] = await db.insert(cashClosuresTable).values({ date: "2099-08-09" }).returning();
+    closureIds.push(closure.id);
+    const blockedCancel = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/purchase-group`, {
+      method: "DELETE", headers: { cookie },
+    });
+    assert.equal(blockedCancel.status, 409);
+    const [stillActiveGroup] = await db.select().from(inventoryPurchasePaymentGroupsTable)
+      .where(eq(inventoryPurchasePaymentGroupsTable.id, group.id));
+    assert.equal(stillActiveGroup.status, "active");
+    await db.delete(cashClosuresTable).where(eq(cashClosuresTable.id, closure.id));
+    closureIds.splice(closureIds.indexOf(closure.id), 1);
+    await db.update(inventoryPurchasesTable).set({ paymentAmount: 41_999 }).where(eq(inventoryPurchasesTable.id, first.id));
+    const inconsistentPurchaseCancel = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/purchase-group`, {
+      method: "DELETE", headers: { cookie },
+    });
+    assert.equal(inconsistentPurchaseCancel.status, 409);
+    await db.update(inventoryPurchasesTable).set({ paymentAmount: 42_000 }).where(eq(inventoryPurchasesTable.id, first.id));
+    await db.update(cashTransactionsTable).set({ amount: 60_001 }).where(eq(cashTransactionsTable.id, result.cashTransactionId));
+    const inconsistentCashCancel = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/purchase-group`, {
+      method: "DELETE", headers: { cookie },
+    });
+    assert.equal(inconsistentCashCancel.status, 409);
+    await db.update(cashTransactionsTable).set({ amount: 60_000 }).where(eq(cashTransactionsTable.id, result.cashTransactionId));
+    await db.update(journalEntriesTable).set({ status: "void" }).where(eq(journalEntriesTable.id, result.journalEntryId));
+    const inconsistentJournalCancel = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/purchase-group`, {
+      method: "DELETE", headers: { cookie },
+    });
+    assert.equal(inconsistentJournalCancel.status, 409);
+    await db.update(journalEntriesTable).set({ status: "posted" }).where(eq(journalEntriesTable.id, result.journalEntryId));
+
+    const individualCancel = await fetch(`${baseUrl}/api/inventory/purchases/${first.id}/payment`, {
+      method: "DELETE", headers: { cookie },
+    });
+    assert.equal(individualCancel.status, 409);
+    const individualDelete = await fetch(`${baseUrl}/api/inventory/purchases/${second.id}`, {
+      method: "DELETE", headers: { cookie },
+    });
+    assert.equal(individualDelete.status, 409);
+
+    const cancel = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/purchase-group`, {
+      method: "DELETE", headers: { cookie },
+    });
+    assert.equal(cancel.status, 200);
+    const cancelled = await cancel.json() as { inventoryPurchaseIds: number[]; cancelled: boolean };
+    assert.deepEqual(cancelled.inventoryPurchaseIds, [first.id, second.id]);
+    assert.equal(cancelled.cancelled, true);
+    const [cancelledGroup] = await db.select().from(inventoryPurchasePaymentGroupsTable)
+      .where(eq(inventoryPurchasePaymentGroupsTable.id, group.id));
+    assert.equal(cancelledGroup.status, "cancelled");
+    assert.ok(cancelledGroup.cancelledAt);
+    const savedPurchases = await db.select().from(inventoryPurchasesTable)
+      .where(inArray(inventoryPurchasesTable.id, [first.id, second.id]));
+    assert.ok(savedPurchases.every((purchase) => purchase.paymentDate === null && purchase.paymentAmount === null));
+    const purchaseListAfterCancel = await fetch(`${baseUrl}/api/inventory/purchases`, { headers: { cookie } });
+    const rowsAfterCancel = await purchaseListAfterCancel.json() as Array<{ id: number; paymentGroupBankTransactionId: number | null }>;
+    assert.equal(rowsAfterCancel.find((purchase) => purchase.id === first.id)?.paymentGroupBankTransactionId, null);
+    const historicalMembers = await db.select().from(inventoryPurchasePaymentGroupMembersTable)
+      .where(eq(inventoryPurchasePaymentGroupMembersTable.groupId, group.id));
+    assert.equal(historicalMembers.length, 2);
+    const deleteAfterCancel = await fetch(`${baseUrl}/api/inventory/purchases/${first.id}`, {
+      method: "DELETE", headers: { cookie },
+    });
+    assert.equal(deleteAfterCancel.status, 204);
+    const [unlinkedBank] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankId));
+    assert.equal(unlinkedBank.cashTransactionId, null);
+    assert.equal(unlinkedBank.journalEntryId, null);
+    const [voidedEntry] = await db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, result.journalEntryId));
+    assert.equal(voidedEntry.status, "void");
+    const reversal = await db.select().from(journalEntriesTable).where(and(
+      eq(journalEntriesTable.sourceType, "reversal"),
+      eq(journalEntriesTable.sourceId, result.journalEntryId),
+    ));
+    assert.equal(reversal.length, 1);
+    journalIds.push(reversal[0].id);
+  });
+
+  it("rejects mismatched grouped totals without leaving a bank claim or partial accounting rows", async () => {
+    const [inventoryAccount] = await db.select({ id: chartOfAccountsTable.id })
+      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1500"));
+    assert.ok(inventoryAccount);
+    const [first] = await db.insert(inventoryPurchasesTable).values({
+      materialType: "food", accountId: inventoryAccount.id, documentName: "Mismatch group A",
+      date: "2099-08-10", totalAmount: 4_000,
+    }).returning();
+    const [second] = await db.insert(inventoryPurchasesTable).values({
+      materialType: "food", accountId: inventoryAccount.id, documentName: "Mismatch group B",
+      date: "2099-08-10", totalAmount: 5_000,
+    }).returning();
+    purchaseIds.push(first.id, second.id);
+    const bankId = await bank("2099-08-10", 10_000, "mismatched-purchase-group");
+    const duplicate = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-purchases`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ inventoryPurchaseIds: [first.id, first.id] }),
+    });
+    assert.equal(duplicate.status, 400);
+    const response = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-purchases`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ inventoryPurchaseIds: [first.id, second.id] }),
+    });
+    assert.equal(response.status, 409);
+    const [unclaimed] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankId));
+    assert.equal(unclaimed.cashTransactionId, null);
+    assert.equal(unclaimed.transferredAt, null);
+    assert.equal((await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.bankTransactionId, bankId))).length, 0);
+    assert.equal((await db.select().from(inventoryPurchasePaymentGroupsTable)
+      .where(eq(inventoryPurchasePaymentGroupsTable.bankTransactionId, bankId))).length, 0);
+    assert.equal((await db.select().from(journalEntriesTable).where(and(
+      eq(journalEntriesTable.sourceType, "inventory_purchase_group"),
+      eq(journalEntriesTable.sourceId, bankId),
+    ))).length, 0);
+  });
+
+  it("serializes grouped bank linking against the existing single-purchase payment path", async () => {
+    const [inventoryAccount] = await db.select({ id: chartOfAccountsTable.id })
+      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1500"));
+    assert.ok(inventoryAccount);
+    const [first] = await db.insert(inventoryPurchasesTable).values({
+      materialType: "food", accountId: inventoryAccount.id, documentName: "Racing purchase A",
+      date: "2099-08-11", totalAmount: 12_000,
+    }).returning();
+    const [second] = await db.insert(inventoryPurchasesTable).values({
+      materialType: "food", accountId: inventoryAccount.id, documentName: "Racing purchase B",
+      date: "2099-08-11", totalAmount: 20_000,
+    }).returning();
+    purchaseIds.push(first.id, second.id);
+    const bankId = await bank("2099-08-11", 32_000, "racing-purchase-group");
+    const headers = { cookie, "content-type": "application/json" };
+    const [groupResponse, singleResponse] = await Promise.all([
+      fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-purchases`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ inventoryPurchaseIds: [first.id, second.id] }),
+      }),
+      fetch(`${baseUrl}/api/inventory/purchases/${first.id}/payment`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ date: "2099-08-11", amount: 12_000 }),
+      }),
+    ]);
+    assert.deepEqual([groupResponse.status, singleResponse.status].sort(), [200, 409]);
+    if (groupResponse.status === 200) {
+      const result = await groupResponse.json() as { cashTransactionId: number; journalEntryId: number };
+      cashIds.push(result.cashTransactionId);
+      journalIds.push(result.journalEntryId);
+      const [group] = await db.select().from(inventoryPurchasePaymentGroupsTable)
+        .where(eq(inventoryPurchasePaymentGroupsTable.bankTransactionId, bankId));
+      paymentGroupIds.push(group.id);
+    } else {
+      const [cash] = await db.select().from(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "inventory_purchase"),
+        eq(cashTransactionsTable.sourceKey, `purchase:${first.id}`),
+      ));
+      assert.ok(cash?.journalEntryId);
+      cashIds.push(cash.id);
+      journalIds.push(cash.journalEntryId);
+    }
+    const [bankAfter] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankId));
+    if (groupResponse.status === 200) {
+      assert.ok(bankAfter.cashTransactionId);
+      assert.equal(bankAfter.amount, 32_000);
+    } else {
+      assert.equal(bankAfter.cashTransactionId, null);
+    }
   });
 
   it("serializes reverse and forward linking without a deadlock or duplicate journal", async () => {

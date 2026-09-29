@@ -38,7 +38,7 @@ describe("inventory purchase payment", () => {
       documentName: `Payment test ${process.pid}`,
       hasReceipt: true,
       date: "2099-01-10",
-      totalAmount: 125_000,
+      totalAmount: 120_000,
       accountId: inventoryAccountId,
     }).returning({ id: inventoryPurchasesTable.id });
     purchaseId = purchase.id;
@@ -85,6 +85,18 @@ describe("inventory purchase payment", () => {
     const suggestions = await suggestionsResponse.json() as Array<{ id: number; score: number }>;
     assert.equal(suggestions[0]?.id, bankTransactionId);
     assert.ok((suggestions[0]?.score ?? 0) > 0);
+
+    const partialResponse = await fetch(`${baseUrl}/api/inventory/purchases/${purchaseId}/payment`, {
+      method: "PUT",
+      headers: { "content-type": "application/json", cookie: adminCookie },
+      body: JSON.stringify({ date: "2099-01-15", amount: 119_999, bankTransactionId }),
+    });
+    assert.equal(partialResponse.status, 409);
+    const [unpaidPurchase] = await db.select().from(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, purchaseId));
+    assert.equal(unpaidPurchase.paymentDate, null);
+    assert.equal((await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.bankTransactionId, bankTransactionId))).length, 0);
+    const [unclaimedBank] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankTransactionId));
+    assert.equal(unclaimedBank.cashTransactionId, null);
 
     const confirmResponse = await fetch(`${baseUrl}/api/inventory/purchases/${purchaseId}/payment`, {
       method: "PUT",
@@ -174,6 +186,61 @@ describe("inventory purchase payment", () => {
     const [releasedAfterDelete] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankTransactionId));
     assert.equal(releasedAfterDelete?.cashTransactionId, null);
     assert.equal(releasedAfterDelete?.transferredAt, null);
+  });
+
+  it("rejects a bank-linked single-purchase payment that is less than the full purchase total", async () => {
+    const [partialPurchase] = await db.insert(inventoryPurchasesTable).values({
+      materialType: "food",
+      documentName: `Partial bank payment ${process.pid}`,
+      hasReceipt: true,
+      date: "2099-01-11",
+      totalAmount: 125_000,
+      accountId: inventoryAccountId,
+    }).returning({ id: inventoryPurchasesTable.id });
+    const [partialBank] = await db.insert(bankTransactionsTable).values({
+      transactionAt: new Date("2099-01-16T09:30:00.000Z"),
+      type: "expense",
+      amount: 120_000,
+      description: `Partial bank payment ${process.pid}`,
+      fingerprint: `inventory-payment-partial-${process.pid}`,
+    }).returning({ id: bankTransactionsTable.id });
+    try {
+      const partialResponse = await fetch(`${baseUrl}/api/inventory/purchases/${partialPurchase.id}/payment`, {
+        method: "PUT",
+        headers: { "content-type": "application/json", cookie: adminCookie },
+        body: JSON.stringify({ date: "2099-01-16", amount: 120_000, bankTransactionId: partialBank.id }),
+      });
+      assert.equal(partialResponse.status, 409);
+      const [unpaid] = await db.select().from(inventoryPurchasesTable)
+        .where(eq(inventoryPurchasesTable.id, partialPurchase.id));
+      assert.equal(unpaid.paymentDate, null);
+      assert.equal(unpaid.paymentAmount, null);
+      const [unclaimed] = await db.select().from(bankTransactionsTable)
+        .where(eq(bankTransactionsTable.id, partialBank.id));
+      assert.equal(unclaimed.cashTransactionId, null);
+      assert.equal(unclaimed.transferredAt, null);
+      assert.equal((await db.select().from(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "inventory_purchase"),
+        eq(cashTransactionsTable.sourceKey, `purchase:${partialPurchase.id}`),
+      ))).length, 0);
+    } finally {
+      const partialCash = await db.select().from(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "inventory_purchase"),
+        eq(cashTransactionsTable.sourceKey, `purchase:${partialPurchase.id}`),
+      ));
+      await db.update(bankTransactionsTable).set({ cashTransactionId: null, transferredAt: null, journalEntryId: null })
+        .where(eq(bankTransactionsTable.id, partialBank.id));
+      if (partialCash.length) await db.delete(cashTransactionsTable)
+        .where(inArray(cashTransactionsTable.id, partialCash.map((row) => row.id)));
+      const partialEntries = await db.select({ id: journalEntriesTable.id }).from(journalEntriesTable).where(and(
+        eq(journalEntriesTable.sourceType, "inventory_purchase"),
+        eq(journalEntriesTable.sourceId, partialPurchase.id),
+      ));
+      if (partialEntries.length) await db.delete(journalEntriesTable)
+        .where(inArray(journalEntriesTable.id, partialEntries.map((row) => row.id)));
+      await db.delete(bankTransactionsTable).where(eq(bankTransactionsTable.id, partialBank.id));
+      await db.delete(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, partialPurchase.id));
+    }
   });
 
   it("allows only one purchase to claim the same bank transaction concurrently", async () => {

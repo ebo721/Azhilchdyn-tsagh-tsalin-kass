@@ -21,6 +21,11 @@ export interface InventoryPurchase {
   paid: boolean;
   paymentDate?: string | null;
   paymentAmount?: number | null;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  paymentGroupBankTransactionId: number | null;
   createdAt: string;
   editable: boolean;
   items: InventoryPurchaseItem[];

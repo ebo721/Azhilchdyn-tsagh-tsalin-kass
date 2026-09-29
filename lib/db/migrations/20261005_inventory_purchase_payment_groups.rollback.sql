@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS inventory_purchase_payment_group_members;
+DROP TABLE IF EXISTS inventory_purchase_payment_groups;

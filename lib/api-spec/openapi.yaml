@@ -1129,6 +1129,47 @@ paths:
           description: Bank transaction or purchase not found
         "409":
           description: Bank transaction or purchase is incompatible or already resolved
+  /bank-transactions/{id}/link-purchases:
+    post:
+      operationId: linkBankTransactionPurchases
+      tags: [bank-transactions]
+      summary: Link multiple existing unpaid inventory purchases to one bank expense
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankPurchasesLinkInput" }
+      responses:
+        "200":
+          description: Purchases linked through one cash transaction and balanced journal
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankPurchasesLinkResult" }
+        "400":
+          description: Invalid purchase selection
+        "404":
+          description: Bank transaction or one or more purchases not found
+        "409":
+          description: Bank transaction or purchase is incompatible or already resolved
+  /bank-transactions/{id}/purchase-group:
+    delete:
+      operationId: cancelBankTransactionPurchaseGroup
+      tags: [bank-transactions]
+      summary: Atomically cancel a grouped inventory purchase bank payment
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Grouped payment reversed and purchases returned to unpaid
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankPurchaseGroupCancellationResult" }
+        "404":
+          description: Bank transaction or active purchase group not found
+        "409":
+          description: Group cannot be cancelled because its date is closed or state is incompatible
   /bank-transactions/{id}/link-expense:
     post:
       operationId: linkBankTransactionExpense
@@ -3100,7 +3141,7 @@ components:
         journalEntryId: { type: ["integer", "null"] }
         createdAt: { type: string }
         editable: { type: boolean }
-        transactionKind: { type: string, enum: [manual, payroll, payroll_advance, inventory_purchase, fixed_asset_purchase, operating_expense, bank_transaction] }
+        transactionKind: { type: string, enum: [manual, payroll, payroll_advance, inventory_purchase, inventory_purchase_group, fixed_asset_purchase, operating_expense, bank_transaction] }
     BankAccount:
       type: object
       required: [id, bankName, accountNumber, createdAt]
@@ -3157,7 +3198,7 @@ components:
         journalEntryId: { type: ["integer", "null"] }
         createdAt: { type: string }
         editable: { type: boolean }
-        transactionKind: { type: string, enum: [manual, payroll, payroll_advance, inventory_purchase, fixed_asset_purchase, operating_expense, bank_transaction] }
+        transactionKind: { type: string, enum: [manual, payroll, payroll_advance, inventory_purchase, inventory_purchase_group, fixed_asset_purchase, operating_expense, bank_transaction] }
         score: { type: number }
     CashTransactionInput:
       type: object
@@ -3287,6 +3328,38 @@ components:
         inventoryPurchaseId: { type: integer, minimum: 1 }
         cashTransactionId: { type: integer, minimum: 1 }
         journalEntryId: { type: integer, minimum: 1 }
+    BankPurchasesLinkInput:
+      type: object
+      required: [inventoryPurchaseIds]
+      properties:
+        inventoryPurchaseIds:
+          type: array
+          minItems: 2
+          uniqueItems: true
+          items: { type: integer, minimum: 1 }
+    BankPurchasesLinkResult:
+      type: object
+      required: [bankTransactionId, inventoryPurchaseIds, cashTransactionId, journalEntryId]
+      properties:
+        bankTransactionId: { type: integer, minimum: 1 }
+        inventoryPurchaseIds:
+          type: array
+          minItems: 2
+          uniqueItems: true
+          items: { type: integer, minimum: 1 }
+        cashTransactionId: { type: integer, minimum: 1 }
+        journalEntryId: { type: integer, minimum: 1 }
+    BankPurchaseGroupCancellationResult:
+      type: object
+      required: [bankTransactionId, inventoryPurchaseIds, cancelled]
+      properties:
+        bankTransactionId: { type: integer, minimum: 1 }
+        inventoryPurchaseIds:
+          type: array
+          minItems: 2
+          uniqueItems: true
+          items: { type: integer, minimum: 1 }
+        cancelled: { type: boolean, const: true }
     ExistingOperatingExpenseLink:
       type: object
       required: [operatingExpenseId]
@@ -3534,7 +3607,7 @@ components:
         totalAmount: { type: number }
     InventoryPurchase:
       type: object
-      required: [id, materialType, accountId, accountCode, accountName, supplierName, hasReceipt, date, totalAmount, paid, createdAt, editable, items]
+      required: [id, materialType, accountId, accountCode, accountName, supplierName, hasReceipt, date, totalAmount, paid, paymentGroupBankTransactionId, createdAt, editable, items]
       properties:
         id: { type: integer }
         materialType:
@@ -3550,6 +3623,7 @@ components:
         paid: { type: boolean }
         paymentDate: { type: string, nullable: true }
         paymentAmount: { type: number, nullable: true }
+        paymentGroupBankTransactionId: { type: ["integer", "null"], minimum: 1 }
         createdAt: { type: string }
         editable: { type: boolean }
         items:
