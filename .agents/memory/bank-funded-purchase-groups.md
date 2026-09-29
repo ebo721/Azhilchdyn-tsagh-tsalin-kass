@@ -14,3 +14,9 @@ Allow a purchase document dated **on or before** a bank settlement to be linked 
 **Why:** The user explicitly confirmed that a purchase recorded earlier may be paid by a later bank transaction. Requiring identical dates hides legitimate unpaid purchases, while rewriting their document dates loses the original record.
 
 **How to apply:** Use this date rule in candidate lists, link validation, and group cancellation integrity checks. Do not infer payment from the document date.
+
+Keep a grouped bank payment homogeneous by material type: all food/inventory purchases or all supply purchases. Reject a mixed group until its cash representation can carry a split classification.
+
+**Why:** One bank-linked cash row has only one category and one asset account. A mixed 1500/1510 journal can be correct while that single cash row misstates one side of the purchase.
+
+**How to apply:** Validate group material types before claiming the bank row; use the corresponding asset account and category for homogeneous cash rows and display them consistently. Do not silently default a mixed group to inventory.
