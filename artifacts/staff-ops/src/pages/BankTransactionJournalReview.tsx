@@ -46,6 +46,14 @@ export function BankTransactionJournalReview() {
 
   const [selectedAccounts, setSelectedAccounts] = useState<Record<number, number>>({});
   const [linkingRowId, setLinkingRowId] = useState<number | null>(null);
+  const [linkingExpenseAccountId, setLinkingExpenseAccountId] = useState<number | undefined>();
+  const isOperatingExpenseAccount = (accountId: number | null | undefined) =>
+    accounts.data?.some((account) => account.id === accountId && account.isActive
+      && account.type === 'expense' && !['6000', '6010'].includes(account.code)) ?? false;
+  const openExpenseLink = (rowId: number, accountId: number) => {
+    setLinkingExpenseAccountId(accountId);
+    setLinkingRowId(rowId);
+  };
   const invalidateLinkedDocumentViews = () => {
     [
       getListBankTransactionJournalReviewQueryKey(),
@@ -76,6 +84,10 @@ export function BankTransactionJournalReview() {
       });
       return;
     }
+    if (item.type === BankTransactionJournalReviewItemType.expense && isOperatingExpenseAccount(item.suggestedAccountId)) {
+      openExpenseLink(item.id, item.suggestedAccountId);
+      return;
+    }
     post.mutate({ id: item.id, data: { accountId: item.suggestedAccountId } }, {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getListBankTransactionJournalReviewQueryKey() });
@@ -89,6 +101,10 @@ export function BankTransactionJournalReview() {
   const handleCustomPost = (item: BankTransactionJournalReviewItem) => {
     const accountId = selectedAccounts[item.id];
     if (!accountId) return;
+    if (item.type === BankTransactionJournalReviewItemType.expense && isOperatingExpenseAccount(accountId)) {
+      openExpenseLink(item.id, accountId);
+      return;
+    }
     post.mutate({ id: item.id, data: { accountId } }, {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getListBankTransactionJournalReviewQueryKey() });
@@ -208,7 +224,7 @@ export function BankTransactionJournalReview() {
                             disabled={isPending}
                             data-testid={`button-approve-suggestion-${row.id}`}
                           >
-                            <Check className="mr-1.5 size-3.5" /> Зөвшөөрөх
+                             <Check className="mr-1.5 size-3.5" /> {isIncome || row.existingPurchaseMatch || !isOperatingExpenseAccount(row.suggestedAccountId) ? 'Зөвшөөрөх' : 'Зардал холбох'}
                           </Button>
                           <Button 
                             size="sm" 
@@ -246,15 +262,23 @@ export function BankTransactionJournalReview() {
                             onClick={() => handleCustomPost(row)}
                             data-testid={`button-post-custom-${row.id}`}
                           >
-                            Шивэх
+                            {!isIncome && isOperatingExpenseAccount(selectedAccounts[row.id]) ? 'Зардал холбох' : 'Зөвхөн журналд'}
                           </Button>
                         </div>
+                        {!isIncome && (
+                          <p className="text-xs text-muted-foreground">
+                            Касс, худалдан авалт эсвэл үйл ажиллагааны зардалд бүртгэх бол баримт холбож баталгаажуулна. Цалин, НДШ-ийг цалингийн бүртгэлээр холбоно. Зөвхөн журналд шивэхэд эдгээр жагсаалтад мөр нэмэгдэхгүй.
+                          </p>
+                        )}
                         {isIncome === false && (
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
-                            onClick={() => setLinkingRowId(linkingRowId === row.id ? null : row.id)}
+                             onClick={() => {
+                               setLinkingExpenseAccountId(isOperatingExpenseAccount(selectedAccounts[row.id]) ? selectedAccounts[row.id] : undefined);
+                               setLinkingRowId(linkingRowId === row.id ? null : row.id);
+                             }}
                             disabled={isPending}
                             data-testid={`button-link-bank-document-${row.id}`}
                           >
@@ -266,7 +290,7 @@ export function BankTransactionJournalReview() {
                   </div>
                   {isIncome === false && linkingRowId === row.id && (
                     <div className="w-full basis-full">
-                      <BankDocumentLinkPanel row={row} onClose={() => setLinkingRowId(null)} />
+                       <BankDocumentLinkPanel key={`${row.id}-${linkingExpenseAccountId ?? 'manual'}`} row={row} initialExpenseAccountId={linkingExpenseAccountId} onClose={() => setLinkingRowId(null)} />
                     </div>
                   )}
                 </div>

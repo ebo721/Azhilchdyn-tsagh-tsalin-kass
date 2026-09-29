@@ -30,16 +30,18 @@ const inventoryUnits: InventoryPurchaseItemInputUnit[] = ['ширхэг', 'кг'
 export function BankDocumentLinkPanel({
   row,
   onClose,
+  initialExpenseAccountId,
 }: {
   row: BankTransactionJournalReviewItem;
   onClose: () => void;
+  initialExpenseAccountId?: number;
 }) {
   const qc = useQueryClient();
   const [type, setType] = useState<LinkType>('expense');
   const [existingId, setExistingId] = useState('');
   const [selectedPurchaseIds, setSelectedPurchaseIds] = useState<number[]>([]);
   const [description, setDescription] = useState(row.description);
-  const [accountId, setAccountId] = useState('');
+  const [accountId, setAccountId] = useState(initialExpenseAccountId ? String(initialExpenseAccountId) : '');
   const [materialType, setMaterialType] = useState<'food' | 'supply'>('food');
   const [supplierName, setSupplierName] = useState(row.counterparty || '');
   const [hasReceipt, setHasReceipt] = useState(false);
@@ -206,7 +208,8 @@ export function BankDocumentLinkPanel({
               <input value={description} onChange={(event) => setDescription(event.target.value)} required className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" placeholder="Утга" data-testid={`input-link-expense-description-${row.id}`} />
               <select value={accountId} onChange={(event) => setAccountId(event.target.value)} required className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" data-testid={`select-link-expense-account-${row.id}`}>
                 <option value="">Идэвхтэй зардлын данс сонгох...</option>
-                {(accounts.data ?? []).filter((account) => account.isActive && account.type === 'expense').map((account) => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}
+                {(accounts.data ?? []).filter((account) => account.isActive && account.type === 'expense'
+                  && !['6000', '6010'].includes(account.code)).map((account) => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}
               </select>
               <div className="grid grid-cols-2 gap-2 text-xs"><label>Огноо<input value={row.date} readOnly className="mt-1 h-9 w-full rounded-md border border-input bg-muted px-2" /></label><label>Дүн<input value={row.amount} readOnly className="mt-1 h-9 w-full rounded-md border border-input bg-muted px-2" /></label></div>
               <Button type="submit" size="sm" disabled={!accountId || linkExpense.isPending}>Шинэ зардал үүсгэж холбох</Button>
