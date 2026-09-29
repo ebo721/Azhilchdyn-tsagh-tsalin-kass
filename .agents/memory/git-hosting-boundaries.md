@@ -19,6 +19,12 @@ If the checkout's HTTPS remote rejects its stored GitHub credential, use the con
 
 **How to apply:** Require the remote `main` head to equal the local commit's parent, commit all changed files together, then sync local `main` only after confirming the remote and local trees are identical.
 
+For a PR that must preserve existing commit history, check whether GitHub already has the desired commit objects through another pushed branch. If it does, create a new branch reference to the exact full commit SHA using the connected GitHub API, then open the PR from that branch; do not recreate or squash the commits.
+
+**Why:** A stale Git CLI credential does not prevent another workspace workflow from uploading the same ancestry, and GitHub can reuse uploaded objects without rewriting history.
+
+**How to apply:** Verify the full commit SHA through the GitHub API, compare it with the intended base to confirm commit count and files, and create the branch reference only when it does not already exist. Confirm the resulting PR excludes later work.
+
 Once a PR is merged, later commits to its source branch are not included in that merge and do not reach production. Treat follow-on fixes as a new branch from current `main`, a new PR, and a separate release check.
 
 **Why:** A merged feature PR had further fixes pushed to its source branch afterward. Vercel successfully deployed the merge, but the fixes remained absent from `main` and production.
