@@ -1,8 +1,7 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { format, startOfMonth } from 'date-fns';
 import {
-  ArrowDownRight,
   CalendarDays,
   Clock3,
   Download,
@@ -98,27 +97,23 @@ export function MealCounts() {
       .sort((a, b) => b.date.localeCompare(a.date) || a.mealType.localeCompare(b.mealType));
   }, [counts, mealType, search]);
 
-  const total = counts.reduce((sum, item) => sum + item.count, 0);
-  const dayCount = new Set(counts.map((item) => item.date)).size;
   const latestSync = counts.reduce((latest, item) => {
     const timestamp = Date.parse(item.syncedAt);
     return Number.isFinite(timestamp) && timestamp > latest ? timestamp : latest;
   }, 0);
   const filtersActive = Boolean(search.trim() || mealType);
-  const intervalChanged = dateFrom !== applied.dateFrom || dateTo !== applied.dateTo;
 
-  function applyInterval(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const error = validateInterval(dateFrom, dateTo);
-    if (error) { setValidation(error); return; }
-    setValidation('');
+  function changeInterval(nextFrom: string, nextTo: string) {
+    setDateFrom(nextFrom);
+    setDateTo(nextTo);
     setImportFeedback(null);
-    if (dateFrom === applied.dateFrom && dateTo === applied.dateTo) {
-      void query.refetch();
-    } else {
-      setApplied({ dateFrom, dateTo });
-      setMealType('');
-    }
+    const error = validateInterval(nextFrom, nextTo);
+    setValidation(error);
+    if (error) return;
+    setApplied((current) => current.dateFrom === nextFrom && current.dateTo === nextTo
+      ? current
+      : { dateFrom: nextFrom, dateTo: nextTo });
+    setMealType('');
   }
 
   function pullFromReader() {
@@ -161,16 +156,16 @@ export function MealCounts() {
             <CalendarDays className="size-4 text-primary" aria-hidden="true" />
             Хугацаа сонгох
           </div>
-           <p className="mt-1 text-xs text-muted-foreground">Хугацаагаа сонгоод хадгалсан бүртгэлийг харах эсвэл Reader-ээс гараар татах боломжтой. Дээд тал нь 366 хоног.</p>
+           <p className="mt-1 text-xs text-muted-foreground">Огноо сонгоход хадгалсан бүртгэл автоматаар харагдана. Reader-ээс мэдээллийг тусад нь татна. Дээд тал нь 366 хоног.</p>
         </div>
-        <form onSubmit={applyInterval} noValidate className="flex flex-col gap-4 p-5 sm:flex-row sm:items-end sm:p-6">
+        <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-end sm:p-6">
           <div className="min-w-0 flex-1">
             <label htmlFor="meal-count-date-from" className="mb-1.5 block text-xs font-semibold text-foreground">Эхлэх өдөр</label>
             <Input
               id="meal-count-date-from"
               type="date"
               value={dateFrom}
-              onChange={(event) => { setDateFrom(event.target.value); setValidation(''); setImportFeedback(null); }}
+              onChange={(event) => changeInterval(event.target.value, dateTo)}
               disabled={importCounts.isPending}
               aria-invalid={Boolean(validation)}
               aria-describedby={validation ? 'meal-count-date-error' : undefined}
@@ -183,36 +178,26 @@ export function MealCounts() {
               id="meal-count-date-to"
               type="date"
               value={dateTo}
-              onChange={(event) => { setDateTo(event.target.value); setValidation(''); setImportFeedback(null); }}
+              onChange={(event) => changeInterval(dateFrom, event.target.value)}
               disabled={importCounts.isPending}
               aria-invalid={Boolean(validation)}
               aria-describedby={validation ? 'meal-count-date-error' : undefined}
               data-testid="input-meal-count-date-to"
             />
           </div>
-           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-             <Button type="submit" variant="outline" disabled={importCounts.isPending} className="w-full sm:w-auto sm:min-w-28" data-testid="button-apply-meal-count-dates">
-               Харах <ArrowDownRight className="ml-2 size-4" aria-hidden="true" />
-             </Button>
-             {canImport && (
-               <Button type="button" onClick={pullFromReader} disabled={importCounts.isPending} className="w-full sm:w-auto sm:min-w-40" data-testid="button-import-meal-counts">
-                 <Download className="mr-2 size-4" aria-hidden="true" />
-                 {importCounts.isPending ? 'Татаж байна…' : 'Reader-ээс татах'}
-               </Button>
-             )}
-           </div>
-        </form>
+          {canImport && (
+            <Button type="button" onClick={pullFromReader} disabled={importCounts.isPending} className="w-full sm:w-auto sm:min-w-40" data-testid="button-import-meal-counts">
+              <Download className="mr-2 size-4" aria-hidden="true" />
+              {importCounts.isPending ? 'Татаж байна…' : 'Reader-ээс татах'}
+            </Button>
+          )}
+        </div>
         {validation && <p id="meal-count-date-error" role="alert" className="px-5 pb-5 text-sm font-medium text-destructive sm:px-6" data-testid="status-meal-count-date-error">{validation}</p>}
          {importFeedback && (
            <div role={importFeedback.kind === 'error' ? 'alert' : 'status'} aria-live="polite" className={`mx-5 mb-5 rounded-xl border px-4 py-3 text-sm font-medium sm:mx-6 ${importFeedback.kind === 'error' ? 'border-destructive/30 bg-destructive/5 text-destructive' : 'border-primary/25 bg-primary/5 text-foreground'}`} data-testid={`status-meal-count-import-${importFeedback.kind}`}>
              {importFeedback.message}
            </div>
          )}
-        {intervalChanged && !validation && (
-          <p className="px-5 pb-5 text-xs text-muted-foreground sm:px-6" data-testid="status-meal-count-unapplied">
-             Огноо өөрчлөгдсөн байна. “Харах” нь хадгалсан бүртгэлийг харуулна{canImport ? ', “Reader-ээс татах” нь сонгосон хугацааны мэдээллийг гараар татна' : ''}.
-          </p>
-        )}
       </section>
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -227,7 +212,6 @@ export function MealCounts() {
 
       {query.isLoading ? (
         <div className="space-y-5" data-testid="status-meal-count-loading">
-          <div className="grid gap-3 sm:grid-cols-3">{[0, 1, 2].map((index) => <LoadingBlock key={index} className="h-28" />)}</div>
           <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
             {[0, 1, 2, 3].map((index) => <LoadingBlock key={index} className="h-12" />)}
           </div>
@@ -236,24 +220,6 @@ export function MealCounts() {
         <ErrorBlock onRetry={() => void query.refetch()} />
       ) : (
         <>
-          <section className="grid gap-3 sm:grid-cols-3" aria-label="Хугацааны тойм">
-            <div className="rounded-2xl border border-primary/20 bg-primary p-5 text-primary-foreground shadow-sm" data-testid="card-meal-count-total">
-              <p className="text-[11px] font-bold uppercase tracking-[.14em] opacity-75">Нийт тоо</p>
-              <p className="mt-5 font-mono text-3xl font-bold tracking-tight" data-testid="value-meal-count-total">{numberFormat.format(total)}</p>
-              <p className="mt-1 text-xs opacity-75">Сонгосон хугацааны бүх бүртгэл</p>
-            </div>
-            <div className="rounded-2xl border border-border bg-card p-5 shadow-sm" data-testid="card-meal-count-days">
-              <div className="flex items-center justify-between"><p className="text-[11px] font-bold uppercase tracking-[.14em] text-muted-foreground">Бүртгэлтэй өдөр</p><CalendarDays className="size-4 text-primary" aria-hidden="true" /></div>
-              <p className="mt-5 font-mono text-3xl font-bold tracking-tight" data-testid="value-meal-count-days">{numberFormat.format(dayCount)}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Өдөр тутмын бүртгэл</p>
-            </div>
-            <div className="rounded-2xl border border-border bg-card p-5 shadow-sm" data-testid="card-meal-count-records">
-              <div className="flex items-center justify-between"><p className="text-[11px] font-bold uppercase tracking-[.14em] text-muted-foreground">Нийт мөр</p><UtensilsCrossed className="size-4 text-primary" aria-hidden="true" /></div>
-              <p className="mt-5 font-mono text-3xl font-bold tracking-tight" data-testid="value-meal-count-records">{numberFormat.format(counts.length)}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{mealTypes.length} төрлийн хоол</p>
-            </div>
-          </section>
-
           <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm" aria-label="Хоолны тооны жагсаалт">
             <div className="flex flex-col gap-4 border-b border-border p-5 sm:p-6 lg:flex-row lg:items-end lg:justify-between">
               <div>
