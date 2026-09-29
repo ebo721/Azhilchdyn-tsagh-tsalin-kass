@@ -7,7 +7,7 @@ import {
   ListJournalReceivablesQueryParams, ListJournalReceivablesResponse, ListJournalSuppliersResponse,
 } from "@workspace/api-zod";
 import { and, asc, desc, eq, gte, lte, inArray, sql } from "drizzle-orm";
-import { db, bankTransactionsTable, cashTransactionsTable, chartOfAccountsTable, journalEntriesTable, journalLinesTable, receivablesTable, receivableAllocationsTable, employeesTable, inventorySuppliersTable, type JournalEntry, type JournalLine } from "@workspace/db";
+import { db, bankTransactionsTable, cashTransactionsTable, chartOfAccountsTable, journalEntriesTable, journalLinesTable, receivablesTable, receivableAllocationsTable, payablesTable, payableAllocationsTable, employeesTable, inventorySuppliersTable, type JournalEntry, type JournalLine } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import {
   JournalValidationError, postJournalEntry, voidJournalEntry,
@@ -177,23 +177,19 @@ router.delete("/journal/entries/:id", async (req, res, next) => {
         .where(eq(journalEntriesTable.id, id))
         .for("update");
       if (!entry) return "missing" as const;
-      const [[originReceivable], [settlementAllocation]] = await Promise.all([
-        tx.select({ id: receivablesTable.id })
-          .from(receivablesTable)
-          .where(eq(receivablesTable.originJournalEntryId, id))
-          .limit(1),
-        tx.select({ id: receivableAllocationsTable.id })
-          .from(receivableAllocationsTable)
-          .where(eq(receivableAllocationsTable.settlementJournalEntryId, id))
-          .limit(1),
-      ]);
-      if (originReceivable || settlementAllocation) return "receivable_linked" as const;
+      const [link] = await tx.select({ linked: sql<boolean>`
+        EXISTS (SELECT 1 FROM ${receivablesTable} WHERE ${receivablesTable.originJournalEntryId} = ${id})
+        OR EXISTS (SELECT 1 FROM ${receivableAllocationsTable} WHERE ${receivableAllocationsTable.settlementJournalEntryId} = ${id})
+        OR EXISTS (SELECT 1 FROM ${payablesTable} WHERE ${payablesTable.journalEntryId} = ${id})
+        OR EXISTS (SELECT 1 FROM ${payableAllocationsTable} WHERE ${payableAllocationsTable.settlementJournalEntryId} = ${id})
+      ` }).from(journalEntriesTable).where(eq(journalEntriesTable.id, id));
+      if (link.linked) return "allocation_linked" as const;
       await tx.delete(journalEntriesTable).where(eq(journalEntriesTable.id, id));
       return "deleted" as const;
     });
     if (result === "missing") return res.status(404).json({ error: "Journal entry not found" });
-    if (result === "receivable_linked") {
-      return res.status(409).json({ error: "Авлагатай холбоотой журналыг шууд устгах боломжгүй" });
+    if (result === "allocation_linked") {
+      return res.status(409).json({ error: "Авлага эсвэл өглөгтэй холбоотой журналыг шууд устгах боломжгүй" });
     }
     return res.status(204).end();
   } catch (error) {
