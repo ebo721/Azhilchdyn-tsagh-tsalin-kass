@@ -21,6 +21,15 @@ import type {
 
 import type {
   Attendance,
+  AttendanceDevice,
+  AttendanceDeviceEnrollment,
+  AttendanceDeviceEnrollmentInput,
+  AttendanceDeviceEnrollmentIssued,
+  AttendanceDevicePunchInput,
+  AttendanceDeviceRegistration,
+  AttendanceDeviceRegistrationInput,
+  AttendanceDeviceSignedRequest,
+  AttendanceDeviceStatus,
   AttendanceInput,
   AttendanceToggleInput,
   AuthSession,
@@ -119,6 +128,11 @@ import type {
   MealScheduleSlot,
   MealScheduleSlotInput,
   NotFoundResponse,
+  OfficeAttendancePendingPunch,
+  OfficeAttendancePunchCancellation,
+  OfficeAttendancePunchCancellationInput,
+  OfficeNetwork,
+  OfficeNetworkInput,
   OperatingExpense,
   OperatingExpenseBankSuggestion,
   OperatingExpenseInput,
@@ -1663,7 +1677,7 @@ export const createAttendance = async (attendanceInput: AttendanceInput, options
 
 
 
-export const getCreateAttendanceMutationOptions = <TError = ErrorType<unknown>,
+export const getCreateAttendanceMutationOptions = <TError = ErrorType<ConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAttendance>>, TError,{data: BodyType<AttendanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createAttendance>>, TError,{data: BodyType<AttendanceInput>}, TContext> => {
 
@@ -1692,12 +1706,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateAttendanceMutationResult = NonNullable<Awaited<ReturnType<typeof createAttendance>>>
     export type CreateAttendanceMutationBody = BodyType<AttendanceInput>
-    export type CreateAttendanceMutationError = ErrorType<unknown>
+    export type CreateAttendanceMutationError = ErrorType<ConflictResponse>
 
     /**
  * @summary Create or replace attendance record
  */
-export const useCreateAttendance = <TError = ErrorType<unknown>,
+export const useCreateAttendance = <TError = ErrorType<ConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAttendance>>, TError,{data: BodyType<AttendanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createAttendance>>,
@@ -1734,7 +1748,7 @@ export const upsertAttendance = async (attendanceToggleInput: AttendanceToggleIn
 
 
 
-export const getUpsertAttendanceMutationOptions = <TError = ErrorType<unknown>,
+export const getUpsertAttendanceMutationOptions = <TError = ErrorType<ConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertAttendance>>, TError,{data: BodyType<AttendanceToggleInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof upsertAttendance>>, TError,{data: BodyType<AttendanceToggleInput>}, TContext> => {
 
@@ -1763,12 +1777,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpsertAttendanceMutationResult = NonNullable<Awaited<ReturnType<typeof upsertAttendance>>>
     export type UpsertAttendanceMutationBody = BodyType<AttendanceToggleInput>
-    export type UpsertAttendanceMutationError = ErrorType<unknown>
+    export type UpsertAttendanceMutationError = ErrorType<ConflictResponse>
 
     /**
  * @summary Mark an employee as present or absent for a day
  */
-export const useUpsertAttendance = <TError = ErrorType<unknown>,
+export const useUpsertAttendance = <TError = ErrorType<ConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertAttendance>>, TError,{data: BodyType<AttendanceToggleInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof upsertAttendance>>,
@@ -1812,7 +1826,7 @@ export const deleteAttendance = async (params: DeleteAttendanceParams, options?:
 
 
 
-export const getDeleteAttendanceMutationOptions = <TError = ErrorType<unknown>,
+export const getDeleteAttendanceMutationOptions = <TError = ErrorType<ConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAttendance>>, TError,{params: DeleteAttendanceParams}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteAttendance>>, TError,{params: DeleteAttendanceParams}, TContext> => {
 
@@ -1841,12 +1855,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type DeleteAttendanceMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAttendance>>>
 
-    export type DeleteAttendanceMutationError = ErrorType<unknown>
+    export type DeleteAttendanceMutationError = ErrorType<ConflictResponse>
 
     /**
  * @summary Clear an employee attendance record for a day
  */
-export const useDeleteAttendance = <TError = ErrorType<unknown>,
+export const useDeleteAttendance = <TError = ErrorType<ConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAttendance>>, TError,{params: DeleteAttendanceParams}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof deleteAttendance>>,
@@ -2372,6 +2386,812 @@ export const useCopyPreviousShiftPlans = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCopyPreviousShiftPlansMutationOptions(options));
+    }
+
+export const getGetOfficeAttendanceNetworkUrl = () => {
+
+
+
+
+  return `/api/attendance/office-network`
+}
+
+/**
+ * @summary Get the configured office public IP (admin or HR)
+ */
+export const getOfficeAttendanceNetwork = async ( options?: Parameters<typeof customFetch>[1]): Promise<OfficeNetwork> => {
+
+  return customFetch<OfficeNetwork>(getGetOfficeAttendanceNetworkUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOfficeAttendanceNetworkQueryKey = () => {
+    return [
+    `/api/attendance/office-network`
+    ] as const;
+    }
+
+
+export const getGetOfficeAttendanceNetworkQueryOptions = <TData = Awaited<ReturnType<typeof getOfficeAttendanceNetwork>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOfficeAttendanceNetwork>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOfficeAttendanceNetworkQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOfficeAttendanceNetwork>>> = ({ signal }) => getOfficeAttendanceNetwork({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOfficeAttendanceNetwork>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetOfficeAttendanceNetworkQueryResult = NonNullable<Awaited<ReturnType<typeof getOfficeAttendanceNetwork>>>
+export type GetOfficeAttendanceNetworkQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the configured office public IP (admin or HR)
+ */
+
+export function useGetOfficeAttendanceNetwork<TData = Awaited<ReturnType<typeof getOfficeAttendanceNetwork>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOfficeAttendanceNetwork>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetOfficeAttendanceNetworkQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSetOfficeAttendanceNetworkUrl = () => {
+
+
+
+
+  return `/api/attendance/office-network`
+}
+
+/**
+ * @summary Set the office public IP (admin or HR)
+ */
+export const setOfficeAttendanceNetwork = async (officeNetworkInput: OfficeNetworkInput, options?: Parameters<typeof customFetch>[1]): Promise<OfficeNetwork> => {
+
+  return customFetch<OfficeNetwork>(getSetOfficeAttendanceNetworkUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(officeNetworkInput)
+  }
+);}
+
+
+
+
+
+export const getSetOfficeAttendanceNetworkMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setOfficeAttendanceNetwork>>, TError,{data: BodyType<OfficeNetworkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setOfficeAttendanceNetwork>>, TError,{data: BodyType<OfficeNetworkInput>}, TContext> => {
+
+const mutationKey = ['setOfficeAttendanceNetwork'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setOfficeAttendanceNetwork>>, {data: BodyType<OfficeNetworkInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  setOfficeAttendanceNetwork(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetOfficeAttendanceNetworkMutationResult = NonNullable<Awaited<ReturnType<typeof setOfficeAttendanceNetwork>>>
+    export type SetOfficeAttendanceNetworkMutationBody = BodyType<OfficeNetworkInput>
+    export type SetOfficeAttendanceNetworkMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Set the office public IP (admin or HR)
+ */
+export const useSetOfficeAttendanceNetwork = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setOfficeAttendanceNetwork>>, TError,{data: BodyType<OfficeNetworkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setOfficeAttendanceNetwork>>,
+        TError,
+        {data: BodyType<OfficeNetworkInput>},
+        TContext
+      > => {
+      return useMutation(getSetOfficeAttendanceNetworkMutationOptions(options));
+    }
+
+export const getListOfficeAttendancePendingPunchesUrl = () => {
+
+
+
+
+  return `/api/attendance/office-pending`
+}
+
+/**
+ * @summary List active phone check-ins awaiting checkout (admin or HR)
+ */
+export const listOfficeAttendancePendingPunches = async ( options?: Parameters<typeof customFetch>[1]): Promise<OfficeAttendancePendingPunch[]> => {
+
+  return customFetch<OfficeAttendancePendingPunch[]>(getListOfficeAttendancePendingPunchesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListOfficeAttendancePendingPunchesQueryKey = () => {
+    return [
+    `/api/attendance/office-pending`
+    ] as const;
+    }
+
+
+export const getListOfficeAttendancePendingPunchesQueryOptions = <TData = Awaited<ReturnType<typeof listOfficeAttendancePendingPunches>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOfficeAttendancePendingPunches>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListOfficeAttendancePendingPunchesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOfficeAttendancePendingPunches>>> = ({ signal }) => listOfficeAttendancePendingPunches({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listOfficeAttendancePendingPunches>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListOfficeAttendancePendingPunchesQueryResult = NonNullable<Awaited<ReturnType<typeof listOfficeAttendancePendingPunches>>>
+export type ListOfficeAttendancePendingPunchesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List active phone check-ins awaiting checkout (admin or HR)
+ */
+
+export function useListOfficeAttendancePendingPunches<TData = Awaited<ReturnType<typeof listOfficeAttendancePendingPunches>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOfficeAttendancePendingPunches>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListOfficeAttendancePendingPunchesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCancelOfficeAttendancePendingPunchUrl = (id: number,) => {
+
+
+
+
+  return `/api/attendance/office-pending/${id}/cancel`
+}
+
+/**
+ * @summary Record cancellation of a pending phone punch (admin or HR)
+ */
+export const cancelOfficeAttendancePendingPunch = async (id: number,
+    officeAttendancePunchCancellationInput: OfficeAttendancePunchCancellationInput, options?: Parameters<typeof customFetch>[1]): Promise<OfficeAttendancePunchCancellation> => {
+
+  return customFetch<OfficeAttendancePunchCancellation>(getCancelOfficeAttendancePendingPunchUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(officeAttendancePunchCancellationInput)
+  }
+);}
+
+
+
+
+
+export const getCancelOfficeAttendancePendingPunchMutationOptions = <TError = ErrorType<NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelOfficeAttendancePendingPunch>>, TError,{id: number;data: BodyType<OfficeAttendancePunchCancellationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelOfficeAttendancePendingPunch>>, TError,{id: number;data: BodyType<OfficeAttendancePunchCancellationInput>}, TContext> => {
+
+const mutationKey = ['cancelOfficeAttendancePendingPunch'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelOfficeAttendancePendingPunch>>, {id: number;data: BodyType<OfficeAttendancePunchCancellationInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  cancelOfficeAttendancePendingPunch(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelOfficeAttendancePendingPunchMutationResult = NonNullable<Awaited<ReturnType<typeof cancelOfficeAttendancePendingPunch>>>
+    export type CancelOfficeAttendancePendingPunchMutationBody = BodyType<OfficeAttendancePunchCancellationInput>
+    export type CancelOfficeAttendancePendingPunchMutationError = ErrorType<NotFoundResponse | ConflictResponse>
+
+    /**
+ * @summary Record cancellation of a pending phone punch (admin or HR)
+ */
+export const useCancelOfficeAttendancePendingPunch = <TError = ErrorType<NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelOfficeAttendancePendingPunch>>, TError,{id: number;data: BodyType<OfficeAttendancePunchCancellationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelOfficeAttendancePendingPunch>>,
+        TError,
+        {id: number;data: BodyType<OfficeAttendancePunchCancellationInput>},
+        TContext
+      > => {
+      return useMutation(getCancelOfficeAttendancePendingPunchMutationOptions(options));
+    }
+
+export const getListAttendanceDeviceEnrollmentsUrl = () => {
+
+
+
+
+  return `/api/attendance/device-enrollments`
+}
+
+/**
+ * @summary List enrollment token metadata (admin or HR)
+ */
+export const listAttendanceDeviceEnrollments = async ( options?: Parameters<typeof customFetch>[1]): Promise<AttendanceDeviceEnrollment[]> => {
+
+  return customFetch<AttendanceDeviceEnrollment[]>(getListAttendanceDeviceEnrollmentsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAttendanceDeviceEnrollmentsQueryKey = () => {
+    return [
+    `/api/attendance/device-enrollments`
+    ] as const;
+    }
+
+
+export const getListAttendanceDeviceEnrollmentsQueryOptions = <TData = Awaited<ReturnType<typeof listAttendanceDeviceEnrollments>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAttendanceDeviceEnrollments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAttendanceDeviceEnrollmentsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAttendanceDeviceEnrollments>>> = ({ signal }) => listAttendanceDeviceEnrollments({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAttendanceDeviceEnrollments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAttendanceDeviceEnrollmentsQueryResult = NonNullable<Awaited<ReturnType<typeof listAttendanceDeviceEnrollments>>>
+export type ListAttendanceDeviceEnrollmentsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List enrollment token metadata (admin or HR)
+ */
+
+export function useListAttendanceDeviceEnrollments<TData = Awaited<ReturnType<typeof listAttendanceDeviceEnrollments>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAttendanceDeviceEnrollments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAttendanceDeviceEnrollmentsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateAttendanceDeviceEnrollmentUrl = () => {
+
+
+
+
+  return `/api/attendance/device-enrollments`
+}
+
+/**
+ * @summary Issue a single-use enrollment token for an active employee (admin or HR)
+ */
+export const createAttendanceDeviceEnrollment = async (attendanceDeviceEnrollmentInput: AttendanceDeviceEnrollmentInput, options?: Parameters<typeof customFetch>[1]): Promise<AttendanceDeviceEnrollmentIssued> => {
+
+  return customFetch<AttendanceDeviceEnrollmentIssued>(getCreateAttendanceDeviceEnrollmentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(attendanceDeviceEnrollmentInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAttendanceDeviceEnrollmentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAttendanceDeviceEnrollment>>, TError,{data: BodyType<AttendanceDeviceEnrollmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAttendanceDeviceEnrollment>>, TError,{data: BodyType<AttendanceDeviceEnrollmentInput>}, TContext> => {
+
+const mutationKey = ['createAttendanceDeviceEnrollment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAttendanceDeviceEnrollment>>, {data: BodyType<AttendanceDeviceEnrollmentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAttendanceDeviceEnrollment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAttendanceDeviceEnrollmentMutationResult = NonNullable<Awaited<ReturnType<typeof createAttendanceDeviceEnrollment>>>
+    export type CreateAttendanceDeviceEnrollmentMutationBody = BodyType<AttendanceDeviceEnrollmentInput>
+    export type CreateAttendanceDeviceEnrollmentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Issue a single-use enrollment token for an active employee (admin or HR)
+ */
+export const useCreateAttendanceDeviceEnrollment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAttendanceDeviceEnrollment>>, TError,{data: BodyType<AttendanceDeviceEnrollmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAttendanceDeviceEnrollment>>,
+        TError,
+        {data: BodyType<AttendanceDeviceEnrollmentInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAttendanceDeviceEnrollmentMutationOptions(options));
+    }
+
+export const getListAttendanceDevicesUrl = () => {
+
+
+
+
+  return `/api/attendance/devices`
+}
+
+/**
+ * @summary List registered attendance devices (admin or HR)
+ */
+export const listAttendanceDevices = async ( options?: Parameters<typeof customFetch>[1]): Promise<AttendanceDevice[]> => {
+
+  return customFetch<AttendanceDevice[]>(getListAttendanceDevicesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAttendanceDevicesQueryKey = () => {
+    return [
+    `/api/attendance/devices`
+    ] as const;
+    }
+
+
+export const getListAttendanceDevicesQueryOptions = <TData = Awaited<ReturnType<typeof listAttendanceDevices>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAttendanceDevices>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAttendanceDevicesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAttendanceDevices>>> = ({ signal }) => listAttendanceDevices({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAttendanceDevices>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAttendanceDevicesQueryResult = NonNullable<Awaited<ReturnType<typeof listAttendanceDevices>>>
+export type ListAttendanceDevicesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List registered attendance devices (admin or HR)
+ */
+
+export function useListAttendanceDevices<TData = Awaited<ReturnType<typeof listAttendanceDevices>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAttendanceDevices>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAttendanceDevicesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRevokeAttendanceDeviceUrl = (id: number,) => {
+
+
+
+
+  return `/api/attendance/devices/${id}`
+}
+
+/**
+ * @summary Revoke an attendance device (admin or HR)
+ */
+export const revokeAttendanceDevice = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getRevokeAttendanceDeviceUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getRevokeAttendanceDeviceMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeAttendanceDevice>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeAttendanceDevice>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['revokeAttendanceDevice'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeAttendanceDevice>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  revokeAttendanceDevice(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeAttendanceDeviceMutationResult = NonNullable<Awaited<ReturnType<typeof revokeAttendanceDevice>>>
+
+    export type RevokeAttendanceDeviceMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Revoke an attendance device (admin or HR)
+ */
+export const useRevokeAttendanceDevice = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeAttendanceDevice>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokeAttendanceDevice>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRevokeAttendanceDeviceMutationOptions(options));
+    }
+
+export const getRegisterAttendanceDeviceUrl = () => {
+
+
+
+
+  return `/api/attendance/device/register`
+}
+
+/**
+ * @summary Redeem an enrollment token and register a browser public key from the office network
+ */
+export const registerAttendanceDevice = async (attendanceDeviceRegistrationInput: AttendanceDeviceRegistrationInput, options?: Parameters<typeof customFetch>[1]): Promise<AttendanceDeviceRegistration> => {
+
+  return customFetch<AttendanceDeviceRegistration>(getRegisterAttendanceDeviceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(attendanceDeviceRegistrationInput)
+  }
+);}
+
+
+
+
+
+export const getRegisterAttendanceDeviceMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerAttendanceDevice>>, TError,{data: BodyType<AttendanceDeviceRegistrationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof registerAttendanceDevice>>, TError,{data: BodyType<AttendanceDeviceRegistrationInput>}, TContext> => {
+
+const mutationKey = ['registerAttendanceDevice'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerAttendanceDevice>>, {data: BodyType<AttendanceDeviceRegistrationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  registerAttendanceDevice(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterAttendanceDeviceMutationResult = NonNullable<Awaited<ReturnType<typeof registerAttendanceDevice>>>
+    export type RegisterAttendanceDeviceMutationBody = BodyType<AttendanceDeviceRegistrationInput>
+    export type RegisterAttendanceDeviceMutationError = ErrorType<void>
+
+    /**
+ * @summary Redeem an enrollment token and register a browser public key from the office network
+ */
+export const useRegisterAttendanceDevice = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerAttendanceDevice>>, TError,{data: BodyType<AttendanceDeviceRegistrationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof registerAttendanceDevice>>,
+        TError,
+        {data: BodyType<AttendanceDeviceRegistrationInput>},
+        TContext
+      > => {
+      return useMutation(getRegisterAttendanceDeviceMutationOptions(options));
+    }
+
+export const getGetAttendanceDeviceStatusUrl = () => {
+
+
+
+
+  return `/api/attendance/device/status`
+}
+
+/**
+ * @summary Get this registered device's signed attendance status from the office network
+ */
+export const getAttendanceDeviceStatus = async (attendanceDeviceSignedRequest: AttendanceDeviceSignedRequest, options?: Parameters<typeof customFetch>[1]): Promise<AttendanceDeviceStatus> => {
+
+  return customFetch<AttendanceDeviceStatus>(getGetAttendanceDeviceStatusUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(attendanceDeviceSignedRequest)
+  }
+);}
+
+
+
+
+
+export const getGetAttendanceDeviceStatusMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getAttendanceDeviceStatus>>, TError,{data: BodyType<AttendanceDeviceSignedRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof getAttendanceDeviceStatus>>, TError,{data: BodyType<AttendanceDeviceSignedRequest>}, TContext> => {
+
+const mutationKey = ['getAttendanceDeviceStatus'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getAttendanceDeviceStatus>>, {data: BodyType<AttendanceDeviceSignedRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  getAttendanceDeviceStatus(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GetAttendanceDeviceStatusMutationResult = NonNullable<Awaited<ReturnType<typeof getAttendanceDeviceStatus>>>
+    export type GetAttendanceDeviceStatusMutationBody = BodyType<AttendanceDeviceSignedRequest>
+    export type GetAttendanceDeviceStatusMutationError = ErrorType<void>
+
+    /**
+ * @summary Get this registered device's signed attendance status from the office network
+ */
+export const useGetAttendanceDeviceStatus = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getAttendanceDeviceStatus>>, TError,{data: BodyType<AttendanceDeviceSignedRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof getAttendanceDeviceStatus>>,
+        TError,
+        {data: BodyType<AttendanceDeviceSignedRequest>},
+        TContext
+      > => {
+      return useMutation(getGetAttendanceDeviceStatusMutationOptions(options));
+    }
+
+export const getPunchAttendanceDeviceUrl = () => {
+
+
+
+
+  return `/api/attendance/device/punch`
+}
+
+/**
+ * @summary Sign in or out with this registered device from the office network
+ */
+export const punchAttendanceDevice = async (attendanceDevicePunchInput: AttendanceDevicePunchInput, options?: Parameters<typeof customFetch>[1]): Promise<AttendanceDeviceStatus> => {
+
+  return customFetch<AttendanceDeviceStatus>(getPunchAttendanceDeviceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(attendanceDevicePunchInput)
+  }
+);}
+
+
+
+
+
+export const getPunchAttendanceDeviceMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof punchAttendanceDevice>>, TError,{data: BodyType<AttendanceDevicePunchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof punchAttendanceDevice>>, TError,{data: BodyType<AttendanceDevicePunchInput>}, TContext> => {
+
+const mutationKey = ['punchAttendanceDevice'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof punchAttendanceDevice>>, {data: BodyType<AttendanceDevicePunchInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  punchAttendanceDevice(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PunchAttendanceDeviceMutationResult = NonNullable<Awaited<ReturnType<typeof punchAttendanceDevice>>>
+    export type PunchAttendanceDeviceMutationBody = BodyType<AttendanceDevicePunchInput>
+    export type PunchAttendanceDeviceMutationError = ErrorType<void>
+
+    /**
+ * @summary Sign in or out with this registered device from the office network
+ */
+export const usePunchAttendanceDevice = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof punchAttendanceDevice>>, TError,{data: BodyType<AttendanceDevicePunchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof punchAttendanceDevice>>,
+        TError,
+        {data: BodyType<AttendanceDevicePunchInput>},
+        TContext
+      > => {
+      return useMutation(getPunchAttendanceDeviceMutationOptions(options));
     }
 
 export const getGetPayrollUrl = (params?: GetPayrollParams,) => {
