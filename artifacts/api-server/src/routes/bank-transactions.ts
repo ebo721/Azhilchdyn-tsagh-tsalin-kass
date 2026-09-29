@@ -51,6 +51,7 @@ import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.j
 import { cashAccountForCategory } from "../lib/cash-account.js";
 import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
 import { loadBankRecognitionContext, recognizeBankTransaction } from "../lib/bank-recognition.js";
+import { inventoryPurchaseAccountCodes } from "../lib/route-shared.js";
 import {
   cancelBankPurchaseGroup,
   linkBankPurchase,
@@ -60,6 +61,9 @@ import {
 } from "../lib/bank-document-linking.js";
 
 const router: IRouter = Router();
+const isInventoryPurchaseAccount = (code: string | null | undefined) =>
+  inventoryPurchaseAccountCodes.some((purchaseCode) => purchaseCode === code);
+const inventoryCashCategories = ["Бараа материал", "Хүнсний бараа материал", "Хангамжийн материал"];
 const maxUploadBytes = 10 * 1024 * 1024;
 const maxXmlBytes = 8 * 1024 * 1024;
 const maxRows = 20_000;
@@ -446,10 +450,12 @@ router.post("/bank-transactions/:id/link-purchases", async (req, res, next) => {
     if (typeof result === "string") {
       const status = result === "missing_bank" || result === "missing_purchase"
         ? 404
-        : result === "bank_resolved" || result === "purchase_conflict" || result === "closed"
+        : result === "bank_resolved" || result === "purchase_conflict" || result === "purchase_mixed_material_types" || result === "closed"
           ? 409
           : 400;
-      res.status(status).json({ error: result });
+      res.status(status).json({ error: result === "purchase_mixed_material_types"
+        ? "Нэг банкны төлбөрт зөвхөн ижил төрлийн бараа материал эсвэл хангамжийн баримтуудыг нэгтгэнэ үү"
+        : result });
       return;
     }
     res.json(LinkBankTransactionPurchasesResponse.parse(result));
@@ -488,8 +494,10 @@ router.post("/bank-transactions/:id/link-expense", async (req, res, next) => {
     const { id } = LinkBankTransactionExpenseParams.parse(req.params);
     const result = await linkBankExpense(id, LinkBankTransactionExpenseBody.parse(req.body));
     if (typeof result === "string") {
-      const status = result === "missing_bank" || result === "missing_expense" ? 404 : result === "bank_resolved" || result === "expense_conflict" || result === "closed" ? 409 : 400;
-      return res.status(status).json({ error: result });
+      const status = result === "missing_bank" || result === "missing_expense" ? 404 : result === "bank_resolved" || result === "expense_conflict" || result === "purchase_document_required" || result === "closed" ? 409 : 400;
+      return res.status(status).json({ error: result === "purchase_document_required"
+        ? "Бараа материал, хангамжийн банкны зарлагыг худалдан авалтын баримтаар холбоно уу. Өөр төрлийн гүйлгээ бол GL дансыг эхлээд өөрчилнө үү"
+        : result });
     }
     return res.json(LinkBankTransactionExpenseResponse.parse(result));
   } catch (error) {
@@ -506,10 +514,12 @@ router.post("/bank-transactions/:id/link-fixed-asset", async (req, res, next) =>
     if (typeof result === "string") {
       const status = result === "missing_bank" || result === "missing_fixed_asset"
         ? 404
-        : result === "bank_resolved" || result === "fixed_asset_conflict" || result === "closed"
+        : result === "bank_resolved" || result === "fixed_asset_conflict" || result === "purchase_document_required" || result === "closed"
           ? 409
           : 400;
-      return res.status(status).json({ error: result });
+      return res.status(status).json({ error: result === "purchase_document_required"
+        ? "Бараа материал, хангамжийн банкны зарлагыг худалдан авалтын баримтаар холбоно уу. Өөр төрлийн гүйлгээ бол GL дансыг эхлээд өөрчилнө үү"
+        : result });
     }
     return res.json(LinkBankTransactionFixedAssetResponse.parse(result));
   } catch (error) {
@@ -539,6 +549,9 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
         eq(chartOfAccountsTable.id, accountId),
         eq(chartOfAccountsTable.isActive, true),
       ));
+      if (bank.type === "expense" && isInventoryPurchaseAccount(account?.code)) {
+        return "purchase-document-required" as const;
+      }
       const allowed = bank.type === "income"
         ? account?.type === "revenue"
         : account !== undefined && ["expense", "asset", "liability"].includes(account.type);
@@ -572,6 +585,10 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
     }
     if (result === "invalid_account") {
       res.status(400).json({ error: "Гүйлгээний төрөлд тохирох идэвхтэй GL данс сонгоно уу" });
+      return;
+    }
+    if (result === "purchase-document-required") {
+      res.status(409).json({ error: "Бараа материал, хангамжийн зарлагыг худалдан авалтын баримттай холбох эсвэл шинэ худалдан авалт үүсгэж бүртгэнэ үү" });
       return;
     }
     res.json(PostBankTransactionJournalResponse.parse(result));
@@ -871,6 +888,9 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
         : account.type !== "expense" && !(account.type === "asset" && ["1500", "1510", "1800"].includes(account.code)))) {
         return "account-required" as const;
       }
+      if (bank.type === "expense" && isInventoryPurchaseAccount(account.code)) {
+        return "purchase-document-required" as const;
+      }
       const category = bank.type === "income" ? account.name
         : account.code === "1500" ? "Бараа материал"
         : account.code === "1510" ? "Хангамжийн материал"
@@ -939,6 +959,10 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
     }
     if (result === "account-required") {
       res.status(400).json({ error: "Энэ банкны гүйлгээнд тохирох идэвхтэй GL данс онооно уу" });
+      return;
+    }
+    if (result === "purchase-document-required") {
+      res.status(409).json({ error: "Бараа материал, хангамжийн зарлагыг касс руу шууд шилжүүлэхгүй. Худалдан авалтын баримттай холбох эсвэл шинээр үүсгэнэ үү" });
       return;
     }
     if (result === "managed-cash-exists") {
@@ -1022,6 +1046,16 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
       if (cash.sourceType !== null && !["payroll", "payroll_advance"].includes(cash.sourceType)) {
         return "cash-source-managed" as const;
       }
+      if (bank.type === "expense") {
+        const [bankAccount] = bank.accountId === null ? [] : await tx.select({ code: chartOfAccountsTable.code })
+          .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, bank.accountId));
+        const [cashAccount] = cash.accountId === null ? [] : await tx.select({ code: chartOfAccountsTable.code })
+          .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, cash.accountId));
+        if (isInventoryPurchaseAccount(bankAccount?.code)
+          || (cash.sourceType === null && (isInventoryPurchaseAccount(cashAccount?.code) || inventoryCashCategories.includes(cash.category)))) {
+          return "purchase-document-required" as const;
+        }
+      }
       if (!bankAndCashAmountsMatch(bank, cash)) return "amount-mismatch" as const;
       if (cash.bankTransactionId !== null) return "cash-linked" as const;
       const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, String(cash.date)));
@@ -1069,6 +1103,7 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
         "type-mismatch": "Банк болон кассын гүйлгээний төрөл таарахгүй байна",
          "amount-mismatch": "Банк болон кассын гүйлгээний дүн таарахгүй байна",
          "cash-source-managed": "Энэ автомат кассын гүйлгээг банкны гүйлгээтэй шууд холбох боломжгүй",
+          "purchase-document-required": "Бараа материал, хангамжийн кассын гүйлгээг шууд холбохгүй. Худалдан авалтын баримттай холбох эсвэл шинээр үүсгэнэ үү",
         "cash-linked": "Кассын гүйлгээ аль хэдийн банкны гүйлгээнд холбогдсон байна",
         closed: "Өндөрлөсөн өдрийн кассын гүйлгээг холбох боломжгүй",
       };

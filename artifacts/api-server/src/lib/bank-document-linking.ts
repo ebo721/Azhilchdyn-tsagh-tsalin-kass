@@ -6,7 +6,7 @@ import {
   inventoryPurchasesTable, inventorySuppliersTable, journalEntriesTable, journalLinesTable, operatingExpensesTable,
 } from "@workspace/db";
 import { cashAccountForCategory } from "./cash-account.js";
-import { inventoryMaterialLabel, inventoryPurchaseAccount, money } from "./route-shared.js";
+import { inventoryMaterialLabel, inventoryPurchaseAccount, inventoryPurchaseAccountCodes, money } from "./route-shared.js";
 import { postJournalEntry, voidJournalEntry } from "./journal-posting.js";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -60,6 +60,8 @@ export async function linkBankPurchases(id: number, purchaseIds: number[]) {
     const totalCents = purchases.reduce((sum, purchase) => sum + cents(Number(purchase.totalAmount)), 0);
     if (purchases.some((purchase) => purchase.paymentDate !== null || purchase.date > date)
       || totalCents !== cents(Number(bank.amount))) return "purchase_conflict";
+    const materialTypes = new Set(purchases.map((purchase) => purchase.materialType));
+    if (materialTypes.size !== 1) return "purchase_mixed_material_types";
     for (const purchase of purchases) {
       if (await activePurchasePaymentGroup(tx, purchase.id)) return "purchase_conflict";
       const [priorCash] = await tx.select({ id: cashTransactionsTable.id }).from(cashTransactionsTable)
@@ -89,17 +91,14 @@ export async function linkBankPurchases(id: number, purchaseIds: number[]) {
     if (!settlement) throw new Error("Inventory or bank account is missing or inactive");
 
     const amount = cents(Number(bank.amount)) / 100;
-    const [cashAccount] = await tx.select().from(chartOfAccountsTable).where(and(
-      eq(chartOfAccountsTable.code, "1500"),
-      eq(chartOfAccountsTable.type, "asset"),
-      eq(chartOfAccountsTable.isActive, true),
-    ));
-    if (!cashAccount) throw new Error("Inventory cash account is missing");
+    const materialType = purchases[0].materialType;
+    const cashAccount = await inventoryPurchaseAccount(tx, materialType);
+    const category = inventoryMaterialLabel(materialType);
     const verifiedAt = new Date();
-    const description = `Бараа материалын бүлэг худалдан авалт (${purchases.length})`;
+    const description = `${category}ын бүлэг худалдан авалт (${purchases.length})`;
     const [cash] = await tx.insert(cashTransactionsTable).values({
       type: "expense",
-      category: "Бараа материал",
+      category,
       accountId: cashAccount.id,
       description,
       amount,
@@ -348,6 +347,9 @@ export async function linkBankExpense(id: number, input: ExpenseInput): Promise<
     const [bank] = await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id)).for("update");
     if (!bank) return "missing_bank";
     if (bank.type !== "expense" || bank.cashTransactionId !== null || bank.transferredAt !== null || bank.unclearAt !== null || bank.journalEntryId !== null) return "bank_resolved";
+    const [assignedAccount] = bank.accountId === null ? [] : await tx.select({ code: chartOfAccountsTable.code })
+      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, bank.accountId));
+    if (inventoryPurchaseAccountCodes.some((code) => code === assignedAccount?.code)) return "purchase_document_required";
     const date = bank.transactionAt.toISOString().slice(0, 10);
     const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, date));
     if (closed) return "closed";
@@ -384,6 +386,9 @@ export async function linkBankFixedAsset(id: number, input: FixedAssetInput): Pr
     if (bank.type !== "expense" || bank.cashTransactionId !== null || bank.transferredAt !== null || bank.unclearAt !== null || bank.journalEntryId !== null) {
       return "bank_resolved";
     }
+    const [assignedAccount] = bank.accountId === null ? [] : await tx.select({ code: chartOfAccountsTable.code })
+      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, bank.accountId));
+    if (inventoryPurchaseAccountCodes.some((code) => code === assignedAccount?.code)) return "purchase_document_required";
     const date = bank.transactionAt.toISOString().slice(0, 10);
     const amount = money(Number(bank.amount));
     const [closed] = await tx.select({ id: cashClosuresTable.id })

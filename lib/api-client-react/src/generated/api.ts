@@ -5753,7 +5753,7 @@ export const transferBankTransactionToCash = async (id: number,
 
 
 
-export const getTransferBankTransactionToCashMutationOptions = <TError = ErrorType<unknown>,
+export const getTransferBankTransactionToCashMutationOptions = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof transferBankTransactionToCash>>, TError,{id: number;data: BodyType<BankTransactionCashTransferInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof transferBankTransactionToCash>>, TError,{id: number;data: BodyType<BankTransactionCashTransferInput>}, TContext> => {
 
@@ -5782,12 +5782,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type TransferBankTransactionToCashMutationResult = NonNullable<Awaited<ReturnType<typeof transferBankTransactionToCash>>>
     export type TransferBankTransactionToCashMutationBody = BodyType<BankTransactionCashTransferInput>
-    export type TransferBankTransactionToCashMutationError = ErrorType<unknown>
+    export type TransferBankTransactionToCashMutationError = ErrorType<void>
 
     /**
  * @summary Create a verified cash transaction from a bank transaction
  */
-export const useTransferBankTransactionToCash = <TError = ErrorType<unknown>,
+export const useTransferBankTransactionToCash = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof transferBankTransactionToCash>>, TError,{id: number;data: BodyType<BankTransactionCashTransferInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof transferBankTransactionToCash>>,
@@ -5902,7 +5902,7 @@ export const linkBankTransactionToCash = async (id: number,
 
 
 
-export const getLinkBankTransactionToCashMutationOptions = <TError = ErrorType<unknown>,
+export const getLinkBankTransactionToCashMutationOptions = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionToCash>>, TError,{id: number;data: BodyType<BankTransactionCashLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionToCash>>, TError,{id: number;data: BodyType<BankTransactionCashLinkInput>}, TContext> => {
 
@@ -5931,12 +5931,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type LinkBankTransactionToCashMutationResult = NonNullable<Awaited<ReturnType<typeof linkBankTransactionToCash>>>
     export type LinkBankTransactionToCashMutationBody = BodyType<BankTransactionCashLinkInput>
-    export type LinkBankTransactionToCashMutationError = ErrorType<unknown>
+    export type LinkBankTransactionToCashMutationError = ErrorType<void>
 
     /**
  * @summary Verify an existing cash transaction against a bank transaction
  */
-export const useLinkBankTransactionToCash = <TError = ErrorType<unknown>,
+export const useLinkBankTransactionToCash = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionToCash>>, TError,{id: number;data: BodyType<BankTransactionCashLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof linkBankTransactionToCash>>,

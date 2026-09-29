@@ -318,7 +318,7 @@ router.get("/cash/transactions", async (_req, res, next) => {
           : transaction.sourceType === "inventory_purchase"
             ? inventoryCategoryBySourceKey.get(transaction.sourceKey ?? "") ?? "Хангамжийн материал"
             : transaction.sourceType === "inventory_purchase_group"
-              ? "Бараа материал"
+              ? transaction.category
               : transaction.sourceType === "fixed_asset_purchase"
                 ? "Эд хөрөнгө"
                 : isCanonicalCashCategory(transaction.category)
