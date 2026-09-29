@@ -6,6 +6,7 @@ import {
   inventoryPurchasesTable, inventorySuppliersTable, journalEntriesTable, journalLinesTable, operatingExpensesTable,
 } from "@workspace/db";
 import { cashAccountForCategory } from "./cash-account.js";
+import { lockCashDate } from "./cash-date-lock.js";
 import { inventoryMaterialLabel, inventoryPurchaseAccount, inventoryPurchaseAccountCodes, money } from "./route-shared.js";
 import { postJournalEntry, voidJournalEntry } from "./journal-posting.js";
 
@@ -15,7 +16,8 @@ type PurchaseInput = { inventoryPurchaseId: number } | {
   items: Array<{ inventoryItemId?: number; name: string; category: string; unit: string; quantity: number; unitPrice: number }>;
 };
 type ExpenseInput = { operatingExpenseId: number } | { description: string; accountId: number; date: string; amount: number };
-type FixedAssetInput = { fixedAssetId: number } | { name: string; unitPrice: number; quantity: number; date: string };
+type FixedAssetDetails = { name: string; unitPrice: number; quantity: number; date: string };
+type FixedAssetInput = { fixedAssetId: number; assetUpdate?: FixedAssetDetails } | FixedAssetDetails;
 export type LinkResult = { bankTransactionId: number; inventoryPurchaseId: number; cashTransactionId: number; journalEntryId: number }
   | { bankTransactionId: number; operatingExpenseId: number; cashTransactionId: number; journalEntryId: number }
   | { bankTransactionId: number; fixedAssetId: number; cashTransactionId: number; journalEntryId: number };
@@ -386,10 +388,24 @@ export async function linkBankExpense(id: number, input: ExpenseInput): Promise<
 
 export async function linkBankFixedAsset(id: number, input: FixedAssetInput): Promise<LinkResult | string> {
   return db.transaction(async (tx) => {
+    const [snapshot] = await tx.select({ transactionAt: bankTransactionsTable.transactionAt })
+      .from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id));
+    if (!snapshot) return "missing_bank";
+    const snapshotDate = snapshot.transactionAt.toISOString().slice(0, 10);
+    const [previousCash] = "fixedAssetId" in input
+      ? await tx.select({ date: cashTransactionsTable.date }).from(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "fixed_asset_purchase"),
+        eq(cashTransactionsTable.sourceKey, `fixed-asset:${input.fixedAssetId}`),
+      ))
+      : [];
+    for (const cashDate of [...new Set([snapshotDate, ...(previousCash ? [String(previousCash.date)] : [])])].sort()) {
+      await lockCashDate(tx, cashDate);
+    }
     const [bank] = await tx.select().from(bankTransactionsTable)
       .where(eq(bankTransactionsTable.id, id))
       .for("update");
     if (!bank) return "missing_bank";
+    if (bank.transactionAt.toISOString().slice(0, 10) !== snapshotDate) return "bank_resolved";
     if (bank.type !== "expense" || bank.cashTransactionId !== null || bank.transferredAt !== null || bank.unclearAt !== null || bank.journalEntryId !== null) {
       return "bank_resolved";
     }
@@ -403,13 +419,18 @@ export async function linkBankFixedAsset(id: number, input: FixedAssetInput): Pr
       .where(eq(cashClosuresTable.date, date));
     if (closed) return "closed";
 
-    let asset: any;
+    let asset: typeof fixedAssetsTable.$inferSelect;
+    const assetUpdate = "fixedAssetId" in input ? input.assetUpdate : undefined;
     if ("fixedAssetId" in input) {
       [asset] = await tx.select().from(fixedAssetsTable)
         .where(eq(fixedAssetsTable.id, input.fixedAssetId))
         .for("update");
       if (!asset) return "missing_fixed_asset";
-      if (asset.date !== date || money(Number(asset.unitPrice) * asset.quantity) !== amount) {
+      if (assetUpdate && (!assetUpdate.name.trim() || money(assetUpdate.unitPrice) !== assetUpdate.unitPrice)) {
+        return "invalid_fixed_asset";
+      }
+      if ((assetUpdate?.date ?? asset.date) !== date
+        || money((assetUpdate?.unitPrice ?? Number(asset.unitPrice)) * (assetUpdate?.quantity ?? asset.quantity)) !== amount) {
         return "fixed_asset_conflict";
       }
     } else {
@@ -431,7 +452,15 @@ export async function linkBankFixedAsset(id: number, input: FixedAssetInput): Pr
       eq(cashTransactionsTable.sourceType, "fixed_asset_purchase"),
       eq(cashTransactionsTable.sourceKey, sourceKey),
     )).for("update");
+    if ("fixedAssetId" in input && (existingCash?.date ?? null) !== (previousCash?.date ?? null)) {
+      return "fixed_asset_conflict";
+    }
     if (existingCash?.bankTransactionId && existingCash.bankTransactionId !== id) return "fixed_asset_conflict";
+    if (existingCash) {
+      const [oldDateClosed] = await tx.select({ date: cashClosuresTable.date }).from(cashClosuresTable)
+        .where(eq(cashClosuresTable.date, String(existingCash.date)));
+      if (oldDateClosed) return "closed";
+    }
 
     const [fixedAssetAccount] = await tx.select().from(chartOfAccountsTable).where(and(
       eq(chartOfAccountsTable.code, "1800"),
@@ -445,6 +474,15 @@ export async function linkBankFixedAsset(id: number, input: FixedAssetInput): Pr
     ));
     if (!fixedAssetAccount || !bankAccount) throw new Error("Fixed asset or bank account is missing or inactive");
 
+    if (assetUpdate) {
+      [asset] = await tx.update(fixedAssetsTable).set({
+        name: assetUpdate.name.trim(),
+        unitPrice: money(assetUpdate.unitPrice),
+        quantity: assetUpdate.quantity,
+        date,
+        purchased: true,
+      }).where(eq(fixedAssetsTable.id, asset.id)).returning();
+    }
     const description = `${asset.name} (${asset.quantity} ширхэг)`;
     const categoryAccount = await cashAccountForCategory(tx, "Эд хөрөнгө");
     let cash = existingCash;

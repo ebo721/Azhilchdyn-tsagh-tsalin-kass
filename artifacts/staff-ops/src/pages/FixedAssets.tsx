@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { BriefcaseBusiness, Pencil, Plus, Trash2 } from 'lucide-react';
@@ -12,7 +12,10 @@ import {
   getListBankTransactionsQueryKey,
   getListCashTransactionsQueryKey,
   getListFixedAssetsQueryKey,
+  getListFixedAssetBankSuggestionsQueryKey,
   useCreateFixedAsset,
+  useLinkBankTransactionFixedAsset,
+  useListFixedAssetBankSuggestions,
   useListFixedAssets,
   useUpdateFixedAsset,
   type FixedAsset,
@@ -26,25 +29,44 @@ export function FixedAssets() {
   const list = useListFixedAssets();
   const create = useCreateFixedAsset();
   const update = useUpdateFixedAsset();
+  const linkBank = useLinkBankTransactionFixedAsset();
   const deletion = useQueueDeletion();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<FixedAsset | null>(null);
+  const [selectedBankId, setSelectedBankId] = useState<number | null>(null);
   const form = useForm<FixedAssetForm>({ defaultValues: { name: '', unitPrice: '', quantity: '1', date: today(), purchased: false } });
+  const values = form.watch();
+  const name = values.name?.trim() ?? '';
+  const date = values.date ?? '';
+  const unitPrice = Number(values.unitPrice);
+  const quantity = Number(values.quantity);
+  const amount = Math.round(unitPrice * quantity * 100) / 100;
+  const canSuggest = open && !editing?.bankTransactionId && name.length > 0
+    && /^\d{4}-\d{2}-\d{2}$/.test(date) && unitPrice > 0 && Number.isInteger(quantity) && quantity > 0;
+  const suggestions = useListFixedAssetBankSuggestions(
+    { date, amount: canSuggest ? amount : 1, description: name || ' ' },
+    { query: { queryKey: getListFixedAssetBankSuggestionsQueryKey({ date, amount: canSuggest ? amount : 1, description: name || ' ' }), enabled: canSuggest } },
+  );
+  useEffect(() => { setSelectedBankId(null); }, [name, date, amount]);
+  const selectedBank = suggestions.data?.find((bank) => bank.id === selectedBankId);
   const refresh = () => {
     qc.invalidateQueries({ queryKey: getListFixedAssetsQueryKey() });
     qc.invalidateQueries({ queryKey: getListCashTransactionsQueryKey() });
     qc.invalidateQueries({ queryKey: getGetCashSummaryQueryKey() });
     qc.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
     qc.invalidateQueries({ queryKey: getListBankTransactionJournalReviewQueryKey() });
+    qc.invalidateQueries({ queryKey: getListFixedAssetBankSuggestionsQueryKey() });
   };
   const startCreate = () => {
     setEditing(null);
+    setSelectedBankId(null);
     form.reset({ name: '', unitPrice: '', quantity: '1', date: today(), purchased: false });
     setOpen(true);
   };
   const startEdit = (asset: FixedAsset) => {
     setEditing(asset);
+    setSelectedBankId(null);
     form.reset({
       name: asset.name,
       unitPrice: String(asset.unitPrice),
@@ -62,6 +84,27 @@ export function FixedAssets() {
       date: values.date,
       purchased: values.purchased,
     };
+    if (selectedBankId !== null) {
+      if (!selectedBank || !values.purchased) {
+        form.setError('root', { message: 'Банкны саналаа дахин сонгоно уу.' });
+        return;
+      }
+      linkBank.mutate({
+        id: selectedBankId,
+        data: editing
+          ? { fixedAssetId: editing.id, assetUpdate: { name: data.name, unitPrice: data.unitPrice, quantity: data.quantity, date: data.date } }
+          : { name: data.name, unitPrice: data.unitPrice, quantity: data.quantity, date: data.date },
+      }, {
+        onSuccess: () => {
+          refresh();
+          setSelectedBankId(null);
+          form.reset({ name: '', unitPrice: '', quantity: '1', date: today(), purchased: false });
+          setEditing(null);
+          setOpen(false);
+        },
+      });
+      return;
+    }
     const mutation = editing ? update : create;
     mutation.mutate({
       ...(editing ? { id: editing.id } : {}),
@@ -91,8 +134,25 @@ export function FixedAssets() {
         <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-xs font-semibold">Үнэ<input type="number" min="0" step="0.01" className="h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('unitPrice', { required: true, min: 0 })} data-testid="input-fixed-asset-price" /></label><label className="space-y-2 text-xs font-semibold">Тоо ширхэг<input type="number" min="1" step="1" className="h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('quantity', { required: true, min: 1 })} data-testid="input-fixed-asset-quantity" /></label></div>
         <label className="block space-y-2 text-xs font-semibold">Огноо<input type="date" className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('date', { required: true })} data-testid="input-fixed-asset-date" /></label>
          <label className="flex items-start gap-3 rounded-xl border border-border bg-secondary/35 p-4 text-sm font-semibold"><input type="checkbox" className="mt-0.5 size-4 accent-primary" {...form.register('purchased')} data-testid="checkbox-fixed-asset-purchased" /><span>Худалдан авсан<p className="mt-1 font-normal text-muted-foreground">Сонговол худалдан авалтын кассын зарлага бүртгэнэ. Сонгоогүй бол хөрөнгийг бүртгэх бөгөөд кассын зарлага шинээр үүсгэхгүй. Банкны гүйлгээтэй холбохдоо банк, касс, журналыг холболтын үйлдэл хамтад нь бүртгэнэ.</p></span></label>
-        {(create.isError || update.isError) && <p className="text-xs font-semibold text-destructive">Мэдээлэл буруу эсвэл сонгосон өдрийн касс өндөрлөсөн байна.</p>}
-        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Болих</Button><Button type="submit" disabled={create.isPending || update.isPending} data-testid="button-save-fixed-asset">{create.isPending || update.isPending ? 'Хадгалж байна...' : 'Хадгалах'}</Button></div>
+         {editing?.bankTransactionId ? <p className="rounded-xl border border-border p-3 text-xs text-muted-foreground">Банк #{editing.bankTransactionId}-тай холбогдсон. Холбоотой хөрөнгийн огноо, нийт дүн банкны гүйлгээтэй таарах ёстой.</p> : (
+           <div className="space-y-2 rounded-xl border border-border p-4" data-testid="fixed-asset-bank-suggestions">
+             <p className="text-sm font-semibold">Банкны гүйлгээний санал</p>
+             <p className="text-xs text-muted-foreground">Зөвхөн огноо, нийт дүн яг таарсан, холбогдоогүй банкны зарлагыг харуулна. Гүйлгээ сонговол хөрөнгө, касс, журнал хамт холбогдоно.</p>
+             {!canSuggest ? <p className="text-xs text-muted-foreground">Санал харахын тулд нэр, үнэ, тоо ширхэг, огноог бөглөнө үү.</p>
+               : suggestions.isLoading ? <LoadingBlock className="h-10" />
+               : suggestions.isError ? <ErrorBlock onRetry={() => suggestions.refetch()} />
+               : <div className="space-y-2">
+                   <label className="flex items-center gap-2 text-sm"><input type="radio" name="fixed-asset-bank" checked={selectedBankId === null} onChange={() => setSelectedBankId(null)} />Банкгүй хадгалах</label>
+                   {suggestions.data?.length ? suggestions.data.map((bank) => <label key={bank.id} className="flex cursor-pointer items-start gap-2 rounded-lg border border-border p-2 text-sm">
+                     <input type="radio" name="fixed-asset-bank" checked={selectedBankId === bank.id} onChange={() => { setSelectedBankId(bank.id); form.setValue('purchased', true); form.clearErrors('root'); }} data-testid={`select-fixed-asset-bank-${bank.id}`} />
+                     <span><span className="font-semibold">{dateLabel(bank.transactionAt)} · {money(bank.amount)} · {bank.score}%</span><span className="block text-xs text-muted-foreground">{bank.description || `Банк #${bank.id}`}</span></span>
+                   </label>) : <p className="text-xs text-muted-foreground">Тохирох банкны зарлага алга.</p>}
+                 </div>}
+           </div>
+         )}
+         {form.formState.errors.root?.message && <p className="text-xs font-semibold text-destructive">{form.formState.errors.root.message}</p>}
+         {(create.isError || update.isError || linkBank.isError) && <p className="text-xs font-semibold text-destructive">Хадгалж чадсангүй. Банкны гүйлгээ өөр бичилтэд холбогдсон, дүн/огноо зөрсөн эсвэл кассын өдөр өндөрлөсөн байж болно.</p>}
+         <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Болих</Button><Button type="submit" disabled={create.isPending || update.isPending || linkBank.isPending || (selectedBankId !== null && !selectedBank)} data-testid="button-save-fixed-asset">{create.isPending || update.isPending || linkBank.isPending ? 'Хадгалж байна...' : 'Хадгалах'}</Button></div>
       </form></Form>
     </Modal>}
   </div>;
