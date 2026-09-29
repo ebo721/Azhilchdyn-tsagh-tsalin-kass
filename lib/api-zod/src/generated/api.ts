@@ -3509,6 +3509,30 @@ export const ListJournalReceivablesResponse = zod.array(ListJournalReceivablesRe
 
 
 /**
+ * @summary List payables and their remaining balances
+ */
+export const listJournalPayablesQueryStatusDefault = `open`;
+
+export const ListJournalPayablesQueryParams = zod.object({
+  "status": zod.enum(['open', 'closed', 'all']).default(listJournalPayablesQueryStatusDefault)
+})
+
+export const ListJournalPayablesResponseItem = zod.object({
+  "id": zod.number().int(),
+  "journalEntryId": zod.number().int(),
+  "description": zod.string(),
+  "partyType": zod.enum(['employee', 'supplier']),
+  "partyId": zod.number().int(),
+  "partyLabel": zod.string(),
+  "originalAmount": zod.number(),
+  "remainingBalance": zod.number(),
+  "status": zod.enum(['open', 'closed']),
+  "createdAt": zod.coerce.date()
+})
+export const ListJournalPayablesResponse = zod.array(ListJournalPayablesResponseItem)
+
+
+/**
  * @summary List existing suppliers for journal allocations
  */
 export const ListJournalSuppliersResponseItem = zod.object({

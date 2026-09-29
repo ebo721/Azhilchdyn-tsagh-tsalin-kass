@@ -91,12 +91,14 @@ import type {
   JournalEntrySummary,
   JournalEntryUpdateInput,
   JournalLedger,
+  JournalPayable,
   JournalReceivable,
   JournalSupplier,
   JournalTrialBalance,
   JournalVoidResult,
   ListAttendanceParams,
   ListJournalEntriesParams,
+  ListJournalPayablesParams,
   ListJournalReceivablesParams,
   ListMealCountsParams,
   ListMealScheduleParams,
@@ -9527,6 +9529,90 @@ export function useListJournalReceivables<TData = Awaited<ReturnType<typeof list
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListJournalReceivablesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListJournalPayablesUrl = (params?: ListJournalPayablesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/journal/payables?${stringifiedParams}` : `/api/journal/payables`
+}
+
+/**
+ * @summary List payables and their remaining balances
+ */
+export const listJournalPayables = async (params?: ListJournalPayablesParams, options?: Parameters<typeof customFetch>[1]): Promise<JournalPayable[]> => {
+
+  return customFetch<JournalPayable[]>(getListJournalPayablesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListJournalPayablesQueryKey = (params?: ListJournalPayablesParams,) => {
+    return [
+    `/api/journal/payables`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListJournalPayablesQueryOptions = <TData = Awaited<ReturnType<typeof listJournalPayables>>, TError = ErrorType<BadRequestResponse>>(params?: ListJournalPayablesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJournalPayables>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListJournalPayablesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listJournalPayables>>> = ({ signal }) => listJournalPayables(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listJournalPayables>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListJournalPayablesQueryResult = NonNullable<Awaited<ReturnType<typeof listJournalPayables>>>
+export type ListJournalPayablesQueryError = ErrorType<BadRequestResponse>
+
+
+/**
+ * @summary List payables and their remaining balances
+ */
+
+export function useListJournalPayables<TData = Awaited<ReturnType<typeof listJournalPayables>>, TError = ErrorType<BadRequestResponse>>(
+ params?: ListJournalPayablesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJournalPayables>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListJournalPayablesQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
