@@ -7,6 +7,7 @@ import { bankTransactionsTable, cashTransactionsTable, chartOfAccountsTable, db,
 import app from "../app";
 import { createStaffSession, hrCookie } from "../lib/hr-session";
 import { fallbackExpenseAccount } from "../lib/chart-of-accounts.js";
+import { bankSuggestionScore } from "../lib/bank-suggestion-score.js";
 
 describe("operating expenses", () => {
   let server: Server;
@@ -15,6 +16,7 @@ describe("operating expenses", () => {
   let expenseId: number;
   let bankId: number;
   let expenseAccountId: number;
+  let expenseAccountName: string;
   before(async () => {
     process.env.SESSION_SECRET = "operating-expense-test";
     const [admin] = await db.select().from(usersTable).where(eq(usersTable.role, "admin")).limit(1);
@@ -23,6 +25,7 @@ describe("operating expenses", () => {
     await db.insert(chartOfAccountsTable).values({ code: "6900", name: "Бусад үйл ажиллагааны зардал", type: "expense", normalBalance: "debit" }).onConflictDoNothing({ target: chartOfAccountsTable.code });
     const [expenseAccount] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "6900"));
     expenseAccountId = expenseAccount.id;
+    expenseAccountName = expenseAccount.name;
     const [expense] = await db.insert(operatingExpensesTable).values({ description: `test expense ${process.pid}`, accountId: expenseAccountId, date: "2099-03-10", amount: 1200 }).returning({ id: operatingExpensesTable.id });
     expenseId = expense.id;
     const [bank] = await db.insert(bankTransactionsTable).values({
@@ -51,7 +54,18 @@ describe("operating expenses", () => {
     assert.equal(update.status, 200);
     const suggestions = await fetch(`${baseUrl}/api/operating-expenses/${expenseId}/payment-bank-suggestions`, { headers: { cookie: adminCookie } });
     assert.equal(suggestions.status, 200);
-    assert.equal((await suggestions.json() as Array<{ id: number }>)[0].id, bankId);
+    const ranked = await suggestions.json() as Array<{ id: number; score: number }>;
+    assert.equal(ranked[0].id, bankId);
+    assert.equal(ranked[0].score, bankSuggestionScore({
+      transactionAt: new Date("2099-03-12T09:00:00Z"),
+      amount: 1300,
+      counterparty: `matched counterparty ${process.pid}`,
+      description: "unrelated bank text",
+    }, {
+      date: "2099-03-10",
+      amount: 1200,
+      description: `test expense ${process.pid} ${expenseAccountName}`,
+    }));
     const pay = await fetch(`${baseUrl}/api/operating-expenses/${expenseId}/payment`, { method: "PUT", headers: { "content-type": "application/json", cookie: adminCookie }, body: JSON.stringify({ date: "2099-03-12", amount: 1300, bankTransactionId: bankId }) });
     assert.equal(pay.status, 200);
     const [cash] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.sourceKey, `expense:${expenseId}`));

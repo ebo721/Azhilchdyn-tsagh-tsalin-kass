@@ -197,6 +197,48 @@ describe("ordered bank recognition", () => {
     assert.deepEqual(result, { accountId: null, rule: "none", existingPurchaseMatch: null });
   });
 
+  it("ranks eligible unpaid targets by shared text-first similarity", () => {
+    const result = recognizeBankTransaction(transaction({
+      account: "",
+      counterparty: "",
+      description: "альфа бета гамма дельта",
+    }), context({
+      unpaidTargets: [
+        {
+          id: 2,
+          kind: "inventory_purchase",
+          accountId: 1500,
+          date: "2026-09-18",
+          amount: 100_000,
+          text: "альфа бета илүү нэг хоёр гурав дөрөв тав зургаа",
+        },
+        {
+          id: 1,
+          kind: "operating_expense",
+          accountId: 6900,
+          date: "2026-09-18",
+          amount: 100_000,
+          text: "альфа",
+        },
+      ],
+    }));
+    assert.deepEqual(result, {
+      accountId: 6900,
+      rule: "unpaid_target",
+      existingPurchaseMatch: { type: "operating_expense", id: 1 },
+    });
+  });
+
+  it("still excludes unpaid targets with wrong amounts or dates before scoring", () => {
+    const result = recognizeBankTransaction(transaction({ description: "Нийлүүлэгч төлбөр" }), context({
+      unpaidTargets: [
+        { id: 1, kind: "inventory_purchase", accountId: 1500, date: "2026-09-18", amount: 100_001, text: "Нийлүүлэгч" },
+        { id: 2, kind: "operating_expense", accountId: 6900, date: "2026-09-10", amount: 100_000, text: "Нийлүүлэгч" },
+      ],
+    }));
+    assert.deepEqual(result, { accountId: null, rule: "none", existingPurchaseMatch: null });
+  });
+
   it("matches keywords on token boundaries only", () => {
     assert.deepEqual(
       recognizeBankTransaction(transaction({ description: "preventative үйлчилгээ" }), context()),

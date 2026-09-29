@@ -17,9 +17,9 @@ describe("bank suggestion ranking", () => {
   });
 
   it("uses the same date, amount, and text weights for cash and purchase documents", () => {
-    assert.equal(bankSuggestionScore(bank, { ...document, date: "2026-09-30" }), 94.29);
-    assert.equal(bankSuggestionScore(bank, { ...document, amount: "80.00" }), 93);
-    assert.equal(bankSuggestionScore(bank, { ...document, description: "" }), 75);
+    assert.equal(bankSuggestionScore(bank, { ...document, date: "2026-09-30" }), 96.43);
+    assert.equal(bankSuggestionScore(bank, { ...document, amount: "80.00" }), 95);
+    assert.equal(bankSuggestionScore(bank, { ...document, description: "" }), 50);
     assert.equal(bankSuggestionScore(bank, { ...document, description: "ТОНОГ ӨРГӨГЧ" }), 100);
   });
 });
