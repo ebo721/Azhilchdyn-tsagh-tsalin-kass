@@ -21,4 +21,5 @@ feature/meal-counts-reader-push
 - [Route contract and authorization boundaries](route-contract-auth-boundaries.md) — Generated client paths and Express route variants can bypass tests or path-only role checks.
 
 - [Payroll integration test runtime](payroll-integration-test-runtime.md) — Salary-history checks can exceed five minutes; interrupted runs may skip fixture cleanup.
+- [Integration test workspace exports](integration-test-workspace-exports.md) — After API codegen, run tsx integration tests with the workspace condition so runtime Zod uses current source.
 main

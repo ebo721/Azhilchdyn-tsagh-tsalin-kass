@@ -2322,6 +2322,7 @@ components:
           oneOf:
             - $ref: "#/components/schemas/ReceivableCreateAllocation"
             - $ref: "#/components/schemas/ReceivableSettleAllocation"
+            - $ref: "#/components/schemas/PayableSettleAllocation"
             - type: "null"
     JournalEntryLineInput:
       type: object
@@ -2335,6 +2336,7 @@ components:
           oneOf:
             - $ref: "#/components/schemas/ReceivableCreateAllocation"
             - $ref: "#/components/schemas/ReceivableSettleAllocation"
+            - $ref: "#/components/schemas/PayableSettleAllocation"
             - type: "null"
     ReceivableCreateAllocation:
       type: object
@@ -2350,6 +2352,12 @@ components:
       properties:
         kind: { type: string, enum: [settle] }
         receivableId: { type: integer, minimum: 1 }
+    PayableSettleAllocation:
+      type: object
+      required: [kind, payableId]
+      properties:
+        kind: { type: string, enum: [settle] }
+        payableId: { type: integer, minimum: 1 }
     JournalEntryInput:
       type: object
       required: [date, description, lines]

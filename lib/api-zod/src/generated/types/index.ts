@@ -183,6 +183,8 @@ export * from './operatingExpense';
 export * from './operatingExpenseBankSuggestion';
 export * from './operatingExpenseInput';
 export * from './operatingExpensePaymentInput';
+export * from './payableSettleAllocation';
+export * from './payableSettleAllocationKind';
 export * from './payrollAdjustment';
 export * from './payrollAdjustmentInput';
 export * from './payrollAdvanceApprovalInput';
