@@ -1388,7 +1388,7 @@ export const ListCashTransactionsResponseItem = zod.object({
   "journalEntryId": zod.number().int().nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
-  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction'])
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'inventory_purchase_group', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction'])
 })
 export const ListCashTransactionsResponse = zod.array(ListCashTransactionsResponseItem)
 
@@ -1432,7 +1432,7 @@ export const CreateCashTransactionResponse = zod.object({
   "journalEntryId": zod.number().int().nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
-  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction'])
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'inventory_purchase_group', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction'])
 })
 
 
@@ -1479,7 +1479,7 @@ export const UpdateCashTransactionResponse = zod.object({
   "journalEntryId": zod.number().int().nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
-  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction'])
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'inventory_purchase_group', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction'])
 })
 
 
@@ -1527,7 +1527,7 @@ export const UpdateBankCashTransactionIncomeMonthResponse = zod.object({
   "journalEntryId": zod.number().int().nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
-  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction'])
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'inventory_purchase_group', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction'])
 })
 
 
@@ -1751,6 +1751,58 @@ export const LinkBankTransactionPurchaseResponse = zod.object({
   "inventoryPurchaseId": zod.number().int().min(1),
   "cashTransactionId": zod.number().int().min(1),
   "journalEntryId": zod.number().int().min(1)
+})
+
+
+/**
+ * @summary Link multiple existing unpaid inventory purchases to one bank expense
+ */
+export const LinkBankTransactionPurchasesParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+export const linkBankTransactionPurchasesBodyInventoryPurchaseIdsMin = 2;
+
+
+
+export const LinkBankTransactionPurchasesBody = zod.object({
+  "inventoryPurchaseIds": zod.array(zod.number().int().min(1)).min(linkBankTransactionPurchasesBodyInventoryPurchaseIdsMin)
+})
+
+
+
+export const linkBankTransactionPurchasesResponseInventoryPurchaseIdsMin = 2;
+
+
+
+
+
+export const LinkBankTransactionPurchasesResponse = zod.object({
+  "bankTransactionId": zod.number().int().min(1),
+  "inventoryPurchaseIds": zod.array(zod.number().int().min(1)).min(linkBankTransactionPurchasesResponseInventoryPurchaseIdsMin),
+  "cashTransactionId": zod.number().int().min(1),
+  "journalEntryId": zod.number().int().min(1)
+})
+
+
+/**
+ * @summary Atomically cancel a grouped inventory purchase bank payment
+ */
+export const CancelBankTransactionPurchaseGroupParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+export const cancelBankTransactionPurchaseGroupResponseInventoryPurchaseIdsMin = 2;
+
+
+
+export const CancelBankTransactionPurchaseGroupResponse = zod.object({
+  "bankTransactionId": zod.number().int().min(1),
+  "inventoryPurchaseIds": zod.array(zod.number().int().min(1)).min(cancelBankTransactionPurchaseGroupResponseInventoryPurchaseIdsMin),
+  "cancelled": zod.literal(true)
 })
 
 
@@ -1995,7 +2047,7 @@ export const ListBankTransactionCashSuggestionsResponseItem = zod.object({
   "journalEntryId": zod.number().int().nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
-  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction']),
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'inventory_purchase_group', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction']),
   "score": zod.number()
 })
 export const ListBankTransactionCashSuggestionsResponse = zod.array(ListBankTransactionCashSuggestionsResponseItem)
@@ -2648,6 +2700,9 @@ export const MoveMealScheduleEntryResponse = zod.array(MoveMealScheduleEntryResp
 /**
  * @summary List inventory purchases
  */
+
+
+
 export const ListInventoryPurchasesResponseItem = zod.object({
   "id": zod.number().int(),
   "materialType": zod.enum(['food', 'supply']),
@@ -2661,6 +2716,7 @@ export const ListInventoryPurchasesResponseItem = zod.object({
   "paid": zod.boolean(),
   "paymentDate": zod.string().nullish(),
   "paymentAmount": zod.number().nullish(),
+  "paymentGroupBankTransactionId": zod.number().int().min(1).nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
   "items": zod.array(zod.object({
@@ -2706,6 +2762,9 @@ export const CreateInventoryPurchaseBody = zod.object({
 })).min(1)
 })
 
+
+
+
 export const CreateInventoryPurchaseResponse = zod.object({
   "id": zod.number().int(),
   "materialType": zod.enum(['food', 'supply']),
@@ -2719,6 +2778,7 @@ export const CreateInventoryPurchaseResponse = zod.object({
   "paid": zod.boolean(),
   "paymentDate": zod.string().nullish(),
   "paymentAmount": zod.number().nullish(),
+  "paymentGroupBankTransactionId": zod.number().int().min(1).nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
   "items": zod.array(zod.object({
@@ -2767,6 +2827,9 @@ export const UpdateInventoryPurchaseBody = zod.object({
 })).min(1)
 })
 
+
+
+
 export const UpdateInventoryPurchaseResponse = zod.object({
   "id": zod.number().int(),
   "materialType": zod.enum(['food', 'supply']),
@@ -2780,6 +2843,7 @@ export const UpdateInventoryPurchaseResponse = zod.object({
   "paid": zod.boolean(),
   "paymentDate": zod.string().nullish(),
   "paymentAmount": zod.number().nullish(),
+  "paymentGroupBankTransactionId": zod.number().int().min(1).nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
   "items": zod.array(zod.object({
@@ -2823,6 +2887,9 @@ export const ConfirmInventoryPurchasePaymentBody = zod.object({
   "bankTransactionId": zod.number().int().nullish()
 })
 
+
+
+
 export const ConfirmInventoryPurchasePaymentResponse = zod.object({
   "id": zod.number().int(),
   "materialType": zod.enum(['food', 'supply']),
@@ -2836,6 +2903,7 @@ export const ConfirmInventoryPurchasePaymentResponse = zod.object({
   "paid": zod.boolean(),
   "paymentDate": zod.string().nullish(),
   "paymentAmount": zod.number().nullish(),
+  "paymentGroupBankTransactionId": zod.number().int().min(1).nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
   "items": zod.array(zod.object({
@@ -2858,6 +2926,9 @@ export const CancelInventoryPurchasePaymentParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+
+
+
 export const CancelInventoryPurchasePaymentResponse = zod.object({
   "id": zod.number().int(),
   "materialType": zod.enum(['food', 'supply']),
@@ -2871,6 +2942,7 @@ export const CancelInventoryPurchasePaymentResponse = zod.object({
   "paid": zod.boolean(),
   "paymentDate": zod.string().nullish(),
   "paymentAmount": zod.number().nullish(),
+  "paymentGroupBankTransactionId": zod.number().int().min(1).nullable(),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
   "items": zod.array(zod.object({

@@ -127,6 +127,8 @@ import {
   payrollAdjustmentsTable,
   payrollAdvanceApprovalsTable,
   inventoryPurchasesTable,
+  inventoryPurchasePaymentGroupMembersTable,
+  inventoryPurchasePaymentGroupsTable,
   inventorySuppliersTable,
   inventoryPurchaseItemsTable,
   inventoryItemsTable,
@@ -143,6 +145,7 @@ import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment.js";
 import { planShiftPlanCopy } from "../lib/shift-plan-copy.js";
 import { reconcileOperatingExpenses } from "../lib/operating-expense-sync.js";
 import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
+import { activePurchasePaymentGroup } from "../lib/bank-document-linking.js";
 import {
   cashAccountForCategory,
   isCanonicalCashCategory,
@@ -156,7 +159,7 @@ const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, op
 
 router.get("/inventory/purchases", async (_req, res, next) => {
   try {
-    const [purchases, items, closures] = await Promise.all([
+    const [purchases, items, closures, paymentGroups] = await Promise.all([
       db.select({
         purchase: inventoryPurchasesTable,
         accountCode: chartOfAccountsTable.code,
@@ -166,8 +169,18 @@ router.get("/inventory/purchases", async (_req, res, next) => {
         .orderBy(desc(inventoryPurchasesTable.date), desc(inventoryPurchasesTable.id)),
       db.select().from(inventoryPurchaseItemsTable).orderBy(inventoryPurchaseItemsTable.id),
       db.select({ date: cashClosuresTable.date }).from(cashClosuresTable),
+      db.select({
+        purchaseId: inventoryPurchasePaymentGroupMembersTable.purchaseId,
+        bankTransactionId: inventoryPurchasePaymentGroupsTable.bankTransactionId,
+      }).from(inventoryPurchasePaymentGroupMembersTable)
+        .innerJoin(inventoryPurchasePaymentGroupsTable, eq(
+          inventoryPurchasePaymentGroupsTable.id,
+          inventoryPurchasePaymentGroupMembersTable.groupId,
+        ))
+        .where(eq(inventoryPurchasePaymentGroupsTable.status, "active")),
     ]);
     const closedDates = new Set(closures.map((closure) => closure.date));
+    const paymentGroupByPurchase = new Map(paymentGroups.map((group) => [group.purchaseId, group.bankTransactionId]));
     res.json(ListInventoryPurchasesResponse.parse(purchases.map((row) => ({
       id: row.purchase.id,
       materialType: row.purchase.materialType,
@@ -181,6 +194,7 @@ router.get("/inventory/purchases", async (_req, res, next) => {
       paid: row.purchase.paymentDate !== null,
       paymentDate: row.purchase.paymentDate,
       paymentAmount: row.purchase.paymentAmount === null ? null : Number(row.purchase.paymentAmount),
+      paymentGroupBankTransactionId: paymentGroupByPurchase.get(row.purchase.id) ?? null,
       createdAt: row.purchase.createdAt.toISOString(),
       editable: !closedDates.has(row.purchase.date),
       items: items
@@ -266,6 +280,16 @@ router.put("/inventory/suppliers/:id", async (req, res, next) => {
     );
     const purchaseIds = matchingPurchases.map((purchase) => purchase.id);
     const updatedSupplier = await db.transaction(async (tx) => {
+      if (purchaseIds.length > 0) {
+        const lockedPurchases = await tx.select({ id: inventoryPurchasesTable.id })
+          .from(inventoryPurchasesTable)
+          .where(inArray(inventoryPurchasesTable.id, purchaseIds))
+          .orderBy(inventoryPurchasesTable.id)
+          .for("update");
+        for (const purchase of lockedPurchases) {
+          if (await activePurchasePaymentGroup(tx, purchase.id)) return null;
+        }
+      }
       const [updated] = await tx.update(inventorySuppliersTable)
         .set({ name, normalizedName })
         .where(eq(inventorySuppliersTable.id, id))
@@ -283,6 +307,10 @@ router.put("/inventory/suppliers/:id", async (req, res, next) => {
       }
       return updated;
     });
+    if (!updatedSupplier) {
+      res.status(409).json({ error: "Нийлүүлэгчийн худалдан авалтад бүлэг төлбөр байна. Эхлээд банкны бүлэг төлбөрийг цуцална уу" });
+      return;
+    }
     const purchaseItems = purchaseIds.length > 0
       ? await db.select().from(inventoryPurchaseItemsTable).where(inArray(inventoryPurchaseItemsTable.purchaseId, purchaseIds))
       : [];
@@ -668,6 +696,7 @@ router.post("/inventory/purchases", async (req, res, next) => {
       paid: false,
       paymentDate: null,
       paymentAmount: null,
+      paymentGroupBankTransactionId: null,
       createdAt: result.purchase.createdAt.toISOString(),
       editable: true,
       items: result.savedItems.map((item) => ({
@@ -720,6 +749,10 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
     }
     const totalAmount = money(normalizedItems.reduce((total, item) => total + item.totalAmount, 0));
     const result = await db.transaction(async (tx) => {
+      const [lockedPurchase] = await tx.select().from(inventoryPurchasesTable)
+        .where(eq(inventoryPurchasesTable.id, id)).for("update");
+      if (!lockedPurchase) return { kind: "missing" as const };
+      if (await activePurchasePaymentGroup(tx, id)) return { kind: "grouped" as const };
       const account = await inventoryPurchaseAccount(tx, input.materialType);
       const normalizedSupplierName = supplierName.toLocaleLowerCase("mn-MN");
       let [supplier] = await tx.select().from(inventorySuppliersTable)
@@ -806,6 +839,14 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
       res.status(409).json({ error: "Энэ худалдан авалтын бараа аль хэдийн зарлагдсан тул засах боломжгүй" });
       return;
     }
+    if (result.kind === "grouped") {
+      res.status(409).json({ error: "Энэ худалдан авалт бүлэг төлбөрт холбогдсон байна. Эхлээд банкны бүлэг төлбөрийг цуцална уу" });
+      return;
+    }
+    if (result.kind === "missing") {
+      res.status(404).json({ error: "Худалдан авалт олдсонгүй" });
+      return;
+    }
     res.json(UpdateInventoryPurchaseResponse.parse({
       id: result.purchase.id,
       materialType: result.purchase.materialType,
@@ -819,6 +860,7 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
       paid: result.purchase.paymentDate !== null,
       paymentDate: result.purchase.paymentDate,
       paymentAmount: result.purchase.paymentAmount === null ? null : Number(result.purchase.paymentAmount),
+      paymentGroupBankTransactionId: null,
       createdAt: result.purchase.createdAt.toISOString(),
       editable: true,
       items: result.savedItems.map((item) => ({
@@ -893,6 +935,7 @@ router.put("/inventory/purchases/:id/payment", async (req, res, next) => {
         .for("update");
       if (!currentPurchase) return "purchase_missing" as const;
       if (currentPurchase.paymentDate !== null) return "already_paid" as const;
+      if (await activePurchasePaymentGroup(tx, id)) return "grouped" as const;
       const [closure] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable)
         .where(eq(cashClosuresTable.date, input.date));
       if (closure) return "cash_closed" as const;
@@ -906,6 +949,7 @@ router.put("/inventory/purchases/:id/payment", async (req, res, next) => {
       if (input.bankTransactionId != null) {
         if (!bank) return "bank_missing" as const;
         const bankDate = bank.transactionAt.toISOString().slice(0, 10);
+        if (money(input.amount) !== money(Number(currentPurchase.totalAmount))) return "bank_mismatch" as const;
         if (bank.type !== "expense" || bank.unclearAt !== null || bankDate !== input.date || money(Number(bank.amount)) !== money(input.amount)) {
           return "bank_mismatch" as const;
         }
@@ -998,6 +1042,10 @@ router.put("/inventory/purchases/:id/payment", async (req, res, next) => {
       res.status(409).json({ error: "Энэ худалдан авалтын төлбөр аль хэдийн батлагдсан байна" });
       return;
     }
+    if (result === "grouped") {
+      res.status(409).json({ error: "Энэ худалдан авалт бүлэг төлбөрт холбогдсон байна. Эхлээд банкны бүлэг төлбөрийг цуцална уу" });
+      return;
+    }
     if (result === "cash_closed") {
       res.status(409).json({ error: "Өндөрлөсөн өдрийн төлбөрийг өөрчлөх боломжгүй" });
       return;
@@ -1044,6 +1092,7 @@ router.delete("/inventory/purchases/:id/payment", async (req, res, next) => {
         .where(eq(inventoryPurchasesTable.id, id))
         .for("update");
       if (!currentPurchase) return "missing" as const;
+      if (await activePurchasePaymentGroup(tx, id)) return "grouped" as const;
       if (currentPurchase.paymentDate) {
         const [closure] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable)
           .where(eq(cashClosuresTable.date, currentPurchase.paymentDate));
@@ -1081,6 +1130,10 @@ router.delete("/inventory/purchases/:id/payment", async (req, res, next) => {
       res.status(409).json({ error: "Өндөрлөсөн өдрийн төлбөрийг цуцлах боломжгүй" });
       return;
     }
+    if (result === "grouped") {
+      res.status(409).json({ error: "Энэ худалдан авалт бүлэг төлбөрт холбогдсон байна. Банкны бүлэг төлбөрийг бүхэлд нь цуцална уу" });
+      return;
+    }
     const response = await inventoryPurchaseResponse(id);
     res.json(CancelInventoryPurchasePaymentResponse.parse(response));
   } catch (error) {
@@ -1101,6 +1154,10 @@ router.delete("/inventory/purchases/:id", async (req, res, next) => {
       return;
     }
     const result = await db.transaction(async (tx) => {
+      const [lockedPurchase] = await tx.select().from(inventoryPurchasesTable)
+        .where(eq(inventoryPurchasesTable.id, id)).for("update");
+      if (!lockedPurchase) return { kind: "missing" as const };
+      if (await activePurchasePaymentGroup(tx, id)) return { kind: "grouped" as const };
       const [cash] = await tx.select().from(cashTransactionsTable).where(and(
         eq(cashTransactionsTable.sourceType, "inventory_purchase"),
         eq(cashTransactionsTable.sourceKey, `purchase:${id}`),
@@ -1136,6 +1193,14 @@ router.delete("/inventory/purchases/:id", async (req, res, next) => {
       res.status(409).json({ error: "Энэ худалдан авалтын бараа аль хэдийн зарлагдсан тул устгах боломжгүй" });
       return;
     }
+    if (result.kind === "grouped") {
+      res.status(409).json({ error: "Энэ худалдан авалт бүлэг төлбөрт холбогдсон байна. Эхлээд банкны бүлэг төлбөрийг цуцална уу" });
+      return;
+    }
+    if (result.kind === "missing") {
+      res.status(404).json({ error: "Худалдан авалт олдсонгүй" });
+      return;
+    }
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -1156,6 +1221,10 @@ router.post("/inventory/purchases/:id/reclassify-as-expense", async (req, res, n
       return;
     }
     const result = await db.transaction(async (tx) => {
+      const [lockedPurchase] = await tx.select().from(inventoryPurchasesTable)
+        .where(eq(inventoryPurchasesTable.id, id)).for("update");
+      if (!lockedPurchase) return { kind: "missing" as const };
+      if (await activePurchasePaymentGroup(tx, id)) return { kind: "grouped" as const };
       const account = await lockedExpenseAccount(tx, input.accountId);
       if (!account) return { kind: "invalid_account" as const };
       const lines = await tx.select().from(inventoryPurchaseItemsTable).where(eq(inventoryPurchaseItemsTable.purchaseId, id));
@@ -1209,6 +1278,14 @@ router.post("/inventory/purchases/:id/reclassify-as-expense", async (req, res, n
     });
     if (result.kind === "consumed") {
       res.status(409).json({ error: "Энэ худалдан авалтын бараа аль хэдийн зарлагдсан тул шилжүүлэх боломжгүй" });
+      return;
+    }
+    if (result.kind === "grouped") {
+      res.status(409).json({ error: "Энэ худалдан авалт бүлэг төлбөрт холбогдсон байна. Эхлээд банкны бүлэг төлбөрийг цуцална уу" });
+      return;
+    }
+    if (result.kind === "missing") {
+      res.status(404).json({ error: "Худалдан авалт олдсонгүй" });
       return;
     }
     if (result.kind === "invalid_account") {

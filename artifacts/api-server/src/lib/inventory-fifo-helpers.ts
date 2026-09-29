@@ -8,6 +8,8 @@ import {
   inventoryItemsTable,
   inventoryPurchaseItemsTable,
   inventoryPurchasesTable,
+  inventoryPurchasePaymentGroupMembersTable,
+  inventoryPurchasePaymentGroupsTable,
 } from "@workspace/db";
 import { money } from "./date-utils.js";
 import type { Tx } from "./route-shared.js";
@@ -124,6 +126,17 @@ export async function inventoryPurchaseResponse(id: number) {
     db.select().from(inventoryPurchaseItemsTable).where(eq(inventoryPurchaseItemsTable.purchaseId, id)),
     db.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, purchase.date)),
   ]);
+  const [paymentGroup] = await db.select({
+    bankTransactionId: inventoryPurchasePaymentGroupsTable.bankTransactionId,
+  }).from(inventoryPurchasePaymentGroupMembersTable)
+    .innerJoin(inventoryPurchasePaymentGroupsTable, eq(
+      inventoryPurchasePaymentGroupsTable.id,
+      inventoryPurchasePaymentGroupMembersTable.groupId,
+    ))
+    .where(and(
+      eq(inventoryPurchasePaymentGroupMembersTable.purchaseId, id),
+      eq(inventoryPurchasePaymentGroupsTable.status, "active"),
+    )).limit(1);
   return {
     id: purchase.id,
     materialType: purchase.materialType,
@@ -137,6 +150,7 @@ export async function inventoryPurchaseResponse(id: number) {
     paid: purchase.paymentDate !== null,
     paymentDate: purchase.paymentDate,
     paymentAmount: purchase.paymentAmount === null ? null : Number(purchase.paymentAmount),
+    paymentGroupBankTransactionId: paymentGroup?.bankTransactionId ?? null,
     createdAt: purchase.createdAt.toISOString(),
     editable: closure.length === 0,
     items: items.map((item) => ({

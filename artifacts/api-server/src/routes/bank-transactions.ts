@@ -26,6 +26,11 @@ import {
   LinkBankTransactionPurchaseBody,
   LinkBankTransactionPurchaseParams,
   LinkBankTransactionPurchaseResponse,
+  LinkBankTransactionPurchasesBody,
+  LinkBankTransactionPurchasesParams,
+  LinkBankTransactionPurchasesResponse,
+  CancelBankTransactionPurchaseGroupParams,
+  CancelBankTransactionPurchaseGroupResponse,
   LinkBankTransactionExpenseBody,
   LinkBankTransactionExpenseParams,
   LinkBankTransactionExpenseResponse,
@@ -46,7 +51,13 @@ import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.j
 import { cashAccountForCategory } from "../lib/cash-account.js";
 import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
 import { loadBankRecognitionContext, recognizeBankTransaction } from "../lib/bank-recognition.js";
-import { linkBankPurchase, linkBankExpense, linkBankFixedAsset } from "../lib/bank-document-linking.js";
+import {
+  cancelBankPurchaseGroup,
+  linkBankPurchase,
+  linkBankPurchases,
+  linkBankExpense,
+  linkBankFixedAsset,
+} from "../lib/bank-document-linking.js";
 
 const router: IRouter = Router();
 const maxUploadBytes = 10 * 1024 * 1024;
@@ -245,11 +256,11 @@ function bankAndCashAmountsMatch(
 
 function cashSuggestionResponse(row: typeof cashTransactionsTable.$inferSelect, score: number) {
   const isOperatingExpense = row.type === "expense"
-    && !["payroll", "payroll_advance", "inventory_purchase", "fixed_asset_purchase"].includes(row.sourceType ?? "");
+    && !["payroll", "payroll_advance", "inventory_purchase", "inventory_purchase_group", "fixed_asset_purchase"].includes(row.sourceType ?? "");
   const category = row.type === "expense"
     ? row.sourceType === "payroll" || row.sourceType === "payroll_advance"
       ? "Цалин"
-      : row.sourceType === "inventory_purchase"
+          : row.sourceType === "inventory_purchase" || row.sourceType === "inventory_purchase_group"
         ? "Бараа материал"
         : row.sourceType === "fixed_asset_purchase"
           ? "Эд хөрөнгө"
@@ -268,7 +279,7 @@ function cashSuggestionResponse(row: typeof cashTransactionsTable.$inferSelect, 
     journalEntryId: row.journalEntryId,
     createdAt: row.createdAt.toISOString(),
     editable: row.sourceType === null,
-    transactionKind: (row.sourceType ?? "manual") as "manual" | "payroll" | "payroll_advance" | "inventory_purchase" | "fixed_asset_purchase" | "bank_transaction",
+    transactionKind: (row.sourceType ?? "manual") as "manual" | "payroll" | "payroll_advance" | "inventory_purchase" | "inventory_purchase_group" | "fixed_asset_purchase" | "bank_transaction",
     score,
   };
 }
@@ -423,6 +434,55 @@ router.post("/bank-transactions/:id/link-purchase", async (req, res, next) => {
   }
 });
 
+router.post("/bank-transactions/:id/link-purchases", async (req, res, next) => {
+  try {
+    const { id } = LinkBankTransactionPurchasesParams.parse(req.params);
+    const { inventoryPurchaseIds } = LinkBankTransactionPurchasesBody.parse(req.body);
+    if (new Set(inventoryPurchaseIds).size !== inventoryPurchaseIds.length) {
+      res.status(400).json({ error: "Худалдан авалтын давхардсан дугаар байна" });
+      return;
+    }
+    const result = await linkBankPurchases(id, inventoryPurchaseIds);
+    if (typeof result === "string") {
+      const status = result === "missing_bank" || result === "missing_purchase"
+        ? 404
+        : result === "bank_resolved" || result === "purchase_conflict" || result === "closed"
+          ? 409
+          : 400;
+      res.status(status).json({ error: result });
+      return;
+    }
+    res.json(LinkBankTransactionPurchasesResponse.parse(result));
+  } catch (error) {
+    const code = (error as { code?: string; cause?: { code?: string } }).code
+      ?? (error as { cause?: { code?: string } }).cause?.code;
+    if (code === "23505" || (error instanceof Error && error.message.includes("claimed concurrently"))) {
+      res.status(409).json({ error: "Банкны гүйлгээ эсвэл худалдан авалт аль хэдийн холбогдсон байна" });
+      return;
+    }
+    next(error);
+  }
+});
+
+router.delete("/bank-transactions/:id/purchase-group", async (req, res, next) => {
+  try {
+    const { id } = CancelBankTransactionPurchaseGroupParams.parse(req.params);
+    const session = await getStaffSession(req);
+    const result = await cancelBankPurchaseGroup(id, session?.id ?? null);
+    if (typeof result === "string") {
+      const status = result === "missing_bank" || result === "missing_group" ? 404 : 409;
+      const message = result === "closed"
+        ? "Өндөрлөсөн өдрийн бүлэг төлбөрийг цуцлах боломжгүй"
+        : "Бүлэг төлбөрийг цуцлах боломжгүй эсвэл аль хэдийн цуцлагдсан байна";
+      res.status(status).json({ error: message });
+      return;
+    }
+    res.json(CancelBankTransactionPurchaseGroupResponse.parse(result));
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post("/bank-transactions/:id/link-expense", async (req, res, next) => {
   try {
     const { id } = LinkBankTransactionExpenseParams.parse(req.params);
@@ -535,6 +595,7 @@ router.delete("/bank-transactions/:id/journal", async (req, res, next) => {
       if (!entry || entry.sourceId !== bank.id || entry.status !== "posted") {
         return "source_managed" as const;
       }
+      if (entry.sourceType === "inventory_purchase_group") return "grouped_purchase_group" as const;
       let linkedCashId: number | null = null;
       let linkedCashSourceType: string | null = null;
       if (entry.sourceType === "bank") {
@@ -611,6 +672,10 @@ router.delete("/bank-transactions/:id/journal", async (req, res, next) => {
     }
     if (result === "source_managed") {
       res.status(409).json({ error: "Энэ журнал баримт эсвэл өөр эх үүсвэртэй холбоотой тул эх үүсвэр цэснээс цуцална уу" });
+      return;
+    }
+    if (result === "grouped_purchase_group") {
+      res.status(409).json({ error: "Энэ банкны гүйлгээ бүлэг худалдан авалтын төлбөрт холбогдсон байна. Бүлгийн төлбөрийг бүхэлд нь цуцална уу" });
       return;
     }
     res.json(DeleteBankTransactionJournalResponse.parse(result));

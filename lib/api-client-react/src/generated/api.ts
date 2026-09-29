@@ -40,8 +40,11 @@ import type {
   BankExpenseLinkResult,
   BankFixedAssetLinkInput,
   BankFixedAssetLinkResult,
+  BankPurchaseGroupCancellationResult,
   BankPurchaseLinkInput,
   BankPurchaseLinkResult,
+  BankPurchasesLinkInput,
+  BankPurchasesLinkResult,
   BankTransaction,
   BankTransactionAccountInput,
   BankTransactionCashLinkInput,
@@ -5135,6 +5138,149 @@ export const useLinkBankTransactionPurchase = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getLinkBankTransactionPurchaseMutationOptions(options));
+    }
+
+export const getLinkBankTransactionPurchasesUrl = (id: number,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}/link-purchases`
+}
+
+/**
+ * @summary Link multiple existing unpaid inventory purchases to one bank expense
+ */
+export const linkBankTransactionPurchases = async (id: number,
+    bankPurchasesLinkInput: BankPurchasesLinkInput, options?: Parameters<typeof customFetch>[1]): Promise<BankPurchasesLinkResult> => {
+
+  return customFetch<BankPurchasesLinkResult>(getLinkBankTransactionPurchasesUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bankPurchasesLinkInput)
+  }
+);}
+
+
+
+
+
+export const getLinkBankTransactionPurchasesMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionPurchases>>, TError,{id: number;data: BodyType<BankPurchasesLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionPurchases>>, TError,{id: number;data: BodyType<BankPurchasesLinkInput>}, TContext> => {
+
+const mutationKey = ['linkBankTransactionPurchases'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof linkBankTransactionPurchases>>, {id: number;data: BodyType<BankPurchasesLinkInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  linkBankTransactionPurchases(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LinkBankTransactionPurchasesMutationResult = NonNullable<Awaited<ReturnType<typeof linkBankTransactionPurchases>>>
+    export type LinkBankTransactionPurchasesMutationBody = BodyType<BankPurchasesLinkInput>
+    export type LinkBankTransactionPurchasesMutationError = ErrorType<void>
+
+    /**
+ * @summary Link multiple existing unpaid inventory purchases to one bank expense
+ */
+export const useLinkBankTransactionPurchases = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkBankTransactionPurchases>>, TError,{id: number;data: BodyType<BankPurchasesLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof linkBankTransactionPurchases>>,
+        TError,
+        {id: number;data: BodyType<BankPurchasesLinkInput>},
+        TContext
+      > => {
+      return useMutation(getLinkBankTransactionPurchasesMutationOptions(options));
+    }
+
+export const getCancelBankTransactionPurchaseGroupUrl = (id: number,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}/purchase-group`
+}
+
+/**
+ * @summary Atomically cancel a grouped inventory purchase bank payment
+ */
+export const cancelBankTransactionPurchaseGroup = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<BankPurchaseGroupCancellationResult> => {
+
+  return customFetch<BankPurchaseGroupCancellationResult>(getCancelBankTransactionPurchaseGroupUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getCancelBankTransactionPurchaseGroupMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelBankTransactionPurchaseGroup>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelBankTransactionPurchaseGroup>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['cancelBankTransactionPurchaseGroup'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelBankTransactionPurchaseGroup>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  cancelBankTransactionPurchaseGroup(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelBankTransactionPurchaseGroupMutationResult = NonNullable<Awaited<ReturnType<typeof cancelBankTransactionPurchaseGroup>>>
+
+    export type CancelBankTransactionPurchaseGroupMutationError = ErrorType<void>
+
+    /**
+ * @summary Atomically cancel a grouped inventory purchase bank payment
+ */
+export const useCancelBankTransactionPurchaseGroup = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelBankTransactionPurchaseGroup>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelBankTransactionPurchaseGroup>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getCancelBankTransactionPurchaseGroupMutationOptions(options));
     }
 
 export const getLinkBankTransactionExpenseUrl = (id: number,) => {

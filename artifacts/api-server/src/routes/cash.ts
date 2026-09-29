@@ -317,11 +317,13 @@ router.get("/cash/transactions", async (_req, res, next) => {
           ? "Цалин"
           : transaction.sourceType === "inventory_purchase"
             ? inventoryCategoryBySourceKey.get(transaction.sourceKey ?? "") ?? "Хангамжийн материал"
-            : transaction.sourceType === "fixed_asset_purchase"
-              ? "Эд хөрөнгө"
-              : isCanonicalCashCategory(transaction.category)
-                ? transaction.category
-                : "Үйл ажиллагааны зардал"
+            : transaction.sourceType === "inventory_purchase_group"
+              ? "Бараа материал"
+              : transaction.sourceType === "fixed_asset_purchase"
+                ? "Эд хөрөнгө"
+                : isCanonicalCashCategory(transaction.category)
+                  ? transaction.category
+                  : "Үйл ажиллагааны зардал"
         : transaction.category;
       return {
       ...transaction,
@@ -330,7 +332,7 @@ router.get("/cash/transactions", async (_req, res, next) => {
       accountName: row.accountName,
       category,
       subcategory: category === "Үйл ажиллагааны зардал"
-        && !["payroll", "payroll_advance", "inventory_purchase", "fixed_asset_purchase"].includes(transaction.sourceType ?? "")
+        && !["payroll", "payroll_advance", "inventory_purchase", "inventory_purchase_group", "fixed_asset_purchase"].includes(transaction.sourceType ?? "")
         ? subcategoryByCashId.get(transaction.id) ?? (transaction.category !== "Үйл ажиллагааны зардал" ? transaction.category : null)
         : null,
       amount: Number(transaction.amount),

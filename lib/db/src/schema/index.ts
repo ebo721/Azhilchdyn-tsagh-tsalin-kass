@@ -387,6 +387,32 @@ export const inventoryPurchasesTable = pgTable("inventory_purchases", {
   index("inventory_purchases_account_id_idx").on(table.accountId),
 ]);
 
+export const inventoryPurchasePaymentGroupsTable = pgTable("inventory_purchase_payment_groups", {
+  id: serial("id").primaryKey(),
+  // Preserve the bank ID as audit history even if the now-unlinked bank row is deleted.
+  bankTransactionId: integer("bank_transaction_id").notNull(),
+  cashTransactionId: integer("cash_transaction_id").references(() => cashTransactionsTable.id, { onDelete: "set null" }),
+  journalEntryId: integer("journal_entry_id").notNull().references(() => journalEntriesTable.id, { onDelete: "restrict" }),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+}, (table) => [
+  index("inventory_purchase_payment_groups_bank_idx").on(table.bankTransactionId),
+  check("inventory_purchase_payment_groups_status_check", sql`${table.status} IN ('active', 'cancelled')`),
+  check("inventory_purchase_payment_groups_cancelled_check", sql`(${table.status} = 'active' AND ${table.cancelledAt} IS NULL) OR (${table.status} = 'cancelled' AND ${table.cancelledAt} IS NOT NULL)`),
+]);
+
+export const inventoryPurchasePaymentGroupMembersTable = pgTable("inventory_purchase_payment_group_members", {
+  groupId: integer("group_id").notNull().references(() => inventoryPurchasePaymentGroupsTable.id, { onDelete: "cascade" }),
+  // Intentionally no purchase FK: cancelled groups retain their exact purchase IDs
+  // while allowing each purchase to be edited or deleted independently afterward.
+  purchaseId: integer("purchase_id").notNull(),
+}, (table) => [
+  index("inventory_purchase_payment_group_members_purchase_idx").on(table.purchaseId),
+  index("inventory_purchase_payment_group_members_group_idx").on(table.groupId),
+  uniqueIndex("inventory_purchase_payment_group_members_group_purchase_idx").on(table.groupId, table.purchaseId),
+]);
+
 export const inventorySuppliersTable = pgTable("inventory_suppliers", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
