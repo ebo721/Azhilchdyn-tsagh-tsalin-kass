@@ -213,6 +213,71 @@ export const attendanceTable = pgTable("attendance", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const officeAttendanceNetworkTable = pgTable("office_attendance_network", {
+  id: integer("id").primaryKey(),
+  officeIp: text("office_ip").notNull(),
+  updatedBy: integer("updated_by").references(() => usersTable.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  check("office_attendance_network_singleton_check", sql`${table.id} = 1`),
+]);
+
+export const attendanceDeviceEnrollmentsTable = pgTable("attendance_device_enrollments", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => employeesTable.id, { onDelete: "restrict" }),
+  tokenHash: text("token_hash").notNull().unique(),
+  createdBy: integer("created_by").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+}, (table) => [
+  index("attendance_device_enrollments_employee_idx").on(table.employeeId),
+]);
+
+export const attendanceDevicesTable = pgTable("attendance_devices", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => employeesTable.id, { onDelete: "restrict" }),
+  publicKey: jsonb("public_key").notNull(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+}, (table) => [
+  index("attendance_devices_employee_idx").on(table.employeeId),
+]);
+
+export const officeAttendancePunchesTable = pgTable("office_attendance_punches", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => employeesTable.id, { onDelete: "restrict" }),
+  deviceId: integer("device_id").notNull().references(() => attendanceDevicesTable.id, { onDelete: "restrict" }),
+  officeDate: date("office_date", { mode: "string" }).notNull(),
+  checkedInAt: timestamp("checked_in_at", { withTimezone: true }).notNull(),
+  checkedOutAt: timestamp("checked_out_at", { withTimezone: true }),
+  attendanceId: integer("attendance_id").references(() => attendanceTable.id, { onDelete: "restrict" }),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancelledBy: integer("cancelled_by").references(() => usersTable.id, { onDelete: "set null" }),
+  cancellationReason: text("cancellation_reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("office_attendance_punches_employee_date_idx").on(table.employeeId, table.officeDate),
+  uniqueIndex("office_attendance_punches_pending_employee_idx").on(table.employeeId)
+    .where(sql`${table.checkedOutAt} IS NULL AND ${table.cancelledAt} IS NULL`),
+  check(
+    "office_attendance_punches_cancellation_check",
+    sql`(${table.cancelledAt} IS NULL AND ${table.cancellationReason} IS NULL) OR (${table.cancelledAt} IS NOT NULL AND ${table.cancellationReason} IS NOT NULL)`,
+  ),
+]);
+
+export const officeAttendanceNoncesTable = pgTable("office_attendance_nonces", {
+  id: serial("id").primaryKey(),
+  deviceId: integer("device_id").notNull().references(() => attendanceDevicesTable.id, { onDelete: "cascade" }),
+  nonceHash: text("nonce_hash").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("office_attendance_nonces_device_nonce_idx").on(table.deviceId, table.nonceHash),
+]);
+
 export const payrollAdjustmentsTable = pgTable("payroll_adjustments", {
   id: serial("id").primaryKey(),
   employeeId: integer("employee_id").notNull().references(() => employeesTable.id, { onDelete: "cascade" }),
@@ -560,6 +625,9 @@ export type PayableAllocation = typeof payableAllocationsTable.$inferSelect;
 export type ShiftTemplate = typeof shiftTemplatesTable.$inferSelect;
 export type EmployeeShiftPlan = typeof employeeShiftPlansTable.$inferSelect;
 export type Attendance = typeof attendanceTable.$inferSelect;
+export type AttendanceDeviceEnrollment = typeof attendanceDeviceEnrollmentsTable.$inferSelect;
+export type AttendanceDevice = typeof attendanceDevicesTable.$inferSelect;
+export type OfficeAttendancePunch = typeof officeAttendancePunchesTable.$inferSelect;
 export type PayrollAdjustment = typeof payrollAdjustmentsTable.$inferSelect;
 export type PayrollAdvanceApproval = typeof payrollAdvanceApprovalsTable.$inferSelect;
 export type CashTransaction = typeof cashTransactionsTable.$inferSelect;

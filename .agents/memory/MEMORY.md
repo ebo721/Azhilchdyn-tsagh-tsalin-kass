@@ -17,9 +17,9 @@
 - [PostgreSQL RESTRICT errors](postgres-restrict-errors.md) — A RESTRICT foreign key may raise SQLSTATE 23001 rather than 23503; handle both in deletion conflicts.
 - [Bank cash account precedence](bank-cash-account-precedence.md) — An assigned bank GL account governs new cash and journal postings; a separate expense subcategory is redundant.
 - [Remote DB reconciliation latency](remote-db-reconciliation-latency.md) — Cheap SQL plans can hide costly serial network round-trips; batch clean-pair checks and retain dirty-pair sync.
-feature/meal-counts-reader-push
 - [Route contract and authorization boundaries](route-contract-auth-boundaries.md) — Generated client paths and Express route variants can bypass tests or path-only role checks.
 
 - [Payroll integration test runtime](payroll-integration-test-runtime.md) — Salary-history checks can exceed five minutes; interrupted runs may skip fixture cleanup.
 - [Integration test workspace exports](integration-test-workspace-exports.md) — After API codegen, run tsx integration tests with the workspace condition so runtime Zod uses current source.
-main
+- [Stacked PR merge visibility](stacked-pr-merge-visibility.md) — A merged label on a feature-targeted PR does not put its changes on main; compare main’s tree to the final branch.
+- [Office network attendance edge](office-network-attendance-edge.md) — Trust only the direct Vercel edge for office IP checks; frontend proxy rewrites cannot establish employee origin.

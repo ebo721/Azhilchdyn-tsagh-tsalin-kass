@@ -124,6 +124,7 @@ import {
 import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import {
   attendanceTable,
+  officeAttendancePunchesTable,
   cashTransactionsTable,
   cashClosuresTable,
   bankTransactionsTable,
@@ -160,6 +161,24 @@ import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-
 
 const router: IRouter = Router();
 const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, operatingExpenseAccountName, inventoryMaterialLabel, defaultChartOfAccounts, operatingExpenseAccountCodes, inventoryPurchaseAccountCodes, reservedAccountTypes, chartOfAccountResponse, ensureDefaultChartOfAccounts, inventoryPurchaseAccount, lockedExpenseAccount, fallbackExpenseAccount, today, currentMonth, money, InventoryBankPaymentConflictError, OperatingExpenseBankPaymentConflictError, calendarDateOffset, descriptionTokens, inventoryBankSuggestionScore, deletionTargetPatterns, roleCanRequestDeletion, deletionRequestResponse, monthlyIncomeTaxRelief, hoursBetween, previousMonth, nextMonth, daysInMonth, isValidCalendarDate, calendarDateText, weekdayCount, monthWeekdays, defaultPayrollSchedule, getPayrollSchedule, scheduleDate, payrollPeriod, selectPayrollScheduleVersion, scheduleVersionAffectsMonth, shiftDailyRate, weekdayDatesBetween, salaryAt, getPayrollSummary, getPayrollAdvanceSummary, calculatePayrollAdvanceLine, InventoryInsufficientStockError, planInventoryFifoConsumption, applyInventoryFifoConsumption, reverseInventoryFifoConsumption, inventoryPurchaseResponse } = shared;
+
+async function lockAttendanceEmployee(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], employeeId: number): Promise<boolean> {
+  const result = await tx.execute(sql`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`);
+  return result.rows.length > 0;
+}
+
+function isAttendanceDateConflict(error: unknown): boolean {
+  return typeof error === "object"
+    && error !== null
+    && "code" in error
+    && error.code === "23505"
+    && "constraint" in error
+    && error.constraint === "attendance_employee_date_conflict";
+}
+
+function sendAttendanceConflict(res: Parameters<Parameters<IRouter["post"]>[1]>[1], message: string): void {
+  res.status(409).json({ error: message });
+}
 
 
 
@@ -383,14 +402,34 @@ router.get("/attendance", async (req, res, next) => {
 router.post("/attendance", async (req, res, next) => {
   try {
     const input = CreateAttendanceBody.parse(req.body);
-    const [record] = await db
-      .insert(attendanceTable)
-      .values({ ...input, hours: hoursBetween(input.clockIn, input.clockOut) })
-      .returning();
-    const [employee] = await db
-      .select()
-      .from(employeesTable)
-      .where(eq(employeesTable.id, record.employeeId));
+    const result = await db.transaction(async (tx) => {
+      if (!await lockAttendanceEmployee(tx, input.employeeId)) return { kind: "missing-employee" as const };
+      const [pending] = await tx.select({ id: officeAttendancePunchesTable.id })
+        .from(officeAttendancePunchesTable)
+        .where(and(
+          eq(officeAttendancePunchesTable.employeeId, input.employeeId),
+          eq(officeAttendancePunchesTable.officeDate, input.date),
+          isNull(officeAttendancePunchesTable.checkedOutAt),
+          isNull(officeAttendancePunchesTable.cancelledAt),
+        ))
+        .limit(1);
+      if (pending) return { kind: "pending-phone-punch" as const };
+      const [record] = await tx.insert(attendanceTable)
+        .values({ ...input, hours: hoursBetween(input.clockIn, input.clockOut) })
+        .returning();
+      const [employee] = await tx.select().from(employeesTable)
+        .where(eq(employeesTable.id, record.employeeId));
+      return { kind: "created" as const, record, employee };
+    });
+    if (result.kind === "missing-employee") {
+      res.status(404).json({ error: "Ажилтан олдсонгүй" });
+      return;
+    }
+    if (result.kind === "pending-phone-punch") {
+      sendAttendanceConflict(res, "Энэ өдөр утасны ирцийн эхлэх бүртгэл дуусаагүй байна");
+      return;
+    }
+    const { record, employee } = result;
     res.status(201).json({
       ...record,
       employeeName: employee?.name ?? "Тодорхойгүй",
@@ -398,6 +437,10 @@ router.post("/attendance", async (req, res, next) => {
       hours: Number(record.hours),
     });
   } catch (error) {
+    if (isAttendanceDateConflict(error)) {
+      sendAttendanceConflict(res, "Энэ ажилтан, өдөрт ирцийн бүртгэл аль хэдийн байна");
+      return;
+    }
     next(error);
   }
 });
@@ -412,34 +455,53 @@ router.put("/attendance", async (req, res, next) => {
         ? selectedHours === 12 ? "21:00" : "17:00"
         : "00:00"
     );
-    const existing = await db
-      .select()
-      .from(attendanceTable)
-      .where(and(
-        eq(attendanceTable.employeeId, input.employeeId),
-        eq(attendanceTable.date, input.date),
-      ));
-    const [record] = existing.length
-      ? await db
-          .update(attendanceTable)
-          .set({ status: input.status, clockIn, clockOut, hours: selectedHours })
-          .where(eq(attendanceTable.id, existing[0].id))
-          .returning()
-      : await db
-          .insert(attendanceTable)
-          .values({
-            employeeId: input.employeeId,
-            date: input.date,
-            status: input.status,
-            clockIn,
-            clockOut,
-            hours: selectedHours,
-          })
-          .returning();
-    const [employee] = await db
-      .select()
-      .from(employeesTable)
-      .where(eq(employeesTable.id, record.employeeId));
+    const result = await db.transaction(async (tx) => {
+      if (!await lockAttendanceEmployee(tx, input.employeeId)) return { kind: "missing-employee" as const };
+      const [pending] = await tx.select({ id: officeAttendancePunchesTable.id })
+        .from(officeAttendancePunchesTable)
+        .where(and(
+          eq(officeAttendancePunchesTable.employeeId, input.employeeId),
+          eq(officeAttendancePunchesTable.officeDate, input.date),
+          isNull(officeAttendancePunchesTable.checkedOutAt),
+          isNull(officeAttendancePunchesTable.cancelledAt),
+        ))
+        .limit(1);
+      if (pending) return { kind: "pending-phone-punch" as const };
+      const [existing] = await tx.select().from(attendanceTable)
+        .where(and(
+          eq(attendanceTable.employeeId, input.employeeId),
+          eq(attendanceTable.date, input.date),
+        ))
+        .for("update")
+        .limit(1);
+      const [record] = existing
+        ? await tx.update(attendanceTable)
+            .set({ status: input.status, clockIn, clockOut, hours: selectedHours })
+            .where(eq(attendanceTable.id, existing.id))
+            .returning()
+        : await tx.insert(attendanceTable)
+            .values({
+              employeeId: input.employeeId,
+              date: input.date,
+              status: input.status,
+              clockIn,
+              clockOut,
+              hours: selectedHours,
+            })
+            .returning();
+      const [employee] = await tx.select().from(employeesTable)
+        .where(eq(employeesTable.id, record.employeeId));
+      return { kind: "updated" as const, record, employee };
+    });
+    if (result.kind === "missing-employee") {
+      res.status(404).json({ error: "Ажилтан олдсонгүй" });
+      return;
+    }
+    if (result.kind === "pending-phone-punch") {
+      sendAttendanceConflict(res, "Энэ өдөр утасны ирцийн эхлэх бүртгэл дуусаагүй байна");
+      return;
+    }
+    const { record, employee } = result;
     res.json({
       ...record,
       employeeName: employee?.name ?? "Тодорхойгүй",
@@ -447,6 +509,10 @@ router.put("/attendance", async (req, res, next) => {
       hours: Number(record.hours),
     });
   } catch (error) {
+    if (isAttendanceDateConflict(error)) {
+      sendAttendanceConflict(res, "Энэ ажилтан, өдөрт ирцийн бүртгэл аль хэдийн байна");
+      return;
+    }
     next(error);
   }
 });
@@ -454,10 +520,27 @@ router.put("/attendance", async (req, res, next) => {
 router.delete("/attendance", async (req, res, next) => {
   try {
     const input = DeleteAttendanceQueryParams.parse(req.query);
-    await db.delete(attendanceTable).where(and(
-      eq(attendanceTable.employeeId, input.employeeId),
-      eq(attendanceTable.date, input.date),
-    ));
+    const result = await db.transaction(async (tx) => {
+      await lockAttendanceEmployee(tx, input.employeeId);
+      const [linkedPhonePunch] = await tx.select({ id: officeAttendancePunchesTable.id })
+        .from(officeAttendancePunchesTable)
+        .innerJoin(attendanceTable, eq(attendanceTable.id, officeAttendancePunchesTable.attendanceId))
+        .where(and(
+          eq(attendanceTable.employeeId, input.employeeId),
+          eq(attendanceTable.date, input.date),
+        ))
+        .limit(1);
+      if (linkedPhonePunch) return false;
+      await tx.delete(attendanceTable).where(and(
+        eq(attendanceTable.employeeId, input.employeeId),
+        eq(attendanceTable.date, input.date),
+      ));
+      return true;
+    });
+    if (!result) {
+      sendAttendanceConflict(res, "Утасны ирцтэй холбогдсон бүртгэлийг устгаж болохгүй");
+      return;
+    }
     res.status(204).send();
   } catch (error) {
     next(error);

@@ -1,4 +1,5 @@
 import path from 'path';
+import { readFileSync } from 'node:fs';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
@@ -17,9 +18,24 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 const basePath = process.env.BASE_PATH ?? '/';
+const routing = JSON.parse(readFileSync(new URL('./vercel.json', import.meta.url), 'utf8')) as {
+  rewrites: { source: string; destination: string }[];
+};
+const apiDestination = routing.rewrites.find((rule) => rule.source === '/api/:path*')?.destination;
+if (process.env.VERCEL_ENV === 'production' && !apiDestination) {
+  throw new Error('Direct attendance API origin is missing from vercel.json');
+}
+// The frontend rewrite is a second proxy hop and loses the visitor's office IP.
+// Employee punches must call the API's Vercel edge directly, only in production.
+const directAttendanceApiOrigin = process.env.VERCEL_ENV === 'production' && apiDestination
+  ? new URL(apiDestination).origin
+  : '';
 
 export default defineConfig({
   base: basePath,
+  define: {
+    'import.meta.env.VITE_OFFICE_ATTENDANCE_API_ORIGIN': JSON.stringify(directAttendanceApiOrigin),
+  },
   plugins: [
     react(),
     tailwindcss(),

@@ -2,12 +2,13 @@ import { type ReactNode, useState } from 'react';
 import { BriefcaseBusiness, ChevronRight, LogOut, Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { cn } from '@/lib/utils';
-import { Banknote, Clock3, Landmark, LayoutDashboard, PackageOpen, Receipt, ShieldCheck, Timer, UserRound, UsersRound, WalletCards, Library, Utensils, CalendarDays, ClipboardList, ArrowLeftRight } from 'lucide-react';
+import { Banknote, Clock3, Landmark, LayoutDashboard, MonitorSmartphone, PackageOpen, Receipt, ShieldCheck, Timer, UserRound, UsersRound, WalletCards, Library, Utensils, CalendarDays, ClipboardList, ArrowLeftRight } from 'lucide-react';
 
 export const nav = [
   { href: '/', label: 'Статистик', icon: LayoutDashboard },
   { href: '/employees', label: 'Ажилчид', icon: UsersRound },
   { href: '/attendance', label: 'Ирц', icon: Clock3 },
+  { href: '/attendance/devices', label: 'Ирцийн төхөөрөмж', icon: MonitorSmartphone },
   { href: '/hour-balance', label: 'Цагийн баланс', icon: Timer },
   { href: '/payroll', label: 'Цалин', icon: Banknote },
   { href: '/cash', label: 'Касс', icon: WalletCards },
@@ -28,7 +29,7 @@ export function AppShell({ children, role, onLogout }: { children: ReactNode; ro
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const visibleNav = role === 'hr'
-    ? nav.filter((item) => ['/employees', '/attendance', '/hour-balance', '/meal-counts'].includes(item.href))
+    ? nav.filter((item) => ['/employees', '/attendance', '/attendance/devices', '/hour-balance', '/meal-counts'].includes(item.href))
     : role === 'accountant'
        ? nav.filter((item) => ['/employees', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/journal', '/ar-ap', '/meal-counts'].includes(item.href))
       : role === 'warehouse'
@@ -38,7 +39,7 @@ export function AppShell({ children, role, onLogout }: { children: ReactNode; ro
         : role === 'viewer'
            ? nav.filter((item) => ['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/inventory', '/fixed-assets', '/journal', '/ar-ap', '/meals', '/meal-schedule', '/meal-counts'].includes(item.href))
           : nav;
-  const active = visibleNav.find((item) => item.href === location || (item.href !== '/' && location.startsWith(`${item.href}/`)))?.label ?? 'Статистик';
+  const active = (visibleNav.find((item) => item.href === location) ?? visibleNav.find((item) => item.href !== '/' && location.startsWith(`${item.href}/`)))?.label ?? 'Статистик';
   return (
     <div className="min-h-[100dvh] bg-background app-grid" data-role={role}>
       <aside className={cn('fixed inset-y-0 left-0 z-40 flex w-[248px] flex-col bg-sidebar px-4 py-5 text-sidebar-foreground transition-transform duration-200 lg:translate-x-0', mobileOpen ? 'translate-x-0' : '-translate-x-full')} data-testid="navigation-sidebar">
