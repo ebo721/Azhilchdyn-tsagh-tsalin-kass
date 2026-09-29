@@ -166,6 +166,35 @@ export interface JournalReceivable {
   createdAt: string;
 }
 
+export type JournalPayablePartyType = typeof JournalPayablePartyType[keyof typeof JournalPayablePartyType];
+
+
+export const JournalPayablePartyType = {
+  employee: 'employee',
+  supplier: 'supplier',
+} as const;
+
+export type JournalPayableStatus = typeof JournalPayableStatus[keyof typeof JournalPayableStatus];
+
+
+export const JournalPayableStatus = {
+  open: 'open',
+  closed: 'closed',
+} as const;
+
+export interface JournalPayable {
+  id: number;
+  journalEntryId: number;
+  description: string;
+  partyType: JournalPayablePartyType;
+  partyId: number;
+  partyLabel: string;
+  originalAmount: number;
+  remainingBalance: number;
+  status: JournalPayableStatus;
+  createdAt: string;
+}
+
 export interface JournalSupplier {
   id: number;
   name: string;
@@ -2083,6 +2112,19 @@ export type ListJournalReceivablesStatus = typeof ListJournalReceivablesStatus[k
 export const ListJournalReceivablesStatus = {
   open: 'open',
   settled: 'settled',
+  all: 'all',
+} as const;
+
+export type ListJournalPayablesParams = {
+status?: ListJournalPayablesStatus;
+};
+
+export type ListJournalPayablesStatus = typeof ListJournalPayablesStatus[keyof typeof ListJournalPayablesStatus];
+
+
+export const ListJournalPayablesStatus = {
+  open: 'open',
+  closed: 'closed',
   all: 'all',
 } as const;
 
