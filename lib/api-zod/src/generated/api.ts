@@ -3409,6 +3409,7 @@ export const createJournalEntryBodyLinesItemCreditMin = 0;
 
 
 
+
 export const createJournalEntryBodyLinesMin = 2;
 
 
@@ -3429,6 +3430,9 @@ export const CreateJournalEntryBody = zod.object({
 }),zod.object({
   "kind": zod.enum(['settle']),
   "receivableId": zod.number().int().min(1)
+}),zod.object({
+  "kind": zod.enum(['settle']),
+  "payableId": zod.number().int().min(1)
 }),zod.null()]).optional()
 })).min(createJournalEntryBodyLinesMin)
 })
@@ -3437,6 +3441,7 @@ export const createJournalEntryResponseOneDateRegExp = new RegExp('^\\d{4}-\\d{2
 export const createJournalEntryResponseTwoLinesItemDebitMin = 0;
 
 export const createJournalEntryResponseTwoLinesItemCreditMin = 0;
+
 
 
 
@@ -3469,6 +3474,9 @@ export const CreateJournalEntryResponse = zod.object({
 }),zod.object({
   "kind": zod.enum(['settle']),
   "receivableId": zod.number().int().min(1)
+}),zod.object({
+  "kind": zod.enum(['settle']),
+  "payableId": zod.number().int().min(1)
 }),zod.null()])
 })),
   "voidedAt": zod.coerce.date().nullable(),
@@ -3527,6 +3535,7 @@ export const getJournalEntryResponseTwoLinesItemCreditMin = 0;
 
 
 
+
 export const GetJournalEntryResponse = zod.object({
   "id": zod.number().int(),
   "date": zod.string().regex(getJournalEntryResponseOneDateRegExp),
@@ -3553,6 +3562,9 @@ export const GetJournalEntryResponse = zod.object({
 }),zod.object({
   "kind": zod.enum(['settle']),
   "receivableId": zod.number().int().min(1)
+}),zod.object({
+  "kind": zod.enum(['settle']),
+  "payableId": zod.number().int().min(1)
 }),zod.null()])
 })),
   "voidedAt": zod.coerce.date().nullable(),
@@ -3575,6 +3587,7 @@ export const updateJournalEntryBodyLinesItemCreditMin = 0;
 
 
 
+
 export const updateJournalEntryBodyLinesMin = 2;
 
 
@@ -3593,6 +3606,9 @@ export const UpdateJournalEntryBody = zod.object({
 }),zod.object({
   "kind": zod.enum(['settle']),
   "receivableId": zod.number().int().min(1)
+}),zod.object({
+  "kind": zod.enum(['settle']),
+  "payableId": zod.number().int().min(1)
 }),zod.null()]).optional()
 })).min(updateJournalEntryBodyLinesMin)
 })
@@ -3601,6 +3617,7 @@ export const updateJournalEntryResponseOneDateRegExp = new RegExp('^\\d{4}-\\d{2
 export const updateJournalEntryResponseTwoLinesItemDebitMin = 0;
 
 export const updateJournalEntryResponseTwoLinesItemCreditMin = 0;
+
 
 
 
@@ -3633,6 +3650,9 @@ export const UpdateJournalEntryResponse = zod.object({
 }),zod.object({
   "kind": zod.enum(['settle']),
   "receivableId": zod.number().int().min(1)
+}),zod.object({
+  "kind": zod.enum(['settle']),
+  "payableId": zod.number().int().min(1)
 }),zod.null()])
 })),
   "voidedAt": zod.coerce.date().nullable(),

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PayableSettleAllocation } from './payableSettleAllocation';
 import type { ReceivableCreateAllocation } from './receivableCreateAllocation';
 import type { ReceivableSettleAllocation } from './receivableSettleAllocation';
 
@@ -17,5 +18,5 @@ export interface JournalEntryLineInput {
   credit: number;
   /** @nullable */
   memo?: string | null;
-  allocation?: ReceivableCreateAllocation | ReceivableSettleAllocation | null;
+  allocation?: ReceivableCreateAllocation | ReceivableSettleAllocation | PayableSettleAllocation | null;
 }

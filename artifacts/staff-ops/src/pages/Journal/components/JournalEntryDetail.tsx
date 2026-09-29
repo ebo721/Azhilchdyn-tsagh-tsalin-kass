@@ -92,7 +92,13 @@ export function JournalEntryDetail({ entryId, onClose, role, onEdit }: { entryId
                     <td className="px-4 py-2 text-right font-mono text-xs">{formatMoney(line.credit)}</td>
                     <td className="px-4 py-2 text-muted-foreground">
                       {line.memo || '-'}
-                      {line.allocation && <div className="mt-1 text-xs text-primary">{line.allocation.kind === 'settle' ? `Авлага #${line.allocation.receivableId} төлөлт` : `Авлага үүсгэсэн (${line.allocation.partyType === 'employee' ? `ажилтан #${line.allocation.employeeId}` : `нийлүүлэгч #${line.allocation.supplierId}`})`}</div>}
+                      {line.allocation && <div className="mt-1 text-xs text-primary">{
+                        line.allocation.kind === 'settle'
+                          ? 'payableId' in line.allocation
+                            ? `Өглөг #${line.allocation.payableId} төлөлт`
+                            : `Авлага #${line.allocation.receivableId} төлөлт`
+                          : `${accounts?.some((account) => account.id === line.accountId && account.code === '2000') ? 'Өглөг' : 'Авлага'} үүсгэсэн (${line.allocation.partyType === 'employee' ? `ажилтан #${line.allocation.employeeId}` : `нийлүүлэгч #${line.allocation.supplierId}`})`
+                      }</div>}
                     </td>
                   </tr>
                 ))}

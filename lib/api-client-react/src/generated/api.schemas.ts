@@ -51,6 +51,19 @@ export interface ReceivableSettleAllocation {
   receivableId: number;
 }
 
+export type PayableSettleAllocationKind = typeof PayableSettleAllocationKind[keyof typeof PayableSettleAllocationKind];
+
+
+export const PayableSettleAllocationKind = {
+  settle: 'settle',
+} as const;
+
+export interface PayableSettleAllocation {
+  kind: PayableSettleAllocationKind;
+  /** @minimum 1 */
+  payableId: number;
+}
+
 export interface JournalEntryLine {
   id: number;
   accountId: number;
@@ -60,7 +73,7 @@ export interface JournalEntryLine {
   credit: number;
   /** @nullable */
   memo: string | null;
-  allocation: ReceivableCreateAllocation | ReceivableSettleAllocation | null;
+  allocation: ReceivableCreateAllocation | ReceivableSettleAllocation | PayableSettleAllocation | null;
 }
 
 export interface JournalEntryLineInput {
@@ -72,7 +85,7 @@ export interface JournalEntryLineInput {
   credit: number;
   /** @nullable */
   memo?: string | null;
-  allocation?: ReceivableCreateAllocation | ReceivableSettleAllocation | null;
+  allocation?: ReceivableCreateAllocation | ReceivableSettleAllocation | PayableSettleAllocation | null;
 }
 
 export interface JournalEntryInput {

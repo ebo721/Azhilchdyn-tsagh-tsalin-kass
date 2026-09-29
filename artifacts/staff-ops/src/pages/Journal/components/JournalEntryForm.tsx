@@ -24,7 +24,7 @@ type EditableJournalLine = {
   debit: string;
   credit: string;
   memo: string;
-  allocation?: { kind: 'create'; partyType: 'employee' | 'supplier'; employeeId?: number; supplierId?: number } | { kind: 'settle'; receivableId: number };
+  allocation?: { kind: 'create'; partyType: 'employee' | 'supplier'; employeeId?: number; supplierId?: number } | { kind: 'settle'; receivableId: number } | { kind: 'settle'; payableId: number };
 };
 
 export function JournalEntryForm({ onClose, entry }: { onClose: () => void; entry?: JournalEntry }) {
@@ -120,7 +120,7 @@ export function JournalEntryForm({ onClose, entry }: { onClose: () => void; entr
         toast.error('Авлага хуваарилах этгээдийг сонгоно уу');
         return;
       }
-      if (account?.code === '1200' && line.allocation?.kind === 'settle' && !line.allocation.receivableId) {
+      if (account?.code === '1200' && line.allocation?.kind === 'settle' && (!('receivableId' in line.allocation) || !line.allocation.receivableId)) {
         toast.error('Төлөгдөх өмнөх авлагыг сонгоно уу');
         return;
       }
@@ -190,7 +190,7 @@ export function JournalEntryForm({ onClose, entry }: { onClose: () => void; entr
                             {line.allocation?.kind === 'create' && line.allocation.partyType === 'supplier' && <select className="rounded border px-2 py-1" value={line.allocation.supplierId ?? ''} onChange={(e) => updateAllocation(line.id, { kind: 'create', partyType: 'supplier', supplierId: Number(e.target.value) })}><option value="">Нийлүүлэгч сонгох</option>{suppliers?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}
                           </div>
                         ) : Number(line.credit) > 0 ? (
-                          <select className="w-full rounded border px-2 py-1" value={line.allocation?.kind === 'settle' ? line.allocation.receivableId : ''} onChange={(e) => updateAllocation(line.id, { kind: 'settle', receivableId: Number(e.target.value) })}>
+                          <select className="w-full rounded border px-2 py-1" value={line.allocation?.kind === 'settle' && 'receivableId' in line.allocation ? line.allocation.receivableId : ''} onChange={(e) => updateAllocation(line.id, { kind: 'settle', receivableId: Number(e.target.value) })}>
                             <option value="">Өмнөх авлага сонгох...</option>{receivables?.map((r) => <option key={r.id} value={r.id}>{r.partyLabel} — үлдэгдэл {formatMoney(r.openAmount)}</option>)}
                           </select>
                         ) : null}
