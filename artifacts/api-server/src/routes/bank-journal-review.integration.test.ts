@@ -134,7 +134,7 @@ describe("bank journal review routes", () => {
         transactionAt: new Date("2099-03-05T11:00:00.000Z"),
         type: "expense",
         amount: 42_000,
-        accountId: fixedAssetAccountId,
+        accountId: expenseAccountId,
         account: "6677889900",
         counterparty: "Касс",
         description: "Касс руу шилжүүлэх туршилт",
@@ -426,7 +426,7 @@ describe("bank journal review routes", () => {
     }
   });
 
-  it("links a cash transfer to one bank-sourced journal entry", async () => {
+  it("links an ordinary cash transfer to one journal and protects its settled expense", async () => {
     const transfer = () => fetch(`${baseUrl}/api/bank-transactions/${transferBankId}/transfer-to-cash`, {
       method: "POST",
       headers: { cookie, "content-type": "application/json" },
@@ -444,8 +444,8 @@ describe("bank journal review routes", () => {
     ]);
     assert.ok(bank.journalEntryId);
     assert.equal(cash.journalEntryId, bank.journalEntryId);
-    assert.equal(cash.accountId, fixedAssetAccountId);
-    assert.equal(cash.category, "Эд хөрөнгө");
+    assert.equal(cash.accountId, expenseAccountId);
+    assert.equal(cash.category, "Үйл ажиллагааны зардал");
     journalEntryIds.push(bank.journalEntryId);
 
     const [entry] = await db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, bank.journalEntryId));
@@ -456,11 +456,11 @@ describe("bank journal review routes", () => {
     const lines = await db.select().from(journalLinesTable)
       .where(eq(journalLinesTable.journalEntryId, bank.journalEntryId));
     assert.equal(lines.length, 2);
-    assert.equal(lines.find((line) => Number(line.debit) > 0)?.accountId, fixedAssetAccountId);
+    assert.equal(lines.find((line) => Number(line.debit) > 0)?.accountId, expenseAccountId);
     assert.equal(lines.reduce((sum, line) => sum + Number(line.debit), 0), 42_000);
     assert.equal(lines.reduce((sum, line) => sum + Number(line.credit), 0), 42_000);
     const mirrored = await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.bankTransactionId, transferBankId));
-    assert.equal(mirrored.length, 0);
+    assert.equal(mirrored.length, 1);
 
     const retry = await transfer();
     assert.equal(retry.status, 200);
@@ -476,25 +476,10 @@ describe("bank journal review routes", () => {
       method: "DELETE",
       headers: { cookie },
     });
-    assert.equal(remove.status, 200);
-    const removed = await remove.json() as { reversalJournalEntryId: number };
-    journalEntryIds.push(removed.reversalJournalEntryId);
-    const [[afterDeleteBank], [afterDeleteCash], [voided], [reversal]] = await Promise.all([
-      db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, transferBankId)),
-      db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, firstResult.cashTransactionId)),
-      db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, bank.journalEntryId)),
-      db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, removed.reversalJournalEntryId)),
-    ]);
-    assert.equal(afterDeleteBank.journalEntryId, null);
-    assert.equal(afterDeleteCash.journalEntryId, null);
-    assert.equal(afterDeleteBank.cashTransactionId, null);
-    assert.equal(afterDeleteBank.transferredAt, null);
-    assert.equal(afterDeleteCash.bankTransactionId, null);
-    assert.equal(afterDeleteCash.bankVerifiedAt, null);
-    assert.equal(afterDeleteCash.sourceType, null);
-    assert.equal(afterDeleteCash.sourceKey, null);
-    assert.equal(voided.status, "void");
-    assert.equal(reversal.status, "posted");
+    assert.equal(remove.status, 409);
+    const [afterBlockedDelete] = await db.select().from(bankTransactionsTable)
+      .where(eq(bankTransactionsTable.id, transferBankId));
+    assert.equal(afterBlockedDelete.journalEntryId, bank.journalEntryId);
   });
 
   it("uses the selected operating expense account for cash, journal, and expense", async () => {
@@ -576,9 +561,7 @@ describe("bank journal review routes", () => {
 
   it("suggests and links payroll cash with sub-tugrik bank rounding while preserving its employee source key", async () => {
     const [payrollAccount] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "6000"));
-    const [otherAssetAccount] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1800"));
     assert.ok(payrollAccount);
-    assert.ok(otherAssetAccount);
     const [bank] = await db.insert(bankTransactionsTable).values({
       transactionAt: new Date("2099-03-08T11:00:00.000Z"),
       type: "expense",
@@ -620,10 +603,10 @@ describe("bank journal review routes", () => {
       transactionAt: new Date("2099-03-08T12:00:00.000Z"),
       type: "expense",
       amount: 44_000,
-      accountId: otherAssetAccount.id,
+      accountId: expenseAccountId,
       account: "9988776655",
       counterparty: "Цалинтай ижил дүнтэй нийлүүлэгч",
-      description: "Цалинтай давхцсан дүнтэй бараа материал",
+      description: "Цалинтай давхцсан дүнтэй ердийн зардал",
       fingerprint: `review-non-payroll-collision-${randomUUID()}`,
     }).returning();
     bankIds.push(unrelatedBank.id);
@@ -635,10 +618,12 @@ describe("bank journal review routes", () => {
     assert.equal(unrelatedTransferResponse.status, 200);
     const unrelatedTransfer = await unrelatedTransferResponse.json() as {
       cashTransactionId: number;
-      journalEntryId: number;
     };
     cashIds.push(unrelatedTransfer.cashTransactionId);
-    journalEntryIds.push(unrelatedTransfer.journalEntryId);
+    const [unrelatedPostedBank] = await db.select({ journalEntryId: bankTransactionsTable.journalEntryId })
+      .from(bankTransactionsTable).where(eq(bankTransactionsTable.id, unrelatedBank.id));
+    assert.ok(unrelatedPostedBank.journalEntryId);
+    journalEntryIds.push(unrelatedPostedBank.journalEntryId);
 
     const suggestionsResponse = await fetch(`${baseUrl}/api/bank-transactions/${bank.id}/cash-suggestions`, {
       headers: { cookie },
@@ -646,12 +631,19 @@ describe("bank journal review routes", () => {
     assert.equal(suggestionsResponse.status, 200);
     const suggestions = await suggestionsResponse.json() as Array<{
       id: number;
+      score: number;
       transactionKind: string;
       journalEntryId: number | null;
     }>;
     const suggestion = suggestions.find((candidate) => candidate.id === cash.id);
     assert.equal(suggestion?.transactionKind, "payroll");
     assert.equal(suggestion?.journalEntryId, null);
+    const reverseResponse = await fetch(`${baseUrl}/api/cash/transactions/${cash.id}/bank-suggestions`, {
+      headers: { cookie },
+    });
+    assert.equal(reverseResponse.status, 200);
+    const reverseSuggestions = await reverseResponse.json() as Array<{ id: number; score: number }>;
+    assert.equal(reverseSuggestions.find((candidate) => candidate.id === bank.id)?.score, suggestion?.score);
 
     const linkResponse = await fetch(`${baseUrl}/api/bank-transactions/${bank.id}/link-cash`, {
       method: "POST",
