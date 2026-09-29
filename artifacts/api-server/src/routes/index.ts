@@ -18,6 +18,7 @@ import journalRouter from "./journal.js";
 import mealsRouter from "./meals.js";
 import mealScheduleRouter from "./meal-schedule.js";
 import inventoryMaterialRequestsRouter from "./inventory-material-requests.js";
+import { readerMealCountsStaffRouter } from "./reader-meal-counts.js";
 
 const router: IRouter = Router();
 
@@ -39,6 +40,7 @@ router.use(deletionRequestsRouter);
 router.use(dashboardRouter);
 router.use(journalRouter);
 router.use(mealsRouter);
+router.use(readerMealCountsStaffRouter);
 router.use(mealScheduleRouter);
 
 export default router;

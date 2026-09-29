@@ -1841,6 +1841,56 @@ export const MarkTransactionUnclearParams = zod.object({
 export const MarkTransactionUnclearResponse = zod.void()
 
 
+/**
+ * @summary List synchronized meal counts for a date range
+ */
+export const listMealCountsQueryDateFromRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const listMealCountsQueryDateToRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+export const ListMealCountsQueryParams = zod.object({
+  "dateFrom": zod.coerce.string().regex(listMealCountsQueryDateFromRegExp),
+  "dateTo": zod.coerce.string().regex(listMealCountsQueryDateToRegExp)
+})
+
+export const listMealCountsResponseDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+export const listMealCountsResponseCountMin = 0;
+
+
+
+export const ListMealCountsResponseItem = zod.object({
+  "date": zod.string().regex(listMealCountsResponseDateRegExp),
+  "mealType": zod.string().min(1),
+  "count": zod.number().int().min(listMealCountsResponseCountMin),
+  "syncedAt": zod.coerce.date()
+})
+export const ListMealCountsResponse = zod.array(ListMealCountsResponseItem)
+
+
+/**
+ * Staff-session authenticated. Only admins and warehouse staff may import. Dates are inclusive and must be real calendar dates spanning no more than 366 days. The server fetches absolute totals from the configured Reader endpoint; repeated imports replace matching date/meal-type values.
+ * @summary Manually import Reader meal counts for a date range
+ */
+export const importMealCountsBodyDateFromRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const importMealCountsBodyDateToRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+export const ImportMealCountsBody = zod.object({
+  "dateFrom": zod.string().regex(importMealCountsBodyDateFromRegExp),
+  "dateTo": zod.string().regex(importMealCountsBodyDateToRegExp)
+})
+
+export const importMealCountsResponseReceivedMin = 0;
+
+
+
+export const ImportMealCountsResponse = zod.object({
+  "received": zod.number().int().min(importMealCountsResponseReceivedMin),
+  "updatedAt": zod.coerce.date()
+})
+
+
 export const ListMealsResponseItem = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),

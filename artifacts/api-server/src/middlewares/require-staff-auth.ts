@@ -8,6 +8,14 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
     res.status(401).json({ error: "Нэвтрэх шаардлагатай" });
     return;
   }
+  if (req.method === "POST" && req.path === "/meal-counts/import") {
+    if (session.role === "admin" || session.role === "warehouse") {
+      next();
+      return;
+    }
+    res.status(403).json({ error: "Зөвхөн админ эсвэл агуулахын ажилтан импорт хийнэ" });
+    return;
+  }
   // Meal technologists have a deliberately narrow meal workflow surface.
   // Keep this before deletion-request and other method-specific exceptions.
   if (session.role === "technologist") {
@@ -27,7 +35,7 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
       next();
       return;
     }
-    if (req.method === "GET" && (mealPrefix("/meals") || mealPrefix("/meal-schedule"))) {
+    if (req.method === "GET" && (mealPrefix("/meals") || mealPrefix("/meal-schedule") || mealPrefix("/meal-counts"))) {
       next();
       return;
     }
@@ -85,7 +93,7 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
     return;
   }
   const matchesPrefix = (prefix: string) => req.path === prefix || req.path.startsWith(`${prefix}/`);
-  const viewerReadPrefixes = ["/employees", "/attendance", "/hour-balance", "/payroll", "/payroll-advance", "/cash", "/bank-accounts", "/bank-transactions", "/inventory", "/meals", "/meal-schedule", "/fixed-assets", "/operating-expenses", "/journal"];
+  const viewerReadPrefixes = ["/employees", "/attendance", "/hour-balance", "/payroll", "/payroll-advance", "/cash", "/bank-accounts", "/bank-transactions", "/inventory", "/meals", "/meal-schedule", "/meal-counts", "/fixed-assets", "/operating-expenses", "/journal"];
   if (role === "viewer" && req.method === "GET" && viewerReadPrefixes.some(matchesPrefix)) {
     next();
     return;
@@ -107,11 +115,11 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
     return;
   }
   const allowedPrefixes = role === "hr"
-    ? ["/employees", "/attendance", "/hour-balance"]
+    ? ["/employees", "/attendance", "/hour-balance", "/meal-counts"]
       : role === "accountant"
-        ? ["/hour-balance", "/payroll", "/payroll-advance", "/payroll-schedule", "/cash", "/bank-accounts", "/bank-transactions", "/journal"]
+        ? ["/hour-balance", "/payroll", "/payroll-advance", "/payroll-schedule", "/cash", "/bank-accounts", "/bank-transactions", "/journal", "/meal-counts"]
       : role === "warehouse"
-        ? ["/inventory", "/meals", "/meal-schedule", "/fixed-assets", "/operating-expenses"]
+        ? ["/inventory", "/meals", "/meal-schedule", "/meal-counts", "/fixed-assets", "/operating-expenses"]
         : [];
   if (allowedPrefixes.some(matchesPrefix)) {
     next();

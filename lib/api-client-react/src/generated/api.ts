@@ -98,11 +98,15 @@ import type {
   ListAttendanceParams,
   ListJournalEntriesParams,
   ListJournalReceivablesParams,
+  ListMealCountsParams,
   ListMealScheduleParams,
   ListShiftPlansParams,
   LoginInput,
   MaterialRequestCatalogItem,
   Meal,
+  MealCount,
+  MealCountsImportInput,
+  MealCountsImportResult,
   MealEditRequest,
   MealEditRequestInput,
   MealIngredientInput,
@@ -5194,6 +5198,162 @@ export const useMarkTransactionUnclear = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getMarkTransactionUnclearMutationOptions(options));
+    }
+
+export const getListMealCountsUrl = (params: ListMealCountsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/meal-counts?${stringifiedParams}` : `/api/meal-counts`
+}
+
+/**
+ * @summary List synchronized meal counts for a date range
+ */
+export const listMealCounts = async (params: ListMealCountsParams, options?: Parameters<typeof customFetch>[1]): Promise<MealCount[]> => {
+
+  return customFetch<MealCount[]>(getListMealCountsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMealCountsQueryKey = (params?: ListMealCountsParams,) => {
+    return [
+    `/api/meal-counts`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListMealCountsQueryOptions = <TData = Awaited<ReturnType<typeof listMealCounts>>, TError = ErrorType<BadRequestResponse>>(params: ListMealCountsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMealCounts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMealCountsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMealCounts>>> = ({ signal }) => listMealCounts(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMealCounts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMealCountsQueryResult = NonNullable<Awaited<ReturnType<typeof listMealCounts>>>
+export type ListMealCountsQueryError = ErrorType<BadRequestResponse>
+
+
+/**
+ * @summary List synchronized meal counts for a date range
+ */
+
+export function useListMealCounts<TData = Awaited<ReturnType<typeof listMealCounts>>, TError = ErrorType<BadRequestResponse>>(
+ params: ListMealCountsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMealCounts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMealCountsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getImportMealCountsUrl = () => {
+
+
+
+
+  return `/api/meal-counts/import`
+}
+
+/**
+ * Staff-session authenticated. Only admins and warehouse staff may import. Dates are inclusive and must be real calendar dates spanning no more than 366 days. The server fetches absolute totals from the configured Reader endpoint; repeated imports replace matching date/meal-type values.
+ * @summary Manually import Reader meal counts for a date range
+ */
+export const importMealCounts = async (mealCountsImportInput: MealCountsImportInput, options?: Parameters<typeof customFetch>[1]): Promise<MealCountsImportResult> => {
+
+  return customFetch<MealCountsImportResult>(getImportMealCountsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(mealCountsImportInput)
+  }
+);}
+
+
+
+
+
+export const getImportMealCountsMutationOptions = <TError = ErrorType<BadRequestResponse | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importMealCounts>>, TError,{data: BodyType<MealCountsImportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importMealCounts>>, TError,{data: BodyType<MealCountsImportInput>}, TContext> => {
+
+const mutationKey = ['importMealCounts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importMealCounts>>, {data: BodyType<MealCountsImportInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  importMealCounts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportMealCountsMutationResult = NonNullable<Awaited<ReturnType<typeof importMealCounts>>>
+    export type ImportMealCountsMutationBody = BodyType<MealCountsImportInput>
+    export type ImportMealCountsMutationError = ErrorType<BadRequestResponse | void>
+
+    /**
+ * @summary Manually import Reader meal counts for a date range
+ */
+export const useImportMealCounts = <TError = ErrorType<BadRequestResponse | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importMealCounts>>, TError,{data: BodyType<MealCountsImportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importMealCounts>>,
+        TError,
+        {data: BodyType<MealCountsImportInput>},
+        TContext
+      > => {
+      return useMutation(getImportMealCountsMutationOptions(options));
     }
 
 export const getListMealsUrl = () => {
