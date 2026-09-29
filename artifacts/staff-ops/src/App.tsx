@@ -17,7 +17,8 @@ import { Meals } from '@/pages/Meals';
 import { MealSchedule } from '@/pages/MealSchedule';
 import { MealCounts } from '@/pages/MealCounts';
 import { OperatingExpenses } from '@/pages/OperatingExpenses';
-import { Journal } from '@/pages/Journal';
+import { Journal, JournalNew } from '@/pages/Journal';
+import { ArAp } from '@/pages/ArAp';
 import { DeletionRequests } from '@/pages/DeletionRequests';
 import { UserSettings } from '@/pages/settings/UserSettings';
 import { ChartOfAccountsSettings } from '@/pages/settings/ChartOfAccountsSettings';
@@ -26,13 +27,14 @@ import { HrLogin } from '@/pages/HrLogin';
 import NotFound from '@/pages/not-found';
 import { useGetAuthSession, useLogoutHrManager } from '@workspace/api-client-react';
 import { BankTransactionJournalReview } from '@/pages/BankTransactionJournalReview';
-import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
+import { Route, Switch, useLocation, useSearch, Router as WouterRouter } from 'wouter';
 
 const queryClient = new QueryClient();
 
 function Router() {
   const [location] = useLocation();
   const [, navigate] = useLocation();
+  const search = useSearch();
   const session = useGetAuthSession();
   const logout = useLogoutHrManager();
   // Keep this frontend-compatible while the generated client catches up with the API role.
@@ -42,14 +44,22 @@ function Router() {
     : null;
   useEffect(() => {
     if (role === 'hr' && !['/employees', '/attendance', '/hour-balance', '/meal-counts'].includes(location)) navigate('/employees', { replace: true });
-    if (role === 'accountant' && !['/employees', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/bank-transactions/journal-review', '/operating-expenses', '/journal', '/meal-counts'].includes(location)) navigate('/hour-balance', { replace: true });
+    if (role === 'accountant' && !['/employees', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/bank-transactions/journal-review', '/operating-expenses', '/journal', '/journal/new', '/ar-ap', '/meal-counts'].includes(location)) navigate('/hour-balance', { replace: true });
     if (role === 'warehouse' && !['/inventory', '/fixed-assets', '/operating-expenses', '/meals', '/meal-schedule', '/meal-counts'].includes(location)) navigate('/inventory', { replace: true });
-    if (role === 'viewer' && !['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/bank-transactions/journal-review', '/operating-expenses', '/inventory', '/fixed-assets', '/journal', '/meals', '/meal-schedule', '/meal-counts'].includes(location)) navigate('/employees', { replace: true });
+    if (role === 'viewer' && !['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/bank-transactions/journal-review', '/operating-expenses', '/inventory', '/fixed-assets', '/journal', '/ar-ap', '/meals', '/meal-schedule', '/meal-counts'].includes(location)) navigate('/employees', { replace: true });
     if (role === 'technologist' && !['/meals', '/meal-schedule', '/meal-counts'].includes(location)) navigate('/meals', { replace: true });
   }, [location, navigate, role]);
   if (session.isLoading) return <div className="grid min-h-[100dvh] place-items-center"><LoadingBlock className="size-12" /></div>;
   if (!role) return <HrLogin />;
   const signOut = () => logout.mutate(undefined, { onSuccess: () => { queryClient.clear(); navigate('/'); } });
+  if (location === '/ar-ap' && (role === 'admin' || role === 'accountant' || role === 'viewer')) {
+    return <ErrorBoundary resetKey={location}><AppShell role={role} onLogout={signOut}><ArAp canCreate={role !== 'viewer'} /></AppShell></ErrorBoundary>;
+  }
+  if (location === '/journal/new' && (role === 'admin' || role === 'accountant')) {
+    const account = new URLSearchParams(search).get('account');
+    const initialAccountCode = account === '1200' || account === '2000' ? account : undefined;
+    return <ErrorBoundary resetKey={location}><AppShell role={role} onLogout={signOut}><JournalNew initialAccountCode={initialAccountCode} onClose={() => navigate('/journal')} /></AppShell></ErrorBoundary>;
+  }
   return <ErrorBoundary resetKey={location}><AppShell role={role} onLogout={signOut}>{role === 'admin' ? <Switch><Route path="/" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/bank-transactions" component={BankTransactions} /><Route path="/bank-transactions/journal-review" component={BankTransactionJournalReview} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route path="/operating-expenses" component={OperatingExpenses} /><Route path="/journal" component={Journal} /><Route path="/meals" component={Meals} /><Route path="/meal-schedule" component={MealSchedule} /><Route path="/meal-counts" component={MealCounts} /><Route path="/deletion-requests" component={DeletionRequests} /><Route path="/users" component={() => <UserSettings UnclearTransactionsSettings={UnclearTransactionsSettings} ChartOfAccountsSettings={ChartOfAccountsSettings} />} /><Route component={NotFound} /></Switch> : role === 'hr' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/meal-counts" component={MealCounts} /><Route component={Employees} /></Switch> : role === 'accountant' ? <Switch><Route path="/employees" component={Employees} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/bank-transactions" component={BankTransactions} /><Route path="/bank-transactions/journal-review" component={BankTransactionJournalReview} /><Route path="/operating-expenses" component={OperatingExpenses} /><Route path="/journal" component={Journal} /><Route path="/meal-counts" component={MealCounts} /><Route component={HourBalance} /></Switch> : role === 'viewer' ? <Switch><Route path="/employees" component={Employees} /><Route path="/attendance" component={AttendancePage} /><Route path="/hour-balance" component={HourBalance} /><Route path="/payroll" component={Payroll} /><Route path="/cash" component={Cash} /><Route path="/bank-transactions" component={BankTransactions} /><Route path="/bank-transactions/journal-review" component={BankTransactionJournalReview} /><Route path="/operating-expenses" component={OperatingExpenses} /><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route path="/journal" component={Journal} /><Route path="/meals" component={Meals} /><Route path="/meal-schedule" component={MealSchedule} /><Route path="/meal-counts" component={MealCounts} /><Route component={Employees} /></Switch> : role === 'technologist' ? <Switch><Route path="/meals" component={Meals} /><Route path="/meal-schedule" component={MealSchedule} /><Route path="/meal-counts" component={MealCounts} /><Route component={Meals} /></Switch> : <Switch><Route path="/inventory" component={Inventory} /><Route path="/fixed-assets" component={FixedAssets} /><Route path="/operating-expenses" component={OperatingExpenses} /><Route path="/meals" component={Meals} /><Route path="/meal-schedule" component={MealSchedule} /><Route path="/meal-counts" component={MealCounts} /><Route component={Inventory} /></Switch>}</AppShell></ErrorBoundary>;
 }
 

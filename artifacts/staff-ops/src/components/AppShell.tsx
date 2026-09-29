@@ -2,7 +2,7 @@ import { type ReactNode, useState } from 'react';
 import { BriefcaseBusiness, ChevronRight, LogOut, Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { cn } from '@/lib/utils';
-import { Banknote, Clock3, Landmark, LayoutDashboard, PackageOpen, Receipt, ShieldCheck, Timer, UserRound, UsersRound, WalletCards, Library, Utensils, CalendarDays, ClipboardList } from 'lucide-react';
+import { Banknote, Clock3, Landmark, LayoutDashboard, PackageOpen, Receipt, ShieldCheck, Timer, UserRound, UsersRound, WalletCards, Library, Utensils, CalendarDays, ClipboardList, ArrowLeftRight } from 'lucide-react';
 
 export const nav = [
   { href: '/', label: 'Статистик', icon: LayoutDashboard },
@@ -19,6 +19,7 @@ export const nav = [
   { href: '/meal-counts', label: 'Хоолны тоо', icon: ClipboardList },
   { href: '/fixed-assets', label: 'Эд хөрөнгө', icon: BriefcaseBusiness },
   { href: '/journal', label: 'Ерөнхий журнал', icon: Library },
+  { href: '/ar-ap', label: 'Авлага, Өглөг', icon: ArrowLeftRight },
   { href: '/deletion-requests', label: 'Устгах хүсэлт', icon: ShieldCheck },
   { href: '/users', label: 'Хэрэглэгчийн тохиргоо', icon: UserRound },
 ];
@@ -29,13 +30,13 @@ export function AppShell({ children, role, onLogout }: { children: ReactNode; ro
   const visibleNav = role === 'hr'
     ? nav.filter((item) => ['/employees', '/attendance', '/hour-balance', '/meal-counts'].includes(item.href))
     : role === 'accountant'
-      ? nav.filter((item) => ['/employees', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/journal', '/meal-counts'].includes(item.href))
+       ? nav.filter((item) => ['/employees', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/journal', '/ar-ap', '/meal-counts'].includes(item.href))
       : role === 'warehouse'
         ? nav.filter((item) => ['/inventory', '/fixed-assets', '/meals', '/meal-schedule', '/meal-counts'].includes(item.href))
         : role === 'technologist'
           ? nav.filter((item) => ['/meals', '/meal-schedule', '/meal-counts'].includes(item.href))
         : role === 'viewer'
-          ? nav.filter((item) => ['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/inventory', '/fixed-assets', '/journal', '/meals', '/meal-schedule', '/meal-counts'].includes(item.href))
+           ? nav.filter((item) => ['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/inventory', '/fixed-assets', '/journal', '/ar-ap', '/meals', '/meal-schedule', '/meal-counts'].includes(item.href))
           : nav;
   const active = visibleNav.find((item) => item.href === location || (item.href !== '/' && location.startsWith(`${item.href}/`)))?.label ?? 'Статистик';
   return (
@@ -48,7 +49,7 @@ export function AppShell({ children, role, onLogout }: { children: ReactNode; ro
           </Link>
           <button className="grid size-8 place-items-center rounded-lg hover:bg-sidebar-accent lg:hidden" onClick={() => setMobileOpen(false)} data-testid="button-close-navigation"><X className="size-4" /></button>
         </div>
-        <nav className="mt-10 space-y-1" data-testid="navigation-main">
+        <nav className="mt-10 min-h-0 flex-1 space-y-1 overflow-y-auto pb-4" data-testid="navigation-main">
           {visibleNav.map(({ href, label, icon: Icon }) => (
             <Link key={href} href={href} onClick={() => setMobileOpen(false)} className={cn('group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-colors', location === href ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground')} data-testid={`link-nav-${label}`}>
               <Icon className="size-[17px]" /><span>{label}</span>{location === href && <ChevronRight className="ml-auto size-4 opacity-60" />}
