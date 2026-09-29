@@ -64,7 +64,7 @@ export function BankDocumentLinkPanel({
   );
   const unpaidPurchases = useMemo(
     () => (purchases.data ?? []).filter((item) =>
-      !item.paymentDate && item.date === row.date
+      !item.paymentDate && item.date <= row.date
       && Math.round(item.totalAmount * 100) > 0
       && Math.round(item.totalAmount * 100) <= Math.round(row.amount * 100)),
     [purchases.data, row.date, row.amount],
@@ -168,10 +168,10 @@ export function BankDocumentLinkPanel({
             <div className="mb-4 space-y-3 rounded-lg border border-border/70 bg-background p-3">
               <div>
                 <p className="text-xs font-semibold">Төлөгдөөгүй худалдан авалтуудаас сонгох</p>
-                <p className="text-xs text-muted-foreground">Нэг буюу хэд хэдэн баримтыг бүтнээр нь холбоно. Огноо ижил, нийлбэр нь банкны дүнтэй яг тэнцүү байх ёстой.</p>
+                 <p className="text-xs text-muted-foreground">Нэг буюу хэд хэдэн баримтыг бүтнээр нь холбоно. Баримтын огноо банкны төлбөрийн өдрөөс хойш биш, нийлбэр нь банкны дүнтэй яг тэнцүү байх ёстой.</p>
               </div>
               {unpaidPurchases.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Энэ өдөр тохирох төлөгдөөгүй худалдан авалт алга.</p>
+                 <p className="text-xs text-muted-foreground">Энэ өдөр эсвэл өмнө нь бүртгэсэн тохирох төлөгдөөгүй худалдан авалт алга.</p>
               ) : (
                 <div className="max-h-48 space-y-1 overflow-y-auto">
                   {unpaidPurchases.map((item) => (
@@ -184,7 +184,7 @@ export function BankDocumentLinkPanel({
                           event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))}
                         data-testid={`checkbox-link-purchase-${row.id}-${item.id}`}
                       />
-                      <span className="min-w-0 flex-1 truncate">#{item.id} · {item.supplierName}</span>
+                       <span className="min-w-0 flex-1 truncate">{item.date} · #{item.id} · {item.supplierName}</span>
                       <span className="shrink-0 font-mono">{money(item.totalAmount)}</span>
                     </label>
                   ))}

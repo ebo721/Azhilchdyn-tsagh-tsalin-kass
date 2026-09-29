@@ -58,7 +58,7 @@ export async function linkBankPurchases(id: number, purchaseIds: number[]) {
       .where(eq(cashClosuresTable.date, date));
     if (closed) return "closed";
     const totalCents = purchases.reduce((sum, purchase) => sum + cents(Number(purchase.totalAmount)), 0);
-    if (purchases.some((purchase) => purchase.paymentDate !== null || purchase.date !== date)
+    if (purchases.some((purchase) => purchase.paymentDate !== null || purchase.date > date)
       || totalCents !== cents(Number(bank.amount))) return "purchase_conflict";
     for (const purchase of purchases) {
       if (await activePurchasePaymentGroup(tx, purchase.id)) return "purchase_conflict";
@@ -210,7 +210,7 @@ export async function cancelBankPurchaseGroup(id: number, cancelledBy: number | 
       || cash.date !== date
       || cash.bankVerifiedAt === null) return "group_conflict";
     const purchaseTotalCents = purchases.reduce((sum, purchase) => sum + cents(Number(purchase.totalAmount)), 0);
-    if (purchases.some((purchase) => purchase.date !== date
+    if (purchases.some((purchase) => purchase.date > date
       || purchase.paymentDate !== date
       || purchase.paymentAmount === null
       || cents(Number(purchase.paymentAmount)) !== cents(Number(purchase.totalAmount)))
@@ -284,7 +284,7 @@ export async function linkBankPurchase(id: number, input: PurchaseInput): Promis
     const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, date));
     if (closed) return "closed";
     if ("inventoryPurchaseId" in input) {
-      if (purchase.paymentDate !== null || purchase.date !== date || money(Number(purchase.totalAmount)) !== money(Number(bank.amount))) return "purchase_conflict";
+      if (purchase.paymentDate !== null || purchase.date > date || money(Number(purchase.totalAmount)) !== money(Number(bank.amount))) return "purchase_conflict";
     } else {
       const supplier = input.supplierName.normalize("NFKC").trim().replace(/\s+/g, " ");
       const items = input.items.map((item) => ({ ...item, name: item.name.trim(), category: item.category.trim(), totalAmount: money(item.quantity * item.unitPrice) }));
