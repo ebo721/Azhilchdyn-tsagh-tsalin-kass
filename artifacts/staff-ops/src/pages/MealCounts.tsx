@@ -6,7 +6,6 @@ import {
   CalendarDays,
   Clock3,
   Download,
-  RefreshCw,
   Search,
   UtensilsCrossed,
 } from 'lucide-react';
@@ -154,18 +153,6 @@ export function MealCounts() {
         eyebrow="Reader · Хоолны бүртгэл"
         title="Хоолны тоо"
         detail="Хадгалсан хоолны тоог өдрөөр болон төрлөөр харна. Reader-ээс мэдээлэл зөвхөн эрх бүхий ажилтан товч дарсан үед татагдана."
-        action={
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void query.refetch()}
-            disabled={query.isFetching}
-            data-testid="button-refresh-meal-counts"
-          >
-            <RefreshCw className={`mr-2 size-4 ${query.isFetching ? 'animate-spin' : ''}`} />
-            Шинэчлэх
-          </Button>
-        }
       />
 
       <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm" aria-label="Огнооны интервал">
