@@ -19,6 +19,12 @@ In this workspace, the connected GitHub integration can make repository API call
 
 **How to apply:** Before extending a branch published via the API, compare the local and remote refs/trees and base the next remote commit on the actual remote head. Never ask for or expose the integration's token to work around Git authentication.
 
+When passing filenames from the CodeExecution shell callback into filesystem operations, trim each line, including carriage returns.
+
+**Why:** Its command output can contain CRLF line endings; an untrimmed `git diff --name-only` path looks valid in logs but fails to open with `ENOENT`.
+
+**How to apply:** Split filename lists on `\r?\n`, trim each entry, and discard blanks before reading or uploading branch files.
+
 If the checkout's HTTPS remote rejects its stored GitHub credential, use the connected GitHub integration to create one atomic commit with an expected-head guard instead of force-pushing or writing files as separate commits.
 
 **Why:** The workspace remote credential can be stale even when the GitHub integration is healthy; an expected-head atomic commit prevents overwriting concurrent changes or briefly deploying a partial update.
