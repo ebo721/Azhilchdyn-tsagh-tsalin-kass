@@ -262,7 +262,7 @@ describe("bank document linking", () => {
   it("links an existing unpaid purchase, posts a balanced journal, and removes review row", async () => {
     const [purchase] = await db.insert(inventoryPurchasesTable).values({
       materialType: "food", accountId: (await db.select({ id: chartOfAccountsTable.id }).from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1500")))[0].id,
-      documentName: "Existing linked purchase", date: "2099-08-01", totalAmount: 42_000,
+      documentName: "Existing linked purchase", date: "2099-07-23", totalAmount: 42_000,
     }).returning();
     purchaseIds.push(purchase.id);
     const bankId = await bank("2099-08-01", 42_000, "existing-purchase");
@@ -274,6 +274,7 @@ describe("bank document linking", () => {
     const result = await response.json() as { cashTransactionId: number; journalEntryId: number };
     cashIds.push(result.cashTransactionId); journalIds.push(result.journalEntryId);
     const [saved] = await db.select().from(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, purchase.id));
+    assert.equal(saved.date, "2099-07-23");
     assert.equal(saved.paymentDate, "2099-08-01"); assert.equal(Number(saved.paymentAmount), 42_000);
     const [linked] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankId));
     assert.equal(linked.cashTransactionId, result.cashTransactionId); assert.ok(linked.transferredAt);
@@ -291,11 +292,11 @@ describe("bank document linking", () => {
     assert.ok(inventoryAccount);
     const [first] = await db.insert(inventoryPurchasesTable).values({
       materialType: "food", accountId: inventoryAccount.id, documentName: "Grouped purchase A",
-      date: "2099-08-09", totalAmount: 42_000,
+      date: "2099-07-31", totalAmount: 42_000,
     }).returning();
     const [second] = await db.insert(inventoryPurchasesTable).values({
       materialType: "food", accountId: inventoryAccount.id, documentName: "Grouped purchase B",
-      date: "2099-08-09", totalAmount: 18_000,
+      date: "2099-08-04", totalAmount: 18_000,
     }).returning();
     purchaseIds.push(first.id, second.id);
     const bankId = await bank("2099-08-09", 60_000, "grouped-purchases");
@@ -313,6 +314,7 @@ describe("bank document linking", () => {
     journalIds.push(result.journalEntryId);
     const [cash] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, result.cashTransactionId));
     assert.equal(cash.amount, 60_000);
+    assert.equal(cash.date, "2099-08-09");
     assert.equal(cash.sourceType, "inventory_purchase_group");
     const cashListResponse = await fetch(`${baseUrl}/api/cash/transactions`, { headers: { cookie } });
     assert.equal(cashListResponse.status, 200);
@@ -321,6 +323,7 @@ describe("bank document linking", () => {
     const entries = await db.select().from(journalEntriesTable)
       .where(eq(journalEntriesTable.id, result.journalEntryId));
     assert.equal(entries.length, 1);
+    assert.equal(entries[0].date, "2099-08-09");
     const lines = await db.select({
       accountId: journalLinesTable.accountId,
       debit: journalLinesTable.debit,
@@ -341,8 +344,8 @@ describe("bank document linking", () => {
     const paidPurchases = await db.select().from(inventoryPurchasesTable)
       .where(inArray(inventoryPurchasesTable.id, [first.id, second.id]))
       .orderBy(inventoryPurchasesTable.id);
-    assert.deepEqual(paidPurchases.map((purchase) => [purchase.paymentDate, Number(purchase.paymentAmount)]), [
-      ["2099-08-09", 42_000], ["2099-08-09", 18_000],
+    assert.deepEqual(paidPurchases.map((purchase) => [purchase.date, purchase.paymentDate, Number(purchase.paymentAmount)]), [
+      ["2099-07-31", "2099-08-09", 42_000], ["2099-08-04", "2099-08-09", 18_000],
     ]);
     const members = await db.select().from(inventoryPurchasePaymentGroupMembersTable)
       .where(inArray(inventoryPurchasePaymentGroupMembersTable.purchaseId, [first.id, second.id]));
@@ -485,6 +488,42 @@ describe("bank document linking", () => {
       eq(journalEntriesTable.sourceType, "inventory_purchase_group"),
       eq(journalEntriesTable.sourceId, bankId),
     ))).length, 0);
+  });
+
+  it("rejects a purchase dated after the bank payment in single and grouped links", async () => {
+    const [inventoryAccount] = await db.select({ id: chartOfAccountsTable.id })
+      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1500"));
+    assert.ok(inventoryAccount);
+    const [futurePurchase] = await db.insert(inventoryPurchasesTable).values({
+      materialType: "food", accountId: inventoryAccount.id, documentName: "Future purchase",
+      date: "2099-08-16", totalAmount: 6_000,
+    }).returning();
+    const [earlierPurchase] = await db.insert(inventoryPurchasesTable).values({
+      materialType: "food", accountId: inventoryAccount.id, documentName: "Earlier purchase",
+      date: "2099-08-12", totalAmount: 4_000,
+    }).returning();
+    purchaseIds.push(futurePurchase.id, earlierPurchase.id);
+    const singleBankId = await bank("2099-08-15", 6_000, "future-single-purchase");
+    const groupBankId = await bank("2099-08-15", 10_000, "future-group-purchase");
+    const headers = { cookie, "content-type": "application/json" };
+    const single = await fetch(`${baseUrl}/api/bank-transactions/${singleBankId}/link-purchase`, {
+      method: "POST", headers,
+      body: JSON.stringify({ inventoryPurchaseId: futurePurchase.id }),
+    });
+    assert.equal(single.status, 409);
+    const group = await fetch(`${baseUrl}/api/bank-transactions/${groupBankId}/link-purchases`, {
+      method: "POST", headers,
+      body: JSON.stringify({ inventoryPurchaseIds: [earlierPurchase.id, futurePurchase.id] }),
+    });
+    assert.equal(group.status, 409);
+    const unclaimedBanks = await db.select().from(bankTransactionsTable)
+      .where(inArray(bankTransactionsTable.id, [singleBankId, groupBankId]));
+    assert.ok(unclaimedBanks.every((row) => row.cashTransactionId === null && row.transferredAt === null));
+    const untouchedPurchases = await db.select().from(inventoryPurchasesTable)
+      .where(inArray(inventoryPurchasesTable.id, [futurePurchase.id, earlierPurchase.id]));
+    assert.ok(untouchedPurchases.every((row) => row.paymentDate === null && row.paymentAmount === null));
+    assert.equal((await db.select().from(cashTransactionsTable)
+      .where(inArray(cashTransactionsTable.bankTransactionId, [singleBankId, groupBankId]))).length, 0);
   });
 
   it("serializes grouped bank linking against the existing single-purchase payment path", async () => {

@@ -22,5 +22,5 @@
 - [Integration test workspace exports](integration-test-workspace-exports.md) — After API codegen, run tsx integration tests with the workspace condition so runtime Zod uses current source.
 - [Stacked PR merge visibility](stacked-pr-merge-visibility.md) — A merged label on a feature-targeted PR does not put its changes on main; compare main’s tree to the final branch.
 - [Office network attendance edge](office-network-attendance-edge.md) — Trust only the direct Vercel edge for office IP checks; frontend proxy rewrites cannot establish employee origin.
-- [Bank-funded purchase groups](bank-funded-purchase-groups.md) — One bank payment may settle multiple purchases, but only if each is fully paid and their totals exactly match.
+- [Bank-funded purchase groups](bank-funded-purchase-groups.md) — Full purchase totals must exactly match the bank; purchase dates may precede the payment date.
 - [PostgreSQL schema fingerprint portability](postgres-schema-fingerprint-portability.md) — PG versions may expose NOT NULL as extra constraints; fingerprint nullability once, through column metadata.
