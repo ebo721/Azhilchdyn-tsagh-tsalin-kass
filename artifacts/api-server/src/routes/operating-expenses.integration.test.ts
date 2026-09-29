@@ -6,7 +6,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { bankTransactionsTable, cashTransactionsTable, chartOfAccountsTable, db, operatingExpensesTable, usersTable } from "@workspace/db";
 import app from "../app";
 import { createStaffSession, hrCookie } from "../lib/hr-session";
-import { fallbackExpenseAccount } from "./operations";
+import { fallbackExpenseAccount } from "../lib/chart-of-accounts.js";
 
 describe("operating expenses", () => {
   let server: Server;
