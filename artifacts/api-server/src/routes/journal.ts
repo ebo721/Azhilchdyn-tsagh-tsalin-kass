@@ -4,7 +4,8 @@ import {
   ListJournalEntriesQueryParams, ListJournalEntriesResponse, UpdateJournalEntryBody, UpdateJournalEntryParams,
   UpdateJournalEntryResponse, VoidJournalEntryParams, VoidJournalEntryResponse, DeleteJournalEntryParams,
   GetJournalAccountLedgerParams, GetJournalAccountLedgerResponse, GetJournalTrialBalanceResponse,
-  ListJournalReceivablesQueryParams, ListJournalReceivablesResponse, ListJournalSuppliersResponse,
+  ListJournalReceivablesQueryParams, ListJournalReceivablesResponse, ListJournalPayablesQueryParams,
+  ListJournalPayablesResponse, ListJournalSuppliersResponse,
 } from "@workspace/api-zod";
 import { and, asc, desc, eq, gte, lte, inArray, sql } from "drizzle-orm";
 import { db, bankTransactionsTable, cashTransactionsTable, chartOfAccountsTable, journalEntriesTable, journalLinesTable, receivablesTable, receivableAllocationsTable, payablesTable, payableAllocationsTable, employeesTable, inventorySuppliersTable, type JournalEntry, type JournalLine } from "@workspace/db";
@@ -103,6 +104,44 @@ router.get("/journal/receivables", async (req, res, next) => {
       partyType: row.employeeId ? "employee" : "supplier",
       partyId: row.employeeId ?? row.supplierId!,
       partyLabel: row.employeeName ?? row.supplierName!,
+    }))));
+  } catch (error) { return next(error); }
+});
+
+router.get("/journal/payables", async (req, res, next) => {
+  try {
+    const query = ListJournalPayablesQueryParams.safeParse(req.query);
+    if (!query.success) return res.status(400).json({ error: "Invalid payable status" });
+    const { status = "open" } = query.data;
+    const rows = await db.select({
+      id: payablesTable.id,
+      journalEntryId: payablesTable.journalEntryId,
+      description: payablesTable.description,
+      partyType: payablesTable.partyType,
+      partyId: payablesTable.partyId,
+      originalAmount: payablesTable.originalAmount,
+      remainingBalance: payablesTable.remainingBalance,
+      status: payablesTable.status,
+      createdAt: payablesTable.createdAt,
+      employeeName: employeesTable.name,
+      supplierName: inventorySuppliersTable.name,
+    }).from(payablesTable)
+      .leftJoin(employeesTable, and(eq(payablesTable.partyType, "employee"), eq(employeesTable.id, payablesTable.partyId)))
+      .leftJoin(inventorySuppliersTable, and(eq(payablesTable.partyType, "supplier"), eq(inventorySuppliersTable.id, payablesTable.partyId)))
+      .where(status === "all" ? undefined : eq(payablesTable.status, status))
+      .orderBy(desc(payablesTable.createdAt), desc(payablesTable.id));
+    return res.json(ListJournalPayablesResponse.parse(rows.map((row) => ({
+      id: row.id,
+      journalEntryId: row.journalEntryId,
+      description: row.description,
+      partyType: row.partyType,
+      partyId: row.partyId,
+      partyLabel: row.employeeName ?? row.supplierName
+        ?? `${row.partyType === "employee" ? "Ажилтан" : "Нийлүүлэгч"} #${row.partyId} (устгагдсан)`,
+      originalAmount: row.originalAmount,
+      remainingBalance: row.remainingBalance,
+      status: row.status,
+      createdAt: row.createdAt,
     }))));
   } catch (error) { return next(error); }
 });

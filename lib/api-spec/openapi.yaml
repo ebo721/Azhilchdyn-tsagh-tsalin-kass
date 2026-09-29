@@ -2125,6 +2125,26 @@ paths:
                 items: { $ref: "#/components/schemas/JournalReceivable" }
         "400":
           $ref: "#/components/responses/BadRequest"
+  /journal/payables:
+    get:
+      operationId: listJournalPayables
+      tags: [journal]
+      summary: List payables and their remaining balances
+      parameters:
+        - in: query
+          name: status
+          required: false
+          schema: { type: string, enum: [open, closed, all], default: open }
+      responses:
+        "200":
+          description: Payables
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/JournalPayable" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
   /journal/suppliers:
     get:
       operationId: listJournalSuppliers
@@ -2419,6 +2439,20 @@ components:
         originalAmount: { type: number }
         openAmount: { type: number }
         status: { type: string, enum: [open, settled] }
+        createdAt: { type: string, format: date-time }
+    JournalPayable:
+      type: object
+      required: [id, journalEntryId, description, partyType, partyId, partyLabel, originalAmount, remainingBalance, status, createdAt]
+      properties:
+        id: { type: integer }
+        journalEntryId: { type: integer }
+        description: { type: string }
+        partyType: { type: string, enum: [employee, supplier] }
+        partyId: { type: integer }
+        partyLabel: { type: string }
+        originalAmount: { type: number }
+        remainingBalance: { type: number }
+        status: { type: string, enum: [open, closed] }
         createdAt: { type: string, format: date-time }
     JournalSupplier:
       type: object

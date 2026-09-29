@@ -142,6 +142,56 @@ describe("payable allocation integration", () => {
     assert.equal(supplierPayable.partyId, supplierId);
   });
 
+  it("lists open, closed, and all payables with their party and balance", async () => {
+    const { entryId, payable } = await createEmployeePayable(90);
+    const supplierResult = await post(createLines(45, { kind: "create", partyType: "supplier", supplierId }));
+    assert.equal(supplierResult.response.status, 201, supplierResult.value.error);
+    const [supplierPayable] = await db.select().from(payablesTable).where(eq(payablesTable.journalEntryId, supplierResult.value.id!));
+    assert.ok(supplierPayable);
+    payableIds.push(supplierPayable.id);
+
+    type PayableRow = {
+      id: number; journalEntryId: number; description: string;
+      partyType: string; partyId: number; partyLabel: string;
+      originalAmount: number; remainingBalance: number; status: string; createdAt: string;
+    };
+    async function list(status?: string): Promise<PayableRow[]> {
+      const response = await request(`/journal/payables${status ? `?status=${status}` : ""}`);
+      assert.equal(response.status, 200);
+      return response.json() as Promise<PayableRow[]>;
+    }
+    const open = await list();
+    const employee = open.find((row) => row.id === payable.id);
+    assert.ok(employee);
+    assert.equal(employee.journalEntryId, entryId);
+    assert.equal(employee.description, "Payable integration");
+    assert.equal(employee.partyType, "employee");
+    assert.equal(employee.partyId, employeeId);
+    assert.match(employee.partyLabel, /Payable Employee/);
+    assert.equal(employee.originalAmount, 90);
+    assert.equal(employee.remainingBalance, 90);
+    assert.equal(employee.status, "open");
+    assert.ok(!Number.isNaN(Date.parse(employee.createdAt)));
+    const supplier = open.find((row) => row.id === supplierPayable.id);
+    assert.ok(supplier);
+    assert.equal(supplier.partyType, "supplier");
+    assert.equal(supplier.partyId, supplierId);
+    assert.match(supplier.partyLabel, /Payable Supplier/);
+    assert.equal(supplier.remainingBalance, 45);
+
+    const payment = await post(settleLines(90, payable.id));
+    assert.equal(payment.response.status, 201, payment.value.error);
+    assert.equal((await list()).some((row) => row.id === payable.id), false);
+    const closed = await list("closed");
+    assert.equal(closed.find((row) => row.id === payable.id)?.remainingBalance, 0);
+    assert.equal(closed.find((row) => row.id === payable.id)?.status, "closed");
+    assert.equal(closed.some((row) => row.id === supplierPayable.id), false);
+    const all = await list("all");
+    assert.equal(all.some((row) => row.id === payable.id), true);
+    assert.equal(all.some((row) => row.id === supplierPayable.id), true);
+    assert.equal((await request("/journal/payables?status=invalid")).status, 400);
+  });
+
   it("rejects missing or wrong metadata and invalid employees atomically", async () => {
     for (const allocation of [
       undefined,
