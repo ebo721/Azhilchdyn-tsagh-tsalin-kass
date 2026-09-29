@@ -1,4 +1,4 @@
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray, or } from "drizzle-orm";
 import { bankTransactionsTable, cashTransactionsTable, chartOfAccountsTable, operatingExpensesTable } from "@workspace/db";
 import { cashAccountForCategory, shouldMirrorCashAsOperatingExpense } from "./cash-account.js";
 
@@ -83,10 +83,64 @@ export async function syncOperatingExpenseForBankCash(tx: any, bankId: number, c
   return resolved ?? null;
 }
 
-export async function reconcileOperatingExpenses(tx: any) {
-  const pairs = await tx.select({ bankId: bankTransactionsTable.id, cashId: cashTransactionsTable.id })
+export async function reconcileOperatingExpenses(
+  tx: any,
+  report?: (stats: { candidatePairCount: number; syncedCount: number; elapsedMs: number }) => void,
+) {
+  const started = performance.now();
+  const pairs = await tx.select({ bank: bankTransactionsTable, cash: cashTransactionsTable })
     .from(bankTransactionsTable).innerJoin(cashTransactionsTable, eq(bankTransactionsTable.cashTransactionId, cashTransactionsTable.id))
-    .where(eq(bankTransactionsTable.type, "expense"));
-  for (const pair of pairs) await syncOperatingExpenseForBankCash(tx, pair.bankId, pair.cashId);
-  return tx.select().from(operatingExpensesTable);
+    .where(and(
+      eq(bankTransactionsTable.type, "expense"),
+      or(isNull(cashTransactionsTable.sourceType), notInArray(cashTransactionsTable.sourceType, SYSTEM_SOURCES)),
+    ))
+    .orderBy(bankTransactionsTable.id)
+    .for("update", { of: [bankTransactionsTable, cashTransactionsTable] });
+
+  const bankIds = pairs.map((pair: any) => pair.bank.id as number);
+  const cashIds = pairs.map((pair: any) => pair.cash.id as number);
+  const linkedExpenses = pairs.length
+    ? await tx.select().from(operatingExpensesTable).where(or(
+      inArray(operatingExpensesTable.bankTransactionId, bankIds),
+      inArray(operatingExpensesTable.cashTransactionId, cashIds),
+    )).for("update")
+    : [];
+  const byBank = new Map<number, typeof operatingExpensesTable.$inferSelect>(
+    linkedExpenses.filter((expense: typeof operatingExpensesTable.$inferSelect) => expense.bankTransactionId !== null)
+      .map((expense: typeof operatingExpensesTable.$inferSelect) => [expense.bankTransactionId!, expense]),
+  );
+  const byCash = new Map<number, typeof operatingExpensesTable.$inferSelect>(
+    linkedExpenses.filter((expense: typeof operatingExpensesTable.$inferSelect) => expense.cashTransactionId !== null)
+      .map((expense: typeof operatingExpensesTable.$inferSelect) => [expense.cashTransactionId!, expense]),
+  );
+  const [canonicalAccount] = pairs.some((pair: any) => pair.cash.category === OPERATING_EXPENSE_CATEGORY)
+    ? await tx.select({ id: chartOfAccountsTable.id }).from(chartOfAccountsTable).where(and(
+      eq(chartOfAccountsTable.code, "6900"),
+      eq(chartOfAccountsTable.type, "expense"),
+    ))
+    : [];
+
+  let syncedCount = 0;
+  for (const { bank, cash } of pairs) {
+    const expense = byBank.get(bank.id) ?? byCash.get(cash.id);
+    const keepsBankAccount = cash.sourceType === "bank_transaction"
+      && bank.accountId !== null && cash.accountId === bank.accountId;
+    const isCurrent = cash.category === OPERATING_EXPENSE_CATEGORY
+      && canonicalAccount
+      && (keepsBankAccount || cash.accountId === canonicalAccount.id)
+      && expense
+      && expense.bankTransactionId === bank.id
+      && expense.cashTransactionId === cash.id
+      && expense.description === cash.description
+      && expense.date === cash.date
+      && expense.amount === cash.amount
+      && expense.paymentDate === cash.date
+      && expense.paymentAmount === cash.amount;
+    if (isCurrent) continue;
+    await syncOperatingExpenseForBankCash(tx, bank.id, cash.id);
+    syncedCount++;
+  }
+  const rows = await tx.select().from(operatingExpensesTable);
+  report?.({ candidatePairCount: pairs.length, syncedCount, elapsedMs: Math.round(performance.now() - started) });
+  return rows;
 }

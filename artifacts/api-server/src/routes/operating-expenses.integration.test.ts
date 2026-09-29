@@ -308,6 +308,21 @@ describe("operating expenses", () => {
         assert.equal(firstRows.some((row) => row.bankTransactionId === pair.bank.id), false);
       }
 
+      await db.update(cashTransactionsTable).set({
+        description: "historical revised",
+        amount: 2800,
+        date: "2099-05-09",
+      }).where(eq(cashTransactionsTable.id, historical.cash.id));
+      const refreshedList = await fetch(`${baseUrl}/api/operating-expenses`, { headers: { cookie: adminCookie } });
+      assert.equal(refreshedList.status, 200);
+      const refreshedRows = await refreshedList.json() as Array<{
+        bankTransactionId: number | null; description: string; amount: number; paymentDate: string | null;
+      }>;
+      const refreshed = refreshedRows.find((row) => row.bankTransactionId === historical.bank.id);
+      assert.equal(refreshed?.description, "historical revised");
+      assert.equal(refreshed?.amount, 2800);
+      assert.equal(refreshed?.paymentDate, "2099-05-09");
+
       const secondList = await fetch(`${baseUrl}/api/operating-expenses`, { headers: { cookie: adminCookie } });
       const secondRows = await secondList.json() as Array<{ bankTransactionId: number | null }>;
       assert.equal(secondRows.filter((row) => row.bankTransactionId === historical.bank.id).length, 1);

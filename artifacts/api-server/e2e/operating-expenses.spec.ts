@@ -12,7 +12,7 @@ const roles = [
   { username: "saacc", passwordVariable: "ACCOUNTANT_PASSWORD", canSeeExpenseMenu: true },
   { username: "sahr", passwordVariable: "HR_MANAGER_PASSWORD", canSeeExpenseMenu: false },
   { username: "satre", passwordVariable: "WAREHOUSE_PASSWORD", canSeeExpenseMenu: false },
-  { username: "sasta", passwordVariable: "SASTA_PASSWORD", canSeeExpenseMenu: false },
+  { username: "sasta", passwordVariable: "SASTA_PASSWORD", canSeeExpenseMenu: true },
 ] as const;
 
 async function login(page: Page, username: string, passwordVariable: string) {

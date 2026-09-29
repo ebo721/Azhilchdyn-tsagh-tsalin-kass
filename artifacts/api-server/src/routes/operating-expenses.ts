@@ -191,9 +191,12 @@ const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, op
 
 
 
-router.get("/operating-expenses", async (_req, res, next) => {
+router.get("/operating-expenses", async (req, res, next) => {
   try {
-    const rows = await db.transaction((tx) => reconcileOperatingExpenses(tx)) as Array<typeof operatingExpensesTable.$inferSelect>;
+    const rows = await db.transaction((tx) => reconcileOperatingExpenses(tx, (stats) => {
+      if (stats.elapsedMs > 1000) req.log.warn(stats, "Slow operating expense reconciliation");
+      else req.log.debug(stats, "Operating expense reconciliation");
+    })) as Array<typeof operatingExpensesTable.$inferSelect>;
     const accounts = await db.select().from(chartOfAccountsTable);
     const names = new Map(accounts.map((account) => [account.id, account.name]));
     res.json(ListOperatingExpensesResponse.parse(rows.map((row) => {
