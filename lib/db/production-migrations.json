@@ -44,7 +44,11 @@
     {
       "filename": "20261001_reader_meal_counts.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20261002_payables.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "f1dd1ed54974b95ad8fffe34da93483c61a0b852668d16d0e2bcb909cb2296a3"
+  "schemaFingerprint": "c410987b4fc2c1daa902007dc14aab18a3b0c978087eb993ebdf3676b3b35eb5"
 }

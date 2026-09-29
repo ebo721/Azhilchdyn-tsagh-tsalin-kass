@@ -149,6 +149,39 @@ export const receivableAllocationsTable = pgTable("receivable_allocations", {
   check("receivable_allocations_amount_check", sql`${table.amount} > 0`),
 ]);
 
+export const payablesTable = pgTable("payables", {
+  id: serial("id").primaryKey(),
+  partyType: text("party_type").notNull(),
+  partyId: integer("party_id").notNull(),
+  originalAmount: numeric("original_amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  remainingBalance: numeric("remaining_balance", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  status: text("status").notNull().default("open"),
+  journalEntryId: integer("journal_entry_id").notNull().references(() => journalEntriesTable.id, { onDelete: "restrict" }),
+  description: text("description").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("payables_party_status_idx").on(table.partyType, table.partyId, table.status),
+  index("payables_journal_entry_idx").on(table.journalEntryId),
+  check("payables_party_type_check", sql`${table.partyType} IN ('employee', 'supplier')`),
+  check("payables_party_id_check", sql`${table.partyId} > 0`),
+  check("payables_amounts_check", sql`${table.originalAmount} > 0 AND ${table.remainingBalance} >= 0 AND ${table.remainingBalance} <= ${table.originalAmount}`),
+  check("payables_status_balance_check", sql`(${table.status} = 'open' AND ${table.remainingBalance} > 0) OR (${table.status} = 'closed' AND ${table.remainingBalance} = 0)`),
+  check("payables_status_check", sql`${table.status} IN ('open', 'closed')`),
+]);
+
+export const payableAllocationsTable = pgTable("payable_allocations", {
+  id: serial("id").primaryKey(),
+  payableId: integer("payable_id").notNull().references(() => payablesTable.id, { onDelete: "restrict" }),
+  settlementJournalEntryId: integer("settlement_journal_entry_id").notNull().references(() => journalEntriesTable.id, { onDelete: "restrict" }),
+  settlementJournalLineId: integer("settlement_journal_line_id").notNull().references(() => journalLinesTable.id, { onDelete: "restrict" }),
+  amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("payable_allocations_settlement_line_idx").on(table.settlementJournalLineId),
+  index("payable_allocations_payable_idx").on(table.payableId),
+  check("payable_allocations_amount_check", sql`${table.amount} > 0`),
+]);
+
 export const shiftTemplatesTable = pgTable("shift_templates", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -522,6 +555,8 @@ export type JournalEntry = typeof journalEntriesTable.$inferSelect;
 export type JournalLine = typeof journalLinesTable.$inferSelect;
 export type Receivable = typeof receivablesTable.$inferSelect;
 export type ReceivableAllocation = typeof receivableAllocationsTable.$inferSelect;
+export type Payable = typeof payablesTable.$inferSelect;
+export type PayableAllocation = typeof payableAllocationsTable.$inferSelect;
 export type ShiftTemplate = typeof shiftTemplatesTable.$inferSelect;
 export type EmployeeShiftPlan = typeof employeeShiftPlansTable.$inferSelect;
 export type Attendance = typeof attendanceTable.$inferSelect;
