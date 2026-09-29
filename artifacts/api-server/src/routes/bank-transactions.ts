@@ -52,6 +52,7 @@ import { cashAccountForCategory } from "../lib/cash-account.js";
 import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
 import { loadBankRecognitionContext, recognizeBankTransaction } from "../lib/bank-recognition.js";
 import { inventoryPurchaseAccountCodes } from "../lib/route-shared.js";
+import { bankSuggestionScore } from "../lib/bank-suggestion-score.js";
 import {
   cancelBankPurchaseGroup,
   linkBankPurchase,
@@ -230,23 +231,6 @@ function calendarDateOffset(date: string, offset: number) {
   const value = new Date(`${date}T00:00:00.000Z`);
   value.setUTCDate(value.getUTCDate() + offset);
   return value.toISOString().slice(0, 10);
-}
-
-function descriptionTokens(value: string) {
-  return new Set(value.toLocaleLowerCase("mn-MN").match(/[\p{L}\p{N}]+/gu) ?? []);
-}
-
-function suggestionScore(bank: typeof bankTransactionsTable.$inferSelect, cash: typeof cashTransactionsTable.$inferSelect) {
-  const bankDate = bank.transactionAt.toISOString().slice(0, 10);
-  const distance = Math.abs((Date.parse(`${cash.date}T00:00:00Z`) - Date.parse(`${bankDate}T00:00:00Z`)) / 86_400_000);
-  const bankAmount = Number(bank.amount);
-  const cashAmount = Number(cash.amount);
-  const amountCloseness = Math.max(0, 1 - Math.abs(bankAmount - cashAmount) / Math.max(bankAmount, cashAmount, 1));
-  const bankTokens = descriptionTokens(bank.description);
-  const cashTokens = descriptionTokens(cash.description);
-  const overlap = [...bankTokens].filter((token) => cashTokens.has(token)).length;
-  const tokenOverlap = overlap / Math.max(new Set([...bankTokens, ...cashTokens]).size, 1);
-  return Math.round((0.4 * (1 - distance / 7) + 0.35 * amountCloseness + 0.25 * tokenOverlap) * 10_000) / 100;
 }
 
 function bankAndCashAmountsMatch(
@@ -1033,7 +1017,7 @@ router.get("/bank-transactions/:id/cash-suggestions", async (req, res, next) => 
     ));
     const suggestions = candidates
       .filter((cash) => bankAndCashAmountsMatch(bank, cash))
-      .map((cash) => ({ cash, score: suggestionScore(bank, cash) }))
+      .map((cash) => ({ cash, score: bankSuggestionScore(bank, cash) }))
       .sort((left, right) => right.score - left.score || left.cash.id - right.cash.id)
       .slice(0, 10)
       .map(({ cash, score }) => cashSuggestionResponse(cash, score));

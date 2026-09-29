@@ -150,6 +150,7 @@ import { getStaffRole, getStaffSession, type StaffRole } from "../lib/hr-session
 import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment.js";
 import { planShiftPlanCopy } from "../lib/shift-plan-copy.js";
 import { reconcileOperatingExpenses } from "../lib/operating-expense-sync.js";
+import { bankSuggestionScore } from "../lib/bank-suggestion-score.js";
 import {
   cashAccountForCategory,
   isCanonicalCashCategory,
@@ -263,11 +264,12 @@ router.get("/operating-expenses/:id/payment-bank-suggestions", async (req, res, 
       gte(bankTransactionsTable.transactionAt, start), lte(bankTransactionsTable.transactionAt, end),
     ));
     const expenseAccountName = await operatingExpenseAccountName(expense.accountId);
-    const words = `${expense.description} ${expenseAccountName}`.toLocaleLowerCase("mn-MN").split(/\s+/).filter((w) => w.length > 1);
     const result = banks.map((bank) => {
-      const days = Math.abs(new Date(bank.transactionAt).getTime() - new Date(`${expense.date}T12:00:00Z`).getTime()) / 86400000;
-      const text = `${bank.description} ${bank.counterparty}`.toLocaleLowerCase("mn-MN");
-      const score = (Math.abs(Number(bank.amount) - Number(expense.amount)) < 0.01 ? 60 : 0) + Math.max(0, 30 - days * 4) + words.filter((w) => text.includes(w)).length * 5;
+      const score = bankSuggestionScore(bank, {
+        date: expense.date,
+        amount: expense.amount,
+        description: `${expense.description} ${expenseAccountName}`,
+      });
       return { id: bank.id, transactionAt: bank.transactionAt.toISOString(), amount: Number(bank.amount), description: bank.description, score };
     }).sort((a, b) => b.score - a.score);
     res.json(ListOperatingExpensePaymentBankSuggestionsResponse.parse(result));

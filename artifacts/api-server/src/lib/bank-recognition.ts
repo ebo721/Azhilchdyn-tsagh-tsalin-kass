@@ -7,6 +7,7 @@ import {
 } from "@workspace/db";
 import { and, desc, eq, isNotNull, isNull, or } from "drizzle-orm";
 import { bankKeywordRecognitionRules } from "./bank-recognition-rules.js";
+import { bankSuggestionScore } from "./bank-suggestion-score.js";
 import { ensureDefaultChartOfAccounts } from "./route-shared.js";
 
 export type RecognizableBankTransaction = {
@@ -83,7 +84,10 @@ function unpaidTargetMatch(
       .filter((targetToken) => [...bankTokens].some((bankToken) => relatedTokens(targetToken, bankToken)))
       .length;
     if (overlap === 0) return [];
-    const score = 100 - distance * 5 + overlap * 10;
+    const score = bankSuggestionScore({
+      ...transaction,
+      description: `${transaction.description} ${transaction.account}`,
+    }, { date: target.date, amount: target.amount, description: target.text });
     return [{ ...target, score }];
   }).sort((left, right) => right.score - left.score || right.id - left.id);
   const [best, runnerUp] = candidates;

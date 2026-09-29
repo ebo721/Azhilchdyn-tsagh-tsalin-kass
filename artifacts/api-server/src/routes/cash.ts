@@ -164,6 +164,7 @@ import {
   shouldMirrorCashAsOperatingExpense,
 } from "../lib/cash-account.js";
 import * as shared from "../lib/route-shared.js";
+import { bankSuggestionScore } from "../lib/bank-suggestion-score.js";
 import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-shared.js";
 
 const router: IRouter = Router();
@@ -238,19 +239,6 @@ async function postCashJournal(tx: any, cash: any, counterAccount: any, cashAcco
   });
   if (posting.status !== "posted") throw new Error("Cash journal entry must be balanced");
   return posting.journalEntryId;
-}
-
-function cashBankSuggestionScore(
-  cash: typeof cashTransactionsTable.$inferSelect,
-  bank: typeof bankTransactionsTable.$inferSelect,
-) {
-  const bankDate = bank.transactionAt.toISOString().slice(0, 10);
-  const distance = Math.abs((Date.parse(`${cash.date}T00:00:00Z`) - Date.parse(`${bankDate}T00:00:00Z`)) / 86_400_000);
-  const cashTokens = descriptionTokens(cash.description);
-  const bankTokens = descriptionTokens(bank.description);
-  const overlap = [...cashTokens].filter((token) => bankTokens.has(token)).length;
-  const tokenOverlap = overlap / Math.max(new Set([...cashTokens, ...bankTokens]).size, 1);
-  return Math.round((0.7 * (1 - distance / 7) + 0.3 * tokenOverlap) * 10_000) / 100;
 }
 
 async function journalNeedsReplacement(tx: any, existing: any, input: any, counterAccount: any, settlementAccountId: number) {
@@ -660,7 +648,7 @@ router.get("/cash/transactions/:id/bank-suggestions", async (req, res, next) => 
         return difference === 0
           || (["payroll", "payroll_advance"].includes(cash.sourceType ?? "") && difference < 1);
       })
-      .map((bank) => ({ bank, score: cashBankSuggestionScore(cash, bank) }))
+      .map((bank) => ({ bank, score: bankSuggestionScore(bank, cash) }))
       .sort((left, right) => right.score - left.score || left.bank.id - right.bank.id)
       .slice(0, 10)
       .map(({ bank, score }) => ({

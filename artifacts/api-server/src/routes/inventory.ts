@@ -152,6 +152,7 @@ import {
   shouldMirrorCashAsOperatingExpense,
 } from "../lib/cash-account.js";
 import * as shared from "../lib/route-shared.js";
+import { bankSuggestionScore } from "../lib/bank-suggestion-score.js";
 import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-shared.js";
 
 const router: IRouter = Router();
@@ -896,7 +897,11 @@ router.get("/inventory/purchases/:id/payment-bank-suggestions", async (req, res,
       lte(bankTransactionsTable.transactionAt, calendarDateOffset(purchase.date, 8)),
     ));
     const suggestions = candidates
-      .map((bank) => ({ bank, score: inventoryBankSuggestionScore(purchase, bank) }))
+      .map((bank) => ({ bank, score: bankSuggestionScore(bank, {
+        date: purchase.date,
+        amount: purchase.totalAmount,
+        description: purchase.documentName,
+      }) }))
       .sort((a, b) => b.score - a.score)
       .slice(0, 10)
       .map(({ bank, score }) => ({
