@@ -623,6 +623,240 @@ export const CopyPreviousShiftPlansResponse = zod.object({
 
 
 /**
+ * @summary Get the configured office public IP (admin or HR)
+ */
+export const GetOfficeAttendanceNetworkResponse = zod.object({
+  "officeIp": zod.string().nullable()
+})
+
+
+/**
+ * @summary Set the office public IP (admin or HR)
+ */
+export const setOfficeAttendanceNetworkBodyOfficeIpMax = 45;
+
+
+
+export const SetOfficeAttendanceNetworkBody = zod.object({
+  "officeIp": zod.string().min(1).max(setOfficeAttendanceNetworkBodyOfficeIpMax)
+})
+
+export const SetOfficeAttendanceNetworkResponse = zod.object({
+  "officeIp": zod.string().nullable()
+})
+
+
+/**
+ * @summary List active phone check-ins awaiting checkout (admin or HR)
+ */
+export const listOfficeAttendancePendingPunchesResponseOfficeDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const ListOfficeAttendancePendingPunchesResponseItem = zod.object({
+  "id": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "employeeName": zod.string(),
+  "deviceId": zod.number().int(),
+  "deviceName": zod.string(),
+  "officeDate": zod.string().regex(listOfficeAttendancePendingPunchesResponseOfficeDateRegExp),
+  "checkedInAt": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListOfficeAttendancePendingPunchesResponse = zod.array(ListOfficeAttendancePendingPunchesResponseItem)
+
+
+/**
+ * @summary Record cancellation of a pending phone punch (admin or HR)
+ */
+export const CancelOfficeAttendancePendingPunchParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const cancelOfficeAttendancePendingPunchBodyReasonMax = 250;
+
+
+
+export const CancelOfficeAttendancePendingPunchBody = zod.object({
+  "reason": zod.string().min(1).max(cancelOfficeAttendancePendingPunchBodyReasonMax)
+})
+
+export const CancelOfficeAttendancePendingPunchResponse = zod.object({
+  "id": zod.number().int(),
+  "cancelledAt": zod.string(),
+  "cancelledBy": zod.number().int(),
+  "reason": zod.string()
+})
+
+
+/**
+ * @summary List enrollment token metadata (admin or HR)
+ */
+export const ListAttendanceDeviceEnrollmentsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "expiresAt": zod.string(),
+  "usedAt": zod.string().nullable(),
+  "revokedAt": zod.string().nullable(),
+  "createdAt": zod.string()
+})
+export const ListAttendanceDeviceEnrollmentsResponse = zod.array(ListAttendanceDeviceEnrollmentsResponseItem)
+
+
+/**
+ * @summary Issue a single-use enrollment token for an active employee (admin or HR)
+ */
+export const CreateAttendanceDeviceEnrollmentBody = zod.object({
+  "employeeId": zod.number().int()
+})
+
+export const CreateAttendanceDeviceEnrollmentResponse = zod.object({
+  "id": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "token": zod.string(),
+  "expiresAt": zod.string()
+})
+
+
+/**
+ * @summary List registered attendance devices (admin or HR)
+ */
+export const ListAttendanceDevicesResponseItem = zod.object({
+  "id": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "employeeName": zod.string(),
+  "name": zod.string(),
+  "createdAt": zod.string(),
+  "lastUsedAt": zod.string().nullable(),
+  "revokedAt": zod.string().nullable()
+})
+export const ListAttendanceDevicesResponse = zod.array(ListAttendanceDevicesResponseItem)
+
+
+/**
+ * @summary Revoke an attendance device (admin or HR)
+ */
+export const RevokeAttendanceDeviceParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const RevokeAttendanceDeviceResponse = zod.void()
+
+
+/**
+ * @summary Redeem an enrollment token and register a browser public key from the office network
+ */
+export const registerAttendanceDeviceBodyTokenMin = 32;
+export const registerAttendanceDeviceBodyTokenMax = 128;
+
+export const registerAttendanceDeviceBodyPublicKeyXMin = 43;
+export const registerAttendanceDeviceBodyPublicKeyXMax = 43;
+
+export const registerAttendanceDeviceBodyPublicKeyYMin = 43;
+export const registerAttendanceDeviceBodyPublicKeyYMax = 43;
+
+export const registerAttendanceDeviceBodyTimestampMin = 0;
+
+export const registerAttendanceDeviceBodyNonceMin = 16;
+export const registerAttendanceDeviceBodyNonceMax = 128;
+
+export const registerAttendanceDeviceBodySignatureMin = 80;
+export const registerAttendanceDeviceBodySignatureMax = 100;
+
+export const registerAttendanceDeviceBodyNameMax = 80;
+
+
+
+export const RegisterAttendanceDeviceBody = zod.object({
+  "token": zod.string().min(registerAttendanceDeviceBodyTokenMin).max(registerAttendanceDeviceBodyTokenMax),
+  "publicKey": zod.object({
+  "kty": zod.literal("EC"),
+  "crv": zod.literal("P-256"),
+  "x": zod.string().min(registerAttendanceDeviceBodyPublicKeyXMin).max(registerAttendanceDeviceBodyPublicKeyXMax),
+  "y": zod.string().min(registerAttendanceDeviceBodyPublicKeyYMin).max(registerAttendanceDeviceBodyPublicKeyYMax)
+}),
+  "timestamp": zod.number().int().min(registerAttendanceDeviceBodyTimestampMin),
+  "nonce": zod.string().min(registerAttendanceDeviceBodyNonceMin).max(registerAttendanceDeviceBodyNonceMax),
+  "signature": zod.string().min(registerAttendanceDeviceBodySignatureMin).max(registerAttendanceDeviceBodySignatureMax),
+  "name": zod.string().min(1).max(registerAttendanceDeviceBodyNameMax)
+})
+
+export const RegisterAttendanceDeviceResponse = zod.object({
+  "deviceId": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "name": zod.string(),
+  "registeredAt": zod.string()
+})
+
+
+/**
+ * @summary Get this registered device's signed attendance status from the office network
+ */
+export const getAttendanceDeviceStatusBodyTimestampMin = 0;
+
+export const getAttendanceDeviceStatusBodyNonceMin = 16;
+export const getAttendanceDeviceStatusBodyNonceMax = 128;
+
+export const getAttendanceDeviceStatusBodySignatureMin = 80;
+export const getAttendanceDeviceStatusBodySignatureMax = 100;
+
+
+
+export const GetAttendanceDeviceStatusBody = zod.object({
+  "deviceId": zod.number().int(),
+  "timestamp": zod.number().int().min(getAttendanceDeviceStatusBodyTimestampMin),
+  "nonce": zod.string().min(getAttendanceDeviceStatusBodyNonceMin).max(getAttendanceDeviceStatusBodyNonceMax),
+  "signature": zod.string().min(getAttendanceDeviceStatusBodySignatureMin).max(getAttendanceDeviceStatusBodySignatureMax)
+})
+
+export const getAttendanceDeviceStatusResponseOfficeDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const GetAttendanceDeviceStatusResponse = zod.object({
+  "employeeId": zod.number().int(),
+  "officeDate": zod.string().regex(getAttendanceDeviceStatusResponseOfficeDateRegExp),
+  "state": zod.enum(['not-checked-in', 'checked-in', 'checked-out']),
+  "checkedInAt": zod.string().nullable(),
+  "checkedOutAt": zod.string().nullable(),
+  "attendanceId": zod.number().int().nullable()
+})
+
+
+/**
+ * @summary Sign in or out with this registered device from the office network
+ */
+export const punchAttendanceDeviceBodyOneTimestampMin = 0;
+
+export const punchAttendanceDeviceBodyOneNonceMin = 16;
+export const punchAttendanceDeviceBodyOneNonceMax = 128;
+
+export const punchAttendanceDeviceBodyOneSignatureMin = 80;
+export const punchAttendanceDeviceBodyOneSignatureMax = 100;
+
+
+
+export const PunchAttendanceDeviceBody = zod.object({
+  "deviceId": zod.number().int(),
+  "timestamp": zod.number().int().min(punchAttendanceDeviceBodyOneTimestampMin),
+  "nonce": zod.string().min(punchAttendanceDeviceBodyOneNonceMin).max(punchAttendanceDeviceBodyOneNonceMax),
+  "signature": zod.string().min(punchAttendanceDeviceBodyOneSignatureMin).max(punchAttendanceDeviceBodyOneSignatureMax)
+}).and(zod.object({
+  "action": zod.enum(['check-in', 'check-out'])
+}))
+
+export const punchAttendanceDeviceResponseOfficeDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const PunchAttendanceDeviceResponse = zod.object({
+  "employeeId": zod.number().int(),
+  "officeDate": zod.string().regex(punchAttendanceDeviceResponseOfficeDateRegExp),
+  "state": zod.enum(['not-checked-in', 'checked-in', 'checked-out']),
+  "checkedInAt": zod.string().nullable(),
+  "checkedOutAt": zod.string().nullable(),
+  "attendanceId": zod.number().int().nullable()
+})
+
+
+/**
  * @summary Calculate payroll for a month
  */
 export const getPayrollQueryMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');

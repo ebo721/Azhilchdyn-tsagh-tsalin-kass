@@ -1976,6 +1976,178 @@ export interface DeletionRequestInput {
   label: string;
 }
 
+export interface OfficeNetwork {
+  /** @nullable */
+  officeIp: string | null;
+}
+
+export interface OfficeNetworkInput {
+  /**
+     * @minLength 1
+     * @maxLength 45
+     */
+  officeIp: string;
+}
+
+export interface AttendanceDeviceEnrollment {
+  id: number;
+  employeeId: number;
+  expiresAt: string;
+  /** @nullable */
+  usedAt: string | null;
+  /** @nullable */
+  revokedAt: string | null;
+  createdAt: string;
+}
+
+export interface AttendanceDeviceEnrollmentInput {
+  employeeId: number;
+}
+
+export interface AttendanceDeviceEnrollmentIssued {
+  id: number;
+  employeeId: number;
+  token: string;
+  expiresAt: string;
+}
+
+export interface AttendanceDevice {
+  id: number;
+  employeeId: number;
+  employeeName: string;
+  name: string;
+  createdAt: string;
+  /** @nullable */
+  lastUsedAt: string | null;
+  /** @nullable */
+  revokedAt: string | null;
+}
+
+export interface AttendanceDeviceJwk {
+  kty: 'EC';
+  crv: 'P-256';
+  /**
+     * @minLength 43
+     * @maxLength 43
+     */
+  x: string;
+  /**
+     * @minLength 43
+     * @maxLength 43
+     */
+  y: string;
+}
+
+export interface AttendanceDeviceRegistrationInput {
+  /**
+     * @minLength 32
+     * @maxLength 128
+     */
+  token: string;
+  publicKey: AttendanceDeviceJwk;
+  /** @minimum 0 */
+  timestamp: number;
+  /**
+     * @minLength 16
+     * @maxLength 128
+     */
+  nonce: string;
+  /**
+     * @minLength 80
+     * @maxLength 100
+     */
+  signature: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
+}
+
+export interface AttendanceDeviceRegistration {
+  deviceId: number;
+  employeeId: number;
+  name: string;
+  registeredAt: string;
+}
+
+export interface AttendanceDeviceSignedRequest {
+  deviceId: number;
+  /** @minimum 0 */
+  timestamp: number;
+  /**
+     * @minLength 16
+     * @maxLength 128
+     */
+  nonce: string;
+  /**
+     * @minLength 80
+     * @maxLength 100
+     */
+  signature: string;
+}
+
+export type AttendanceDevicePunchInputAction = typeof AttendanceDevicePunchInputAction[keyof typeof AttendanceDevicePunchInputAction];
+
+
+export const AttendanceDevicePunchInputAction = {
+  'check-in': 'check-in',
+  'check-out': 'check-out',
+} as const;
+
+export type AttendanceDevicePunchInput = AttendanceDeviceSignedRequest & {
+  action: AttendanceDevicePunchInputAction;
+};
+
+export type AttendanceDeviceStatusState = typeof AttendanceDeviceStatusState[keyof typeof AttendanceDeviceStatusState];
+
+
+export const AttendanceDeviceStatusState = {
+  'not-checked-in': 'not-checked-in',
+  'checked-in': 'checked-in',
+  'checked-out': 'checked-out',
+} as const;
+
+export interface AttendanceDeviceStatus {
+  employeeId: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  officeDate: string;
+  state: AttendanceDeviceStatusState;
+  /** @nullable */
+  checkedInAt: string | null;
+  /** @nullable */
+  checkedOutAt: string | null;
+  /** @nullable */
+  attendanceId: number | null;
+}
+
+export interface OfficeAttendancePendingPunch {
+  id: number;
+  employeeId: number;
+  employeeName: string;
+  deviceId: number;
+  deviceName: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  officeDate: string;
+  checkedInAt: string;
+  createdAt: string;
+}
+
+export interface OfficeAttendancePunchCancellationInput {
+  /**
+     * @minLength 1
+     * @maxLength 250
+     */
+  reason: string;
+}
+
+export interface OfficeAttendancePunchCancellation {
+  id: number;
+  cancelledAt: string;
+  cancelledBy: number;
+  reason: string;
+}
+
 /**
  * Invalid request
  */

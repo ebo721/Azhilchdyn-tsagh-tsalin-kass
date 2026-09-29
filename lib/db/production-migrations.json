@@ -48,7 +48,15 @@
     {
       "filename": "20261002_payables.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20261003_office_wifi_attendance.sql",
+      "releaseMode": "expand"
+    },
+    {
+      "filename": "20261004_attendance_concurrency_and_cancellation.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "c410987b4fc2c1daa902007dc14aab18a3b0c978087eb993ebdf3676b3b35eb5"
+  "schemaFingerprint": "845d92ac5359140216c6b427ccf68a147354ceca3e1a0fedef208b7fab83c1b9"
 }
