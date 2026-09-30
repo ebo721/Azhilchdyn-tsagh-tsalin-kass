@@ -246,6 +246,14 @@ describe("bank journal review routes", () => {
         });
         assert.equal(response.status, 409, `${code} ${path} must require a purchase document`);
       }
+      const alternateAccountResponse = await fetch(`${baseUrl}/api/bank-transactions/${bank.id}/post-journal`, {
+        method: "POST",
+        headers: { cookie, "content-type": "application/json" },
+        body: JSON.stringify({ accountId: expenseAccountId }),
+      });
+      assert.equal(alternateAccountResponse.status, 409, `${code} must not post under another expense account`);
+      assert.equal((await alternateAccountResponse.json() as { error: string }).error,
+        "Бараа материал, хангамжийн зарлагыг худалдан авалтын баримттай холбох эсвэл шинэ худалдан авалт үүсгэж бүртгэнэ үү");
       const [[unchangedBank], [unchangedCash], bankJournals, bankCash] = await Promise.all([
         db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bank.id)),
         db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, cash.id)),
