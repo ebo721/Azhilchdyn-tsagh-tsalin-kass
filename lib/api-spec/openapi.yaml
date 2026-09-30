@@ -2194,6 +2194,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FixedAsset"
+  /fixed-assets/bank-suggestions:
+    get:
+      operationId: listFixedAssetBankSuggestions
+      tags: [fixed-assets]
+      summary: Suggest unclaimed bank expenses for a fixed asset form
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        - name: amount
+          in: query
+          required: true
+          schema: { type: number, exclusiveMinimum: 0 }
+        - name: description
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: Ranked bank expenses matching the fixed asset date and total
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryPurchaseBankSuggestion"
   /fixed-assets/{id}:
     put:
       operationId: updateFixedAsset
@@ -3383,11 +3410,14 @@ components:
         journalEntryId: { type: integer, minimum: 1 }
     ExistingFixedAssetLink:
       type: object
+      additionalProperties: false
       required: [fixedAssetId]
       properties:
         fixedAssetId: { type: integer, minimum: 1 }
+        assetUpdate: { $ref: "#/components/schemas/NewFixedAssetBankPurchaseInput" }
     NewFixedAssetBankPurchaseInput:
       type: object
+      additionalProperties: false
       required: [name, unitPrice, quantity, date]
       properties:
         name: { type: string, minLength: 1 }
@@ -3395,7 +3425,7 @@ components:
         quantity: { type: integer, minimum: 1 }
         date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
     BankFixedAssetLinkInput:
-      anyOf:
+      oneOf:
         - $ref: "#/components/schemas/ExistingFixedAssetLink"
         - $ref: "#/components/schemas/NewFixedAssetBankPurchaseInput"
     BankFixedAssetLinkResult:

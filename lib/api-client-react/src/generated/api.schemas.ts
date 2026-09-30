@@ -1406,11 +1406,6 @@ export interface BankExpenseLinkResult {
   journalEntryId: number;
 }
 
-export interface ExistingFixedAssetLink {
-  /** @minimum 1 */
-  fixedAssetId: number;
-}
-
 export interface NewFixedAssetBankPurchaseInput {
   /** @minLength 1 */
   name: string;
@@ -1420,6 +1415,12 @@ export interface NewFixedAssetBankPurchaseInput {
   quantity: number;
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   date: string;
+}
+
+export interface ExistingFixedAssetLink {
+  /** @minimum 1 */
+  fixedAssetId: number;
+  assetUpdate?: NewFixedAssetBankPurchaseInput;
 }
 
 export type BankFixedAssetLinkInput = ExistingFixedAssetLink | NewFixedAssetBankPurchaseInput;
@@ -2295,6 +2296,21 @@ export type ListMealScheduleParams = {
  * @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$
  */
 weekStart: string;
+};
+
+export type ListFixedAssetBankSuggestionsParams = {
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+date: string;
+/**
+ * @exclusiveMinimum 0
+ */
+amount: number;
+/**
+ * @minLength 1
+ */
+description: string;
 };
 
 export type ListJournalEntriesParams = {

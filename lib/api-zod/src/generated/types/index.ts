@@ -164,6 +164,7 @@ export * from './journalTrialBalanceAccount';
 export * from './journalTrialBalanceAccountNormalBalance';
 export * from './journalVoidResult';
 export * from './listAttendanceParams';
+export * from './listFixedAssetBankSuggestionsParams';
 export * from './listJournalEntriesParams';
 export * from './listJournalPayablesParams';
 export * from './listJournalPayablesStatus';

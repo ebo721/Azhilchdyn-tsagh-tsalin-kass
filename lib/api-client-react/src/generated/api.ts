@@ -109,6 +109,7 @@ import type {
   JournalTrialBalance,
   JournalVoidResult,
   ListAttendanceParams,
+  ListFixedAssetBankSuggestionsParams,
   ListJournalEntriesParams,
   ListJournalPayablesParams,
   ListJournalReceivablesParams,
@@ -9834,6 +9835,90 @@ export const useCreateFixedAsset = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getCreateFixedAssetMutationOptions(options));
     }
+
+export const getListFixedAssetBankSuggestionsUrl = (params: ListFixedAssetBankSuggestionsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/fixed-assets/bank-suggestions?${stringifiedParams}` : `/api/fixed-assets/bank-suggestions`
+}
+
+/**
+ * @summary Suggest unclaimed bank expenses for a fixed asset form
+ */
+export const listFixedAssetBankSuggestions = async (params: ListFixedAssetBankSuggestionsParams, options?: Parameters<typeof customFetch>[1]): Promise<InventoryPurchaseBankSuggestion[]> => {
+
+  return customFetch<InventoryPurchaseBankSuggestion[]>(getListFixedAssetBankSuggestionsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListFixedAssetBankSuggestionsQueryKey = (params?: ListFixedAssetBankSuggestionsParams,) => {
+    return [
+    `/api/fixed-assets/bank-suggestions`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListFixedAssetBankSuggestionsQueryOptions = <TData = Awaited<ReturnType<typeof listFixedAssetBankSuggestions>>, TError = ErrorType<unknown>>(params: ListFixedAssetBankSuggestionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFixedAssetBankSuggestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListFixedAssetBankSuggestionsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFixedAssetBankSuggestions>>> = ({ signal }) => listFixedAssetBankSuggestions(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listFixedAssetBankSuggestions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListFixedAssetBankSuggestionsQueryResult = NonNullable<Awaited<ReturnType<typeof listFixedAssetBankSuggestions>>>
+export type ListFixedAssetBankSuggestionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Suggest unclaimed bank expenses for a fixed asset form
+ */
+
+export function useListFixedAssetBankSuggestions<TData = Awaited<ReturnType<typeof listFixedAssetBankSuggestions>>, TError = ErrorType<unknown>>(
+ params: ListFixedAssetBankSuggestionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFixedAssetBankSuggestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListFixedAssetBankSuggestionsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getUpdateFixedAssetUrl = (id: number,) => {
 

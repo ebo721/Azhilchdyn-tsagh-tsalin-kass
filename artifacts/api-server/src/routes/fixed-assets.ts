@@ -7,8 +7,10 @@ import {
   UpdateFixedAssetResponse,
   DeleteFixedAssetParams,
   ListFixedAssetsResponse,
+  ListFixedAssetBankSuggestionsQueryParams,
+  ListFixedAssetBankSuggestionsResponse,
 } from "@workspace/api-zod";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte } from "drizzle-orm";
 import {
   bankTransactionsTable,
   cashClosuresTable,
@@ -18,6 +20,7 @@ import {
   fixedAssetsTable,
 } from "@workspace/db";
 import { cashAccountForCategory } from "../lib/cash-account.js";
+import { bankSuggestionScore } from "../lib/bank-suggestion-score.js";
 import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
 import { isCashDateClosed, isValidCalendarDate, money, type Tx } from "../lib/route-shared.js";
 
@@ -85,6 +88,52 @@ router.get("/fixed-assets", async (_req, res, next) => {
       bankTransactionId: bankTransactionBySourceKey.get(`fixed-asset:${asset.id}`) ?? null,
       createdAt: asset.createdAt.toISOString(),
     }))));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/fixed-assets/bank-suggestions", async (req, res, next) => {
+  try {
+    const { date, amount, description } = ListFixedAssetBankSuggestionsQueryParams.parse(req.query);
+    if (!isValidCalendarDate(date)) {
+      res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
+      return;
+    }
+    if (await isCashDateClosed(date)) {
+      res.json(ListFixedAssetBankSuggestionsResponse.parse([]));
+      return;
+    }
+    const start = new Date(`${date}T00:00:00.000Z`);
+    const end = new Date(`${date}T23:59:59.999Z`);
+    const candidates = await db.select({
+      bank: bankTransactionsTable,
+      accountCode: chartOfAccountsTable.code,
+    }).from(bankTransactionsTable)
+      .leftJoin(chartOfAccountsTable, eq(bankTransactionsTable.accountId, chartOfAccountsTable.id))
+      .where(and(
+        eq(bankTransactionsTable.type, "expense"),
+        eq(bankTransactionsTable.amount, money(amount)),
+        isNull(bankTransactionsTable.cashTransactionId),
+        isNull(bankTransactionsTable.transferredAt),
+        isNull(bankTransactionsTable.unclearAt),
+        isNull(bankTransactionsTable.journalEntryId),
+        gte(bankTransactionsTable.transactionAt, start),
+        lte(bankTransactionsTable.transactionAt, end),
+      ));
+    const suggestions = candidates
+      .filter(({ accountCode }) => accountCode !== "1500" && accountCode !== "1510")
+      .map(({ bank }) => ({ bank, score: bankSuggestionScore(bank, { date, amount, description }) }))
+      .sort((a, b) => b.score - a.score || a.bank.id - b.bank.id)
+      .slice(0, 10)
+      .map(({ bank, score }) => ({
+        id: bank.id,
+        transactionAt: bank.transactionAt.toISOString(),
+        amount: Number(bank.amount),
+        description: bank.description,
+        score,
+      }));
+    res.json(ListFixedAssetBankSuggestionsResponse.parse(suggestions));
   } catch (error) {
     next(error);
   }

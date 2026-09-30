@@ -5,8 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { NewFixedAssetBankPurchaseInput } from './newFixedAssetBankPurchaseInput';
 
 export interface ExistingFixedAssetLink {
   /** @minimum 1 */
   fixedAssetId: number;
+  assetUpdate?: NewFixedAssetBankPurchaseInput;
 }

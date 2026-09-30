@@ -13,6 +13,7 @@ import {
 } from "@workspace/db";
 import app from "../app";
 import { createStaffSession, hrCookie } from "../lib/hr-session";
+import { lockCashDate } from "../lib/cash-date-lock.js";
 
 describe("bank document linking", () => {
   let server: Server;
@@ -250,6 +251,144 @@ describe("bank document linking", () => {
     const [stillPosted] = await db.select().from(journalEntriesTable)
       .where(eq(journalEntriesTable.id, cashAfterUpdate.journalEntryId));
     assert.equal(stillPosted.status, "posted");
+  });
+
+  it("suggests only eligible bank expenses matching a fixed asset draft", async () => {
+    const date = "2099-08-30";
+    const bestId = await bank(date, 25_000, "Тоног төхөөрөмж");
+    const weakerId = await bank(date, 25_000, "Өөр гүйлгээ");
+    const wrongDateId = await bank("2099-08-31", 25_000, "Тоног төхөөрөмж");
+    const wrongAmountId = await bank(date, 25_001, "Тоног төхөөрөмж");
+    const resolvedId = await bank(date, 25_000, "Тоног төхөөрөмж");
+    await db.update(bankTransactionsTable).set({ transferredAt: new Date() }).where(eq(bankTransactionsTable.id, resolvedId));
+    const inventoryId = await bank(date, 25_000, "Тоног төхөөрөмж");
+    const [inventoryAccount] = await db.select({ id: chartOfAccountsTable.id })
+      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1500"));
+    assert.ok(inventoryAccount);
+    await db.update(bankTransactionsTable).set({ accountId: inventoryAccount.id }).where(eq(bankTransactionsTable.id, inventoryId));
+
+    const response = await fetch(`${baseUrl}/api/fixed-assets/bank-suggestions?date=${date}&amount=25000&description=${encodeURIComponent("Тоног төхөөрөмж")}`, {
+      headers: { cookie },
+    });
+    assert.equal(response.status, 200);
+    const suggestions = await response.json() as Array<{ id: number; score: number }>;
+    assert.equal(suggestions[0].id, bestId);
+    assert.ok(suggestions.some((row) => row.id === weakerId));
+    assert.ok(suggestions[0].score > suggestions.find((row) => row.id === weakerId)!.score);
+    for (const id of [wrongDateId, wrongAmountId, resolvedId, inventoryId]) {
+      assert.ok(!suggestions.some((row) => row.id === id));
+    }
+    const [closure] = await db.insert(cashClosuresTable).values({ date }).returning({ id: cashClosuresTable.id });
+    closureIds.push(closure.id);
+    const closedDay = await fetch(`${baseUrl}/api/fixed-assets/bank-suggestions?date=${date}&amount=25000&description=${encodeURIComponent("Тоног төхөөрөмж")}`, {
+      headers: { cookie },
+    });
+    assert.equal(closedDay.status, 200);
+    assert.deepEqual(await closedDay.json(), []);
+    const blocked = await fetch(`${baseUrl}/api/bank-transactions/${bestId}/link-fixed-asset`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ name: "Closed asset", date, quantity: 1, unitPrice: 25_000 }),
+    });
+    assert.equal(blocked.status, 409);
+  });
+
+  it("does not link a fixed asset while its cash day is being closed", async () => {
+    const date = "2099-09-03";
+    const bankId = await bank(date, 4_000, "Closing date asset");
+    let release!: () => void;
+    let acquired!: () => void;
+    const waitToRelease = new Promise<void>((resolve) => { release = resolve; });
+    const lockAcquired = new Promise<void>((resolve) => { acquired = resolve; });
+    const closing = db.transaction(async (tx) => {
+      await lockCashDate(tx, date);
+      acquired();
+      await waitToRelease;
+      const [closure] = await tx.insert(cashClosuresTable).values({ date }).returning({ id: cashClosuresTable.id });
+      closureIds.push(closure.id);
+    });
+    await lockAcquired;
+    const link = fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-fixed-asset`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ name: "Closing date asset", date, quantity: 1, unitPrice: 4_000 }),
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    } finally {
+      release();
+    }
+    await closing;
+    const response = await link;
+    assert.equal(response.status, 409);
+    const [unclaimed] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankId));
+    assert.equal(unclaimed.cashTransactionId, null);
+  });
+
+  it("edits an existing fixed asset and links a suggested bank in one transaction", async () => {
+    const create = await fetch(`${baseUrl}/api/fixed-assets`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ name: "Original asset", unitPrice: 2_000, quantity: 1, date: "2099-09-01", purchased: true }),
+    });
+    assert.equal(create.status, 201);
+    const { id: assetId } = await create.json() as { id: number };
+    fixedAssetIds.push(assetId);
+    const [oldCash] = await db.select().from(cashTransactionsTable)
+      .where(and(eq(cashTransactionsTable.sourceType, "fixed_asset_purchase"), eq(cashTransactionsTable.sourceKey, `fixed-asset:${assetId}`)));
+    assert.ok(oldCash?.journalEntryId);
+    cashIds.push(oldCash.id);
+    journalIds.push(oldCash.journalEntryId);
+    const bankId = await bank("2099-09-02", 3_000, "Updated asset");
+    const link = (unitPrice: number) => fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-fixed-asset`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({
+        fixedAssetId: assetId,
+        assetUpdate: { name: "Updated asset", unitPrice, quantity: 1, date: "2099-09-02" },
+      }),
+    });
+    const mismatch = await link(2_500);
+    assert.equal(mismatch.status, 409);
+    const [unchanged] = await db.select().from(fixedAssetsTable).where(eq(fixedAssetsTable.id, assetId));
+    assert.equal(unchanged.name, "Original asset");
+    assert.equal(unchanged.date, "2099-09-01");
+    const [unclaimed] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankId));
+    assert.equal(unclaimed.cashTransactionId, null);
+    const mixed = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-fixed-asset`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({
+        fixedAssetId: assetId,
+        assetUpdate: { name: "Invalid update", date: "2099-09-02", unitPrice: -1, quantity: 1 },
+        name: "Must not be created", date: "2099-09-02", unitPrice: 3_000, quantity: 1,
+      }),
+    });
+    assert.equal(mixed.status, 400);
+    assert.deepEqual(await db.select().from(fixedAssetsTable).where(eq(fixedAssetsTable.name, "Must not be created")), []);
+
+    const response = await link(3_000);
+    assert.equal(response.status, 200);
+    const result = await response.json() as { cashTransactionId: number; journalEntryId: number };
+    journalIds.push(result.journalEntryId);
+    assert.equal(result.cashTransactionId, oldCash.id);
+    const [asset] = await db.select().from(fixedAssetsTable).where(eq(fixedAssetsTable.id, assetId));
+    assert.equal(asset.name, "Updated asset");
+    assert.equal(asset.date, "2099-09-02");
+    assert.equal(asset.purchased, true);
+    const [cash] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, oldCash.id));
+    assert.equal(cash.bankTransactionId, bankId);
+    assert.equal(cash.journalEntryId, result.journalEntryId);
+    assert.equal(cash.description, "Updated asset (1 ширхэг)");
+    const [oldJournal] = await db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, oldCash.journalEntryId));
+    assert.equal(oldJournal.status, "void");
+    const lines = await db.select({
+      code: chartOfAccountsTable.code, debit: journalLinesTable.debit, credit: journalLinesTable.credit,
+    }).from(journalLinesTable)
+      .innerJoin(chartOfAccountsTable, eq(chartOfAccountsTable.id, journalLinesTable.accountId))
+      .where(eq(journalLinesTable.journalEntryId, result.journalEntryId));
+    assert.equal(Number(lines.find((line) => line.code === "1800")?.debit), 3_000);
+    assert.equal(Number(lines.find((line) => line.code === "1010")?.credit), 3_000);
   });
 
   it("creates a new fixed asset from a bank transaction without a duplicate cash journal", async () => {
