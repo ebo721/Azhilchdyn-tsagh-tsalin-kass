@@ -496,15 +496,25 @@ export const mealScheduleEntriesTable = pgTable("meal_schedule_entries", {
   date: date("date", { mode: "string" }).notNull(),
   slotId: integer("slot_id").notNull().references(() => mealScheduleSlotsTable.id, { onDelete: "restrict" }),
   kind: text("kind").notNull(),
-  mealId: integer("meal_id").references(() => mealsTable.id, { onDelete: "restrict" }),
+  mealType: text("meal_type"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
   uniqueIndex("meal_schedule_entries_date_slot_idx").on(table.date, table.slotId),
   index("meal_schedule_entries_date_idx").on(table.date),
-  index("meal_schedule_entries_meal_id_idx").on(table.mealId),
   check("meal_schedule_entries_kind_check", sql`${table.kind} IN ('meal', 'break')`),
-  check("meal_schedule_entries_meal_check", sql`(${table.kind} = 'meal' AND ${table.mealId} IS NOT NULL) OR (${table.kind} = 'break' AND ${table.mealId} IS NULL)`),
+  check("meal_schedule_entries_meal_check", sql`(${table.kind} = 'meal' AND ${table.mealType} IN ('set', 'packed', 'therapeutic')) OR (${table.kind} = 'break' AND ${table.mealType} IS NULL)`),
+]);
+
+export const mealScheduleEntryMealsTable = pgTable("meal_schedule_entry_meals", {
+  id: serial("id").primaryKey(),
+  entryId: integer("entry_id").notNull().references(() => mealScheduleEntriesTable.id, { onDelete: "cascade" }),
+  mealId: integer("meal_id").notNull().references(() => mealsTable.id, { onDelete: "restrict" }),
+  sortOrder: integer("sort_order").notNull(),
+}, (table) => [
+  uniqueIndex("meal_schedule_entry_meals_entry_meal_idx").on(table.entryId, table.mealId),
+  uniqueIndex("meal_schedule_entry_meals_entry_order_idx").on(table.entryId, table.sortOrder),
+  index("meal_schedule_entry_meals_meal_idx").on(table.mealId),
 ]);
 
 export const mealCountsTable = pgTable("meal_counts", {

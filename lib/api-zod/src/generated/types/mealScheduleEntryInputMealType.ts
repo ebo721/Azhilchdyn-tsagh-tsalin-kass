@@ -6,10 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type MealType = typeof MealType[keyof typeof MealType];
+/**
+ * @nullable
+ */
+export type MealScheduleEntryInputMealType = typeof MealScheduleEntryInputMealType[keyof typeof MealScheduleEntryInputMealType] | null;
 
 
-export const MealType = {
+export const MealScheduleEntryInputMealType = {
   set: 'set',
   packed: 'packed',
   therapeutic: 'therapeutic',

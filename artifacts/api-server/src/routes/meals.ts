@@ -6,6 +6,7 @@ import {
   mealIngredientsTable,
   mealsTable,
   mealEditRequestsTable,
+  mealScheduleEntryMealsTable,
   usersTable,
 } from "@workspace/db";
 import { getStaffRole, getStaffSession } from "../lib/hr-session.js";
@@ -176,16 +177,31 @@ router.put("/meals/:id", async (req, res, next): Promise<void> => {
       res.status(409).json({ error: "Ийм нэртэй хоол аль хэдийн байна" });
       return;
     }
-    const [meal] = await db.update(mealsTable).set({
-      name,
-      normalizedName: normalized(name),
-      category,
-      type: input.type,
-      isActive: input.isActive,
-      updatedAt: new Date(),
-    }).where(eq(mealsTable.id, id)).returning();
-    if (!meal) {
+    const result = await db.transaction(async (tx) => {
+      const [current] = await tx.select({ type: mealsTable.type }).from(mealsTable)
+        .where(eq(mealsTable.id, id)).for("update");
+      if (!current) return "missing" as const;
+      if (current.type !== input.type) {
+        const [scheduled] = await tx.select({ id: mealScheduleEntryMealsTable.id })
+          .from(mealScheduleEntryMealsTable).where(eq(mealScheduleEntryMealsTable.mealId, id)).limit(1);
+        if (scheduled) return "scheduled" as const;
+      }
+      const [meal] = await tx.update(mealsTable).set({
+        name,
+        normalizedName: normalized(name),
+        category,
+        type: input.type,
+        isActive: input.isActive,
+        updatedAt: new Date(),
+      }).where(eq(mealsTable.id, id)).returning();
+      return meal;
+    });
+    if (result === "missing") {
       res.status(404).json({ error: "Хоол олдсонгүй" });
+      return;
+    }
+    if (result === "scheduled") {
+      res.status(409).json({ error: "Хуваарьт орсон хоолны төрлийг өөрчлөхөөс өмнө хуваариас нь хасна уу" });
       return;
     }
     res.json(UpdateMealResponse.parse(await mealView(db, id)));
