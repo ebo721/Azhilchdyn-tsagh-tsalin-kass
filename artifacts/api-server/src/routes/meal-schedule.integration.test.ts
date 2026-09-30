@@ -8,6 +8,7 @@ import { eq, inArray } from "drizzle-orm";
 import {
   db,
   deletionRequestsTable,
+  inventoryMaterialRequestsTable,
   mealScheduleEntriesTable,
   mealScheduleSlotsTable,
   mealsTable,
@@ -38,7 +39,7 @@ describe("weekly meal schedule", () => {
   let warehouseCookie: string;
   let userId: number;
   let warehouseUserId: number;
-  let mealId: number;
+  let mealIds: number[];
   const entryIds: number[] = [];
   const slotIds: number[] = [];
   const deletionRequestIds: number[] = [];
@@ -72,15 +73,41 @@ describe("weekly meal schedule", () => {
     });
     warehouseUserId = warehouseUser.id;
     warehouseCookie = `${hrCookie.name}=${createStaffSession(warehouseUser)}`;
-    const [meal] = await db.insert(mealsTable).values({
-      name: `Хуваарийн тест ${suffix}`,
-      normalizedName: `хуваарийн тест ${suffix}`,
-      category: "Тест",
-      type: "single",
-      isActive: true,
-      totalCalories: 420,
-    }).returning({ id: mealsTable.id });
-    mealId = meal.id;
+    const meals = await db.insert(mealsTable).values([
+      {
+        name: `Хуваарийн тест нэг ${suffix}`,
+        normalizedName: `хуваарийн тест нэг ${suffix}`,
+        category: "Тест",
+        type: "packed",
+        isActive: true,
+        totalCalories: 420,
+      },
+      {
+        name: `Хуваарийн тест хоёр ${suffix}`,
+        normalizedName: `хуваарийн тест хоёр ${suffix}`,
+        category: "Тест",
+        type: "packed",
+        isActive: true,
+        totalCalories: 280,
+      },
+      {
+        name: `Хуваарийн тест гурав ${suffix}`,
+        normalizedName: `хуваарийн тест гурав ${suffix}`,
+        category: "Тест",
+        type: "packed",
+        isActive: true,
+        totalCalories: 150,
+      },
+      {
+        name: `Хуваарийн сет ${suffix}`,
+        normalizedName: `хуваарийн сет ${suffix}`,
+        category: "Тест",
+        type: "set",
+        isActive: true,
+        totalCalories: 500,
+      },
+    ]).returning({ id: mealsTable.id });
+    mealIds = meals.map((meal) => meal.id);
     const app = express();
     app.use(express.json());
     app.use("/api", requireStaffAuth, deletionRequestsRouter, mealScheduleRouter);
@@ -93,7 +120,7 @@ describe("weekly meal schedule", () => {
     if (deletionRequestIds.length) await db.delete(deletionRequestsTable).where(inArray(deletionRequestsTable.id, deletionRequestIds));
     if (entryIds.length) await db.delete(mealScheduleEntriesTable).where(inArray(mealScheduleEntriesTable.id, entryIds));
     if (slotIds.length) await db.delete(mealScheduleSlotsTable).where(inArray(mealScheduleSlotsTable.id, slotIds));
-    await db.delete(mealsTable).where(eq(mealsTable.id, mealId));
+    if (mealIds.length) await db.delete(mealsTable).where(inArray(mealsTable.id, mealIds));
     await db.delete(usersTable).where(eq(usersTable.id, userId));
     await db.delete(usersTable).where(eq(usersTable.id, warehouseUserId));
   });
@@ -230,7 +257,7 @@ describe("weekly meal schedule", () => {
     assert.ok(!listed.some((candidate) => candidate.id === slot.id));
   });
 
-  it("creates, edits, swaps and deletes meal and break cells", async () => {
+  it("creates, validates, edits, swaps and deletes multi-meal and break cells", async () => {
     const slotsResponse = await request("/meal-schedule/slots");
     assert.equal(slotsResponse.status, 200);
     const slots = await slotsResponse.json() as { id: number; name: string }[];
@@ -243,30 +270,78 @@ describe("weekly meal schedule", () => {
 
     const mealResponse = await request("/meal-schedule", {
       method: "POST",
-      body: JSON.stringify({ date: weekStart, slotId: slots[0].id, kind: "meal", mealId }),
+      body: JSON.stringify({
+        date: weekStart, slotId: slots[0].id, kind: "meal", mealType: "packed", mealIds: mealIds.slice(0, 2),
+      }),
     });
     assert.equal(mealResponse.status, 201);
-    const mealEntry = await mealResponse.json() as { id: number; kind: string; mealName: string; totalCalories: number };
+    const mealEntry = await mealResponse.json() as {
+      id: number;
+      kind: string;
+      mealType: string | null;
+      meals: { id: number; name: string; category: string; type: string; totalCalories: number }[];
+      totalCalories: number;
+    };
     entryIds.push(mealEntry.id);
     assert.equal(mealEntry.kind, "meal");
-    assert.equal(mealEntry.totalCalories, 420);
+    assert.equal(mealEntry.mealType, "packed");
+    assert.deepEqual(mealEntry.meals.map((meal) => meal.id), mealIds.slice(0, 2));
+    assert.equal(mealEntry.totalCalories, 700);
+    assert.deepEqual(mealEntry.meals.map((meal) => meal.totalCalories), [420, 280]);
+    assert.ok(mealEntry.meals[0].name.startsWith("Хуваарийн тест нэг "));
+    assert.ok(mealEntry.meals[1].name.startsWith("Хуваарийн тест хоёр "));
+    assert.deepEqual(mealEntry.meals.map((meal) => ({ category: meal.category, type: meal.type })), [
+      { category: "Тест", type: "packed" },
+      { category: "Тест", type: "packed" },
+    ]);
+
+    for (const invalidMealIds of [[], [mealIds[0], mealIds[0]], [mealIds[0], mealIds[3]]]) {
+      const invalidSelection = await request("/meal-schedule", {
+        method: "POST",
+        body: JSON.stringify({
+          date: addDays(weekStart, 2), slotId: slots[0].id, kind: "meal",
+          mealType: "packed", mealIds: invalidMealIds,
+        }),
+      });
+      assert.equal(invalidSelection.status, 400);
+    }
 
     const usedSlotDelete = await request(`/meal-schedule/slots/${slots[0].id}`, { method: "DELETE" });
     assert.equal(usedSlotDelete.status, 409);
 
     const breakResponse = await request("/meal-schedule", {
       method: "POST",
-      body: JSON.stringify({ date: tuesday, slotId: slots[1].id, kind: "break", mealId: null }),
+      body: JSON.stringify({ date: tuesday, slotId: slots[1].id, kind: "break", mealType: null, mealIds: [] }),
     });
     assert.equal(breakResponse.status, 201);
-    const breakEntry = await breakResponse.json() as { id: number; kind: string; mealId: null };
+    const breakEntry = await breakResponse.json() as {
+      id: number; kind: string; mealType: null; meals: unknown[]; totalCalories: null;
+    };
     entryIds.push(breakEntry.id);
     assert.equal(breakEntry.kind, "break");
-    assert.equal(breakEntry.mealId, null);
+    assert.equal(breakEntry.mealType, null);
+    assert.deepEqual(breakEntry.meals, []);
+    assert.equal(breakEntry.totalCalories, null);
+
+    const [linkedRequest] = await db.insert(inventoryMaterialRequestsTable).values({
+      requestedDate: tuesday, requesterId: userId, mealScheduleEntryId: breakEntry.id,
+    }).returning();
+    try {
+      const deniedSwap = await request(`/meal-schedule/${mealEntry.id}/move`, {
+        method: "POST",
+        body: JSON.stringify({ date: tuesday, slotId: slots[1].id }),
+      });
+      assert.equal(deniedSwap.status, 409);
+      const [linked] = await db.select({ entryId: inventoryMaterialRequestsTable.mealScheduleEntryId })
+        .from(inventoryMaterialRequestsTable).where(eq(inventoryMaterialRequestsTable.id, linkedRequest.id));
+      assert.equal(linked.entryId, breakEntry.id);
+    } finally {
+      await db.delete(inventoryMaterialRequestsTable).where(eq(inventoryMaterialRequestsTable.id, linkedRequest.id));
+    }
 
     const duplicate = await request("/meal-schedule", {
       method: "POST",
-      body: JSON.stringify({ date: weekStart, slotId: slots[0].id, kind: "break", mealId: null }),
+      body: JSON.stringify({ date: weekStart, slotId: slots[0].id, kind: "break", mealType: null, mealIds: [] }),
     });
     assert.equal(duplicate.status, 409);
 
@@ -275,26 +350,57 @@ describe("weekly meal schedule", () => {
       body: JSON.stringify({ date: tuesday, slotId: slots[1].id }),
     });
     assert.equal(moved.status, 200);
-    const swapped = await moved.json() as { id: number; date: string; slotId: number; kind: string }[];
+    const swapped = await moved.json() as {
+      id: number;
+      date: string;
+      slotId: number;
+      kind: string;
+      mealType: string | null;
+      meals: { id: number }[];
+      totalCalories: number;
+    }[];
     assert.equal(swapped.length, 2);
-    assert.ok(swapped.some((entry) => entry.id === mealEntry.id && entry.date === tuesday && entry.kind === "meal"));
+    const movedMeal = swapped.find((entry) => entry.id === mealEntry.id)!;
+    assert.equal(movedMeal.date, tuesday);
+    assert.equal(movedMeal.kind, "meal");
+    assert.equal(movedMeal.mealType, "packed");
+    assert.deepEqual(movedMeal.meals.map((meal) => meal.id), mealIds.slice(0, 2));
+    assert.equal(movedMeal.totalCalories, 700);
     const replacement = swapped.find((entry) => entry.kind === "break");
     assert.ok(replacement);
+    assert.equal(replacement.mealType, null);
+    assert.deepEqual(replacement.meals, []);
+    assert.equal(replacement.totalCalories, null);
     entryIds.push(replacement.id);
 
     const updated = await request(`/meal-schedule/${mealEntry.id}`, {
       method: "PUT",
-      body: JSON.stringify({ date: tuesday, slotId: slots[1].id, kind: "break", mealId: null }),
+      body: JSON.stringify({
+        date: tuesday, slotId: slots[1].id, kind: "meal", mealType: "packed", mealIds: [mealIds[1], mealIds[2]],
+      }),
     });
     assert.equal(updated.status, 200);
-    const updatedEntry = await updated.json() as { kind: string; mealId: null };
-    assert.equal(updatedEntry.kind, "break");
-    assert.equal(updatedEntry.mealId, null);
+    const updatedEntry = await updated.json() as {
+      kind: string; mealType: string | null; meals: { id: number }[]; totalCalories: number;
+    };
+    assert.equal(updatedEntry.kind, "meal");
+    assert.equal(updatedEntry.mealType, "packed");
+    assert.deepEqual(updatedEntry.meals.map((meal) => meal.id), [mealIds[1], mealIds[2]]);
+    assert.equal(updatedEntry.totalCalories, 430);
 
     const listResponse = await request(`/meal-schedule?weekStart=${weekStart}`);
     assert.equal(listResponse.status, 200);
-    const listed = await listResponse.json() as { id: number }[];
+    const listed = await listResponse.json() as {
+      id: number; kind: string; mealType: string | null; meals: { id: number }[]; totalCalories: number;
+    }[];
     assert.equal(listed.length, 2);
+    assert.deepEqual(listed.find((entry) => entry.id === mealEntry.id)?.meals.map((meal) => meal.id), [mealIds[1], mealIds[2]]);
+    assert.equal(listed.find((entry) => entry.id === mealEntry.id)?.totalCalories, 430);
+    const listedBreak = listed.find((entry) => entry.kind === "break");
+    assert.ok(listedBreak);
+    assert.equal(listedBreak.mealType, null);
+    assert.deepEqual(listedBreak.meals, []);
+    assert.equal(listedBreak.totalCalories, null);
 
     for (const id of listed.map((entry) => entry.id)) {
       const deleted = await request(`/meal-schedule/${id}`, { method: "DELETE" });

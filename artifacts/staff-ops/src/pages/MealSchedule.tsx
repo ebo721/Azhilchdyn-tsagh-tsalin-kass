@@ -19,10 +19,12 @@ import {
   useListMeals,
   useGetAuthSession,
   getListMealScheduleQueryKey,
+  type Meal,
   type MealScheduleEntry,
   type MealScheduleEntryInput,
   type MealScheduleSlot
 } from '@workspace/api-client-react';
+import { MEAL_TYPE_OPTIONS, mealTypeLabel } from './meal-options';
 
 const MONGOLIAN_DAYS = ['Даваа', 'Мягмар', 'Лхагва', 'Пүрэв', 'Баасан', 'Бямба', 'Ням'];
 
@@ -218,7 +220,7 @@ export function MealSchedule() {
                           data-testid={`cell-${day.dateStr}-${slot.id}`}
                         >
                           {entry ? (
-                            <div 
+                             <div
                                draggable={!readOnly && !moveEntry.isPending}
                               onDragStart={(e) => onDragStart(e, entry.id)}
                               onDragEnd={onDragEnd}
@@ -237,7 +239,7 @@ export function MealSchedule() {
                                 onDrop(e, day.dateStr, slot.id);
                                } : undefined}
                                className={cn(
-                                 "flex flex-col h-full rounded-lg border p-2 hover-elevate transition-all",
+                                  "flex min-h-[5.5rem] flex-col rounded-lg border p-2 hover-elevate transition-all",
                                  !readOnly && "cursor-grab active:cursor-grabbing",
                                 draggingId === entry.id ? "opacity-50 border-dashed" : "border-border shadow-sm",
                                 entry.kind === 'break' ? "bg-secondary text-secondary-foreground" : "bg-card text-card-foreground border-orange-200 dark:border-orange-900",
@@ -256,18 +258,19 @@ export function MealSchedule() {
                                 </div>
                               ) : (
                                 <>
-                                  <div className="flex items-start justify-between gap-1 mb-auto">
-                                    <span className="text-xs font-bold leading-tight line-clamp-2" title={entry.mealName || ''}>{entry.mealName}</span>
+                                   <div className="mb-auto space-y-1">
+                                     {entry.meals.map((meal) => (
+                                       <div key={meal.id} className="text-left">
+                                         <div className="break-words text-xs font-bold leading-tight" title={meal.name}>{meal.name}</div>
+                                         <div className="break-words text-[10px] text-muted-foreground leading-tight">{meal.category}</div>
+                                       </div>
+                                     ))}
                                   </div>
                                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
-                                    {entry.mealType === 'set' ? (
-                                      <span className="rounded bg-purple-100 dark:bg-purple-900/30 px-1 py-0.5 text-[9px] font-bold uppercase text-purple-700 dark:text-purple-300">Сет</span>
-                                    ) : (
-                                      <span className="rounded bg-blue-100 dark:bg-blue-900/30 px-1 py-0.5 text-[9px] font-bold uppercase text-blue-700 dark:text-blue-300">Дан</span>
-                                    )}
+                                     <span className="rounded bg-purple-100 dark:bg-purple-900/30 px-1 py-0.5 text-[9px] font-bold text-purple-700 dark:text-purple-300">{mealTypeLabel(entry.mealType)}</span>
                                     <div className="flex items-center gap-0.5 text-[10px] text-orange-600 dark:text-orange-400 font-mono font-bold">
                                       <Flame className="size-3" />
-                                      {entry.totalCalories || 0}
+                                       {entry.totalCalories ?? '—'} ккал
                                     </div>
                                   </div>
                                 </>
@@ -331,9 +334,13 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
 
   const isEdit = !!cell.entry;
   const [kind, setKind] = useState<'meal' | 'break'>(cell.entry?.kind || 'meal');
-  const [mealId, setMealId] = useState<number | ''>(cell.entry?.mealId || '');
+  const [mealType, setMealType] = useState<Meal['type']>(cell.entry?.mealType || 'set');
+  const [mealIds, setMealIds] = useState<number[]>(cell.entry?.meals.map((meal) => meal.id) || []);
 
-  const meals = (mealsQuery.data || []).filter(m => m.isActive);
+  const meals = (mealsQuery.data || []).filter((meal) => meal.isActive && meal.type === mealType);
+  const selectedCalories = mealsQuery.data
+    ?.filter((meal) => mealIds.includes(meal.id))
+    .reduce((total, meal) => total + (meal.totalCalories || 0), 0) ?? 0;
 
   // Technologists may create entries in empty cells, but existing entries
   // remain strictly read-only.
@@ -342,7 +349,23 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
       <Modal title="Хуваарийн мэдээлэл" detail={`${format(new Date(cell.date), 'yyyy.MM.dd')} өдрийн ${cell.slot.name} (${formatMealSlotTimeRange(cell.slot.startTime, cell.slot.endTime)})`} onClose={onClose}>
         <div className="space-y-5">
           <div className="rounded-xl border border-border bg-secondary/30 p-5 text-center">
-            {cell.entry?.kind === 'break' ? <><Coffee className="mx-auto mb-2 size-6 text-muted-foreground" /><p className="font-semibold">Завсарлага</p></> : cell.entry ? <><Utensils className="mx-auto mb-2 size-6 text-orange-500" /><p className="font-semibold">{cell.entry.mealName}</p><p className="mt-1 text-sm text-muted-foreground">{cell.entry.mealType === 'set' ? 'Сет хоол' : 'Дан хоол'} · {cell.entry.totalCalories || 0} ккал</p></> : <p className="text-sm text-muted-foreground">Энэ цагт хуваарь бүртгэгдээгүй байна.</p>}
+            {cell.entry?.kind === 'break' ? (
+              <><Coffee className="mx-auto mb-2 size-6 text-muted-foreground" /><p className="font-semibold">Завсарлага</p></>
+            ) : cell.entry ? (
+              <div className="text-left">
+                <Utensils className="mx-auto mb-2 size-6 text-orange-500" />
+                <p className="mb-2 text-center font-semibold">{mealTypeLabel(cell.entry.mealType)}</p>
+                <ul className="space-y-2">
+                  {cell.entry.meals.map((meal) => (
+                    <li key={meal.id} className="rounded-lg border border-border bg-background px-3 py-2">
+                      <p className="font-medium">{meal.name}</p>
+                      <p className="text-sm text-muted-foreground">{meal.category}</p>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-3 text-center text-sm text-muted-foreground">Нийт илчлэг: {cell.entry.totalCalories ?? '—'} ккал</p>
+              </div>
+            ) : <p className="text-sm text-muted-foreground">Энэ цагт хуваарь бүртгэгдээгүй байна.</p>}
           </div>
           <div className="flex justify-end border-t border-border pt-4"><Button variant="outline" onClick={onClose}>Хаах</Button></div>
         </div>
@@ -352,13 +375,14 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (kind === 'meal' && !mealId) return;
+    if (kind === 'meal' && mealIds.length === 0) return;
 
     const data: MealScheduleEntryInput = {
       date: cell.date,
       slotId: cell.slot.id,
       kind,
-      mealId: kind === 'meal' ? Number(mealId) : null
+      mealType: kind === 'meal' ? mealType : null,
+      mealIds: kind === 'meal' ? mealIds : [],
     };
 
     if (isEdit) {
@@ -404,6 +428,7 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
                   kind === 'meal' ? "border-orange-500 bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300" : "border-border bg-card hover:bg-secondary text-muted-foreground"
                 )}
                 onClick={() => setKind('meal')}
+                aria-pressed={kind === 'meal'}
                 data-testid="button-kind-meal"
               >
                 <Utensils className="size-5" />
@@ -415,7 +440,8 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
                   "flex-1 flex flex-col items-center justify-center gap-2 p-3 rounded-xl border-2 transition-all",
                   kind === 'break' ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300" : "border-border bg-card hover:bg-secondary text-muted-foreground"
                 )}
-                onClick={() => { setKind('break'); setMealId(''); }}
+                onClick={() => { setKind('break'); setMealIds([]); }}
+                aria-pressed={kind === 'break'}
                 data-testid="button-kind-break"
               >
                 <Coffee className="size-5" />
@@ -426,27 +452,47 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
 
           {kind === 'meal' && (
             <div className="animate-in fade-in slide-in-from-top-2">
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Хоол сонгох</label>
+              <label htmlFor="select-schedule-meal-type" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Хоолны төрөл</label>
+              <select
+                id="select-schedule-meal-type"
+                value={mealType}
+                onChange={(e) => {
+                  setMealType(e.target.value as Meal['type']);
+                  setMealIds([]);
+                }}
+                className="mb-3 flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                data-testid="select-schedule-meal-type"
+              >
+                {MEAL_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Хоол сонгох</span>
               {mealsQuery.isLoading ? (
                 <div className="h-10 rounded-md border border-input bg-secondary/50 animate-pulse" />
               ) : meals.length === 0 ? (
-                <div className="text-sm text-destructive bg-destructive/10 p-2 rounded-md">Идэвхтэй хоол олдсонгүй. Хоолны цэс рүү орж хоол нэмнэ үү.</div>
+                <div className="text-sm text-destructive bg-destructive/10 p-2 rounded-md">Энэ төрлийн идэвхтэй хоол олдсонгүй. Хоолны цэс рүү орж хоол нэмнэ үү.</div>
               ) : (
-                <select
-                  value={mealId}
-                  onChange={(e) => setMealId(e.target.value ? Number(e.target.value) : '')}
-                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  required
-                  data-testid="select-meal"
-                >
-                  <option value="" disabled>-- Сонгох --</option>
-                  {meals.map(m => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} ({m.category})
-                    </option>
+                <fieldset className="max-h-56 space-y-2 overflow-y-auto rounded-lg border border-border p-3">
+                  <legend className="sr-only">Хуваарьт оруулах хоолнууд</legend>
+                  {meals.map((meal) => (
+                    <label key={meal.id} className="flex cursor-pointer items-start gap-3 rounded-md p-2 hover:bg-secondary/60">
+                      <input
+                        type="checkbox"
+                        checked={mealIds.includes(meal.id)}
+                        onChange={(e) => setMealIds((current) => e.target.checked
+                          ? [...current, meal.id]
+                          : current.filter((id) => id !== meal.id))}
+                        className="mt-1 size-4 accent-orange-600"
+                        data-testid={`checkbox-schedule-meal-${meal.id}`}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold">{meal.name}</span>
+                        <span className="block text-xs text-muted-foreground">{meal.category} · {meal.totalCalories} ккал</span>
+                      </span>
+                    </label>
                   ))}
-                </select>
+                </fieldset>
               )}
+              {mealIds.length > 0 && <p className="mt-2 text-right text-sm font-semibold text-orange-600">Сонгосон {mealIds.length} хоол · {selectedCalories} ккал</p>}
             </div>
           )}
         </div>

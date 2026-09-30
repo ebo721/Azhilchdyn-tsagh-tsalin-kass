@@ -124,7 +124,7 @@ describe("technologist meal workflow", () => {
 
     const entryResponse = await tech("/meal-schedule", {
       method: "POST",
-      body: JSON.stringify({ date: "2099-01-04", slotId: slotIds[0], kind: "meal", mealId }),
+      body: JSON.stringify({ date: "2099-01-04", slotId: slotIds[0], kind: "meal", mealType: "set", mealIds: [mealId] }),
     });
     assert.equal(entryResponse.status, 201);
     const entry = await entryResponse.json() as { id: number };
@@ -133,7 +133,7 @@ describe("technologist meal workflow", () => {
 
   it("forbids direct meal edits/deletes and all schedule or slot writes", async () => {
     const mealId = await createMeal();
-    const body = JSON.stringify({ name: "Шууд засвар", category: "Үндсэн", type: "single", isActive: true });
+    const body = JSON.stringify({ name: "Шууд засвар", category: "Үндсэн", type: "packed", isActive: true });
     assert.equal((await tech(`/meals/${mealId}`, { method: "PUT", body })).status, 403);
     assert.equal((await tech(`/meals/${mealId}`, { method: "DELETE" })).status, 403);
     assert.equal((await tech(`/meal-schedule/slots/${slotIds[0]}`, { method: "PUT", body: JSON.stringify({
@@ -145,13 +145,13 @@ describe("technologist meal workflow", () => {
     }) })).status, 403);
     const created = await admin("/meal-schedule", {
       method: "POST",
-      body: JSON.stringify({ date: "2099-01-11", slotId: slotIds[0], kind: "meal", mealId }),
+      body: JSON.stringify({ date: "2099-01-11", slotId: slotIds[0], kind: "meal", mealType: "set", mealIds: [mealId] }),
     });
     assert.equal(created.status, 201);
     const entry = await created.json() as { id: number };
     entryIds.push(entry.id);
     assert.equal((await tech(`/meal-schedule/${entry.id}`, { method: "PUT", body: JSON.stringify({
-      date: "2099-01-11", slotId: slotIds[1], kind: "meal", mealId,
+      date: "2099-01-11", slotId: slotIds[1], kind: "meal", mealType: "set", mealIds: [mealId],
     }) })).status, 403);
     assert.equal((await tech(`/meal-schedule/${entry.id}`, { method: "DELETE" })).status, 403);
     assert.equal((await tech(`/meal-schedule/${entry.id}/move`, {
@@ -255,7 +255,7 @@ describe("technologist meal workflow", () => {
     const mealId = await createMeal();
     const scheduled = await admin("/meal-schedule", {
       method: "POST",
-      body: JSON.stringify({ date: "2099-02-01", slotId: slotIds[0], kind: "meal", mealId }),
+      body: JSON.stringify({ date: "2099-02-01", slotId: slotIds[0], kind: "meal", mealType: "set", mealIds: [mealId] }),
     });
     assert.equal(scheduled.status, 201);
     const entry = await scheduled.json() as { id: number };

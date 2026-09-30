@@ -1523,8 +1523,9 @@ export type MealType = typeof MealType[keyof typeof MealType];
 
 
 export const MealType = {
-  single: 'single',
   set: 'set',
+  packed: 'packed',
+  therapeutic: 'therapeutic',
 } as const;
 
 export interface Meal {
@@ -1543,8 +1544,9 @@ export type MealInputType = typeof MealInputType[keyof typeof MealInputType];
 
 
 export const MealInputType = {
-  single: 'single',
   set: 'set',
+  packed: 'packed',
+  therapeutic: 'therapeutic',
 } as const;
 
 export interface MealInput {
@@ -1626,6 +1628,23 @@ export interface MealScheduleSlotInput {
   sortOrder: number;
 }
 
+export type MealScheduleItemType = typeof MealScheduleItemType[keyof typeof MealScheduleItemType];
+
+
+export const MealScheduleItemType = {
+  set: 'set',
+  packed: 'packed',
+  therapeutic: 'therapeutic',
+} as const;
+
+export interface MealScheduleItem {
+  id: number;
+  name: string;
+  category: string;
+  type: MealScheduleItemType;
+  totalCalories: number;
+}
+
 export type MealScheduleEntryKind = typeof MealScheduleEntryKind[keyof typeof MealScheduleEntryKind];
 
 
@@ -1641,8 +1660,9 @@ export type MealScheduleEntryMealType = typeof MealScheduleEntryMealType[keyof t
 
 
 export const MealScheduleEntryMealType = {
-  single: 'single',
   set: 'set',
+  packed: 'packed',
+  therapeutic: 'therapeutic',
 } as const;
 
 export interface MealScheduleEntry {
@@ -1655,11 +1675,8 @@ export interface MealScheduleEntry {
   endTime: string;
   kind: MealScheduleEntryKind;
   /** @nullable */
-  mealId: number | null;
-  /** @nullable */
-  mealName: string | null;
-  /** @nullable */
   mealType: MealScheduleEntryMealType;
+  meals: MealScheduleItem[];
   /** @nullable */
   totalCalories: number | null;
   createdAt: string;
@@ -1674,17 +1691,28 @@ export const MealScheduleEntryInputKind = {
   break: 'break',
 } as const;
 
+/**
+ * @nullable
+ */
+export type MealScheduleEntryInputMealType = typeof MealScheduleEntryInputMealType[keyof typeof MealScheduleEntryInputMealType] | null;
+
+
+export const MealScheduleEntryInputMealType = {
+  set: 'set',
+  packed: 'packed',
+  therapeutic: 'therapeutic',
+} as const;
+
 export interface MealScheduleEntryInput {
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
   date: string;
   /** @minimum 1 */
   slotId: number;
   kind: MealScheduleEntryInputKind;
-  /**
-     * @minimum 1
-     * @nullable
-     */
-  mealId: number | null;
+  /** @nullable */
+  mealType: MealScheduleEntryInputMealType;
+  /** @items.minimum 1 */
+  mealIds: number[];
 }
 
 export interface MealScheduleMoveInput {

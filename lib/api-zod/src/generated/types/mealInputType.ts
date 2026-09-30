@@ -10,6 +10,7 @@ export type MealInputType = typeof MealInputType[keyof typeof MealInputType];
 
 
 export const MealInputType = {
-  single: 'single',
   set: 'set',
+  packed: 'packed',
+  therapeutic: 'therapeutic',
 } as const;

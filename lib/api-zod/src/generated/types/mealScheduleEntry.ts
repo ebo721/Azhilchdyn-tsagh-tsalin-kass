@@ -7,6 +7,7 @@
  */
 import type { MealScheduleEntryKind } from './mealScheduleEntryKind';
 import type { MealScheduleEntryMealType } from './mealScheduleEntryMealType';
+import type { MealScheduleItem } from './mealScheduleItem';
 
 export interface MealScheduleEntry {
   id: number;
@@ -18,11 +19,8 @@ export interface MealScheduleEntry {
   endTime: string;
   kind: MealScheduleEntryKind;
   /** @nullable */
-  mealId: number | null;
-  /** @nullable */
-  mealName: string | null;
-  /** @nullable */
   mealType: MealScheduleEntryMealType;
+  meals: MealScheduleItem[];
   /** @nullable */
   totalCalories: number | null;
   createdAt: Date;

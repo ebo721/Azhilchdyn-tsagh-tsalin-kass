@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MealScheduleEntryInputKind } from './mealScheduleEntryInputKind';
+import type { MealScheduleEntryInputMealType } from './mealScheduleEntryInputMealType';
 
 export interface MealScheduleEntryInput {
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
@@ -13,9 +14,8 @@ export interface MealScheduleEntryInput {
   /** @minimum 1 */
   slotId: number;
   kind: MealScheduleEntryInputKind;
-  /**
-     * @minimum 1
-     * @nullable
-     */
-  mealId: number | null;
+  /** @nullable */
+  mealType: MealScheduleEntryInputMealType;
+  /** @items.minimum 1 */
+  mealIds: number[];
 }

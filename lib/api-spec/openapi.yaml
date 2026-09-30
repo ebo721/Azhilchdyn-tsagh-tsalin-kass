@@ -3495,7 +3495,7 @@ components:
         category: { type: string }
         type:
           type: string
-          enum: [single, set]
+          enum: [set, packed, therapeutic]
         isActive: { type: boolean }
         totalCalories: { type: number }
         ingredients:
@@ -3512,7 +3512,7 @@ components:
         category: { type: string, minLength: 1 }
         type:
           type: string
-          enum: [single, set]
+          enum: [set, packed, therapeutic]
         isActive: { type: boolean }
     MealEditRequestInput:
       type: object
@@ -3564,9 +3564,18 @@ components:
         startTime: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
         endTime: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
         sortOrder: { type: integer, minimum: 0 }
+    MealScheduleItem:
+      type: object
+      required: [id, name, category, type, totalCalories]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        category: { type: string }
+        type: { type: string, enum: [set, packed, therapeutic] }
+        totalCalories: { type: number }
     MealScheduleEntry:
       type: object
-      required: [id, date, slotId, slotName, startTime, endTime, kind, mealId, mealName, mealType, totalCalories, createdAt, updatedAt]
+      required: [id, date, slotId, slotName, startTime, endTime, kind, mealType, meals, totalCalories, createdAt, updatedAt]
       properties:
         id: { type: integer }
         date: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' }
@@ -3575,22 +3584,30 @@ components:
         startTime: { type: string }
         endTime: { type: string }
         kind: { type: string, enum: [meal, break] }
-        mealId: { type: ["integer", "null"] }
-        mealName: { type: ["string", "null"] }
         mealType:
           type: ["string", "null"]
-          enum: [single, set, null]
+          enum: [set, packed, therapeutic, null]
+        meals:
+          type: array
+          items:
+            $ref: "#/components/schemas/MealScheduleItem"
         totalCalories: { type: ["number", "null"] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     MealScheduleEntryInput:
       type: object
-      required: [date, slotId, kind, mealId]
+      required: [date, slotId, kind, mealType, mealIds]
       properties:
         date: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' }
         slotId: { type: integer, minimum: 1 }
         kind: { type: string, enum: [meal, break] }
-        mealId: { type: ["integer", "null"], minimum: 1 }
+        mealType:
+          type: ["string", "null"]
+          enum: [set, packed, therapeutic, null]
+        mealIds:
+          type: array
+          uniqueItems: true
+          items: { type: integer, minimum: 1 }
     MealScheduleMoveInput:
       type: object
       required: [date, slotId]

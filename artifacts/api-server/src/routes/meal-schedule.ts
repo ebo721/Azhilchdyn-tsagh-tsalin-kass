@@ -1,9 +1,11 @@
 import { Router, type IRouter, type Response } from "express";
-import { and, asc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import {
   db,
+  inventoryMaterialRequestsTable,
   mealsTable,
   mealScheduleEntriesTable,
+  mealScheduleEntryMealsTable,
   mealScheduleSlotsTable,
 } from "@workspace/db";
 import {
@@ -40,10 +42,13 @@ function isMonday(value: string) {
 function validateEntryInput(input: {
   date: string;
   kind: "meal" | "break";
-  mealId: number | null;
+  mealType: "set" | "packed" | "therapeutic" | null;
+  mealIds: number[];
 }) {
   if (!isValidCalendarDate(input.date)) return "INVALID_DATE";
-  if ((input.kind === "meal" && input.mealId === null) || (input.kind === "break" && input.mealId !== null)) {
+  if ((input.kind === "meal" && (input.mealType === null || input.mealIds.length === 0))
+    || (input.kind === "break" && (input.mealType !== null || input.mealIds.length !== 0))
+    || input.mealIds.length !== new Set(input.mealIds).size) {
     return "INVALID_KIND";
   }
   return null;
@@ -67,14 +72,22 @@ async function slotView(client: DbClient, id: number) {
   return slot ?? null;
 }
 
-async function ensureReferences(client: DbClient, slotId: number, mealId: number | null) {
+async function ensureReferences(
+  client: DbClient,
+  slotId: number,
+  mealIds: number[],
+  mealType: "set" | "packed" | "therapeutic" | null,
+) {
   const [slot] = await client.select({ id: mealScheduleSlotsTable.id })
     .from(mealScheduleSlotsTable)
     .where(and(eq(mealScheduleSlotsTable.id, slotId), eq(mealScheduleSlotsTable.isActive, true)));
   if (!slot) throw new Error("SLOT_NOT_FOUND");
-  if (mealId !== null) {
-    const [meal] = await client.select({ id: mealsTable.id }).from(mealsTable).where(eq(mealsTable.id, mealId));
-    if (!meal) throw new Error("MEAL_NOT_FOUND");
+  if (mealIds.length > 0) {
+    const meals = await client.select({ id: mealsTable.id, type: mealsTable.type })
+      .from(mealsTable).where(inArray(mealsTable.id, mealIds))
+      .orderBy(asc(mealsTable.id)).for("share");
+    if (meals.length !== mealIds.length) throw new Error("MEAL_NOT_FOUND");
+    if (meals.some((meal) => meal.type !== mealType)) throw new Error("MEAL_TYPE_MISMATCH");
   }
 }
 
@@ -87,22 +100,34 @@ async function entryView(client: DbClient, id: number) {
     startTime: mealScheduleSlotsTable.startTime,
     endTime: mealScheduleSlotsTable.endTime,
     kind: mealScheduleEntriesTable.kind,
-    mealId: mealScheduleEntriesTable.mealId,
-    mealName: mealsTable.name,
-    mealType: mealsTable.type,
-    totalCalories: mealsTable.totalCalories,
+    mealType: mealScheduleEntriesTable.mealType,
     createdAt: mealScheduleEntriesTable.createdAt,
     updatedAt: mealScheduleEntriesTable.updatedAt,
   }).from(mealScheduleEntriesTable)
     .innerJoin(mealScheduleSlotsTable, eq(mealScheduleEntriesTable.slotId, mealScheduleSlotsTable.id))
-    .leftJoin(mealsTable, eq(mealScheduleEntriesTable.mealId, mealsTable.id))
     .where(eq(mealScheduleEntriesTable.id, id));
   if (!entry) return null;
+  const selected = await client.select({
+    id: mealsTable.id,
+    name: mealsTable.name,
+    category: mealsTable.category,
+    type: mealsTable.type,
+    totalCalories: mealsTable.totalCalories,
+  }).from(mealScheduleEntryMealsTable)
+    .innerJoin(mealsTable, eq(mealScheduleEntryMealsTable.mealId, mealsTable.id))
+    .where(eq(mealScheduleEntryMealsTable.entryId, id))
+    .orderBy(asc(mealScheduleEntryMealsTable.sortOrder));
+  const meals = selected.map((meal) => ({
+    ...meal,
+    type: meal.type as "set" | "packed" | "therapeutic",
+    totalCalories: Number(meal.totalCalories),
+  }));
   return {
     ...entry,
     kind: entry.kind as "meal" | "break",
-    mealType: entry.mealType as "single" | "set" | null,
-    totalCalories: entry.totalCalories === null ? null : Number(entry.totalCalories),
+    mealType: entry.mealType as "set" | "packed" | "therapeutic" | null,
+    meals,
+    totalCalories: entry.kind === "meal" ? meals.reduce((total, meal) => total + meal.totalCalories, 0) : null,
   };
 }
 
@@ -122,12 +147,20 @@ function sendKnownError(error: unknown, res: Response) {
     res.status(404).json({ error: "Хуваарийн бичлэг олдсонгүй" });
     return true;
   }
+  if (error.message === "ENTRY_LINKED_REQUEST") {
+    res.status(409).json({ error: "Материалын хүсэлт холбогдсон хуваарийг шилжүүлэхээс өмнө хүсэлтийн холбоосыг шалгана уу" });
+    return true;
+  }
   if (error.message === "SLOT_NOT_FOUND") {
     res.status(400).json({ error: "Хоолны цагийн мөр олдсонгүй" });
     return true;
   }
   if (error.message === "MEAL_NOT_FOUND") {
     res.status(400).json({ error: "Сонгосон хоол олдсонгүй" });
+    return true;
+  }
+  if (error.message === "MEAL_TYPE_MISMATCH") {
+    res.status(400).json({ error: "Сонгосон хоолууд хуваарийн төрөлтэй таарахгүй байна" });
     return true;
   }
   return false;
@@ -245,12 +278,19 @@ router.post("/meal-schedule", async (req, res, next): Promise<void> => {
       return;
     }
     const result = await db.transaction(async (tx) => {
-      await ensureReferences(tx, input.slotId, input.mealId);
+      await ensureReferences(tx, input.slotId, input.mealIds, input.mealType);
       const [existing] = await tx.select({ id: mealScheduleEntriesTable.id })
         .from(mealScheduleEntriesTable)
         .where(and(eq(mealScheduleEntriesTable.date, input.date), eq(mealScheduleEntriesTable.slotId, input.slotId)));
       if (existing) throw new Error("CELL_OCCUPIED");
-      const [created] = await tx.insert(mealScheduleEntriesTable).values(input).returning({ id: mealScheduleEntriesTable.id });
+      const [created] = await tx.insert(mealScheduleEntriesTable)
+        .values({ date: input.date, slotId: input.slotId, kind: input.kind, mealType: input.mealType })
+        .returning({ id: mealScheduleEntriesTable.id });
+      if (input.mealIds.length) {
+        await tx.insert(mealScheduleEntryMealsTable).values(input.mealIds.map((mealId, sortOrder) => ({
+          entryId: created.id, mealId, sortOrder,
+        })));
+      }
       return entryView(tx, created.id);
     });
     res.status(201).json(CreateMealScheduleEntryResponse.parse(result));
@@ -273,16 +313,24 @@ router.put("/meal-schedule/:id", async (req, res, next): Promise<void> => {
       return;
     }
     const result = await db.transaction(async (tx) => {
-      await ensureReferences(tx, input.slotId, input.mealId);
+      await ensureReferences(tx, input.slotId, input.mealIds, input.mealType);
       const [current] = await tx.select({ id: mealScheduleEntriesTable.id })
-        .from(mealScheduleEntriesTable).where(eq(mealScheduleEntriesTable.id, id));
+        .from(mealScheduleEntriesTable).where(eq(mealScheduleEntriesTable.id, id)).for("update");
       if (!current) throw new Error("ENTRY_NOT_FOUND");
       const [occupied] = await tx.select({ id: mealScheduleEntriesTable.id })
         .from(mealScheduleEntriesTable)
         .where(and(eq(mealScheduleEntriesTable.date, input.date), eq(mealScheduleEntriesTable.slotId, input.slotId)));
       if (occupied && occupied.id !== id) throw new Error("CELL_OCCUPIED");
-      await tx.update(mealScheduleEntriesTable).set({ ...input, updatedAt: new Date() })
+      await tx.update(mealScheduleEntriesTable).set({
+        date: input.date, slotId: input.slotId, kind: input.kind, mealType: input.mealType, updatedAt: new Date(),
+      })
         .where(eq(mealScheduleEntriesTable.id, id));
+      await tx.delete(mealScheduleEntryMealsTable).where(eq(mealScheduleEntryMealsTable.entryId, id));
+      if (input.mealIds.length) {
+        await tx.insert(mealScheduleEntryMealsTable).values(input.mealIds.map((mealId, sortOrder) => ({
+          entryId: id, mealId, sortOrder,
+        })));
+      }
       return entryView(tx, id);
     });
     res.json(UpdateMealScheduleEntryResponse.parse(result));
@@ -322,7 +370,7 @@ router.post("/meal-schedule/:id/move", async (req, res, next): Promise<void> => 
     }
     const result = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(73042101)`);
-      await ensureReferences(tx, input.slotId, null);
+      await ensureReferences(tx, input.slotId, [], null);
       const [source] = await tx.select().from(mealScheduleEntriesTable)
         .where(eq(mealScheduleEntriesTable.id, id))
         .for("update");
@@ -333,6 +381,18 @@ router.post("/meal-schedule/:id/move", async (req, res, next): Promise<void> => 
       const [target] = await tx.select().from(mealScheduleEntriesTable)
         .where(and(eq(mealScheduleEntriesTable.date, input.date), eq(mealScheduleEntriesTable.slotId, input.slotId)))
         .for("update");
+      if (target || source.date !== input.date) {
+        const protectedIds = target ? [target.id, ...(source.date !== input.date ? [source.id] : [])] : [source.id];
+        const [linkedRequest] = await tx.select({ id: inventoryMaterialRequestsTable.id })
+          .from(inventoryMaterialRequestsTable)
+          .where(inArray(inventoryMaterialRequestsTable.mealScheduleEntryId, protectedIds)).limit(1);
+        if (linkedRequest) throw new Error("ENTRY_LINKED_REQUEST");
+      }
+      const targetMeals = target ? await tx.select({
+        mealId: mealScheduleEntryMealsTable.mealId,
+        sortOrder: mealScheduleEntryMealsTable.sortOrder,
+      }).from(mealScheduleEntryMealsTable)
+        .where(eq(mealScheduleEntryMealsTable.entryId, target.id)) : [];
       if (target) {
         await tx.delete(mealScheduleEntriesTable).where(eq(mealScheduleEntriesTable.id, target.id));
       }
@@ -345,10 +405,15 @@ router.post("/meal-schedule/:id/move", async (req, res, next): Promise<void> => 
           date: source.date,
           slotId: source.slotId,
           kind: target.kind,
-          mealId: target.mealId,
+          mealType: target.mealType,
           createdAt: target.createdAt,
           updatedAt: new Date(),
         });
+        if (targetMeals.length) {
+          await tx.insert(mealScheduleEntryMealsTable).values(targetMeals.map((meal) => ({
+            entryId: target.id, ...meal,
+          })));
+        }
       }
       const moved = await entryView(tx, source.id);
       const replacement = target ? await entryView(tx, target.id) : null;
