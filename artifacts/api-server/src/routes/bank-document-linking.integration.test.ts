@@ -574,6 +574,167 @@ describe("bank document linking", () => {
       .where(eq(cashTransactionsTable.id, manualCash.id));
     assert.equal(cashAfter.bankTransactionId, null);
     assert.equal(cashAfter.journalEntryId, null);
+
+    const mixedBankId = await bank(date, amount, "fixed-bank-inventory-cash-precedence");
+    await db.update(bankTransactionsTable).set({ accountId: fixedAssetAccount.id })
+      .where(eq(bankTransactionsTable.id, mixedBankId));
+    const [inventoryCash] = await db.insert(cashTransactionsTable).values({
+      type: "expense", category: "Бараа материал", description: "Inventory cash with fixed-asset bank",
+      amount, date, accountId,
+    }).returning();
+    cashIds.push(inventoryCash.id);
+    const mixedResponse = await fetch(`${baseUrl}/api/bank-transactions/${mixedBankId}/link-cash`, {
+      method: "POST", headers, body: JSON.stringify({ cashTransactionId: inventoryCash.id }),
+    });
+    assert.equal(mixedResponse.status, 409);
+    assert.equal((await mixedResponse.json() as { error: string }).error,
+      "Бараа материал, хангамжийн кассын гүйлгээг шууд холбохгүй. Худалдан авалтын баримттай холбох эсвэл шинээр үүсгэнэ үү");
+  });
+
+  it("applies the same inventory-account restriction to cash, expense and fixed-asset links", async () => {
+    const date = "2099-08-22";
+    const amount = 12_500;
+    const headers = { cookie, "content-type": "application/json" };
+    for (const code of ["1500", "1510"]) {
+      const [inventoryAccount] = await db.select({ id: chartOfAccountsTable.id })
+        .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, code));
+      assert.ok(inventoryAccount);
+      const bankIds = await Promise.all([
+        bank(date, amount, `inventory-${code}-cash`),
+        bank(date, amount, `inventory-${code}-expense`),
+        bank(date, amount, `inventory-${code}-fixed-asset`),
+      ]);
+      await db.update(bankTransactionsTable).set({ accountId: inventoryAccount.id })
+        .where(inArray(bankTransactionsTable.id, bankIds));
+      const [manualCash] = await db.insert(cashTransactionsTable).values({
+        type: "expense", category: "Бусад", description: `Inventory ${code} cash`,
+        date, amount, accountId,
+      }).returning();
+      cashIds.push(manualCash.id);
+      const inputs = [
+        ["link-cash", { cashTransactionId: manualCash.id }],
+        ["link-expense", { description: `Inventory ${code} expense`, accountId, date, amount }],
+        ["link-fixed-asset", { name: `Inventory ${code} asset`, unitPrice: amount, quantity: 1, date }],
+      ] as const;
+      for (const [index, [path, body]] of inputs.entries()) {
+        const response = await fetch(`${baseUrl}/api/bank-transactions/${bankIds[index]}/${path}`, {
+          method: "POST", headers, body: JSON.stringify(body),
+        });
+        assert.equal(response.status, 409, `${code} ${path}`);
+        const [unclaimed] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankIds[index]));
+        assert.equal(unclaimed.cashTransactionId, null);
+        assert.equal(unclaimed.journalEntryId, null);
+      }
+      const [cashAfter] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, manualCash.id));
+      assert.equal(cashAfter.bankTransactionId, null);
+    }
+  });
+
+  it("still allows inventory-coded banks through the corresponding purchase documents", async () => {
+    const date = "2099-08-26";
+    for (const [code, materialType, grouped] of [
+      ["1500", "food", false],
+      ["1510", "supply", true],
+    ] as const) {
+      const [account] = await db.select({ id: chartOfAccountsTable.id })
+        .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, code));
+      assert.ok(account);
+      const bankId = await bank(date, 10_000, `purchase-account-${code}`);
+      await db.update(bankTransactionsTable).set({ accountId: account.id })
+        .where(eq(bankTransactionsTable.id, bankId));
+      const purchases = await db.insert(inventoryPurchasesTable).values(
+        (grouped ? [0, 1] : [0]).map((index) => ({
+          materialType, accountId: account.id, documentName: `${code} purchase ${index}`,
+          date, totalAmount: grouped ? 5_000 : 10_000,
+        })),
+      ).returning({ id: inventoryPurchasesTable.id });
+      purchaseIds.push(...purchases.map((purchase) => purchase.id));
+      const response = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/${grouped ? "link-purchases" : "link-purchase"}`, {
+        method: "POST",
+        headers: { cookie, "content-type": "application/json" },
+        body: JSON.stringify(grouped
+          ? { inventoryPurchaseIds: purchases.map((purchase) => purchase.id) }
+          : { inventoryPurchaseId: purchases[0].id }),
+      });
+      assert.equal(response.status, 200, `${code} purchase`);
+      const result = await response.json() as { cashTransactionId: number; journalEntryId: number };
+      cashIds.push(result.cashTransactionId);
+      journalIds.push(result.journalEntryId);
+      if (grouped) {
+        const [group] = await db.select({ id: inventoryPurchasePaymentGroupsTable.id })
+          .from(inventoryPurchasePaymentGroupsTable)
+          .where(eq(inventoryPurchasePaymentGroupsTable.bankTransactionId, bankId));
+        assert.ok(group);
+        paymentGroupIds.push(group.id);
+      }
+      const [claimed] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankId));
+      assert.equal(claimed.cashTransactionId, result.cashTransactionId);
+    }
+  });
+
+  it("keeps payroll cash links reusable and idempotent after the shared bank check", async () => {
+    const date = "2099-08-23";
+    const bankId = await bank(date, 15_000, "payroll-cash-reuse");
+    const [cash] = await db.insert(cashTransactionsTable).values({
+      type: "expense", category: "Цалин", description: "Payroll cash reuse",
+      amount: 15_000, date, sourceType: "payroll", sourceKey: `payroll:eligibility-${randomUUID()}`,
+    }).returning();
+    cashIds.push(cash.id);
+    const link = () => fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-cash`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ cashTransactionId: cash.id }),
+    });
+    const first = await link();
+    assert.equal(first.status, 200);
+    const [linkedCash] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, cash.id));
+    assert.equal(linkedCash.sourceType, "payroll");
+    assert.equal(linkedCash.bankTransactionId, bankId);
+    assert.ok(linkedCash.journalEntryId);
+    journalIds.push(linkedCash.journalEntryId);
+    const retry = await link();
+    assert.equal(retry.status, 200);
+    const [afterRetry] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, cash.id));
+    assert.equal(afterRetry.journalEntryId, linkedCash.journalEntryId);
+  });
+
+  it("uses the cash date for link-cash closure and the bank date for document closure", async () => {
+    const bankDate = "2099-08-24";
+    const cashDate = "2099-08-25";
+    const amount = 9_000;
+    const bankId = await bank(bankDate, amount, "closed-cash-date");
+    const expenseBankId = await bank(bankDate, amount, "closed-bank-date");
+    const [cash] = await db.insert(cashTransactionsTable).values({
+      type: "expense", category: "Бусад", description: "Closed cash date",
+      date: cashDate, amount, accountId,
+    }).returning();
+    cashIds.push(cash.id);
+    const [cashClosure] = await db.insert(cashClosuresTable).values({ date: cashDate }).returning();
+    closureIds.push(cashClosure.id);
+    const headers = { cookie, "content-type": "application/json" };
+    const blockedCash = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-cash`, {
+      method: "POST", headers, body: JSON.stringify({ cashTransactionId: cash.id }),
+    });
+    assert.equal(blockedCash.status, 409);
+    assert.equal((await blockedCash.json() as { error: string }).error,
+      "Өндөрлөсөн өдрийн кассын гүйлгээг холбох боломжгүй");
+    const mismatchId = await bank(bankDate, amount + 1, "amount-before-closed");
+    const mismatched = await fetch(`${baseUrl}/api/bank-transactions/${mismatchId}/link-cash`, {
+      method: "POST", headers, body: JSON.stringify({ cashTransactionId: cash.id }),
+    });
+    assert.equal(mismatched.status, 409);
+    assert.equal((await mismatched.json() as { error: string }).error,
+      "Банк болон кассын гүйлгээний дүн таарахгүй байна");
+    const [bankClosure] = await db.insert(cashClosuresTable).values({ date: bankDate }).returning();
+    closureIds.push(bankClosure.id);
+    const blockedExpense = await fetch(`${baseUrl}/api/bank-transactions/${expenseBankId}/link-expense`, {
+      method: "POST", headers, body: JSON.stringify({ description: "Closed bank date", accountId, date: bankDate, amount }),
+    });
+    assert.equal(blockedExpense.status, 409);
+    for (const id of [bankId, expenseBankId, mismatchId]) {
+      const [unclaimed] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id));
+      assert.equal(unclaimed.cashTransactionId, null);
+    }
   });
 
   it("links an existing unpaid purchase, posts a balanced journal, and removes review row", async () => {
