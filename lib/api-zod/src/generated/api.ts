@@ -1853,6 +1853,11 @@ export const LinkBankTransactionFixedAssetParams = zod.object({
 
 
 
+export const linkBankTransactionFixedAssetBodyOneAssetUpdateUnitPriceExclusiveMin = 0;
+
+
+export const linkBankTransactionFixedAssetBodyOneAssetUpdateDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
 export const linkBankTransactionFixedAssetBodyTwoUnitPriceExclusiveMin = 0;
 
 
@@ -1860,7 +1865,13 @@ export const linkBankTransactionFixedAssetBodyTwoDateRegExp = new RegExp('^\\d{4
 
 
 export const LinkBankTransactionFixedAssetBody = zod.union([zod.object({
-  "fixedAssetId": zod.number().int().min(1)
+  "fixedAssetId": zod.number().int().min(1),
+  "assetUpdate": zod.object({
+  "name": zod.string().min(1),
+  "unitPrice": zod.number().gt(linkBankTransactionFixedAssetBodyOneAssetUpdateUnitPriceExclusiveMin),
+  "quantity": zod.number().int().min(1),
+  "date": zod.string().regex(linkBankTransactionFixedAssetBodyOneAssetUpdateDateRegExp)
+}).optional()
 }),zod.object({
   "name": zod.string().min(1),
   "unitPrice": zod.number().gt(linkBankTransactionFixedAssetBodyTwoUnitPriceExclusiveMin),
@@ -3536,6 +3547,31 @@ export const CreateFixedAssetResponse = zod.object({
   "bankTransactionId": zod.number().int().min(1).nullable(),
   "createdAt": zod.string()
 })
+
+
+/**
+ * @summary Suggest unclaimed bank expenses for a fixed asset form
+ */
+export const listFixedAssetBankSuggestionsQueryDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const listFixedAssetBankSuggestionsQueryAmountExclusiveMin = 0;
+
+
+
+
+export const ListFixedAssetBankSuggestionsQueryParams = zod.object({
+  "date": zod.coerce.string().regex(listFixedAssetBankSuggestionsQueryDateRegExp),
+  "amount": zod.coerce.number().gt(listFixedAssetBankSuggestionsQueryAmountExclusiveMin),
+  "description": zod.coerce.string().min(1)
+})
+
+export const ListFixedAssetBankSuggestionsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "transactionAt": zod.coerce.date(),
+  "amount": zod.number(),
+  "description": zod.string(),
+  "score": zod.number()
+})
+export const ListFixedAssetBankSuggestionsResponse = zod.array(ListFixedAssetBankSuggestionsResponseItem)
 
 
 /**

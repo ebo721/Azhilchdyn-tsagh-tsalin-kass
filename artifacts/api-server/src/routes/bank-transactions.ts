@@ -495,6 +495,13 @@ router.post("/bank-transactions/:id/link-expense", async (req, res, next) => {
 router.post("/bank-transactions/:id/link-fixed-asset", async (req, res, next) => {
   try {
     const { id } = LinkBankTransactionFixedAssetParams.parse(req.params);
+    const body = req.body as Record<string, unknown> | null;
+    if (body && typeof body === "object" && (
+      ("fixedAssetId" in body && ["name", "unitPrice", "quantity", "date"].some((key) => key in body))
+      || (!("fixedAssetId" in body) && "assetUpdate" in body)
+    )) {
+      return res.status(400).json({ error: "Хөрөнгө үүсгэх ба засварлах мэдээллийг нэг хүсэлтэд хольж болохгүй" });
+    }
     const result = await linkBankFixedAsset(id, LinkBankTransactionFixedAssetBody.parse(req.body));
     if (typeof result === "string") {
       const status = result === "missing_bank" || result === "missing_fixed_asset"

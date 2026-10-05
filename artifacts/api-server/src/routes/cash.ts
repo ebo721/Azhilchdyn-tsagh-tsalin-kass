@@ -165,14 +165,11 @@ import {
 } from "../lib/cash-account.js";
 import * as shared from "../lib/route-shared.js";
 import { bankSuggestionScore } from "../lib/bank-suggestion-score.js";
+import { lockCashDate } from "../lib/cash-date-lock.js";
 import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-shared.js";
 
 const router: IRouter = Router();
 const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, operatingExpenseAccountName, inventoryMaterialLabel, defaultChartOfAccounts, operatingExpenseAccountCodes, inventoryPurchaseAccountCodes, reservedAccountTypes, chartOfAccountResponse, ensureDefaultChartOfAccounts, inventoryPurchaseAccount, lockedExpenseAccount, fallbackExpenseAccount, today, currentMonth, money, InventoryBankPaymentConflictError, OperatingExpenseBankPaymentConflictError, calendarDateOffset, descriptionTokens, inventoryBankSuggestionScore, deletionTargetPatterns, roleCanRequestDeletion, deletionRequestResponse, monthlyIncomeTaxRelief, hoursBetween, previousMonth, nextMonth, daysInMonth, isValidCalendarDate, calendarDateText, weekdayCount, monthWeekdays, defaultPayrollSchedule, getPayrollSchedule, scheduleDate, payrollPeriod, selectPayrollScheduleVersion, scheduleVersionAffectsMonth, shiftDailyRate, weekdayDatesBetween, salaryAt, getPayrollSummary, getPayrollAdvanceSummary, calculatePayrollAdvanceLine, InventoryInsufficientStockError, planInventoryFifoConsumption, applyInventoryFifoConsumption, reverseInventoryFifoConsumption, inventoryPurchaseResponse } = shared;
-
-async function lockCashDate(tx: any, date: string) {
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`cash-date:${date}`}))`);
-}
 
 async function safeCashAccount(tx: any, category: string) {
   try {
