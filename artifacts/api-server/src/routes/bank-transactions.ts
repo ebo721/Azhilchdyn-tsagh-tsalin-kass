@@ -53,6 +53,7 @@ import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
 import { loadBankRecognitionContext, recognizeBankTransaction } from "../lib/bank-recognition.js";
 import { inventoryPurchaseAccountCodes } from "../lib/route-shared.js";
 import { bankSuggestionScore } from "../lib/bank-suggestion-score.js";
+import { checkBankLinkEligibility } from "../lib/bank-link-eligibility.js";
 import {
   cancelBankPurchaseGroup,
   linkBankPurchase,
@@ -1045,36 +1046,35 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
         .where(eq(cashTransactionsTable.id, cashTransactionId))
         .for("update");
       if (!cash) return "missing-cash" as const;
-      if (bank.cashTransactionId !== null || bank.transferredAt !== null) {
+      const eligibility = await checkBankLinkEligibility(tx, bank, "cash", String(cash.date));
+      if (eligibility.issue === "bank_resolved") {
         return bank.cashTransactionId === cashTransactionId
           && bank.journalEntryId !== null
           && cash.journalEntryId === bank.journalEntryId
           ? bank
           : "resolved" as const;
       }
-      if (bank.journalEntryId !== null || bank.unclearAt !== null) return "resolved" as const;
       if (cash.type !== bank.type) return "type-mismatch" as const;
       if (cash.sourceType !== null && !["payroll", "payroll_advance"].includes(cash.sourceType)) {
         return "cash-source-managed" as const;
       }
+      if (eligibility.issue === "purchase_document_required") return "purchase-document-required" as const;
       if (bank.type === "expense") {
-        const [bankAccount] = bank.accountId === null ? [] : await tx.select({ code: chartOfAccountsTable.code })
-          .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, bank.accountId));
-        const [cashAccount] = cash.accountId === null ? [] : await tx.select({ code: chartOfAccountsTable.code })
+        const [cashAccount] = cash.sourceType !== null || cash.accountId === null
+          ? [] : await tx.select({ code: chartOfAccountsTable.code })
           .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, cash.accountId));
-        if (isInventoryPurchaseAccount(bankAccount?.code)
-          || (cash.sourceType === null && (isInventoryPurchaseAccount(cashAccount?.code) || inventoryCashCategories.includes(cash.category)))) {
+        if (cash.sourceType === null
+          && (isInventoryPurchaseAccount(cashAccount?.code) || inventoryCashCategories.includes(cash.category))) {
           return "purchase-document-required" as const;
         }
-        if (bankAccount?.code === "1800"
+        if (eligibility.issue === "fixed_asset_document_required"
           || (cash.sourceType === null && (cashAccount?.code === "1800" || cash.category === "Эд хөрөнгө"))) {
           return "fixed-asset-document-required" as const;
         }
       }
       if (!bankAndCashAmountsMatch(bank, cash)) return "amount-mismatch" as const;
       if (cash.bankTransactionId !== null) return "cash-linked" as const;
-      const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, String(cash.date)));
-      if (closed) return "closed" as const;
+      if (eligibility.closed) return "closed" as const;
       const verifiedAt = new Date();
        const [linkedCash] = await tx.update(cashTransactionsTable)
          .set({

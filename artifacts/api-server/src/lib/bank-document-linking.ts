@@ -6,8 +6,9 @@ import {
   inventoryPurchasesTable, inventorySuppliersTable, journalEntriesTable, journalLinesTable, operatingExpensesTable,
 } from "@workspace/db";
 import { cashAccountForCategory } from "./cash-account.js";
+import { checkBankLinkEligibility } from "./bank-link-eligibility.js";
 import { lockCashDate } from "./cash-date-lock.js";
-import { inventoryMaterialLabel, inventoryPurchaseAccount, inventoryPurchaseAccountCodes, money } from "./route-shared.js";
+import { inventoryMaterialLabel, inventoryPurchaseAccount, money } from "./route-shared.js";
 import { postJournalEntry, voidJournalEntry } from "./journal-posting.js";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -53,15 +54,10 @@ export async function linkBankPurchases(id: number, purchaseIds: number[]) {
     const [bank] = await tx.select().from(bankTransactionsTable)
       .where(eq(bankTransactionsTable.id, id)).for("update");
     if (!bank) return "missing_bank";
-    if (bank.type !== "expense" || bank.cashTransactionId !== null || bank.transferredAt !== null || bank.unclearAt !== null || bank.journalEntryId !== null) return "bank_resolved";
-    const [assignedAccount] = bank.accountId === null ? [] : await tx.select({ code: chartOfAccountsTable.code })
-      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, bank.accountId));
-    if (assignedAccount?.code === "1800") return "fixed_asset_document_required";
-
+    const eligibility = await checkBankLinkEligibility(tx, bank, "purchase");
+    if (eligibility.issue) return eligibility.issue;
+    if (eligibility.closed) return "closed";
     const date = bank.transactionAt.toISOString().slice(0, 10);
-    const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable)
-      .where(eq(cashClosuresTable.date, date));
-    if (closed) return "closed";
     const totalCents = purchases.reduce((sum, purchase) => sum + cents(Number(purchase.totalAmount)), 0);
     if (purchases.some((purchase) => purchase.paymentDate !== null || purchase.date > date)
       || totalCents !== cents(Number(bank.amount))) return "purchase_conflict";
@@ -283,13 +279,10 @@ export async function linkBankPurchase(id: number, input: PurchaseInput): Promis
     }
     const [bank] = await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id)).for("update");
     if (!bank) return "missing_bank";
-    if (bank.type !== "expense" || bank.cashTransactionId !== null || bank.transferredAt !== null || bank.unclearAt !== null || bank.journalEntryId !== null) return "bank_resolved";
-    const [assignedAccount] = bank.accountId === null ? [] : await tx.select({ code: chartOfAccountsTable.code })
-      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, bank.accountId));
-    if (assignedAccount?.code === "1800") return "fixed_asset_document_required";
+    const eligibility = await checkBankLinkEligibility(tx, bank, "purchase");
+    if (eligibility.issue) return eligibility.issue;
+    if (eligibility.closed) return "closed";
     const date = bank.transactionAt.toISOString().slice(0, 10);
-    const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, date));
-    if (closed) return "closed";
     if ("inventoryPurchaseId" in input) {
       if (purchase.paymentDate !== null || purchase.date > date || money(Number(purchase.totalAmount)) !== money(Number(bank.amount))) return "purchase_conflict";
     } else {
@@ -354,14 +347,10 @@ export async function linkBankExpense(id: number, input: ExpenseInput): Promise<
     }
     const [bank] = await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id)).for("update");
     if (!bank) return "missing_bank";
-    if (bank.type !== "expense" || bank.cashTransactionId !== null || bank.transferredAt !== null || bank.unclearAt !== null || bank.journalEntryId !== null) return "bank_resolved";
-    const [assignedAccount] = bank.accountId === null ? [] : await tx.select({ code: chartOfAccountsTable.code })
-      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, bank.accountId));
-    if (inventoryPurchaseAccountCodes.some((code) => code === assignedAccount?.code)) return "purchase_document_required";
-    if (assignedAccount?.code === "1800") return "fixed_asset_document_required";
+    const eligibility = await checkBankLinkEligibility(tx, bank, "expense");
+    if (eligibility.issue) return eligibility.issue;
+    if (eligibility.closed) return "closed";
     const date = bank.transactionAt.toISOString().slice(0, 10);
-    const [closed] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, date));
-    if (closed) return "closed";
     if ("operatingExpenseId" in input) {
       if (expense.paymentDate !== null || expense.date !== date || money(Number(expense.amount)) !== money(Number(bank.amount))) return "expense_conflict";
     } else {
@@ -406,18 +395,11 @@ export async function linkBankFixedAsset(id: number, input: FixedAssetInput): Pr
       .for("update");
     if (!bank) return "missing_bank";
     if (bank.transactionAt.toISOString().slice(0, 10) !== snapshotDate) return "bank_resolved";
-    if (bank.type !== "expense" || bank.cashTransactionId !== null || bank.transferredAt !== null || bank.unclearAt !== null || bank.journalEntryId !== null) {
-      return "bank_resolved";
-    }
-    const [assignedAccount] = bank.accountId === null ? [] : await tx.select({ code: chartOfAccountsTable.code })
-      .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, bank.accountId));
-    if (inventoryPurchaseAccountCodes.some((code) => code === assignedAccount?.code)) return "purchase_document_required";
+    const eligibility = await checkBankLinkEligibility(tx, bank, "fixed_asset");
+    if (eligibility.issue) return eligibility.issue;
+    if (eligibility.closed) return "closed";
     const date = bank.transactionAt.toISOString().slice(0, 10);
     const amount = money(Number(bank.amount));
-    const [closed] = await tx.select({ id: cashClosuresTable.id })
-      .from(cashClosuresTable)
-      .where(eq(cashClosuresTable.date, date));
-    if (closed) return "closed";
 
     let asset: typeof fixedAssetsTable.$inferSelect;
     const assetUpdate = "fixedAssetId" in input ? input.assetUpdate : undefined;
