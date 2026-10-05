@@ -60,7 +60,11 @@
     {
       "filename": "20261005_inventory_purchase_payment_groups.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20261006_meal_types_multi_schedule.sql",
+      "releaseMode": "contract"
     }
   ],
-  "schemaFingerprint": "d48d6ee8ec6989ba1721c8f0d9e5f1cf8af321dc1c7d48042a9914329bf92b3c"
+  "schemaFingerprint": "f7c2846f5d0eaaa35dbcac929e3ff8825a6202d0dd08a3e0a9a34ca2044922ab"
 }

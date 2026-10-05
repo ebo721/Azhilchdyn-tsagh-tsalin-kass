@@ -13,6 +13,7 @@ export type MealScheduleEntryMealType = typeof MealScheduleEntryMealType[keyof t
 
 
 export const MealScheduleEntryMealType = {
-  single: 'single',
   set: 'set',
+  packed: 'packed',
+  therapeutic: 'therapeutic',
 } as const;

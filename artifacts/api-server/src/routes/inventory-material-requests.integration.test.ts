@@ -50,7 +50,7 @@ describe("inventory material requests", () => {
     itemId = item.id;
     const [slot] = await db.insert(mealScheduleSlotsTable).values({ name: `Тест цаг ${suffix}`, startTime: "08:00", endTime: "08:30", sortOrder: 900000 + Math.floor(Math.random() * 1000), isActive: true }).returning();
     slotId = slot.id;
-    const [entry] = await db.insert(mealScheduleEntriesTable).values({ date: "2099-04-03", slotId, kind: "break", mealId: null }).returning();
+    const [entry] = await db.insert(mealScheduleEntriesTable).values({ date: "2099-04-03", slotId, kind: "break", mealType: null }).returning();
     scheduleEntryId = entry.id;
     const app = express();
     app.use(express.json());

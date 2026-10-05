@@ -42,3 +42,9 @@ Once a PR is merged, later commits to its source branch are not included in that
 **Why:** A merged feature PR had further fixes pushed to its source branch afterward. Vercel successfully deployed the merge, but the fixes remained absent from `main` and production.
 
 **How to apply:** Check the PR's merged state and exact merged head SHA before explaining a production discrepancy. If the source branch contains newer commits, cherry-pick the intended fixes onto current `main` in a fresh review branch rather than reusing the closed PR.
+
+For a database change that replaces values or removes an old API's expected source of truth, treat rollout as a contract migration rather than labeling it expand. Block automatic production application until the old API is drained, an old-build rollback is ruled out, and production SQL receives separate approval.
+
+**Why:** An older meal API expects `single` and a single schedule meal reference; converting those while it is still serving requests would break reads and writes even though the new schema retains the old column.
+
+**How to apply:** Review backward compatibility against the still-running build, not just the new build. Gate any pending contract migration in the release path; a feature PR can be reviewed as draft, but merging or publishing must wait for a coordinated cutover.

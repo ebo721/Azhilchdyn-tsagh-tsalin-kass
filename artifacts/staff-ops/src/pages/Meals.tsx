@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
+import { MEAL_CATEGORIES, MEAL_TYPE_OPTIONS, mealTypeLabel } from './meal-options';
 import {
   Search,
   Plus,
@@ -59,10 +60,6 @@ export function Meals() {
       m.category.toLowerCase().includes(search.toLowerCase())
     );
   }, [meals, search]);
-
-  const categories = useMemo(() => {
-    return Array.from(new Set(meals.map((m) => m.category))).filter(Boolean);
-  }, [meals]);
 
   const openCreateMeal = () => {
     setEditingMealInfo(null);
@@ -156,11 +153,9 @@ export function Meals() {
                       </td>
                       <td className="px-5 py-3 text-sm text-muted-foreground">{meal.category}</td>
                       <td className="px-5 py-3 text-sm">
-                        {meal.type === 'set' ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-md bg-purple-100 dark:bg-purple-900/30 px-2 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300"><Utensils className="size-3" /> Сет</span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 rounded-md bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">Дан хоол</span>
-                        )}
+                        <span className="inline-flex items-center gap-1.5 rounded-md bg-purple-100 dark:bg-purple-900/30 px-2 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300">
+                          <Utensils className="size-3" /> {mealTypeLabel(meal.type)}
+                        </span>
                       </td>
                       <td className="px-5 py-3 text-right font-mono font-bold text-orange-600 dark:text-orange-400">
                         {meal.totalCalories} <span className="text-[10px] text-muted-foreground font-normal uppercase">ккал</span>
@@ -210,7 +205,6 @@ export function Meals() {
       {isMealFormOpen && (
         <MealFormModal
           meal={editingMealInfo}
-          categories={categories}
           requestOnly={readOnly}
           onClose={() => setIsMealFormOpen(false)}
           onSuccess={(savedMeal) => {
@@ -226,13 +220,11 @@ export function Meals() {
 
 function MealFormModal({
   meal,
-  categories,
   requestOnly,
   onClose,
   onSuccess
 }: {
   meal: Meal | null;
-  categories: string[];
   requestOnly: boolean;
   onClose: () => void;
   onSuccess: (meal: Meal) => void;
@@ -241,7 +233,7 @@ function MealFormModal({
   const update = useUpdateMeal();
   const [name, setName] = useState(meal?.name || '');
   const [category, setCategory] = useState(meal?.category || '');
-  const [type, setType] = useState<'single' | 'set'>(meal?.type || 'single');
+  const [type, setType] = useState<Meal['type']>(meal?.type || 'set');
   const [isActive, setIsActive] = useState(meal ? meal.isActive : true);
   const [requestPending, setRequestPending] = useState(false);
   const [requestStatus, setRequestStatus] = useState<'success' | 'error' | null>(null);
@@ -302,32 +294,35 @@ function MealFormModal({
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Ангилал</label>
-            <Input
+            <label htmlFor="select-meal-category" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Ангилал</label>
+            <select
+              id="select-meal-category"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               disabled={requestSubmitted}
-              list="meal-categories"
-              placeholder="Жишээ: Үндсэн хоол"
+              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="input-meal-category"
               required
-            />
-            <datalist id="meal-categories">
-              {categories.map((c) => <option key={c} value={c} />)}
-            </datalist>
+            >
+              <option value="" disabled>-- Ангилал сонгох --</option>
+              {MEAL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {meal && meal.category && !MEAL_CATEGORIES.includes(meal.category) && (
+                <option value={meal.category}>{meal.category} (хуучин ангилал)</option>
+              )}
+            </select>
           </div>
           {(!requestOnly || !meal) && <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Төрөл</label>
+              <label htmlFor="select-meal-type" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Төрөл</label>
               <select
+                id="select-meal-type"
                 value={type}
-                 onChange={(e) => setType(e.target.value as 'single' | 'set')}
-                 disabled={requestSubmitted}
+                onChange={(e) => setType(e.target.value as Meal['type'])}
+                disabled={requestSubmitted}
                 className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 data-testid="select-meal-type"
               >
-                <option value="single">Дан хоол</option>
-                <option value="set">Сет хоол</option>
+                {MEAL_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </div>
             <div>
@@ -466,9 +461,7 @@ function MealDetailsPanel({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400">{meal.category}</span>
-            {meal.type === 'set' && (
-              <span className="rounded bg-purple-100 dark:bg-purple-900/50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-purple-700 dark:text-purple-300">Сет</span>
-            )}
+            <span className="rounded bg-purple-100 dark:bg-purple-900/50 px-1.5 py-0.5 text-[10px] font-bold text-purple-700 dark:text-purple-300">{mealTypeLabel(meal.type)}</span>
           </div>
           <h2 className="text-xl font-bold tracking-tight text-foreground">{meal.name}</h2>
           <div className="flex items-center gap-4 mt-3">

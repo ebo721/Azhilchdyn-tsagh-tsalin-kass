@@ -9,6 +9,9 @@ import {
   db,
   inventoryItemsTable,
   mealIngredientsTable,
+  mealScheduleEntriesTable,
+  mealScheduleEntryMealsTable,
+  mealScheduleSlotsTable,
   mealsTable,
   usersTable,
 } from "@workspace/db";
@@ -122,17 +125,56 @@ describe("meals and ingredients", () => {
 
     const updatedMealResponse = await request(`/meals/${meal.id}`, {
       method: "PUT",
-      body: JSON.stringify({ name: `Зассан хоол ${suffix}`, category: "Сет", type: "single", isActive: false }),
+      body: JSON.stringify({ name: `Зассан хоол ${suffix}`, category: "Сет", type: "packed", isActive: false }),
     });
     assert.equal(updatedMealResponse.status, 200);
     const updatedMealInfo = await updatedMealResponse.json() as { name: string; type: string; isActive: boolean };
     assert.equal(updatedMealInfo.name, `Зассан хоол ${suffix}`);
-    assert.equal(updatedMealInfo.type, "single");
+    assert.equal(updatedMealInfo.type, "packed");
     assert.equal(updatedMealInfo.isActive, false);
+
+    const therapeuticMealResponse = await request(`/meals/${meal.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ name: `Зассан хоол ${suffix}`, category: "Эмчилгээний", type: "therapeutic", isActive: false }),
+    });
+    assert.equal(therapeuticMealResponse.status, 200);
+    const therapeuticMeal = await therapeuticMealResponse.json() as { type: string };
+    assert.equal(therapeuticMeal.type, "therapeutic");
 
     const deletedMealResponse = await request(`/meals/${meal.id}`, { method: "DELETE" });
     assert.equal(deletedMealResponse.status, 204);
     const [deletedMeal] = await db.select().from(mealsTable).where(eq(mealsTable.id, meal.id));
     assert.equal(deletedMeal, undefined);
+  });
+
+  it("keeps a scheduled meal in its selected type until it is removed from the schedule", async () => {
+    const suffix = randomUUID();
+    const [meal] = await db.insert(mealsTable).values({
+      name: `Төлөвлөсөн хоол ${suffix}`, normalizedName: `төлөвлөсөн хоол ${suffix}`,
+      category: "2-р хоол", type: "packed",
+    }).returning();
+    mealIds.push(meal.id);
+    const [slot] = await db.insert(mealScheduleSlotsTable).values({
+      name: `Тест цаг ${suffix}`, startTime: "12:00", endTime: "12:30",
+      sortOrder: Math.floor(Math.random() * 1_000_000) + 100_000_000,
+    }).returning();
+    try {
+      const [entry] = await db.insert(mealScheduleEntriesTable).values({
+        date: "2098-01-05", slotId: slot.id, kind: "meal", mealType: "packed",
+      }).returning();
+      await db.insert(mealScheduleEntryMealsTable).values({ entryId: entry.id, mealId: meal.id, sortOrder: 0 });
+      const response = await request(`/meals/${meal.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          name: meal.name, category: meal.category, type: "therapeutic", isActive: true,
+        }),
+      });
+      assert.equal(response.status, 409);
+      const [unchanged] = await db.select({ type: mealsTable.type }).from(mealsTable).where(eq(mealsTable.id, meal.id));
+      assert.equal(unchanged.type, "packed");
+    } finally {
+      await db.delete(mealScheduleEntriesTable).where(eq(mealScheduleEntriesTable.slotId, slot.id));
+      await db.delete(mealScheduleSlotsTable).where(eq(mealScheduleSlotsTable.id, slot.id));
+    }
   });
 });
