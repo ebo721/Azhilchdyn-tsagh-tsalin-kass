@@ -543,13 +543,13 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
         eq(chartOfAccountsTable.id, accountId),
         eq(chartOfAccountsTable.isActive, true),
       ));
-      if (bank.type === "expense" && isInventoryPurchaseAccount(account?.code)) {
-        return "purchase-document-required" as const;
-      }
       if (bank.type === "expense") {
         const [assignedAccount] = bank.accountId === null || bank.accountId === accountId
           ? [] : await tx.select({ code: chartOfAccountsTable.code })
             .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, bank.accountId));
+        if (isInventoryPurchaseAccount(account?.code) || isInventoryPurchaseAccount(assignedAccount?.code)) {
+          return "purchase-document-required" as const;
+        }
         if (account?.code === "1800" || assignedAccount?.code === "1800") return "fixed-asset-document-required" as const;
       }
       const allowed = bank.type === "income"
