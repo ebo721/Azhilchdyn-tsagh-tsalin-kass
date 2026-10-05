@@ -9,8 +9,10 @@ import type { EmployeeEmployeeType } from './employeeEmployeeType';
 import type { EmployeePayFrequency } from './employeePayFrequency';
 import type { EmployeeSalaryType } from './employeeSalaryType';
 import type { EmployeeStatus } from './employeeStatus';
+import type { SocialInsuranceProfile } from './socialInsuranceProfile';
 
 export interface Employee {
+  socialInsuranceProfile?: SocialInsuranceProfile | null;
   id: number;
   name: string;
   role: string;

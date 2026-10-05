@@ -1,4 +1,6 @@
 import { Router, type IRouter } from "express";
+import { DownloadSocialInsuranceReportQueryParams } from "@workspace/api-zod";
+import { buildInsuranceWorkbook, InsuranceReportValidationError } from "../lib/social-insurance-report.js";
 import { createServer } from "node:http";
 import {
   CreateAttendanceBody,
@@ -266,6 +268,30 @@ router.put("/payroll-schedule", async (req, res, next) => {
     }
     res.json(UpdatePayrollScheduleResponse.parse(result.saved));
   } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/payroll/social-insurance-report", async (req, res, next) => {
+  try {
+    const session = await getStaffSession(req);
+    if (!session || !["admin", "accountant"].includes(session.role)) {
+      res.status(403).json({ error: "НДШ тайланг зөвхөн админ, нягтлан татна." });
+      return;
+    }
+    const { month } = DownloadSocialInsuranceReportQueryParams.parse(req.query);
+    const summary = await getPayrollSummary(month);
+    const employees = await db.select().from(employeesTable);
+    const workbook = await buildInsuranceWorkbook(summary.lines, employees);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="NDSH-${month}.xlsx"`);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(workbook);
+  } catch (error) {
+    if (error instanceof InsuranceReportValidationError) {
+      res.status(422).json({ error: error.message });
+      return;
+    }
     next(error);
   }
 });

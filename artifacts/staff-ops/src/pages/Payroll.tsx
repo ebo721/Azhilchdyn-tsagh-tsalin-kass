@@ -4,7 +4,8 @@ import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { cn } from '@/lib/utils';
-import { CalendarDays, Banknote, Check, ChevronRight, Coins, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { CalendarDays, Banknote, Check, ChevronRight, Coins, Download, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { downloadSocialInsuranceReport } from '@workspace/api-client-react';
 import { getGetDashboardQueryKey, getGetPayrollAdvanceQueryKey, getGetPayrollQueryKey, getGetPayrollScheduleQueryKey, getListJournalReceivablesQueryKey, useApprovePayrollAdvance, useGetAuthSession, useGetPayroll, useGetPayrollAdvance, useGetPayrollSchedule, useListCashClosures, useListJournalReceivables, useUpdatePayrollAdvancePayment, useUpdatePayrollSchedule, useUpsertPayrollAdjustment, type PayrollLine, type PayrollScheduleInput } from '@workspace/api-client-react';
 import { EmptyState, ErrorBlock, LoadingBlock, Modal } from '@/components/ui-primitives';
 import { dateLabel, currentMonth, money, shiftMonth, today } from '@/lib/app-shared';
@@ -189,6 +190,8 @@ function PayrollScheduleSettingsModal({ onClose }: { onClose: () => void }) {
 }
 
 export function Payroll() {
+  const [downloadingInsurance, setDownloadingInsurance] = useState(false);
+  const [insuranceError, setInsuranceError] = useState<string | null>(null);
   const [month, setMonth] = useState(currentMonth());
   const [selectedLine, setSelectedLine] = useState<PayrollLine | null>(null);
   const [showAdvance, setShowAdvance] = useState(false);
@@ -266,6 +269,25 @@ export function Payroll() {
       },
     });
   };
+  const downloadInsurance = async () => {
+    setDownloadingInsurance(true);
+    setInsuranceError(null);
+    try {
+      const workbook = await downloadSocialInsuranceReport({ month }, { responseType: 'blob' });
+      const url = URL.createObjectURL(workbook);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `NDSH-${month}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setInsuranceError(error instanceof Error ? error.message : 'НДШ тайлан татаж чадсангүй.');
+    } finally {
+      setDownloadingInsurance(false);
+    }
+  };
   const revertApproval = () => {
     if (!window.confirm(`${month} сарын урьдчилгаа цалингийн батлалтыг устгах уу?`)) return;
     deletion.request(`/payroll-advance/approval?month=${month}`, `${month} сарын урьдчилгаа цалингийн батлалт`);
@@ -298,12 +320,15 @@ export function Payroll() {
   };
   return <div className="page-enter">
     <div className="mb-6 flex flex-wrap items-center justify-end gap-2">
+      {(session.data?.role === 'admin' || session.data?.role === 'accountant') && <Button onClick={downloadInsurance} variant="outline" disabled={downloadingInsurance || query.isFetching || query.isError || !month} data-testid="button-download-insurance-report"><Download className="size-4" />{downloadingInsurance ? 'Тайлан бэлдэж байна...' : 'НДШ тайлан · Excel'}</Button>}
       <Button onClick={() => setShowScheduleSettings(true)} variant="outline" data-testid="button-payroll-schedule-settings"><CalendarDays className="size-4" />Цалингийн хуваарь</Button>
       <Button onClick={pullLatestAttendance} variant="outline" disabled={query.isFetching || advanceQuery.isFetching} data-testid="button-pull-payroll-attendance"><RefreshCw className={cn('size-4', (query.isFetching || advanceQuery.isFetching) && 'animate-spin')} />{query.isFetching || advanceQuery.isFetching ? 'Татаж байна...' : 'Цаг татах'}</Button>
       <Button onClick={() => setShowAdvance((value) => !value)} variant={showAdvance ? 'default' : 'outline'} data-testid="button-payroll-advance"><Coins className="size-4" />Урьдчилгаа цалин</Button>
       <div className="flex items-center overflow-hidden rounded-xl border border-border bg-card"><button type="button" onClick={() => setMonth((value) => shiftMonth(value, -1))} className="grid size-10 place-items-center border-r border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Өмнөх сар" data-testid="button-payroll-previous-month"><ChevronRight className="size-4 rotate-180" /></button><div className="flex items-center gap-2 px-3"><CalendarDays className="size-4 text-primary" /><label className="relative flex h-10 min-w-28 cursor-pointer items-center text-sm font-medium"><span>{mongolianMonthLabel(month)}</span><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="Цалингийн сар сонгох" data-testid="input-payroll-month" /></label></div><button type="button" onClick={() => setMonth((value) => shiftMonth(value, 1))} className="grid size-10 place-items-center border-l border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Дараагийн сар" data-testid="button-payroll-next-month"><ChevronRight className="size-4" /></button></div>
     </div>
 
+    {insuranceError && <div role="alert" className="mb-5 whitespace-pre-line rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" data-testid="error-insurance-report">{insuranceError}</div>}
+    {query.isError && query.error instanceof Error && <p role="alert" className="mb-5 whitespace-pre-line text-sm text-destructive">{query.error.message}</p>}
     {!query.isLoading && !query.isError && query.data && (
       <div className="mb-6 rounded-2xl border border-border bg-card p-4 shadow-sm" data-testid="panel-payroll-schedule-info">
         <h3 className="mb-3 text-sm font-bold">Цалингийн мөчлөг ({month})</h3>

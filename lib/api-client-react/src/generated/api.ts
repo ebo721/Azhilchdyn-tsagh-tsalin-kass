@@ -71,6 +71,8 @@ import type {
   DeleteAttendanceParams,
   DeletionRequest,
   DeletionRequestInput,
+  DownloadSocialInsuranceReport422,
+  DownloadSocialInsuranceReportParams,
   Employee,
   EmployeeInput,
   EmployeeSalaryHistory,
@@ -3270,6 +3272,90 @@ export function useGetPayroll<TData = Awaited<ReturnType<typeof getPayroll>>, TE
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetPayrollQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDownloadSocialInsuranceReportUrl = (params: DownloadSocialInsuranceReportParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/payroll/social-insurance-report?${stringifiedParams}` : `/api/payroll/social-insurance-report`
+}
+
+/**
+ * @summary Download the selected month's social insurance upload workbook
+ */
+export const downloadSocialInsuranceReport = async (params: DownloadSocialInsuranceReportParams, options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+  return customFetch<Blob>(getDownloadSocialInsuranceReportUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadSocialInsuranceReportQueryKey = (params?: DownloadSocialInsuranceReportParams,) => {
+    return [
+    `/api/payroll/social-insurance-report`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getDownloadSocialInsuranceReportQueryOptions = <TData = Awaited<ReturnType<typeof downloadSocialInsuranceReport>>, TError = ErrorType<DownloadSocialInsuranceReport422>>(params: DownloadSocialInsuranceReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadSocialInsuranceReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadSocialInsuranceReportQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadSocialInsuranceReport>>> = ({ signal }) => downloadSocialInsuranceReport(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadSocialInsuranceReport>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadSocialInsuranceReportQueryResult = NonNullable<Awaited<ReturnType<typeof downloadSocialInsuranceReport>>>
+export type DownloadSocialInsuranceReportQueryError = ErrorType<DownloadSocialInsuranceReport422>
+
+
+/**
+ * @summary Download the selected month's social insurance upload workbook
+ */
+
+export function useDownloadSocialInsuranceReport<TData = Awaited<ReturnType<typeof downloadSocialInsuranceReport>>, TError = ErrorType<DownloadSocialInsuranceReport422>>(
+ params: DownloadSocialInsuranceReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadSocialInsuranceReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadSocialInsuranceReportQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

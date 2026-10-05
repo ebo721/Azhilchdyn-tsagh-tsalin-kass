@@ -5,6 +5,7 @@ import * as pinoHttpModule from "pino-http";
 import type { HttpLogger } from "pino-http";
 import router from "./routes/index.js";
 import { logger } from "./lib/logger.js";
+import { PayrollConfigurationError } from "./lib/shift-insurance.js";
 
 type PinoHttpFactory = (options?: Record<string, unknown>) => HttpLogger;
 
@@ -44,6 +45,10 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api", router);
 
 const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
+  if (error instanceof PayrollConfigurationError) {
+    res.status(422).json({ error: error.message });
+    return;
+  }
   const isMalformedJson = error instanceof Error
     && "status" in error
     && error.status === 400

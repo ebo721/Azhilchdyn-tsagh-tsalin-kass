@@ -11,6 +11,12 @@ A newly entered salary must have an effective date later than the latest salary-
 
 Payroll deductions are based on the effective social-insurance salary: employee social insurance is 11.5%; taxable income is social-insurance salary minus that contribution; calculated personal income tax is 10% of taxable income; final income tax is calculated tax minus the applicable relief, floored at zero.
 
+For shift employees without the full-salary exception, the user chose: social-insurance monthly salary ÷ expected monthly workdays × actually worked present/late days. Apply the salary and expected-day settings effective on each attendance date, including weekends. Daily-paid shift employees still enter a monthly social-insurance base and expected workdays. Missing expected workdays must be reported, not replaced with office weekdays or a guessed denominator.
+
+**Why:** The user explicitly selected proration of the separate monthly social-insurance base rather than deductions from earned gross or a daily insurance base.
+
+**How to apply:** Preserve office weekday proration and the admin full-salary exception; do not cap actual shift attendance at expected workdays. Exclude leave, absence, and attendance outside employment dates.
+
 When an approved payroll-advance line is changed from paid back to unpaid, refresh that employee's salary and first-half worked days, recalculate the advance, and remove its cash expense in the same transaction.
 
 Salary-history correction may change its effective date, base salary, and social-insurance salary even when it recalculates a paid month. The recorded paid amount must remain unchanged; recalculation produces the resulting payable or receivable balance. A salary effective date is independent of the employment joined date and must not change it. Deletion must preserve the baseline salary row. Editing or deleting the latest row must update the employee's current salary fields in the same transaction.

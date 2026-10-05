@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { needsShiftWorkDays } from "../lib/shift-insurance.js";
 import { createServer } from "node:http";
 import {
   CreateAttendanceBody,
@@ -192,8 +193,8 @@ router.post("/employees", async (req, res, next) => {
       return;
     }
     const salaryType = input.employeeType === "office" ? "monthly" : input.salaryType;
-    if (input.employeeType === "shift" && salaryType === "monthly" && input.monthlyExpectedWorkDays <= 0) {
-      res.status(400).json({ error: "Сарын цалинтай ээлжийн ажилтны сард ажиллах ёстой хоногийг 1-ээс ихээр оруулна уу" });
+    if (needsShiftWorkDays({ ...input, salaryType }) && input.monthlyExpectedWorkDays <= 0) {
+      res.status(400).json({ error: "Ээлжийн ажилтны цалин, НДШ тооцоход сард ажиллах ёстой хоногийг 1–31 гэж оруулна уу" });
       return;
     }
     const employee = await db.transaction(async (tx) => {
@@ -310,10 +311,9 @@ router.patch("/employees/:id", async (req, res, next) => {
     const normalizedSalaryType = (employeeInput.employeeType ?? current.employeeType) === "office"
       ? "monthly"
       : (employeeInput.salaryType ?? (current.salaryType === "hourly" ? "daily" : current.salaryType));
-    if ((employeeInput.employeeType ?? current.employeeType) === "shift"
-      && normalizedSalaryType === "monthly"
+    if (needsShiftWorkDays({ ...current, ...employeeInput, salaryType: normalizedSalaryType })
       && (employeeInput.monthlyExpectedWorkDays ?? current.monthlyExpectedWorkDays) <= 0) {
-      res.status(400).json({ error: "Сарын цалинтай ээлжийн ажилтны сард ажиллах ёстой хоногийг 1-ээс ихээр оруулна уу" });
+      res.status(400).json({ error: "Ээлжийн ажилтны цалин, НДШ тооцоход сард ажиллах ёстой хоногийг 1–31 гэж оруулна уу" });
       return;
     }
     const employee = await db.transaction(async (tx) => {
@@ -427,8 +427,8 @@ router.patch("/employees/:id/salary-history/:historyId", async (req, res, next) 
       ? "monthly"
       : (input.salaryType ?? (target.salaryType === "hourly" ? "daily" : target.salaryType));
     const targetDays = input.monthlyExpectedWorkDays ?? target.monthlyExpectedWorkDays;
-    if (target.employeeType === "shift" && targetSalaryType === "monthly" && targetDays <= 0) {
-      res.status(400).json({ error: "Сарын цалинтай ээлжийн ажилтны сард ажиллах ёстой хоногийг 1-ээс ихээр оруулна уу" });
+    if (needsShiftWorkDays({ ...target, ...input, salaryType: targetSalaryType }) && targetDays <= 0) {
+      res.status(400).json({ error: "Ээлжийн ажилтны цалин, НДШ тооцоход сард ажиллах ёстой хоногийг 1–31 гэж оруулна уу" });
       return;
     }
     if (index > 0 && effectiveFrom < String(employee.joinedAt)) {

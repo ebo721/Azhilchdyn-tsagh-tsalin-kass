@@ -8,8 +8,10 @@
 import type { EmployeeInputEmployeeType } from './employeeInputEmployeeType';
 import type { EmployeeInputPayFrequency } from './employeeInputPayFrequency';
 import type { EmployeeInputSalaryType } from './employeeInputSalaryType';
+import type { SocialInsuranceProfile } from './socialInsuranceProfile';
 
 export interface EmployeeInput {
+  socialInsuranceProfile?: SocialInsuranceProfile;
   /** @minLength 1 */
   name: string;
   /** @minLength 1 */
