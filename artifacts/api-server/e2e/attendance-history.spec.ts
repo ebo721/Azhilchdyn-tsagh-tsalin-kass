@@ -40,12 +40,21 @@ test("shows inactive employees' history and preserves the shift filter after rel
   await expect(page.getByTestId("select-attendance-904-2026-09-03")).toHaveValue("leave");
   await expect(page.getByTestId("row-attendance-calendar-902")).toBeVisible();
   await expect(page.getByTestId("row-attendance-calendar-903")).toBeVisible();
+  for (const id of [901, 902, 904]) {
+    const row = page.getByTestId(`row-attendance-calendar-${id}`);
+    await expect(row.getByText("Идэвхгүй", { exact: true })).toBeVisible();
+    await expect(row).toHaveClass(/bg-muted\/50/);
+  }
+  const activeRow = page.getByTestId("row-attendance-calendar-903");
+  await expect(activeRow.getByText("Идэвхгүй", { exact: true })).toHaveCount(0);
+  await expect(activeRow).not.toHaveClass(/bg-muted\/50/);
   await page.getByTestId("select-attendance-shift-filter").selectOption("1");
   await expect(page.getByTestId("row-attendance-calendar-902")).toBeVisible();
   await expect(page.getByTestId("row-attendance-calendar-901")).toHaveCount(0);
   await page.reload();
   await page.getByTestId("input-attendance-month").fill("2026-09");
   await expect(page.getByTestId("select-attendance-901-2026-09-05")).toHaveValue("worked");
+  await expect(page.getByTestId("row-attendance-calendar-901").getByText("Идэвхгүй", { exact: true })).toBeVisible();
 });
 
 test("shows the employment end month without records, but hides former employees in later months", async ({ page }) => {
