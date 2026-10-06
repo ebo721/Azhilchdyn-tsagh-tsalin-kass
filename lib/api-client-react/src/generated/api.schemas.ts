@@ -379,6 +379,26 @@ export interface Dashboard {
   recentActivity: Activity[];
 }
 
+export interface BankCashUnlinkResult {
+  bankTransactionId: number;
+  cashTransactionId: number;
+  /** @nullable */
+  voidedJournalEntryId: number | null;
+  /** @nullable */
+  reversalJournalEntryId: number | null;
+}
+
+export interface BankCashJournalInput {
+  /** @minimum 1 */
+  accountId: number;
+}
+
+export interface BankCashJournalResult {
+  bankTransactionId: number;
+  cashTransactionId: number;
+  journalEntryId: number;
+}
+
 export interface EmployeeSalaryBankAccount {
   /** @pattern ^(MN[0-9]{18}|[0-9]{6,34})$ */
   bankAccountNumber: string;

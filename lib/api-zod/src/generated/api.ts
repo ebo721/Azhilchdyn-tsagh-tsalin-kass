@@ -1876,6 +1876,42 @@ export const DeleteBankTransactionJournalResponse = zod.object({
 
 
 /**
+ * @summary Unlink an incorrect bank-cash pair without deleting either transaction
+ */
+export const UnlinkBankTransactionCashParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const UnlinkBankTransactionCashResponse = zod.object({
+  "bankTransactionId": zod.number().int(),
+  "cashTransactionId": zod.number().int(),
+  "voidedJournalEntryId": zod.number().int().nullable(),
+  "reversalJournalEntryId": zod.number().int().nullable()
+})
+
+
+/**
+ * @summary Restore a deleted journal for an existing bank-cash pair
+ */
+export const RestoreBankCashJournalParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+
+
+export const RestoreBankCashJournalBody = zod.object({
+  "accountId": zod.number().int().min(1)
+})
+
+export const RestoreBankCashJournalResponse = zod.object({
+  "bankTransactionId": zod.number().int(),
+  "cashTransactionId": zod.number().int(),
+  "journalEntryId": zod.number().int()
+})
+
+
+/**
  * @summary Reject the current journal suggestion while keeping the transaction pending
  */
 export const RejectBankTransactionSuggestionParams = zod.object({
