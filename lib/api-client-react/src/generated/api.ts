@@ -71,6 +71,7 @@ import type {
   DeleteAttendanceParams,
   DeletionRequest,
   DeletionRequestInput,
+  DownloadSocialInsuranceReport409,
   DownloadSocialInsuranceReport422,
   DownloadSocialInsuranceReportParams,
   Employee,
@@ -82,6 +83,7 @@ import type {
   FixedAsset,
   FixedAssetInput,
   GetHourBalanceParams,
+  GetPayroll409,
   GetPayrollAdvanceParams,
   GetPayrollParams,
   HealthStatus,
@@ -151,6 +153,9 @@ import type {
   PayrollSchedule,
   PayrollScheduleInput,
   PayrollSummary,
+  RebuildPayrollBalances200,
+  RebuildPayrollBalances422,
+  RebuildPayrollBalancesParams,
   ReclassifyInventoryPurchaseAsExpenseInput,
   RevertPayrollAdvanceApprovalParams,
   Shift,
@@ -3240,7 +3245,7 @@ export const getGetPayrollQueryKey = (params?: GetPayrollParams,) => {
     }
 
 
-export const getGetPayrollQueryOptions = <TData = Awaited<ReturnType<typeof getPayroll>>, TError = ErrorType<unknown>>(params?: GetPayrollParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPayroll>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetPayrollQueryOptions = <TData = Awaited<ReturnType<typeof getPayroll>>, TError = ErrorType<GetPayroll409>>(params?: GetPayrollParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPayroll>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -3259,14 +3264,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetPayrollQueryResult = NonNullable<Awaited<ReturnType<typeof getPayroll>>>
-export type GetPayrollQueryError = ErrorType<unknown>
+export type GetPayrollQueryError = ErrorType<GetPayroll409>
 
 
 /**
  * @summary Calculate payroll for a month
  */
 
-export function useGetPayroll<TData = Awaited<ReturnType<typeof getPayroll>>, TError = ErrorType<unknown>>(
+export function useGetPayroll<TData = Awaited<ReturnType<typeof getPayroll>>, TError = ErrorType<GetPayroll409>>(
  params?: GetPayrollParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPayroll>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -3283,6 +3288,84 @@ export function useGetPayroll<TData = Awaited<ReturnType<typeof getPayroll>>, TE
 
 
 
+
+export const getRebuildPayrollBalancesUrl = (params: RebuildPayrollBalancesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/payroll/balances/recalculate?${stringifiedParams}` : `/api/payroll/balances/recalculate`
+}
+
+/**
+ * @summary Prepare missing or changed prior financial balances in resumable batches
+ */
+export const rebuildPayrollBalances = async (params: RebuildPayrollBalancesParams, options?: Parameters<typeof customFetch>[1]): Promise<RebuildPayrollBalances200> => {
+
+  return customFetch<RebuildPayrollBalances200>(getRebuildPayrollBalancesUrl(params),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRebuildPayrollBalancesMutationOptions = <TError = ErrorType<RebuildPayrollBalances422>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rebuildPayrollBalances>>, TError,{params: RebuildPayrollBalancesParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rebuildPayrollBalances>>, TError,{params: RebuildPayrollBalancesParams}, TContext> => {
+
+const mutationKey = ['rebuildPayrollBalances'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rebuildPayrollBalances>>, {params: RebuildPayrollBalancesParams}> = (props) => {
+          const {params} = props ?? {};
+
+          return  rebuildPayrollBalances(params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RebuildPayrollBalancesMutationResult = NonNullable<Awaited<ReturnType<typeof rebuildPayrollBalances>>>
+
+    export type RebuildPayrollBalancesMutationError = ErrorType<RebuildPayrollBalances422>
+
+    /**
+ * @summary Prepare missing or changed prior financial balances in resumable batches
+ */
+export const useRebuildPayrollBalances = <TError = ErrorType<RebuildPayrollBalances422>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rebuildPayrollBalances>>, TError,{params: RebuildPayrollBalancesParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rebuildPayrollBalances>>,
+        TError,
+        {params: RebuildPayrollBalancesParams},
+        TContext
+      > => {
+      return useMutation(getRebuildPayrollBalancesMutationOptions(options));
+    }
 
 export const getDownloadSocialInsuranceReportUrl = (params: DownloadSocialInsuranceReportParams,) => {
   const normalizedParams = new URLSearchParams();
@@ -3324,7 +3407,7 @@ export const getDownloadSocialInsuranceReportQueryKey = (params?: DownloadSocial
     }
 
 
-export const getDownloadSocialInsuranceReportQueryOptions = <TData = Awaited<ReturnType<typeof downloadSocialInsuranceReport>>, TError = ErrorType<DownloadSocialInsuranceReport422>>(params: DownloadSocialInsuranceReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadSocialInsuranceReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getDownloadSocialInsuranceReportQueryOptions = <TData = Awaited<ReturnType<typeof downloadSocialInsuranceReport>>, TError = ErrorType<DownloadSocialInsuranceReport409 | DownloadSocialInsuranceReport422>>(params: DownloadSocialInsuranceReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadSocialInsuranceReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -3343,14 +3426,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type DownloadSocialInsuranceReportQueryResult = NonNullable<Awaited<ReturnType<typeof downloadSocialInsuranceReport>>>
-export type DownloadSocialInsuranceReportQueryError = ErrorType<DownloadSocialInsuranceReport422>
+export type DownloadSocialInsuranceReportQueryError = ErrorType<DownloadSocialInsuranceReport409 | DownloadSocialInsuranceReport422>
 
 
 /**
  * @summary Download the selected month's social insurance upload workbook
  */
 
-export function useDownloadSocialInsuranceReport<TData = Awaited<ReturnType<typeof downloadSocialInsuranceReport>>, TError = ErrorType<DownloadSocialInsuranceReport422>>(
+export function useDownloadSocialInsuranceReport<TData = Awaited<ReturnType<typeof downloadSocialInsuranceReport>>, TError = ErrorType<DownloadSocialInsuranceReport409 | DownloadSocialInsuranceReport422>>(
  params: DownloadSocialInsuranceReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadSocialInsuranceReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {

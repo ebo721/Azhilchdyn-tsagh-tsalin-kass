@@ -249,6 +249,7 @@ export type PayrollCalculationData = {
   records: Array<typeof attendanceTable.$inferSelect>;
   allAdjustments: Array<typeof payrollAdjustmentsTable.$inferSelect>;
   allAdvanceApprovals: Array<typeof payrollAdvanceApprovalsTable.$inferSelect>;
+  openingBalances?: Array<{ employeeId: number; balanceAmount: number }>;
 };
 
 export class InventoryInsufficientStockError extends Error {}

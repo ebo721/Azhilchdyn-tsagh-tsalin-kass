@@ -1,4 +1,4 @@
-import { desc, eq, lte } from "drizzle-orm";
+import { and, desc, eq, gte, lte } from "drizzle-orm";
 import {
   attendanceTable,
   db,
@@ -10,7 +10,8 @@ import {
 } from "@workspace/db";
 import { currentMonth, daysInMonth, money, nextMonth, previousMonth } from "./date-utils.js";
 import { shiftInsuredDailySalary } from "./shift-insurance.js";
-import { defaultPayrollSchedule, scheduleDate, selectPayrollScheduleVersion, weekdayDatesBetween, type PayrollCalculationData, type SalaryHistoryRow } from "./route-shared.js";
+import { defaultPayrollSchedule, scheduleDate, weekdayDatesBetween, type PayrollCalculationData, type SalaryHistoryRow, type DbClient } from "./route-shared.js";
+import { readMonthlyPayroll } from "./payroll-balance-store.js";
 
 export const monthlyIncomeTaxRelief = (socialInsuranceSalary: number) => {
   if (socialInsuranceSalary <= 500_000) return 20_000;
@@ -22,18 +23,18 @@ export const monthlyIncomeTaxRelief = (socialInsuranceSalary: number) => {
   return 0;
 };
 
-export async function getPayrollSchedule(month = currentMonth()) {
-  let [row] = await db.select().from(payrollScheduleSettingsTable)
+export async function getPayrollSchedule(month = currentMonth(), connection: DbClient = db) {
+  let [row] = await connection.select().from(payrollScheduleSettingsTable)
     .where(lte(payrollScheduleSettingsTable.effectiveFromMonth, month))
     .orderBy(desc(payrollScheduleSettingsTable.effectiveFromMonth))
     .limit(1);
   if (!row) {
-    [row] = await db.insert(payrollScheduleSettingsTable)
+    [row] = await connection.insert(payrollScheduleSettingsTable)
       .values({ ...defaultPayrollSchedule, effectiveFromMonth: "0001-01" })
       .onConflictDoNothing({ target: payrollScheduleSettingsTable.effectiveFromMonth })
       .returning();
     if (!row) {
-      [row] = await db.select().from(payrollScheduleSettingsTable)
+      [row] = await connection.select().from(payrollScheduleSettingsTable)
         .where(eq(payrollScheduleSettingsTable.effectiveFromMonth, "0001-01")).limit(1);
     }
   }
@@ -81,40 +82,17 @@ export function salaryAt(employee: typeof employeesTable.$inferSelect, history: 
 }
 
 export async function getPayrollSummary(month: string, existingData?: PayrollCalculationData) {
-  const data = existingData ?? await (async () => {
-    const [allEmployees, salaryHistory, records, allAdjustments, allAdvanceApprovals] = await Promise.all([
-      db.select().from(employeesTable),
-      db.select().from(employeeSalaryHistoryTable),
-      db.select().from(attendanceTable),
-      db.select().from(payrollAdjustmentsTable),
-      db.select().from(payrollAdvanceApprovalsTable),
-    ]);
-    return { allEmployees, salaryHistory, records, allAdjustments, allAdvanceApprovals };
-  })();
-  // Request-scoped versions: recursive carryover must not issue one SELECT per
-  // prior month, or reuse a process-wide cache after a schedule edit.
-  const schedules = await db.select().from(payrollScheduleSettingsTable)
-    .where(lte(payrollScheduleSettingsTable.effectiveFromMonth, month));
-  const earliestMonth = data.allEmployees.reduce(
-    (earliest, employee) => employee.joinedAt.slice(0, 7) < earliest ? employee.joinedAt.slice(0, 7) : earliest,
-    month,
-  );
-  if (!selectPayrollScheduleVersion(schedules, earliestMonth)) {
-    // Preserve the existing lazy default initialization, including its
-    // on-conflict reread when another request creates the baseline first.
-    schedules.push(await getPayrollSchedule(earliestMonth));
-  }
-  return getPayrollSummaryWithSchedules(month, data, schedules);
+  if (!existingData) return readMonthlyPayroll(month);
+  return calculatePayrollMonth(month, existingData, await getPayrollSchedule(month));
 }
 
-async function getPayrollSummaryWithSchedules(
+/** One month only. Historical carryover comes from financial records, never from attendance. */
+export function calculatePayrollMonth(
   month: string,
   data: PayrollCalculationData,
-  schedules: Array<typeof payrollScheduleSettingsTable.$inferSelect>,
+  rawSchedule: typeof payrollScheduleSettingsTable.$inferSelect,
 ) {
   const { allEmployees, salaryHistory, records } = data;
-  const rawSchedule = selectPayrollScheduleVersion(schedules, month);
-  if (!rawSchedule) throw new Error(`Missing payroll schedule for ${month}`);
   const schedule = {
     effectiveFromMonth: rawSchedule.effectiveFromMonth,
     id: rawSchedule.id,
@@ -132,12 +110,7 @@ async function getPayrollSummaryWithSchedules(
   const employees = allEmployees.filter((employee) =>
     employee.joinedAt <= monthEnd && (!employee.inactiveAt || employee.inactiveAt >= monthStart)
   );
-  const previousMonthValue = previousMonth(month);
-  const previousMonthEnd = `${previousMonthValue}-${String(daysInMonth(previousMonthValue)).padStart(2, "0")}`;
-  const previousPayroll = allEmployees.some((employee) => employee.joinedAt <= previousMonthEnd)
-    ? await getPayrollSummaryWithSchedules(previousMonthValue, data, schedules)
-    : null;
-  const previousLineMap = new Map(previousPayroll?.lines.map((line) => [line.employeeId, line]) ?? []);
+  const previousLineMap = new Map(data.openingBalances?.map(line => [line.employeeId, line]) ?? []);
   const weekdays = weekdayDatesBetween(period.periodStart, period.periodEnd);
   const monthRecords = records.filter((record) => String(record.date) >= period.periodStart && String(record.date) <= period.periodEnd);
   const adjustmentMap = new Map(adjustments.map((adjustment) => [adjustment.employeeId, adjustment]));
@@ -326,7 +299,10 @@ export async function getPayrollAdvanceSummary(month: string) {
   }
   const [allEmployees, records, salaryHistory] = await Promise.all([
     db.select().from(employeesTable),
-    db.select().from(attendanceTable),
+    db.select().from(attendanceTable).where(and(
+      gte(attendanceTable.date, period.periodStart),
+      lte(attendanceTable.date, period.advancePeriodEnd),
+    )),
     db.select().from(employeeSalaryHistoryTable),
   ]);
   const employees = allEmployees.filter((employee) =>

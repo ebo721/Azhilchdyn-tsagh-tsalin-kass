@@ -1,6 +1,7 @@
 - [OpenAPI calendar-date validation](openapi-calendar-date-validation.md) — Orval cannot combine string date format and pattern; keep shape in schema and calendar checks at the route boundary.
 - [Orval DELETE parameter collisions](orval-delete-parameter-collisions.md) — Mixed path and query parameters on DELETE can generate duplicate Zod exports; prefer path-only parameters.
 - [Effective-dated payroll](effective-dated-payroll.md) — Prorate monthly salary by Mon–Fri workdays; employment end dates are inclusive and paid months stay immutable.
+- [Monthly payroll balances](monthly-payroll-balances.md) — Read current-period attendance only; use saved prior financial debt, with explicit initialization/repair rather than historical GET recomputation.
 - [Workspace-scoped packages](workspace-scoped-packages.md) — Avoid root installs when the package installer cannot target a pnpm workspace package.
 - [Drizzle unique conflicts](drizzle-unique-conflicts.md) — PostgreSQL unique violations may be wrapped; inspect both error.code and error.cause.code for 23505.
 - [Vercel TypeScript emit](vercel-typescript-emit.md) — Keep the API tsconfig emit-compatible; Vercel may hide TS5096 behind “src/app.ts: Emit skipped.”

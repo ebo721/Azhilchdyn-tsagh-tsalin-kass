@@ -87,6 +87,7 @@ test("persists reporting metadata and expected days, downloads the selected mont
 
 test("enforces report authorization and required month at the real API boundary", async ({ page, request }) => {
   expect((await request.get("/api/payroll/social-insurance-report?month=2026-10")).status()).toBe(401);
+  expect((await request.post("/api/payroll/balances/recalculate?month=2026-10")).status()).toBe(401);
   for (const [username, secret, allowed] of [
     ["admin", "ADMIN_PASSWORD", true], ["saacc", "ACCOUNTANT_PASSWORD", true],
     ["sasta", "SASTA_PASSWORD", false], ["sahr", "HR_MANAGER_PASSWORD", false],
@@ -95,7 +96,36 @@ test("enforces report authorization and required month at the real API boundary"
     const response = await page.request.get("/api/payroll/social-insurance-report?month=not-a-month");
     expect(response.status()).toBe(allowed ? 400 : 403);
     expect((await page.request.get("/api/payroll/social-insurance-report")).status()).toBe(allowed ? 400 : 403);
+    expect((await page.request.post("/api/payroll/balances/recalculate?month=invalid")).status()).toBe(allowed ? 400 : 403);
     await page.getByTestId("button-logout").click();
     await expect(page.getByTestId("button-login")).toBeVisible();
   }
+});
+
+test("prepares previous balances in batches and refreshes the payroll view", async ({ page }) => {
+  await login(page, "admin", "ADMIN_PASSWORD");
+  let prepared = false;
+  let batches = 0;
+  await page.route(/\/api\/payroll\?/, route => {
+    const month = new URL(route.request().url()).searchParams.get("month")!;
+    return prepared
+      ? route.fulfill({ json: { month, lines: [], totalGross: 0, totalSocialInsurance: 0, totalIncomeTax: 0,
+        totalDeductions: 0, totalNet: 0, periodStart: `${month}-01`, periodEnd: `${month}-28`,
+        advancePeriodEnd: `${month}-15`, advancePaymentDate: `${month}-20`, finalPaymentDate: `${month}-28` } })
+      : route.fulfill({ status: 409, json: { error: "Өмнөх сарын цалингийн авлага/өглөг бэлтгэгдээгүй байна." } });
+  });
+  await page.route(/\/api\/payroll\/balances\/recalculate\?/, route => {
+    expect(route.request().method()).toBe("POST");
+    batches++;
+    prepared = batches === 2;
+    return route.fulfill({ json: prepared
+      ? { complete: true, processedMonths: ["2026-09"], nextMonth: null }
+      : { complete: false, processedMonths: ["2026-08"], nextMonth: "2026-09" } });
+  });
+  await page.goto("/payroll");
+  await expect(page.getByTestId("button-prepare-payroll-balances")).toBeVisible();
+  await page.getByTestId("button-prepare-payroll-balances").click();
+  await expect(page.getByTestId("payroll-balances-required")).toBeHidden();
+  expect(batches).toBe(2);
+  await expect(page.getByTestId("button-download-insurance-report")).toBeEnabled();
 });

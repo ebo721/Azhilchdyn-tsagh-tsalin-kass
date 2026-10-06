@@ -10,6 +10,7 @@ import { getGetDashboardQueryKey, getGetPayrollAdvanceQueryKey, getGetPayrollQue
 import { EmptyState, ErrorBlock, LoadingBlock, Modal } from '@/components/ui-primitives';
 import { dateLabel, currentMonth, money, shiftMonth, today } from '@/lib/app-shared';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
+import { rebuildPayrollBalances } from '@workspace/api-client-react';
 
 const mongolianMonthLabel = (value: string) => {
   const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value);
@@ -190,6 +191,11 @@ function PayrollScheduleSettingsModal({ onClose }: { onClose: () => void }) {
 }
 
 export function Payroll() {
+  const [preparingBalances, setPreparingBalances] = useState(false);
+  const [balanceProgress, setBalanceProgress] = useState('');
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+  const balancesAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => balancesAbort.current?.abort(), []);
   const [downloadingInsurance, setDownloadingInsurance] = useState(false);
   const [insuranceError, setInsuranceError] = useState<string | null>(null);
   const [month, setMonth] = useState(currentMonth());
@@ -288,6 +294,35 @@ export function Payroll() {
       setDownloadingInsurance(false);
     }
   };
+  const prepareBalances = async () => {
+    const targetMonth = month;
+    const controller = new AbortController();
+    balancesAbort.current = controller;
+    setPreparingBalances(true);
+    setBalanceError(null);
+    setBalanceProgress('Өмнөх сарын авлага/өглөгийг бэлтгэж байна…');
+    let lastNextMonth = '';
+    let count = 0;
+    try {
+      while (true) {
+        const result = await rebuildPayrollBalances({ month: targetMonth }, { signal: controller.signal });
+        count += result.processedMonths.length;
+        setBalanceProgress(`${count} сарын үлдэгдэл шинэчлэгдлээ.`);
+        if (result.complete) break;
+        if (!result.nextMonth || result.nextMonth <= lastNextMonth) {
+          throw new Error('Бүртгэл зэрэг өөрчлөгдсөн тул үлдэгдэл шинэчлэх ажиллагааг дахин эхлүүлнэ үү.');
+        }
+        lastNextMonth = result.nextMonth;
+      }
+      await qc.invalidateQueries({ queryKey: getGetPayrollQueryKey() });
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setBalanceError(error instanceof Error ? error.message : 'Өмнөх үлдэгдэл бэлтгэж чадсангүй.');
+      }
+    } finally {
+      setPreparingBalances(false);
+    }
+  };
   const revertApproval = () => {
     if (!window.confirm(`${month} сарын урьдчилгаа цалингийн батлалтыг устгах уу?`)) return;
     deletion.request(`/payroll-advance/approval?month=${month}`, `${month} сарын урьдчилгаа цалингийн батлалт`);
@@ -327,6 +362,12 @@ export function Payroll() {
       <div className="flex items-center overflow-hidden rounded-xl border border-border bg-card"><button type="button" onClick={() => setMonth((value) => shiftMonth(value, -1))} className="grid size-10 place-items-center border-r border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Өмнөх сар" data-testid="button-payroll-previous-month"><ChevronRight className="size-4 rotate-180" /></button><div className="flex items-center gap-2 px-3"><CalendarDays className="size-4 text-primary" /><label className="relative flex h-10 min-w-28 cursor-pointer items-center text-sm font-medium"><span>{mongolianMonthLabel(month)}</span><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="Цалингийн сар сонгох" data-testid="input-payroll-month" /></label></div><button type="button" onClick={() => setMonth((value) => shiftMonth(value, 1))} className="grid size-10 place-items-center border-l border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Дараагийн сар" data-testid="button-payroll-next-month"><ChevronRight className="size-4" /></button></div>
     </div>
 
+    {query.isError && 'status' in query.error && query.error.status === 409 && <div className="mb-5 space-y-3 rounded-xl border border-border bg-card p-4" data-testid="payroll-balances-required">
+      <p className="text-sm">Өмнөх сарын хадгалсан авлага/өглөгийг нэг удаа бэлтгэх, эсвэл хуучин сарын засварыг тусгах шаардлагатай. Ердийн цалин бодолт зөвхөн сонгосон цалингийн хугацааны ирцийг уншина.</p>
+      {(session.data?.role === 'admin' || session.data?.role === 'accountant') && <Button onClick={prepareBalances} disabled={preparingBalances} data-testid="button-prepare-payroll-balances">{preparingBalances ? 'Шинэчилж байна…' : 'Өмнөх үлдэгдэл шинэчлэх'}</Button>}
+      {balanceProgress && <p aria-live="polite" className="text-sm text-muted-foreground" data-testid="payroll-balances-progress">{balanceProgress}</p>}
+      {balanceError && <p role="alert" className="whitespace-pre-line text-sm text-destructive" data-testid="payroll-balances-error">{balanceError}</p>}
+    </div>}
     {insuranceError && <div role="alert" className="mb-5 whitespace-pre-line rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" data-testid="error-insurance-report">{insuranceError}</div>}
     {query.isError && query.error instanceof Error && <p role="alert" className="mb-5 whitespace-pre-line text-sm text-destructive">{query.error.message}</p>}
     {!query.isLoading && !query.isError && query.data && (

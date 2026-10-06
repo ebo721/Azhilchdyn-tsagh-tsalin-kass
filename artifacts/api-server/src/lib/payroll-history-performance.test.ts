@@ -8,8 +8,8 @@ import {
   payrollAdjustmentsTable, payrollAdvanceApprovalsTable, payrollScheduleSettingsTable,
 } from "@workspace/db";
 import ExcelJS from "exceljs";
-import { getPayrollSummary } from "./payroll-calc-helpers.js";
-import { defaultPayrollSchedule, type PayrollCalculationData } from "./route-shared.js";
+import { calculatePayrollMonth, getPayrollSchedule, getPayrollSummary } from "./payroll-calc-helpers.js";
+import { defaultPayrollSchedule, selectPayrollScheduleVersion, nextMonth, type PayrollCalculationData } from "./route-shared.js";
 import { buildInsuranceWorkbook } from "./social-insurance-report.js";
 
 type Schedule = typeof payrollScheduleSettingsTable.$inferSelect;
@@ -137,6 +137,16 @@ function digest(value: unknown) {
 }
 after(() => pool.end());
 
+// Test-only historical oracle. Production never reconstructs history in a payroll GET.
+function calculateThrough(month: string, data: PayrollCalculationData, schedules: Schedule[]) {
+  let previous: ReturnType<typeof calculatePayrollMonth> | undefined;
+  for (let current = "2016-01"; current <= month; current = nextMonth(current)) {
+    previous = calculatePayrollMonth(current, { ...data, openingBalances: previous?.lines },
+      selectPayrollScheduleVersion(schedules, current)!);
+  }
+  return previous!;
+}
+
 it("preserves complete summaries across ten years, schedule versions and salary corrections", async t => {
   const { data, schedules } = fixture();
   const before = structuredClone(data);
@@ -149,7 +159,7 @@ it("preserves complete summaries across ten years, schedule versions and salary 
     "2025-12": "dacf56d2e1833bc471476646223709c7cecf567499650f185e51d4b86ab234dd",
   };
   for (const month of Object.keys(expected) as Array<keyof typeof expected>) {
-    const summary = await getPayrollSummary(month);
+    const summary = calculateThrough(month, data, schedules);
     assert.equal(digest(summary), expected[month], `${month}: all response fields must match legacy calculation`);
     if (month === "2025-12") {
       assert.equal(summary.lines.find(line => line.employeeId === 3)?.carryoverAmount, 1190);
@@ -160,7 +170,7 @@ it("preserves complete summaries across ten years, schedule versions and salary 
   }
   assert.deepEqual(data, before, "calculation must not mutate payments or inputs");
   data.salaryHistory.find(row => row.id === 11)!.baseSalary = 2_100_000;
-  const corrected = await getPayrollSummary("2025-12");
+  const corrected = calculateThrough("2025-12", data, schedules);
   assert.equal(digest(corrected), "8fd60bc83cbabcb192d76cd73556368929ac8fed1f1b8dea7602353a55f41a05");
   assert.equal(corrected.lines[0].paidAmount, 1_920_000);
   assert.equal(corrected.lines[0].secondPaidAmount, 20_000);
@@ -170,16 +180,16 @@ it("keeps database reads and simulated network time constant for one month versu
   const { data, schedules } = fixture();
   const queries = fakeDatabase(t, data, schedules, 5);
   const shortStart = performance.now();
-  await getPayrollSummary("2016-01");
+  await getPayrollSummary("2016-01", data);
   const shortMs = performance.now() - shortStart;
   const shortReads = queries.length;
   queries.length = 0;
   const longStart = performance.now();
-  await getPayrollSummary("2025-12");
+  await getPayrollSummary("2025-12", data);
   const longMs = performance.now() - longStart;
   t.diagnostic(`one month: ${shortReads} reads, ${shortMs.toFixed(1)}ms; 120 months: ${queries.length} reads, ${longMs.toFixed(1)}ms`);
-  assert.equal(shortReads, 6);
-  assert.equal(queries.length, 6);
+  assert.equal(shortReads, 1);
+  assert.equal(queries.length, 1);
   assert.equal(queries.filter(query => query.includes('from "payroll_schedule_settings"')).length, 1);
   // Network contribution is fixed; allow generous CPU/scheduler headroom so
   // this catches sequential historical I/O without relying on microbenchmarks.
@@ -189,7 +199,7 @@ it("keeps database reads and simulated network time constant for one month versu
 it("exports the same insurance salary from the common long-history summary", async t => {
   const { data, schedules } = fixture();
   const queries = fakeDatabase(t, data, schedules);
-  const summary = await getPayrollSummary("2025-12");
+  const summary = calculateThrough("2025-12", data, schedules);
   const bytes = await buildInsuranceWorkbook(summary.lines, data.allEmployees);
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(bytes as never);
@@ -200,7 +210,7 @@ it("exports the same insurance salary from the common long-history summary", asy
     assert.equal(sheet.getCell(`H${index + 2}`).value, line.socialInsuranceSalary);
     assert.equal(sheet.getCell(`G${index + 2}`).result, line.socialInsuranceSalary);
   });
-  assert.equal(queries.length, 6);
+  assert.equal(queries.length, 0);
 });
 
 it("uses one schedule read with preloaded inputs and observes edits on the next request", async t => {
@@ -221,9 +231,9 @@ for (const conflict of [false, true]) {
     const { data, schedules } = fixture();
     schedules.shift(); // Newer effective versions exist, but not for early employment.
     const queries = fakeDatabase(t, data, schedules, 0, conflict);
-    const summary = await getPayrollSummary("2025-12", data);
-    assert.equal(digest(summary), "dacf56d2e1833bc471476646223709c7cecf567499650f185e51d4b86ab234dd");
-    assert.equal(queries.length, conflict ? 4 : 3);
+    const schedule = await getPayrollSchedule("2016-01");
+    assert.equal(schedule.effectiveFromMonth, "0001-01");
+    assert.equal(queries.length, conflict ? 3 : 2);
     assert.equal(queries.filter(query => query.startsWith("insert ")).length, 1);
     queries.length = 0;
     await getPayrollSummary("2025-12", data);
@@ -237,12 +247,12 @@ it("keeps signed overpayment and the ±1 tolerance across empty-attendance month
   data.allAdjustments = data.allAdjustments.filter(row => row.employeeId === 3);
   data.allAdjustments.forEach(row => { row.paidAmount = 100; row.secondPaidAmount = 10; });
   fakeDatabase(t, data, schedules);
-  let summary = await getPayrollSummary("2025-12", data);
+  let summary = calculateThrough("2025-12", data, schedules);
   assert.equal(summary.lines[0].carryoverAmount, -1190);
   assert.equal(summary.lines[0].balanceAmount, -1200);
   assert.equal(summary.lines[0].overpaidAmount, 1200);
   assert.equal(summary.lines[0].payable, 0);
   data.allAdjustments.forEach(row => { row.secondPaidAmount = 1; });
-  summary = await getPayrollSummary("2025-12", data);
+  summary = calculateThrough("2025-12", data, schedules);
   assert.equal(summary.lines[0].balanceAmount, 0, "round the monthly ±1 difference before carrying it");
 });
