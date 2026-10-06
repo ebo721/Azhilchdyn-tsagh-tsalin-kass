@@ -16,7 +16,7 @@ type Schedule = typeof payrollScheduleSettingsTable.$inferSelect;
 const epoch = new Date(0);
 function fixture(): { data: PayrollCalculationData; schedules: Schedule[] } {
   const employee: typeof employeesTable.$inferSelect = {
-    id: 1, name: "History fixture", role: "Test", phone: "",
+    id: 1, name: "History fixture", role: "Test", phone: "", bankAccountNumber: "",
     employeeType: "office", salaryType: "monthly", baseSalary: 1_500_000,
     socialInsuranceSalary: 1_200_000, payrollTaxExempt: false,
     fullSalaryRegardlessAttendance: false, payFrequency: "twice",

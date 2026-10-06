@@ -213,6 +213,7 @@ export function calculatePayrollMonth(
     return {
       employeeId: employee.id,
       employeeName: employee.name,
+      bankAccountNumber: employee.bankAccountNumber ?? "",
       role: employee.role,
       employeeType: employee.employeeType,
       daysWorked,

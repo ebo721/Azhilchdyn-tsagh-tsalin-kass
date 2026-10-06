@@ -2895,6 +2895,7 @@ components:
         role: { type: string }
         phone: { type: string }
         salaryType: { type: string, enum: [daily, monthly] }
+        bankAccountNumber: { type: string }
         employeeType: { type: string, enum: [shift, office] }
         baseSalary: { type: number }
         socialInsuranceSalary: { type: number }
@@ -2951,6 +2952,7 @@ components:
         name: { type: string, minLength: 1 }
         role: { type: string, minLength: 1 }
         phone: { type: string }
+        bankAccountNumber: { type: string, maxLength: 34, pattern: '^(|[0-9]{6,34}|MN[0-9]{18})$' }
         employeeType: { type: string, enum: [shift, office] }
         salaryType: { type: string, enum: [daily, monthly] }
         baseSalary: { type: number, minimum: 0 }
@@ -2967,6 +2969,7 @@ components:
         name: { type: string, minLength: 1 }
         role: { type: string, minLength: 1 }
         phone: { type: string }
+        bankAccountNumber: { type: string, maxLength: 34, pattern: '^(|[0-9]{6,34}|MN[0-9]{18})$' }
         employeeType: { type: string, enum: [shift, office] }
         salaryType: { type: string, enum: [daily, monthly] }
         monthlyExpectedWorkDays: { type: integer, minimum: 0, maximum: 31 }
@@ -3083,6 +3086,7 @@ components:
       properties:
         employeeId: { type: integer }
         employeeName: { type: string }
+        bankAccountNumber: { type: string }
         role: { type: string }
         employeeType: { type: string, enum: [shift, office] }
         daysWorked: { type: number }

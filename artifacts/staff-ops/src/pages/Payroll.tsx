@@ -81,6 +81,11 @@ function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; m
     onClose();
   };
   return <Modal title={`${line.employeeName} · Цалингийн тохируулга`} detail={`${month.replace('-', ' оны ')} сарын урьдчилгаа, хөнгөлөлт, суутгал болон шилжүүлсэн дүнг оруулна.`} onClose={onClose}>
+    <div className="mb-5 rounded-xl border border-primary/20 bg-primary/5 p-4">
+      <p className="text-xs font-semibold text-muted-foreground">Цалин хүлээн авах банкны данс</p>
+      <p className="mt-2 break-all font-mono text-base font-semibold select-all" data-testid="value-payroll-bank-account">{line.bankAccountNumber || 'Бүртгээгүй'}</p>
+      {!line.bankAccountNumber && <p className="mt-1 text-xs text-muted-foreground">Ажилтны бүртгэлийн «Засах» хэсэгт дансыг оруулна уу.</p>}
+    </div>
     <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-5" data-testid="form-payroll-adjustment">
       <div className="rounded-xl border border-border bg-secondary/40 p-4 text-xs text-muted-foreground">
         <div className="flex justify-between">

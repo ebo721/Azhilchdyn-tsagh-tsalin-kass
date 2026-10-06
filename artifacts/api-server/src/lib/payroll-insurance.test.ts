@@ -17,7 +17,7 @@ function day(offset: number) {
   return date.toISOString().slice(0, 10);
 }
 function employee(changes: Partial<Employee> = {}): Employee {
-  return { id: 999, name: "Insurance fixture", role: "Test", phone: "",
+  return { id: 999, name: "Insurance fixture", role: "Test", phone: "", bankAccountNumber: "",
     employeeType: "shift", salaryType: "daily", baseSalary: 100_000,
     socialInsuranceSalary: 1_200_000, payrollTaxExempt: false,
     fullSalaryRegardlessAttendance: false, payFrequency: "twice",

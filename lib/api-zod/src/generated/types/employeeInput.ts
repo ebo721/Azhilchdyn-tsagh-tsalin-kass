@@ -17,6 +17,11 @@ export interface EmployeeInput {
   /** @minLength 1 */
   role: string;
   phone: string;
+  /**
+     * @maxLength 34
+     * @pattern ^(|[0-9]{6,34}|MN[0-9]{18})$
+     */
+  bankAccountNumber?: string;
   employeeType: EmployeeInputEmployeeType;
   salaryType?: EmployeeInputSalaryType;
   /** @minimum 0 */

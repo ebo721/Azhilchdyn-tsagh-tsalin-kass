@@ -435,6 +435,7 @@ export interface Employee {
   role: string;
   phone: string;
   salaryType: EmployeeSalaryType;
+  bankAccountNumber?: string;
   employeeType: EmployeeEmployeeType;
   baseSalary: number;
   socialInsuranceSalary: number;
@@ -550,6 +551,11 @@ export interface EmployeeInput {
   /** @minLength 1 */
   role: string;
   phone: string;
+  /**
+     * @maxLength 34
+     * @pattern ^(|[0-9]{6,34}|MN[0-9]{18})$
+     */
+  bankAccountNumber?: string;
   employeeType: EmployeeInputEmployeeType;
   salaryType?: EmployeeInputSalaryType;
   /** @minimum 0 */
@@ -606,6 +612,11 @@ export interface EmployeeUpdate {
   /** @minLength 1 */
   role?: string;
   phone?: string;
+  /**
+     * @maxLength 34
+     * @pattern ^(|[0-9]{6,34}|MN[0-9]{18})$
+     */
+  bankAccountNumber?: string;
   employeeType?: EmployeeUpdateEmployeeType;
   salaryType?: EmployeeUpdateSalaryType;
   /**
@@ -761,6 +772,7 @@ export const PayrollLineEmployeeType = {
 export interface PayrollLine {
   employeeId: number;
   employeeName: string;
+  bankAccountNumber?: string;
   role: string;
   employeeType: PayrollLineEmployeeType;
   daysWorked: number;

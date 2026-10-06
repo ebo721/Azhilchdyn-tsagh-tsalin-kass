@@ -72,7 +72,11 @@
     {
       "filename": "20261008_payroll_month_balances.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20261009_employee_bank_accounts.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "ad7792d1f36f8880b4d42c9d909dfba6383961d3040455c90b39c7e19752054e"
+  "schemaFingerprint": "1808cbeceedd45776573f286d5144b8aa9eee7cfb0d1bc0e0dd67fd9acb85bec"
 }

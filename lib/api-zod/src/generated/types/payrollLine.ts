@@ -10,6 +10,7 @@ import type { PayrollLineEmployeeType } from './payrollLineEmployeeType';
 export interface PayrollLine {
   employeeId: number;
   employeeName: string;
+  bankAccountNumber?: string;
   role: string;
   employeeType: PayrollLineEmployeeType;
   daysWorked: number;
