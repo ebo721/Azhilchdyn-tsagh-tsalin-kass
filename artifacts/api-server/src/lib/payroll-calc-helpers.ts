@@ -1,5 +1,8 @@
+import { GetPayrollAdvanceResponse } from "@workspace/api-zod";
+import { PayrollSnapshotMissingError } from "./payroll-attendance-snapshot.js";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import {
+  payrollAttendanceSnapshotsTable,
   attendanceTable,
   db,
   employeesTable,
@@ -79,6 +82,40 @@ export function salaryAt(employee: typeof employeesTable.$inferSelect, history: 
       fullSalaryRegardlessAttendance: employee.fullSalaryRegardlessAttendance,
       payFrequency: employee.payFrequency,
     };
+}
+
+export function applyPayrollFinancials(
+  base: { gross: number; socialInsurance: number; incomeTax: number },
+  adjustment: typeof payrollAdjustmentsTable.$inferSelect | undefined,
+  advanceAmount: number,
+  carryoverAmount: number,
+) {
+  const manualDeduction = money(Number(adjustment?.manualDeduction ?? 0));
+  const firstPaidAmount = money(Number(adjustment?.paidAmount ?? 0));
+  const secondPaidAmount = money(Number(adjustment?.secondPaidAmount ?? 0));
+  const paidAmount = money(firstPaidAmount + secondPaidAmount);
+  const deductions = money(base.socialInsurance + base.incomeTax + advanceAmount + manualDeduction);
+  const payableBeforePayment = money(base.gross - deductions + carryoverAmount);
+  const payable = money(Math.max(0, payableBeforePayment));
+  const rawBalanceAmount = payableBeforePayment - paidAmount;
+  const balanceAmount = money(Math.abs(rawBalanceAmount) <= 1 ? 0 : rawBalanceAmount);
+  return {
+    advanceAmount, manualDeduction, receivableId: adjustment?.receivableId ?? null, deductions,
+    carryoverAmount, payable, paidAmount, paymentDate: adjustment?.paymentDate ?? null,
+    secondPaidAmount, secondPaymentDate: adjustment?.secondPaymentDate ?? null,
+    remainingAmount: money(Math.max(0, balanceAmount)), overpaidAmount: money(Math.max(0, -balanceAmount)),
+    balanceAmount, net: payable,
+  };
+}
+
+export function payrollSummaryTotals(lines: Array<{ gross: number; socialInsurance: number; incomeTax: number; deductions: number; net: number }>) {
+  return {
+    totalGross: money(lines.reduce((total, line) => total + line.gross, 0)),
+    totalSocialInsurance: money(lines.reduce((total, line) => total + line.socialInsurance, 0)),
+    totalIncomeTax: money(lines.reduce((total, line) => total + line.incomeTax, 0)),
+    totalDeductions: money(lines.reduce((total, line) => total + line.deductions, 0)),
+    totalNet: money(lines.reduce((total, line) => total + line.net, 0)),
+  };
 }
 
 export async function getPayrollSummary(month: string, existingData?: PayrollCalculationData) {
@@ -197,19 +234,8 @@ export function calculatePayrollMonth(
     const calculatedIncomeTax = payrollTaxExempt ? 0 : money(taxableIncome * 0.1);
     const taxRelief = payrollTaxExempt ? 0 : monthlyIncomeTaxRelief(socialInsuranceSalary);
     const incomeTax = payrollTaxExempt ? 0 : money(Math.max(0, calculatedIncomeTax - taxRelief));
-    const advanceAmount = money(paidAdvanceMap.get(employee.id) ?? 0);
-    const manualDeduction = money(Number(adjustment?.manualDeduction ?? 0));
-    const firstPaidAmount = money(Number(adjustment?.paidAmount ?? 0));
-    const secondPaidAmount = money(Number(adjustment?.secondPaidAmount ?? 0));
-    const paidAmount = money(firstPaidAmount + secondPaidAmount);
-    const deductions = money(socialInsurance + incomeTax + advanceAmount + manualDeduction);
-    const carryoverAmount = money(previousLineMap.get(employee.id)?.balanceAmount ?? 0);
-    const payableBeforePayment = money(gross - deductions + carryoverAmount);
-    const payable = money(Math.max(0, payableBeforePayment));
-    const rawBalanceAmount = payableBeforePayment - paidAmount;
-    const balanceAmount = money(Math.abs(rawBalanceAmount) <= 1 ? 0 : rawBalanceAmount);
-    const remainingAmount = money(Math.max(0, balanceAmount));
-    const overpaidAmount = money(Math.max(0, -balanceAmount));
+    const financial = applyPayrollFinancials({ gross, socialInsurance, incomeTax }, adjustment,
+      money(paidAdvanceMap.get(employee.id) ?? 0), money(previousLineMap.get(employee.id)?.balanceAmount ?? 0));
     return {
       employeeId: employee.id,
       employeeName: employee.name,
@@ -225,20 +251,7 @@ export function calculatePayrollMonth(
       calculatedIncomeTax,
       taxRelief,
       incomeTax,
-      advanceAmount,
-      manualDeduction,
-      receivableId: adjustment?.receivableId ?? null,
-      deductions,
-      carryoverAmount,
-      payable,
-      paidAmount,
-      paymentDate: adjustment?.paymentDate ?? null,
-      secondPaidAmount,
-      secondPaymentDate: adjustment?.secondPaymentDate ?? null,
-      remainingAmount,
-      overpaidAmount,
-      balanceAmount,
-      net: payable,
+      ...financial,
     };
   });
 
@@ -250,17 +263,25 @@ export function calculatePayrollMonth(
     advancePaymentDate: period.advancePaymentDate,
     finalPaymentDate: period.finalPaymentDate,
     schedule,
-    totalGross: money(lines.reduce((total, line) => total + line.gross, 0)),
-    totalSocialInsurance: money(lines.reduce((total, line) => total + line.socialInsurance, 0)),
-    totalIncomeTax: money(lines.reduce((total, line) => total + line.incomeTax, 0)),
-    totalDeductions: money(lines.reduce((total, line) => total + line.deductions, 0)),
-    totalNet: money(lines.reduce((total, line) => total + line.net, 0)),
+    ...payrollSummaryTotals(lines),
     lines,
   };
 }
 
-export async function getPayrollAdvanceSummary(month: string) {
-  const rawSchedule = await getPayrollSchedule(month);
+export async function getPayrollAdvanceSummary(
+  month: string,
+  connection: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db,
+  { savedOnly = false, ignoreApproval = false } = {},
+) {
+  const [approval] = await connection.select().from(payrollAdvanceApprovalsTable)
+    .where(eq(payrollAdvanceApprovalsTable.month, month));
+  if (savedOnly && (!approval || ignoreApproval)) {
+    const [snapshot] = await connection.select().from(payrollAttendanceSnapshotsTable)
+      .where(eq(payrollAttendanceSnapshotsTable.month, month));
+    if (!snapshot) throw new PayrollSnapshotMissingError(month);
+    return GetPayrollAdvanceResponse.parse({ ...snapshot.advance, attendancePulledAt: snapshot.pulledAt.toISOString() });
+  }
+  const rawSchedule = await getPayrollSchedule(month, connection);
   const schedule = {
     effectiveFromMonth: rawSchedule.effectiveFromMonth,
     id: rawSchedule.id,
@@ -271,11 +292,7 @@ export async function getPayrollAdvanceSummary(month: string) {
     finalPayDay: rawSchedule.finalPayDay,
   };
   const period = payrollPeriod(month, schedule);
-  const [approval] = await db
-    .select()
-    .from(payrollAdvanceApprovalsTable)
-    .where(eq(payrollAdvanceApprovalsTable.month, month));
-  if (approval) {
+  if (approval && !ignoreApproval) {
     const lines = Array.isArray(approval.lines)
       ? (approval.lines as Array<Record<string, unknown>>).map((line) => ({
           ...line,
@@ -299,12 +316,12 @@ export async function getPayrollAdvanceSummary(month: string) {
     };
   }
   const [allEmployees, records, salaryHistory] = await Promise.all([
-    db.select().from(employeesTable),
-    db.select().from(attendanceTable).where(and(
+    connection.select().from(employeesTable),
+    connection.select().from(attendanceTable).where(and(
       gte(attendanceTable.date, period.periodStart),
       lte(attendanceTable.date, period.advancePeriodEnd),
     )),
-    db.select().from(employeeSalaryHistoryTable),
+    connection.select().from(employeeSalaryHistoryTable),
   ]);
   const employees = allEmployees.filter((employee) =>
     employee.joinedAt <= period.advancePeriodEnd

@@ -692,7 +692,7 @@ paths:
     get:
       operationId: getPayroll
       tags: [payroll]
-      summary: Calculate payroll for a month
+      summary: Read saved payroll without recalculating attendance
       parameters:
         - in: query
           name: month
@@ -708,10 +708,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/PayrollSummary"
         "409":
-          description: Previous financial balances require initialization or repair
+          description: No saved payroll calculation; explicitly pull attendance first
           content:
             application/json:
               schema: { type: object, required: [error], properties: { error: { type: string } } }
+  /payroll/pull-attendance:
+    post:
+      operationId: pullPayrollAttendance
+      tags: [payroll]
+      summary: Explicitly calculate and save payroll and draft advance from current-period attendance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PayrollAttendancePullInput" }
+      responses:
+        "200":
+          description: Saved calculation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayrollAttendancePullResult" }
+        "403":
+          description: Read-only role cannot recalculate payroll
+        "409":
+          description: Previous financial balances require explicit initialization or repair
   /payroll/balances/recalculate:
     post:
       operationId: rebuildPayrollBalances
@@ -3226,6 +3246,8 @@ components:
       type: object
       required: [month, periodStart, advancePeriodEnd, periodEnd, advancePaymentDate, finalPaymentDate, schedule, totalGross, totalSocialInsurance, totalIncomeTax, totalDeductions, totalNet, lines]
       properties:
+        attendancePulledAt: { type: string }
+        attendanceNeedsRefresh: { type: boolean }
         month: { type: string }
         periodStart: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
         advancePeriodEnd: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
@@ -3242,6 +3264,17 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PayrollLine"
+    PayrollAttendancePullInput:
+      type: object
+      required: [month]
+      properties:
+        month: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+    PayrollAttendancePullResult:
+      type: object
+      required: [payroll, advance]
+      properties:
+        payroll: { $ref: "#/components/schemas/PayrollSummary" }
+        advance: { $ref: "#/components/schemas/PayrollAdvanceSummary" }
     PayrollAdvanceLine:
       type: object
       required: [employeeId, employeeName, employeeType, baseSalary, daysWorked, dailySalary, totalSalary, advanceAmount, paid]
@@ -3260,6 +3293,7 @@ components:
       type: object
       required: [month, periodStart, advancePeriodEnd, periodEnd, advancePaymentDate, finalPaymentDate, schedule, approved, approvalDate, totalAmount, lines]
       properties:
+        attendancePulledAt: { type: string }
         month: { type: string }
         periodStart: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
         advancePeriodEnd: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }

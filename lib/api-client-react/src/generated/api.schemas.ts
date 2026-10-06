@@ -894,6 +894,8 @@ export interface PayrollSchedule {
 }
 
 export interface PayrollSummary {
+  attendancePulledAt?: string;
+  attendanceNeedsRefresh?: boolean;
   month: string;
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   periodStart: string;
@@ -912,6 +914,11 @@ export interface PayrollSummary {
   totalDeductions: number;
   totalNet: number;
   lines: PayrollLine[];
+}
+
+export interface PayrollAttendancePullInput {
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])$ */
+  month: string;
 }
 
 export type PayrollAdvanceLineEmployeeType = typeof PayrollAdvanceLineEmployeeType[keyof typeof PayrollAdvanceLineEmployeeType];
@@ -937,6 +944,7 @@ export interface PayrollAdvanceLine {
 }
 
 export interface PayrollAdvanceSummary {
+  attendancePulledAt?: string;
   month: string;
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   periodStart: string;
@@ -955,6 +963,11 @@ export interface PayrollAdvanceSummary {
   approvedAt?: string;
   totalAmount: number;
   lines: PayrollAdvanceLine[];
+}
+
+export interface PayrollAttendancePullResult {
+  payroll: PayrollSummary;
+  advance: PayrollAdvanceSummary;
 }
 
 export interface PayrollAdvanceApprovalLineInput {

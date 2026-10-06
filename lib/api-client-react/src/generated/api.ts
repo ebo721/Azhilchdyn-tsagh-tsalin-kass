@@ -154,6 +154,8 @@ import type {
   PayrollAdvanceApprovalInput,
   PayrollAdvancePaymentInput,
   PayrollAdvanceSummary,
+  PayrollAttendancePullInput,
+  PayrollAttendancePullResult,
   PayrollSchedule,
   PayrollScheduleInput,
   PayrollSummary,
@@ -3302,7 +3304,7 @@ export const getGetPayrollUrl = (params?: GetPayrollParams,) => {
 }
 
 /**
- * @summary Calculate payroll for a month
+ * @summary Read saved payroll without recalculating attendance
  */
 export const getPayroll = async (params?: GetPayrollParams, options?: Parameters<typeof customFetch>[1]): Promise<PayrollSummary> => {
 
@@ -3349,7 +3351,7 @@ export type GetPayrollQueryError = ErrorType<GetPayroll409>
 
 
 /**
- * @summary Calculate payroll for a month
+ * @summary Read saved payroll without recalculating attendance
  */
 
 export function useGetPayroll<TData = Awaited<ReturnType<typeof getPayroll>>, TError = ErrorType<GetPayroll409>>(
@@ -3369,6 +3371,77 @@ export function useGetPayroll<TData = Awaited<ReturnType<typeof getPayroll>>, TE
 
 
 
+
+export const getPullPayrollAttendanceUrl = () => {
+
+
+
+
+  return `/api/payroll/pull-attendance`
+}
+
+/**
+ * @summary Explicitly calculate and save payroll and draft advance from current-period attendance
+ */
+export const pullPayrollAttendance = async (payrollAttendancePullInput: PayrollAttendancePullInput, options?: Parameters<typeof customFetch>[1]): Promise<PayrollAttendancePullResult> => {
+
+  return customFetch<PayrollAttendancePullResult>(getPullPayrollAttendanceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(payrollAttendancePullInput)
+  }
+);}
+
+
+
+
+
+export const getPullPayrollAttendanceMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pullPayrollAttendance>>, TError,{data: BodyType<PayrollAttendancePullInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof pullPayrollAttendance>>, TError,{data: BodyType<PayrollAttendancePullInput>}, TContext> => {
+
+const mutationKey = ['pullPayrollAttendance'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof pullPayrollAttendance>>, {data: BodyType<PayrollAttendancePullInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  pullPayrollAttendance(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PullPayrollAttendanceMutationResult = NonNullable<Awaited<ReturnType<typeof pullPayrollAttendance>>>
+    export type PullPayrollAttendanceMutationBody = BodyType<PayrollAttendancePullInput>
+    export type PullPayrollAttendanceMutationError = ErrorType<void>
+
+    /**
+ * @summary Explicitly calculate and save payroll and draft advance from current-period attendance
+ */
+export const usePullPayrollAttendance = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pullPayrollAttendance>>, TError,{data: BodyType<PayrollAttendancePullInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof pullPayrollAttendance>>,
+        TError,
+        {data: BodyType<PayrollAttendancePullInput>},
+        TContext
+      > => {
+      return useMutation(getPullPayrollAttendanceMutationOptions(options));
+    }
 
 export const getRebuildPayrollBalancesUrl = (params: RebuildPayrollBalancesParams,) => {
   const normalizedParams = new URLSearchParams();

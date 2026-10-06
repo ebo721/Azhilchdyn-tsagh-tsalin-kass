@@ -9,6 +9,7 @@ import type { PayrollAdvanceLine } from './payrollAdvanceLine';
 import type { PayrollSchedule } from './payrollSchedule';
 
 export interface PayrollAdvanceSummary {
+  attendancePulledAt?: string;
   month: string;
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   periodStart: string;
