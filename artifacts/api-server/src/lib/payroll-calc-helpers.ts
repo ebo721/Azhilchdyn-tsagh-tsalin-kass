@@ -10,7 +10,7 @@ import {
 } from "@workspace/db";
 import { currentMonth, daysInMonth, money, nextMonth, previousMonth } from "./date-utils.js";
 import { shiftInsuredDailySalary } from "./shift-insurance.js";
-import { defaultPayrollSchedule, scheduleDate, weekdayDatesBetween, type PayrollCalculationData, type SalaryHistoryRow } from "./route-shared.js";
+import { defaultPayrollSchedule, scheduleDate, selectPayrollScheduleVersion, weekdayDatesBetween, type PayrollCalculationData, type SalaryHistoryRow } from "./route-shared.js";
 
 export const monthlyIncomeTaxRelief = (socialInsuranceSalary: number) => {
   if (socialInsuranceSalary <= 500_000) return 20_000;
@@ -91,8 +91,30 @@ export async function getPayrollSummary(month: string, existingData?: PayrollCal
     ]);
     return { allEmployees, salaryHistory, records, allAdjustments, allAdvanceApprovals };
   })();
+  // Request-scoped versions: recursive carryover must not issue one SELECT per
+  // prior month, or reuse a process-wide cache after a schedule edit.
+  const schedules = await db.select().from(payrollScheduleSettingsTable)
+    .where(lte(payrollScheduleSettingsTable.effectiveFromMonth, month));
+  const earliestMonth = data.allEmployees.reduce(
+    (earliest, employee) => employee.joinedAt.slice(0, 7) < earliest ? employee.joinedAt.slice(0, 7) : earliest,
+    month,
+  );
+  if (!selectPayrollScheduleVersion(schedules, earliestMonth)) {
+    // Preserve the existing lazy default initialization, including its
+    // on-conflict reread when another request creates the baseline first.
+    schedules.push(await getPayrollSchedule(earliestMonth));
+  }
+  return getPayrollSummaryWithSchedules(month, data, schedules);
+}
+
+async function getPayrollSummaryWithSchedules(
+  month: string,
+  data: PayrollCalculationData,
+  schedules: Array<typeof payrollScheduleSettingsTable.$inferSelect>,
+) {
   const { allEmployees, salaryHistory, records } = data;
-  const rawSchedule = await getPayrollSchedule(month);
+  const rawSchedule = selectPayrollScheduleVersion(schedules, month);
+  if (!rawSchedule) throw new Error(`Missing payroll schedule for ${month}`);
   const schedule = {
     effectiveFromMonth: rawSchedule.effectiveFromMonth,
     id: rawSchedule.id,
@@ -113,7 +135,7 @@ export async function getPayrollSummary(month: string, existingData?: PayrollCal
   const previousMonthValue = previousMonth(month);
   const previousMonthEnd = `${previousMonthValue}-${String(daysInMonth(previousMonthValue)).padStart(2, "0")}`;
   const previousPayroll = allEmployees.some((employee) => employee.joinedAt <= previousMonthEnd)
-    ? await getPayrollSummary(previousMonthValue, data)
+    ? await getPayrollSummaryWithSchedules(previousMonthValue, data, schedules)
     : null;
   const previousLineMap = new Map(previousPayroll?.lines.map((line) => [line.employeeId, line]) ?? []);
   const weekdays = weekdayDatesBetween(period.periodStart, period.periodEnd);
