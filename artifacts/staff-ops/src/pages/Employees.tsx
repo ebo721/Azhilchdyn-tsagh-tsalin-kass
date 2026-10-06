@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { EmptyState, ErrorBlock, LoadingBlock, Modal, StatusPill } from '@/components/ui-primitives';
 import { Pencil, Plus, Search, Trash2, UsersRound } from 'lucide-react';
 import {
+  getEmployeeSalaryBankAccount,
   EmployeeEmployeeType,
   getGetDashboardQueryKey,
   getGetPayrollAdvanceQueryKey,
@@ -99,6 +100,8 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
     query: { enabled: isEdit, queryKey: getListEmployeeSalaryHistoryQueryKey(salaryHistoryEmployeeId) },
   });
   const salaryHistoryDeletion = useQueueDeletion();
+  const [bankAccountLoading, setBankAccountLoading] = useState(false);
+  const [bankAccountMessage, setBankAccountMessage] = useState<{ text: string; error: boolean } | null>(null);
   const form = useForm<EmployeeForm>({ defaultValues: { socialInsuranceProfile: employee?.socialInsuranceProfile ?? emptyInsuranceProfile, name: employee?.name ?? '', role: employee?.role ?? '', phone: employee?.phone ?? '', bankAccountNumber: employee?.bankAccountNumber ?? '', employeeType: employee?.employeeType ?? 'office', salaryType: employee?.salaryType ?? 'monthly', payFrequency: employee?.payFrequency ?? 'twice', baseSalary: '', socialInsuranceSalary: String(employee?.socialInsuranceSalary ?? ''), payrollTaxExempt: employee?.payrollTaxExempt ?? false, fullSalaryRegardlessAttendance: employee?.fullSalaryRegardlessAttendance ?? false, monthlyExpectedWorkDays: String(employee?.monthlyExpectedWorkDays ?? 0), joinedAt: employee?.joinedAt ?? today(), status: employee?.status ?? 'active', inactiveAt: employee?.inactiveAt ?? '', salaryEffectiveDate: '' } });
   const [salaryBaseline, setSalaryBaseline] = useState({
     baseSalary: Number(employee?.baseSalary ?? 0),
@@ -122,7 +125,26 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
       create.mutate({ data }, { onSuccess: done, onError });
     }
   };
-  const pending = create.isPending || update.isPending;
+  const pending = create.isPending || update.isPending || bankAccountLoading;
+  const pullSalaryBankAccount = async () => {
+    if (!employee || bankAccountLoading) return;
+    setBankAccountLoading(true);
+    setBankAccountMessage(null);
+    try {
+      const account = await getEmployeeSalaryBankAccount(employee.id);
+      const current = normalizeBankAccount(form.getValues('bankAccountNumber'));
+      if (current && current !== account.bankAccountNumber && !window.confirm(`Оруулсан ${current} дансыг цалингийн гүйлгээний ${account.bankAccountNumber} дансаар солих уу?`)) {
+        setBankAccountMessage({ text: 'Дансыг өөрчлөөгүй.', error: false });
+        return;
+      }
+      form.setValue('bankAccountNumber', account.bankAccountNumber, { shouldDirty: true, shouldValidate: true });
+      setBankAccountMessage({ text: `Гүйлгээ #${account.bankTransactionId}-ээс данс татлаа. «Хадгалах» дарж баталгаажуулна.`, error: false });
+    } catch (error) {
+      setBankAccountMessage({ text: error instanceof Error ? error.message : 'Цалингийн гүйлгээнээс данс татаж чадсангүй.', error: true });
+    } finally {
+      setBankAccountLoading(false);
+    }
+  };
   const deleteSalaryHistory = (historyId: number, effectiveFrom: string) => {
     if (!employee || !window.confirm(`${effectiveFrom}-с хүчинтэй цалингийн мөрийг устгах уу?`)) return;
     void salaryHistoryDeletion.request(
@@ -187,10 +209,12 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
         {employeeType === 'shift' && <label className="space-y-2 text-xs font-semibold">Цалингийн төрөл<select className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('salaryType')} data-testid="select-employee-salary-type"><option value="daily">Өдрийн цалин</option><option value="monthly">Сарын цалин</option></select></label>}
         <label className="space-y-2 text-xs font-semibold">{isEdit ? 'Шинэ цалин' : (employeeType === 'office' || salaryType === 'monthly') ? 'Сарын цалингийн хэмжээ' : 'Өдрийн цалингийн хэмжээ'}<input type="number" min="0" placeholder={isEdit ? 'Өөрчлөх бол шинэ дүн оруулна' : undefined} className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('baseSalary', { required: !isEdit, min: 0 })} data-testid="input-employee-salary" />{isEdit && <span className="block text-[11px] font-normal text-muted-foreground" data-testid="value-employee-current-salary">Одоогийн цалин: {money(salaryBaseline.baseSalary)}. Хоосон бол өөрчлөхгүй.</span>}</label>
         <label className="space-y-2 text-xs font-semibold">НДШ тооцох сарын цалин<input type="number" min="0" disabled={payrollTaxExempt} className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none disabled:cursor-not-allowed disabled:opacity-50 focus:border-primary" {...form.register('socialInsuranceSalary', { required: !payrollTaxExempt, min: 0 })} data-testid="input-employee-social-insurance-salary" /></label>
-        <label className="space-y-2 text-xs font-semibold sm:col-span-2">Цалин хүлээн авах банкны данс
-          <input type="text" maxLength={40} autoComplete="off" spellCheck={false} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('bankAccountNumber', { setValueAs: normalizeBankAccount, pattern: { value: /^(|[0-9]{6,34}|MN[0-9]{18})$/, message: 'Дансны дугаар эсвэл MN-ээр эхэлсэн бүтэн IBAN оруулна уу.' } })} data-testid="input-employee-bank-account" />
+        <div className="space-y-2 text-xs font-semibold sm:col-span-2"><label htmlFor="employee-bank-account">Цалин хүлээн авах банкны данс</label>
+          <input id="employee-bank-account" type="text" maxLength={40} autoComplete="off" spellCheck={false} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('bankAccountNumber', { setValueAs: normalizeBankAccount, pattern: { value: /^(|[0-9]{6,34}|MN[0-9]{18})$/, message: 'Дансны дугаар эсвэл MN-ээр эхэлсэн бүтэн IBAN оруулна уу.' } })} data-testid="input-employee-bank-account" />
           {form.formState.errors.bankAccountNumber ? <span className="block text-[11px] text-destructive">{form.formState.errors.bankAccountNumber.message}</span> : <span className="block text-[11px] font-normal text-muted-foreground">Ажилтны хүлээн авах данс. Дугаарыг бүтнээр нь хадгална.</span>}
-        </label>
+          {isEdit && <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => void pullSalaryBankAccount()} data-testid="button-pull-employee-bank-account">{bankAccountLoading ? 'Данс татаж байна…' : 'Цалингийн гүйлгээнээс данс татах'}</Button>}
+          {bankAccountMessage && <p role={bankAccountMessage.error ? 'alert' : 'status'} className={`text-[11px] font-normal ${bankAccountMessage.error ? 'text-destructive' : 'text-muted-foreground'}`} data-testid="message-employee-bank-account">{bankAccountMessage.text}</p>}
+        </div>
         <label className="flex items-center gap-3 rounded-xl border border-border bg-secondary/35 px-4 py-3 text-sm font-semibold sm:col-span-2"><input type="checkbox" className="size-4 accent-primary" {...form.register('payrollTaxExempt')} data-testid="checkbox-employee-payroll-tax-exempt" /><span><span className="block">НДШ, ХХОАТ төлөхгүй</span><span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">Цалин бодоход НДШ, ХХОАТ болон татварын хөнгөлөлт 0 байна.</span></span></label>
         {isAdmin && <label className="flex items-center gap-3 rounded-xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm font-semibold sm:col-span-2"><input type="checkbox" className="size-4 accent-primary" {...form.register('fullSalaryRegardlessAttendance')} data-testid="checkbox-employee-full-salary" /><span><span className="block">Ирцээс үл хамааран цалинг бүтэн бодох</span><span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">Ажилласан хугацаанд ирц, таслалт, чөлөөнөөс үл хамааран сарын үндсэн цалинг бүтнээр тооцно. Зөвхөн админ өөрчилнө.</span></span></label>}
         {employeeType === 'shift' ? <label className="space-y-2 text-xs font-semibold">Сард ажиллах ёстой хоног<input type="number" min={salaryType === 'monthly' || (!payrollTaxExempt && Number(socialInsuranceSalary) > 0) ? 1 : 0} max="31" className="mt-1 flex h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('monthlyExpectedWorkDays', { required: true, min: salaryType === 'monthly' || (!payrollTaxExempt && Number(socialInsuranceSalary) > 0) ? 1 : 0, max: 31 })} data-testid="input-employee-expected-work-days" /><span className="text-[11px] font-normal text-muted-foreground">НДШ-ийн суурь = НДШ тооцох сарын цалин ÷ энэ хоног × бодит ажилласан хоног. Өдрийн цалинтай ажилтанд ч ашиглана.</span>{form.formState.errors.monthlyExpectedWorkDays && <span className="block text-[11px] text-destructive">Хоногийг зөв оруулна уу (1–31).</span>}</label> : <div className="rounded-xl border border-border bg-secondary/35 p-3 text-xs text-muted-foreground sm:col-span-2">Ажиллах ёстой өдрийг тухайн сарын Даваа–Баасан гарагаар автоматаар тооцно.</div>}

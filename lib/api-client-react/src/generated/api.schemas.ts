@@ -379,6 +379,12 @@ export interface Dashboard {
   recentActivity: Activity[];
 }
 
+export interface EmployeeSalaryBankAccount {
+  /** @pattern ^(MN[0-9]{18}|[0-9]{6,34})$ */
+  bankAccountNumber: string;
+  bankTransactionId: number;
+}
+
 export type EmployeeSalaryType = typeof EmployeeSalaryType[keyof typeof EmployeeSalaryType];
 
 

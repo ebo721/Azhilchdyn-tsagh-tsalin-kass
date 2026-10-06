@@ -89,6 +89,7 @@ export * from './employeeInputEmployeeType';
 export * from './employeeInputPayFrequency';
 export * from './employeeInputSalaryType';
 export * from './employeePayFrequency';
+export * from './employeeSalaryBankAccount';
 export * from './employeeSalaryHistory';
 export * from './employeeSalaryHistoryEmployeeType';
 export * from './employeeSalaryHistoryPayFrequency';

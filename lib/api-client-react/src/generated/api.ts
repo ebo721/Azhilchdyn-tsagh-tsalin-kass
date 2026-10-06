@@ -76,6 +76,7 @@ import type {
   DownloadSocialInsuranceReportParams,
   Employee,
   EmployeeInput,
+  EmployeeSalaryBankAccount,
   EmployeeSalaryHistory,
   EmployeeSalaryHistoryUpdate,
   EmployeeUpdate,
@@ -1353,6 +1354,83 @@ export const useDeleteEmployee = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getDeleteEmployeeMutationOptions(options));
     }
+
+export const getGetEmployeeSalaryBankAccountUrl = (id: number,) => {
+
+
+
+
+  return `/api/employees/${id}/salary-bank-account`
+}
+
+/**
+ * @summary Read the recipient account from the latest verified linked salary payment
+ */
+export const getEmployeeSalaryBankAccount = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<EmployeeSalaryBankAccount> => {
+
+  return customFetch<EmployeeSalaryBankAccount>(getGetEmployeeSalaryBankAccountUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetEmployeeSalaryBankAccountQueryKey = (id: number,) => {
+    return [
+    `/api/employees/${id}/salary-bank-account`
+    ] as const;
+    }
+
+
+export const getGetEmployeeSalaryBankAccountQueryOptions = <TData = Awaited<ReturnType<typeof getEmployeeSalaryBankAccount>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEmployeeSalaryBankAccount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetEmployeeSalaryBankAccountQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getEmployeeSalaryBankAccount>>> = ({ signal }) => getEmployeeSalaryBankAccount(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getEmployeeSalaryBankAccount>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetEmployeeSalaryBankAccountQueryResult = NonNullable<Awaited<ReturnType<typeof getEmployeeSalaryBankAccount>>>
+export type GetEmployeeSalaryBankAccountQueryError = ErrorType<void>
+
+
+/**
+ * @summary Read the recipient account from the latest verified linked salary payment
+ */
+
+export function useGetEmployeeSalaryBankAccount<TData = Awaited<ReturnType<typeof getEmployeeSalaryBankAccount>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEmployeeSalaryBankAccount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetEmployeeSalaryBankAccountQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListEmployeeSalaryHistoryUrl = (id: number,) => {
 

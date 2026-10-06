@@ -2,6 +2,8 @@ import { Router, type IRouter } from "express";
 import { needsShiftWorkDays } from "../lib/shift-insurance.js";
 import { createServer } from "node:http";
 import {
+  GetEmployeeSalaryBankAccountParams,
+  GetEmployeeSalaryBankAccountResponse,
   CreateAttendanceBody,
   CreateShiftBody,
   CreateCashTransactionBody,
@@ -369,6 +371,52 @@ router.patch("/employees/:id", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+router.get("/employees/:id/salary-bank-account", async (req, res): Promise<void> => {
+  const params = GetEmployeeSalaryBankAccountParams.safeParse(req.params);
+  if (!params.success || params.data.id <= 0) {
+    res.status(400).json({ error: "Ажилтны дугаар буруу байна." });
+    return;
+  }
+  const { id } = params.data;
+  const [employee] = await db.select({ id: employeesTable.id }).from(employeesTable).where(eq(employeesTable.id, id));
+  if (!employee) {
+    res.status(404).json({ error: "Ажилтан олдсонгүй." });
+    return;
+  }
+  // Both directions must still link to the same verified payment. Never match by name/amount.
+  const [latest] = await db.select({
+    bankAccountNumber: bankTransactionsTable.account,
+    bankTransactionId: bankTransactionsTable.id,
+  }).from(cashTransactionsTable)
+    .innerJoin(bankTransactionsTable, and(
+      eq(bankTransactionsTable.cashTransactionId, cashTransactionsTable.id),
+      eq(cashTransactionsTable.bankTransactionId, bankTransactionsTable.id),
+    ))
+    .where(and(
+      inArray(cashTransactionsTable.sourceType, ["payroll", "payroll_advance"]),
+      sql`split_part(${cashTransactionsTable.sourceKey}, ':', 2) = ${String(id)}`,
+      sql`${cashTransactionsTable.sourceKey} ~ '^[0-9]{4}-[0-9]{2}:[0-9]+(:2)?$'`,
+      eq(cashTransactionsTable.type, "expense"),
+      isNotNull(cashTransactionsTable.bankVerifiedAt),
+      eq(bankTransactionsTable.type, "expense"),
+    ))
+    .orderBy(desc(sql`coalesce(${bankTransactionsTable.executedAt}, ${bankTransactionsTable.transactionAt})`), desc(bankTransactionsTable.id))
+    .limit(1);
+  if (!latest) {
+    res.status(404).json({ error: "Энэ ажилтанд холбогдсон, банкаар баталгаажсан цалингийн гүйлгээ олдсонгүй." });
+    return;
+  }
+  const result = GetEmployeeSalaryBankAccountResponse.safeParse({
+    ...latest,
+    bankAccountNumber: latest.bankAccountNumber.replace(/\s/g, "").toUpperCase(),
+  });
+  if (!result.success) {
+    res.status(422).json({ error: "Сүүлийн цалингийн гүйлгээний хүлээн авагчийн данс дутуу эсвэл буруу байна. Дансыг гараар оруулна уу." });
+    return;
+  }
+  res.json(result.data);
 });
 
 router.get("/employees/:id/salary-history", async (req, res, next) => {

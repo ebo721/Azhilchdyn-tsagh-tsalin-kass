@@ -245,6 +245,26 @@ paths:
       responses:
         "204":
           description: Employee deleted
+  /employees/{id}/salary-bank-account:
+    get:
+      operationId: getEmployeeSalaryBankAccount
+      tags: [employees]
+      summary: Read the recipient account from the latest verified linked salary payment
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Latest salary recipient account (does not save the employee)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmployeeSalaryBankAccount"
+        "400":
+          description: Invalid employee ID
+        "404":
+          description: Employee or verified linked salary payment not found
+        "422":
+          description: Latest recipient account is incomplete or invalid
   /employees/{id}/salary-history:
     get:
       operationId: listEmployeeSalaryHistory
@@ -2882,6 +2902,12 @@ components:
         title: { type: string }
         detail: { type: string }
         createdAt: { type: string }
+    EmployeeSalaryBankAccount:
+      type: object
+      required: [bankAccountNumber, bankTransactionId]
+      properties:
+        bankAccountNumber: { type: string, pattern: '^(MN[0-9]{18}|[0-9]{6,34})$' }
+        bankTransactionId: { type: integer }
     Employee:
       type: object
       required: [id, name, role, phone, salaryType, employeeType, baseSalary, socialInsuranceSalary, payrollTaxExempt, fullSalaryRegardlessAttendance, payFrequency, monthlyExpectedWorkDays, status, joinedAt, inactiveAt]
