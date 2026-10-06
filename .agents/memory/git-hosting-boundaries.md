@@ -48,3 +48,9 @@ For a database change that replaces values or removes an old API's expected sour
 **Why:** An older meal API expects `single` and a single schedule meal reference; converting those while it is still serving requests would break reads and writes even though the new schema retains the old column.
 
 **How to apply:** Review backward compatibility against the still-running build, not just the new build. Gate any pending contract migration in the release path; a feature PR can be reviewed as draft, but merging or publishing must wait for a coordinated cutover.
+
+Treat an execution-worker disconnect during GitHub publication as an unknown outcome, not proof that the repository update failed.
+
+**Why:** A multi-step publication can lose its tool response after an external write, leaving no reliable confirmation of which steps completed.
+
+**How to apply:** Before retrying, compare the remote head and tree with the intended local commit. If they already match, report success without another write; otherwise retain the expected-parent guard. Do not claim the live version changed without confirmation.
