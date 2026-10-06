@@ -54,3 +54,9 @@ Treat an execution-worker disconnect during GitHub publication as an unknown out
 **Why:** A multi-step publication can lose its tool response after an external write, leaving no reliable confirmation of which steps completed.
 
 **How to apply:** Before retrying, compare the remote head and tree with the intended local commit. If they already match, report success without another write; otherwise retain the expected-parent guard. Do not claim the live version changed without confirmation.
+
+When recreating a local commit through GitHub's Git Commits API, preserve its trailing message newline as well as its tree, parent, author, committer, and timestamps.
+
+**Why:** The API preserves the message verbatim, whereas ordinary Git commits end the message with a newline. Omitting it produces a different commit SHA even when all files and metadata match; retaining it allowed the remote commit to match the local commit exactly.
+
+**How to apply:** Use the original message without trimming its final newline when exact commit identity matters. Still verify the resulting tree and expected remote head before updating the branch.
