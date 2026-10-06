@@ -11,7 +11,7 @@ for (const mode of ["restore", "unlink", "cancel", "error"] as const) {
       editable: false, bankTransactionId: 15 as number | null,
       bankVerifiedAt: `${date}T00:00:00Z` as string | null,
       journalEntryId: (mode === "restore" ? null : 77) as number | null,
-      createdAt: `${date}T00:00:00Z`,
+      createdAt: "2000-01-01T00:00:00Z",
     };
     let actions = 0;
     const alerts: string[] = [];
@@ -47,6 +47,15 @@ for (const mode of ["restore", "unlink", "cancel", "error"] as const) {
       return mode === "cancel" && dialog.type() === "confirm" ? dialog.dismiss() : dialog.accept();
     });
     await page.goto("/cash");
+    await expect(page.getByTestId("date-cash-851")).toContainText(date);
+    await expect(page.getByTestId("date-cash-851")).toHaveAttribute("datetime", date);
+    if (mode === "restore") {
+      await page.screenshot({ path: "/tmp/cash-row-date-desktop.png" });
+      await page.setViewportSize({ width: 402, height: 874 });
+      await expect(page.getByTestId("date-cash-851")).toBeVisible();
+      await page.screenshot({ path: "/tmp/cash-row-date-mobile.png" });
+      await page.setViewportSize({ width: 1280, height: 720 });
+    }
     if (mode === "restore") {
       await page.getByTestId("button-post-cash-journal-851").click();
       await expect(page.getByTestId("form-post-cash-journal")).toBeVisible();
