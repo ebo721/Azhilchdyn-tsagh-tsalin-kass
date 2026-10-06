@@ -100,6 +100,7 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
   }
   if (role === "accountant" && (
     (req.method === "GET" && req.path === "/employees")
+    || (req.method === "GET" && /^\/employees\/[1-9][0-9]*\/salary-bank-account$/.test(req.path))
     || (req.method === "GET" && (
       req.path === "/attendance/shifts"
       || req.path === "/attendance/shift-plans"

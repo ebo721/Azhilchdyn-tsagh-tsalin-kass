@@ -453,6 +453,22 @@ export const DeleteEmployeeResponse = zod.void()
 
 
 /**
+ * @summary Read the recipient account from the latest verified linked salary payment
+ */
+export const GetEmployeeSalaryBankAccountParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const getEmployeeSalaryBankAccountResponseBankAccountNumberRegExp = new RegExp('^(MN[0-9]{18}|[0-9]{6,34})$');
+
+
+export const GetEmployeeSalaryBankAccountResponse = zod.object({
+  "bankAccountNumber": zod.string().regex(getEmployeeSalaryBankAccountResponseBankAccountNumberRegExp),
+  "bankTransactionId": zod.number().int()
+})
+
+
+/**
  * @summary List an employee's salary history
  */
 export const ListEmployeeSalaryHistoryParams = zod.object({
