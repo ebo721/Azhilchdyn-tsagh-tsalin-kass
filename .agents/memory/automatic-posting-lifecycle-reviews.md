@@ -24,3 +24,9 @@ The Journal screen’s “Delete” action permanently deletes only the selected
 **Why:** In this product, reversal is a separate accounting behavior; users expect “Delete” to remove the selected journal itself.
 
 **How to apply:** Use hard delete for the Journal screen action, rely on journal foreign keys to clear `journalEntryId`, leave cash/bank/source rows intact, and reject deletion when receivable records restrict it.
+
+The Cash screen's delete action is limited to manually entered transactions.
+
+**Why:** The user explicitly chose “Зөвхөн гараар оруулсан гүйлгээ” when asked whether deletion should also include automatic bank and salary transactions.
+
+**How to apply:** Keep automatic transactions outside this action unless the user changes this scope; their deletion requires separate source-lifecycle handling.
