@@ -9,6 +9,7 @@ import {
   payrollScheduleSettingsTable,
 } from "@workspace/db";
 import { currentMonth, daysInMonth, money, nextMonth, previousMonth } from "./date-utils.js";
+import { shiftInsuredDailySalary } from "./shift-insurance.js";
 import { defaultPayrollSchedule, scheduleDate, weekdayDatesBetween, type PayrollCalculationData, type SalaryHistoryRow } from "./route-shared.js";
 
 export const monthlyIncomeTaxRelief = (socialInsuranceSalary: number) => {
@@ -129,10 +130,6 @@ export async function getPayrollSummary(month: string, existingData?: PayrollCal
 
   const lines = employees.map((employee) => {
     const employeeRecords = monthRecords.filter((record) => record.employeeId === employee.id);
-    const daysWorked = employeeRecords.filter((record) =>
-      ["present", "late"].includes(record.status),
-    ).length;
-    const hours = money(employeeRecords.reduce((total, record) => total + Number(record.hours), 0));
     const eligibleWeekdays = weekdays.filter((date) =>
       date >= employee.joinedAt && (!employee.inactiveAt || date <= employee.inactiveAt)
     );
@@ -148,6 +145,8 @@ export async function getPayrollSummary(month: string, existingData?: PayrollCal
         && (!employee.inactiveAt || String(record.date) <= employee.inactiveAt)
       )
       .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const daysWorked = workedRecords.length;
+    const hours = money(workedRecords.reduce((total, record) => total + Number(record.hours), 0));
     const excessWorkedDayCount = Math.max(0, workedRecords.length - eligibleWeekdays.length);
     const excessWorkedRecords = workedRecords
       .filter((record) => !eligibleWeekdays.includes(String(record.date)))
@@ -169,14 +168,11 @@ export async function getPayrollSummary(month: string, existingData?: PayrollCal
           ? (salary.salaryType === "monthly" ? Number(salary.baseSalary) : Number(salary.baseSalary) * salary.monthlyExpectedWorkDays) / weekdays.length
         : 0);
     }, 0);
-    const attendedShiftGross = employeeRecords
-      .filter((record) => ["present", "late"].includes(record.status))
+    const attendedShiftGross = workedRecords
       .reduce((total, record) => {
         const salary = salaryAt(employee, salaryHistory, String(record.date));
         return total + (salary.employeeType === "shift" && !salary.fullSalaryRegardlessAttendance
-          ? salary.salaryType === "monthly"
-            ? Number(salary.baseSalary) / Math.max(1, salary.monthlyExpectedWorkDays)
-            : Number(salary.baseSalary)
+          ? shiftDailyRate(salary)
           : 0);
       }, 0);
     const gross = money(officeGross + fullShiftGross + attendedShiftGross);
@@ -186,10 +182,18 @@ export async function getPayrollSummary(month: string, existingData?: PayrollCal
     });
     const socialInsuranceSalary = money(insuredSalaryDates.reduce((total, date) => {
       const salary = salaryAt(employee, salaryHistory, date);
-      return total + (salary.payrollTaxExempt ? 0 : Number(salary.socialInsuranceSalary) / weekdays.length);
+      return total + (salary.payrollTaxExempt
+        || (salary.employeeType === "shift" && !salary.fullSalaryRegardlessAttendance)
+        ? 0 : Number(salary.socialInsuranceSalary) / weekdays.length);
     }, 0) + excessWorkedRecords.reduce((total, record) => {
       const salary = salaryAt(employee, salaryHistory, String(record.date));
-      return total + (salary.payrollTaxExempt || salary.fullSalaryRegardlessAttendance ? 0 : Number(salary.socialInsuranceSalary) / weekdays.length);
+      return total + (salary.payrollTaxExempt || salary.fullSalaryRegardlessAttendance || salary.employeeType !== "office"
+        ? 0 : Number(salary.socialInsuranceSalary) / weekdays.length);
+    }, 0) + workedRecords.reduce((total, record) => {
+      const date = String(record.date);
+      const salary = salaryAt(employee, salaryHistory, date);
+      return total + (salary.employeeType === "shift" && !salary.fullSalaryRegardlessAttendance
+        ? shiftInsuredDailySalary(salary, employee.name, date) : 0);
     }, 0));
     const payrollTaxExempt = socialInsuranceSalary === 0;
     const socialInsurance = payrollTaxExempt ? 0 : money(socialInsuranceSalary * 0.115);

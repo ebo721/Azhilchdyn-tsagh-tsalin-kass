@@ -20,6 +20,15 @@ export const employeesTable = pgTable("employees", {
   name: text("name").notNull(),
   role: text("role").notNull(),
   phone: text("phone").notNull().default(""),
+  socialInsuranceProfile: jsonb("social_insurance_profile").$type<{
+    registrationNumber: string;
+    clanName: string;
+    parentName: string;
+    insuranceTypeCode: string;
+    occupationCode: string;
+    citizenship: string;
+    email: string;
+  }>(),
   salaryType: text("salary_type").notNull().default("monthly"),
   employeeType: text("employee_type").notNull().default("office"),
   baseSalary: numeric("base_salary", { precision: 12, scale: 2, mode: "number" }).notNull(),

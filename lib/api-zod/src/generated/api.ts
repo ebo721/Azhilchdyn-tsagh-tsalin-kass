@@ -185,7 +185,32 @@ export const GetDashboardResponse = zod.object({
 /**
  * @summary List employees
  */
+export const listEmployeesResponseSocialInsuranceProfileOneRegistrationNumberMax = 30;
+
+export const listEmployeesResponseSocialInsuranceProfileOneClanNameMax = 100;
+
+export const listEmployeesResponseSocialInsuranceProfileOneParentNameMax = 100;
+
+export const listEmployeesResponseSocialInsuranceProfileOneInsuranceTypeCodeMax = 20;
+
+export const listEmployeesResponseSocialInsuranceProfileOneOccupationCodeMax = 30;
+
+export const listEmployeesResponseSocialInsuranceProfileOneCitizenshipMax = 100;
+
+export const listEmployeesResponseSocialInsuranceProfileOneEmailMax = 200;
+
+
+
 export const ListEmployeesResponseItem = zod.object({
+  "socialInsuranceProfile": zod.union([zod.object({
+  "registrationNumber": zod.string().max(listEmployeesResponseSocialInsuranceProfileOneRegistrationNumberMax),
+  "clanName": zod.string().max(listEmployeesResponseSocialInsuranceProfileOneClanNameMax),
+  "parentName": zod.string().max(listEmployeesResponseSocialInsuranceProfileOneParentNameMax),
+  "insuranceTypeCode": zod.string().max(listEmployeesResponseSocialInsuranceProfileOneInsuranceTypeCodeMax),
+  "occupationCode": zod.string().max(listEmployeesResponseSocialInsuranceProfileOneOccupationCodeMax),
+  "citizenship": zod.string().max(listEmployeesResponseSocialInsuranceProfileOneCitizenshipMax),
+  "email": zod.string().max(listEmployeesResponseSocialInsuranceProfileOneEmailMax)
+}),zod.null()]).optional(),
   "id": zod.number().int(),
   "name": zod.string(),
   "role": zod.string(),
@@ -208,6 +233,20 @@ export const ListEmployeesResponse = zod.array(ListEmployeesResponseItem)
 /**
  * @summary Create an employee
  */
+export const createEmployeeBodySocialInsuranceProfileRegistrationNumberMax = 30;
+
+export const createEmployeeBodySocialInsuranceProfileClanNameMax = 100;
+
+export const createEmployeeBodySocialInsuranceProfileParentNameMax = 100;
+
+export const createEmployeeBodySocialInsuranceProfileInsuranceTypeCodeMax = 20;
+
+export const createEmployeeBodySocialInsuranceProfileOccupationCodeMax = 30;
+
+export const createEmployeeBodySocialInsuranceProfileCitizenshipMax = 100;
+
+export const createEmployeeBodySocialInsuranceProfileEmailMax = 200;
+
 
 
 export const createEmployeeBodyBaseSalaryMin = 0;
@@ -220,6 +259,15 @@ export const createEmployeeBodyMonthlyExpectedWorkDaysMax = 31;
 
 
 export const CreateEmployeeBody = zod.object({
+  "socialInsuranceProfile": zod.object({
+  "registrationNumber": zod.string().max(createEmployeeBodySocialInsuranceProfileRegistrationNumberMax),
+  "clanName": zod.string().max(createEmployeeBodySocialInsuranceProfileClanNameMax),
+  "parentName": zod.string().max(createEmployeeBodySocialInsuranceProfileParentNameMax),
+  "insuranceTypeCode": zod.string().max(createEmployeeBodySocialInsuranceProfileInsuranceTypeCodeMax),
+  "occupationCode": zod.string().max(createEmployeeBodySocialInsuranceProfileOccupationCodeMax),
+  "citizenship": zod.string().max(createEmployeeBodySocialInsuranceProfileCitizenshipMax),
+  "email": zod.string().max(createEmployeeBodySocialInsuranceProfileEmailMax)
+}).optional(),
   "name": zod.string().min(1),
   "role": zod.string().min(1),
   "phone": zod.string(),
@@ -234,7 +282,32 @@ export const CreateEmployeeBody = zod.object({
   "joinedAt": zod.coerce.date()
 })
 
+export const createEmployeeResponseSocialInsuranceProfileOneRegistrationNumberMax = 30;
+
+export const createEmployeeResponseSocialInsuranceProfileOneClanNameMax = 100;
+
+export const createEmployeeResponseSocialInsuranceProfileOneParentNameMax = 100;
+
+export const createEmployeeResponseSocialInsuranceProfileOneInsuranceTypeCodeMax = 20;
+
+export const createEmployeeResponseSocialInsuranceProfileOneOccupationCodeMax = 30;
+
+export const createEmployeeResponseSocialInsuranceProfileOneCitizenshipMax = 100;
+
+export const createEmployeeResponseSocialInsuranceProfileOneEmailMax = 200;
+
+
+
 export const CreateEmployeeResponse = zod.object({
+  "socialInsuranceProfile": zod.union([zod.object({
+  "registrationNumber": zod.string().max(createEmployeeResponseSocialInsuranceProfileOneRegistrationNumberMax),
+  "clanName": zod.string().max(createEmployeeResponseSocialInsuranceProfileOneClanNameMax),
+  "parentName": zod.string().max(createEmployeeResponseSocialInsuranceProfileOneParentNameMax),
+  "insuranceTypeCode": zod.string().max(createEmployeeResponseSocialInsuranceProfileOneInsuranceTypeCodeMax),
+  "occupationCode": zod.string().max(createEmployeeResponseSocialInsuranceProfileOneOccupationCodeMax),
+  "citizenship": zod.string().max(createEmployeeResponseSocialInsuranceProfileOneCitizenshipMax),
+  "email": zod.string().max(createEmployeeResponseSocialInsuranceProfileOneEmailMax)
+}),zod.null()]).optional(),
   "id": zod.number().int(),
   "name": zod.string(),
   "role": zod.string(),
@@ -260,6 +333,20 @@ export const UpdateEmployeeParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+export const updateEmployeeBodySocialInsuranceProfileRegistrationNumberMax = 30;
+
+export const updateEmployeeBodySocialInsuranceProfileClanNameMax = 100;
+
+export const updateEmployeeBodySocialInsuranceProfileParentNameMax = 100;
+
+export const updateEmployeeBodySocialInsuranceProfileInsuranceTypeCodeMax = 20;
+
+export const updateEmployeeBodySocialInsuranceProfileOccupationCodeMax = 30;
+
+export const updateEmployeeBodySocialInsuranceProfileCitizenshipMax = 100;
+
+export const updateEmployeeBodySocialInsuranceProfileEmailMax = 200;
+
 
 
 export const updateEmployeeBodyMonthlyExpectedWorkDaysMin = 0;
@@ -272,6 +359,15 @@ export const updateEmployeeBodySocialInsuranceSalaryMin = 0;
 
 
 export const UpdateEmployeeBody = zod.object({
+  "socialInsuranceProfile": zod.object({
+  "registrationNumber": zod.string().max(updateEmployeeBodySocialInsuranceProfileRegistrationNumberMax),
+  "clanName": zod.string().max(updateEmployeeBodySocialInsuranceProfileClanNameMax),
+  "parentName": zod.string().max(updateEmployeeBodySocialInsuranceProfileParentNameMax),
+  "insuranceTypeCode": zod.string().max(updateEmployeeBodySocialInsuranceProfileInsuranceTypeCodeMax),
+  "occupationCode": zod.string().max(updateEmployeeBodySocialInsuranceProfileOccupationCodeMax),
+  "citizenship": zod.string().max(updateEmployeeBodySocialInsuranceProfileCitizenshipMax),
+  "email": zod.string().max(updateEmployeeBodySocialInsuranceProfileEmailMax)
+}).optional(),
   "name": zod.string().min(1).optional(),
   "role": zod.string().min(1).optional(),
   "phone": zod.string().optional(),
@@ -289,7 +385,32 @@ export const UpdateEmployeeBody = zod.object({
   "salaryEffectiveDate": zod.coerce.date().optional()
 })
 
+export const updateEmployeeResponseSocialInsuranceProfileOneRegistrationNumberMax = 30;
+
+export const updateEmployeeResponseSocialInsuranceProfileOneClanNameMax = 100;
+
+export const updateEmployeeResponseSocialInsuranceProfileOneParentNameMax = 100;
+
+export const updateEmployeeResponseSocialInsuranceProfileOneInsuranceTypeCodeMax = 20;
+
+export const updateEmployeeResponseSocialInsuranceProfileOneOccupationCodeMax = 30;
+
+export const updateEmployeeResponseSocialInsuranceProfileOneCitizenshipMax = 100;
+
+export const updateEmployeeResponseSocialInsuranceProfileOneEmailMax = 200;
+
+
+
 export const UpdateEmployeeResponse = zod.object({
+  "socialInsuranceProfile": zod.union([zod.object({
+  "registrationNumber": zod.string().max(updateEmployeeResponseSocialInsuranceProfileOneRegistrationNumberMax),
+  "clanName": zod.string().max(updateEmployeeResponseSocialInsuranceProfileOneClanNameMax),
+  "parentName": zod.string().max(updateEmployeeResponseSocialInsuranceProfileOneParentNameMax),
+  "insuranceTypeCode": zod.string().max(updateEmployeeResponseSocialInsuranceProfileOneInsuranceTypeCodeMax),
+  "occupationCode": zod.string().max(updateEmployeeResponseSocialInsuranceProfileOneOccupationCodeMax),
+  "citizenship": zod.string().max(updateEmployeeResponseSocialInsuranceProfileOneCitizenshipMax),
+  "email": zod.string().max(updateEmployeeResponseSocialInsuranceProfileOneEmailMax)
+}),zod.null()]).optional(),
   "id": zod.number().int(),
   "name": zod.string(),
   "role": zod.string(),
@@ -935,6 +1056,19 @@ export const GetPayrollResponse = zod.object({
   "net": zod.number()
 }))
 })
+
+
+/**
+ * @summary Download the selected month's social insurance upload workbook
+ */
+export const downloadSocialInsuranceReportQueryMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+
+
+export const DownloadSocialInsuranceReportQueryParams = zod.object({
+  "month": zod.coerce.string().regex(downloadSocialInsuranceReportQueryMonthRegExp)
+})
+
+export const DownloadSocialInsuranceReportResponse = zod.unknown()
 
 
 /**

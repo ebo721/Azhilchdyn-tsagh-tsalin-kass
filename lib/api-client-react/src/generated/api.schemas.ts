@@ -411,7 +411,25 @@ export const EmployeeStatus = {
   inactive: 'inactive',
 } as const;
 
+export interface SocialInsuranceProfile {
+  /** @maxLength 30 */
+  registrationNumber: string;
+  /** @maxLength 100 */
+  clanName: string;
+  /** @maxLength 100 */
+  parentName: string;
+  /** @maxLength 20 */
+  insuranceTypeCode: string;
+  /** @maxLength 30 */
+  occupationCode: string;
+  /** @maxLength 100 */
+  citizenship: string;
+  /** @maxLength 200 */
+  email: string;
+}
+
 export interface Employee {
+  socialInsuranceProfile?: SocialInsuranceProfile | null;
   id: number;
   name: string;
   role: string;
@@ -526,6 +544,7 @@ export const EmployeeInputPayFrequency = {
 } as const;
 
 export interface EmployeeInput {
+  socialInsuranceProfile?: SocialInsuranceProfile;
   /** @minLength 1 */
   name: string;
   /** @minLength 1 */
@@ -581,6 +600,7 @@ export const EmployeeUpdateStatus = {
 } as const;
 
 export interface EmployeeUpdate {
+  socialInsuranceProfile?: SocialInsuranceProfile;
   /** @minLength 1 */
   name?: string;
   /** @minLength 1 */
@@ -2278,6 +2298,17 @@ export type GetPayrollParams = {
  * @pattern ^\d{4}-(0[1-9]|1[0-2])$
  */
 month?: string;
+};
+
+export type DownloadSocialInsuranceReportParams = {
+/**
+ * @pattern ^\d{4}-(0[1-9]|1[0-2])$
+ */
+month: string;
+};
+
+export type DownloadSocialInsuranceReport422 = {
+  error: string;
 };
 
 export type GetPayrollAdvanceParams = {

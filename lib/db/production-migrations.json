@@ -64,7 +64,11 @@
     {
       "filename": "20261006_meal_types_multi_schedule.sql",
       "releaseMode": "contract"
+    },
+    {
+      "filename": "20261007_employee_insurance_profile.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "f7c2846f5d0eaaa35dbcac929e3ff8825a6202d0dd08a3e0a9a34ca2044922ab"
+  "schemaFingerprint": "3a5007923e16f61a6b558cae81074649bb3056ca823dca9c2e64c891218f6c0f"
 }
