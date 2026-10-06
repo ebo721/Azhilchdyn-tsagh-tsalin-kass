@@ -47,7 +47,7 @@ for (const mode of ["restore", "unlink", "cancel", "error"] as const) {
       return mode === "cancel" && dialog.type() === "confirm" ? dialog.dismiss() : dialog.accept();
     });
     await page.goto("/cash");
-    await expect(page.getByTestId("date-cash-851")).toContainText(date);
+    await expect(page.getByTestId("date-cash-851")).toHaveText(String(Number(date.slice(8, 10))));
     await expect(page.getByTestId("date-cash-851")).toHaveAttribute("datetime", date);
     if (mode === "restore") {
       await page.screenshot({ path: "/tmp/cash-row-date-desktop.png" });
