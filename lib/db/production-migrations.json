@@ -68,7 +68,11 @@
     {
       "filename": "20261007_employee_insurance_profile.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20261008_payroll_month_balances.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "3a5007923e16f61a6b558cae81074649bb3056ca823dca9c2e64c891218f6c0f"
+  "schemaFingerprint": "ad7792d1f36f8880b4d42c9d909dfba6383961d3040455c90b39c7e19752054e"
 }

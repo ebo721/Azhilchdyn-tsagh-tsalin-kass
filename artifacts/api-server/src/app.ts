@@ -6,6 +6,7 @@ import type { HttpLogger } from "pino-http";
 import router from "./routes/index.js";
 import { logger } from "./lib/logger.js";
 import { PayrollConfigurationError } from "./lib/shift-insurance.js";
+import { PayrollBalancesNotReadyError } from "./lib/payroll-balance-store.js";
 
 type PinoHttpFactory = (options?: Record<string, unknown>) => HttpLogger;
 
@@ -45,6 +46,10 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api", router);
 
 const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
+  if (error instanceof PayrollBalancesNotReadyError) {
+    res.status(409).json({ error: error.message });
+    return;
+  }
   if (error instanceof PayrollConfigurationError) {
     res.status(422).json({ error: error.message });
     return;

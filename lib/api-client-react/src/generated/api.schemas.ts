@@ -2300,11 +2300,36 @@ export type GetPayrollParams = {
 month?: string;
 };
 
+export type GetPayroll409 = {
+  error: string;
+};
+
+export type RebuildPayrollBalancesParams = {
+/**
+ * @pattern ^\d{4}-(0[1-9]|1[0-2])$
+ */
+month: string;
+};
+
+export type RebuildPayrollBalances200 = {
+  complete: boolean;
+  processedMonths: string[];
+  nextMonth: string | null;
+};
+
+export type RebuildPayrollBalances422 = {
+  error: string;
+};
+
 export type DownloadSocialInsuranceReportParams = {
 /**
  * @pattern ^\d{4}-(0[1-9]|1[0-2])$
  */
 month: string;
+};
+
+export type DownloadSocialInsuranceReport409 = {
+  error: string;
 };
 
 export type DownloadSocialInsuranceReport422 = {

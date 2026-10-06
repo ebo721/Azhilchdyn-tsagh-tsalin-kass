@@ -163,6 +163,8 @@ import {
 } from "../lib/cash-account.js";
 import * as shared from "../lib/route-shared.js";
 import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-shared.js";
+import { RebuildPayrollBalancesQueryParams, RebuildPayrollBalancesResponse } from "@workspace/api-zod";
+import { rebuildPayrollBalances } from "../lib/payroll-balance-store.js";
 
 const router: IRouter = Router();
 const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, operatingExpenseAccountName, inventoryMaterialLabel, defaultChartOfAccounts, operatingExpenseAccountCodes, inventoryPurchaseAccountCodes, reservedAccountTypes, chartOfAccountResponse, ensureDefaultChartOfAccounts, inventoryPurchaseAccount, lockedExpenseAccount, fallbackExpenseAccount, today, currentMonth, money, InventoryBankPaymentConflictError, OperatingExpenseBankPaymentConflictError, calendarDateOffset, descriptionTokens, inventoryBankSuggestionScore, deletionTargetPatterns, roleCanRequestDeletion, deletionRequestResponse, monthlyIncomeTaxRelief, hoursBetween, previousMonth, nextMonth, daysInMonth, isValidCalendarDate, calendarDateText, weekdayCount, monthWeekdays, defaultPayrollSchedule, getPayrollSchedule, scheduleDate, payrollPeriod, selectPayrollScheduleVersion, scheduleVersionAffectsMonth, shiftDailyRate, weekdayDatesBetween, salaryAt, getPayrollSummary, getPayrollAdvanceSummary, calculatePayrollAdvanceLine, InventoryInsufficientStockError, planInventoryFifoConsumption, applyInventoryFifoConsumption, reverseInventoryFifoConsumption, inventoryPurchaseResponse } = shared;
@@ -300,6 +302,19 @@ router.get("/payroll", async (req, res, next) => {
   try {
     const { month } = GetPayrollQueryParams.parse(req.query);
     res.json(GetPayrollResponse.parse(await getPayrollSummary(month ?? currentMonth())));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/payroll/balances/recalculate", async (req, res, next): Promise<void> => {
+  try {
+    const { month } = RebuildPayrollBalancesQueryParams.parse(req.query);
+    if (month.startsWith("0000")) {
+      res.status(400).json({ error: "Бодит сар сонгоно уу." });
+      return;
+    }
+    res.json(RebuildPayrollBalancesResponse.parse(await rebuildPayrollBalances(previousMonth(month))));
   } catch (error) {
     next(error);
   }
@@ -771,16 +786,17 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
       let paymentInput = input;
       let paymentSourceLines = sourceLines;
       if (!input.paid) {
-        const attendanceRecords = await tx
-          .select()
-          .from(attendanceTable)
-          .where(eq(attendanceTable.employeeId, input.employeeId));
         const [scheduleRow] = await tx.select().from(payrollScheduleSettingsTable)
           .where(lte(payrollScheduleSettingsTable.effectiveFromMonth, input.month))
           .orderBy(desc(payrollScheduleSettingsTable.effectiveFromMonth))
           .limit(1);
         const schedule = scheduleRow ?? { ...defaultPayrollSchedule };
         const period = payrollPeriod(input.month, schedule);
+        const attendanceRecords = await tx.select().from(attendanceTable).where(and(
+          eq(attendanceTable.employeeId, input.employeeId),
+          gte(attendanceTable.date, period.periodStart),
+          lte(attendanceTable.date, period.advancePeriodEnd),
+        ));
         const firstHalfRecords = attendanceRecords.filter((record) =>
           String(record.date) >= period.periodStart
           && String(record.date) <= period.advancePeriodEnd

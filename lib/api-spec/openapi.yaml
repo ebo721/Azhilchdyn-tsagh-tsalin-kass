@@ -687,6 +687,38 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PayrollSummary"
+        "409":
+          description: Previous financial balances require initialization or repair
+          content:
+            application/json:
+              schema: { type: object, required: [error], properties: { error: { type: string } } }
+  /payroll/balances/recalculate:
+    post:
+      operationId: rebuildPayrollBalances
+      tags: [payroll]
+      summary: Prepare missing or changed prior financial balances in resumable batches
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+      responses:
+        "200":
+          description: At most six missing or changed months prepared
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [complete, processedMonths, nextMonth]
+                properties:
+                  complete: { type: boolean }
+                  processedMonths: { type: array, items: { type: string } }
+                  nextMonth: { type: string, nullable: true }
+        "422":
+          description: Historical payroll configuration needs correction
+          content:
+            application/json:
+              schema: { type: object, required: [error], properties: { error: { type: string } } }
   /payroll/social-insurance-report:
     get:
       operationId: downloadSocialInsuranceReport
@@ -712,6 +744,11 @@ paths:
                 required: [error]
                 properties:
                   error: { type: string }
+        "409":
+          description: Previous financial balances require initialization or repair
+          content:
+            application/json:
+              schema: { type: object, required: [error], properties: { error: { type: string } } }
   /payroll-schedule:
     get:
       operationId: getPayrollSchedule

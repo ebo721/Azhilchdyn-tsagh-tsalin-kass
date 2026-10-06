@@ -15,6 +15,8 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 
+export * from "./payroll-month-balances";
+
 export const employeesTable = pgTable("employees", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),

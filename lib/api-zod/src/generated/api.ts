@@ -1059,6 +1059,23 @@ export const GetPayrollResponse = zod.object({
 
 
 /**
+ * @summary Prepare missing or changed prior financial balances in resumable batches
+ */
+export const rebuildPayrollBalancesQueryMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+
+
+export const RebuildPayrollBalancesQueryParams = zod.object({
+  "month": zod.coerce.string().regex(rebuildPayrollBalancesQueryMonthRegExp)
+})
+
+export const RebuildPayrollBalancesResponse = zod.object({
+  "complete": zod.boolean(),
+  "processedMonths": zod.array(zod.string()),
+  "nextMonth": zod.string().nullable()
+})
+
+
+/**
  * @summary Download the selected month's social insurance upload workbook
  */
 export const downloadSocialInsuranceReportQueryMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
