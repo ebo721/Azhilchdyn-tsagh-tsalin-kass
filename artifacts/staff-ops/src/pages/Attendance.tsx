@@ -102,8 +102,17 @@ export function AttendancePage() {
   const qc = useQueryClient();
   const attendanceMap = useMemo(() => new Map((query.data ?? []).map((row) => [`${row.employeeId}-${row.date}`, row])), [query.data]);
   const planMap = useMemo(() => new Map((plans.data ?? []).map((row) => [`${row.employeeId}-${row.date}`, row])), [plans.data]);
-  const officeEmployees = (employees.data ?? []).filter((employee) => employee.status === EmployeeStatus.active && employee.employeeType === EmployeeEmployeeType.office);
-  const shiftEmployees = (employees.data ?? []).filter((employee) => employee.status === EmployeeStatus.active && employee.employeeType === EmployeeEmployeeType.shift);
+  const recordedEmployeeIds = new Set([
+    ...(query.data ?? []).map((record) => record.employeeId),
+    ...(plans.data ?? []).map((plan) => plan.employeeId),
+  ]);
+  const calendarEmployees = (employees.data ?? []).filter((employee) =>
+    employee.status === EmployeeStatus.active
+    || recordedEmployeeIds.has(employee.id)
+    || (employee.joinedAt <= days[days.length - 1]
+      && employee.inactiveAt !== null && employee.inactiveAt >= days[0]));
+  const officeEmployees = calendarEmployees.filter((employee) => employee.employeeType === EmployeeEmployeeType.office);
+  const shiftEmployees = calendarEmployees.filter((employee) => employee.employeeType === EmployeeEmployeeType.shift);
   const activeEmployees = [...officeEmployees, ...shiftEmployees];
   const filteredEmployees = shiftFilter === 'all'
     ? activeEmployees
