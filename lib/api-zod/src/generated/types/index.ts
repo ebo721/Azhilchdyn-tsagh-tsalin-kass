@@ -230,6 +230,8 @@ export * from './payrollAdvanceLine';
 export * from './payrollAdvanceLineEmployeeType';
 export * from './payrollAdvancePaymentInput';
 export * from './payrollAdvanceSummary';
+export * from './payrollAttendancePullInput';
+export * from './payrollAttendancePullResult';
 export * from './payrollLine';
 export * from './payrollLineEmployeeType';
 export * from './payrollSchedule';

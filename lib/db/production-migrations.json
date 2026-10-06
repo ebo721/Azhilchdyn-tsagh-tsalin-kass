@@ -76,7 +76,11 @@
     {
       "filename": "20261009_employee_bank_accounts.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20261010_payroll_attendance_snapshots.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "1808cbeceedd45776573f286d5144b8aa9eee7cfb0d1bc0e0dd67fd9acb85bec"
+  "schemaFingerprint": "66d6aa8050f2f583692f4b55dd810425d22c4b32efb78f64ee776ea53d35f139"
 }

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { cn } from '@/lib/utils';
 import { CalendarDays, Banknote, Check, ChevronRight, Coins, Download, Pencil, RefreshCw, Trash2 } from 'lucide-react';
-import { downloadSocialInsuranceReport } from '@workspace/api-client-react';
+import { downloadSocialInsuranceReport, usePullPayrollAttendance } from '@workspace/api-client-react';
 import { getGetDashboardQueryKey, getGetPayrollAdvanceQueryKey, getGetPayrollQueryKey, getGetPayrollScheduleQueryKey, getListJournalReceivablesQueryKey, useApprovePayrollAdvance, useGetAuthSession, useGetPayroll, useGetPayrollAdvance, useGetPayrollSchedule, useListCashClosures, useListJournalReceivables, useUpdatePayrollAdvancePayment, useUpdatePayrollSchedule, useUpsertPayrollAdjustment, type PayrollLine, type PayrollScheduleInput } from '@workspace/api-client-react';
 import { EmptyState, ErrorBlock, LoadingBlock, Modal } from '@/components/ui-primitives';
 import { dateLabel, currentMonth, money, shiftMonth, today } from '@/lib/app-shared';
@@ -210,6 +210,10 @@ export function Payroll() {
   const [downloadingInsurance, setDownloadingInsurance] = useState(false);
   const [insuranceError, setInsuranceError] = useState<string | null>(null);
   const [month, setMonth] = useState(currentMonth());
+  const selectedMonth = useRef(month);
+  selectedMonth.current = month;
+  const pullAttendance = usePullPayrollAttendance();
+  const [attendanceError, setAttendanceError] = useState<string | null>(null);
   const [selectedLine, setSelectedLine] = useState<PayrollLine | null>(null);
   const [showAdvance, setShowAdvance] = useState(false);
   const [showScheduleSettings, setShowScheduleSettings] = useState(false);
@@ -218,7 +222,7 @@ export function Payroll() {
   const [advanceDates, setAdvanceDates] = useState<Record<number, string>>({});
   const [advanceAmounts, setAdvanceAmounts] = useState<Record<number, string>>({});
   const query = useGetPayroll({ month });
-  const advanceQuery = useGetPayrollAdvance({ month });
+  const advanceQuery = useGetPayrollAdvance({ month }, { query: { queryKey: getGetPayrollAdvanceQueryKey({ month }), enabled: showAdvance } });
   const cashClosures = useListCashClosures();
   const closedCashDates = new Set(cashClosures.data?.map((closure) => closure.date) ?? []);
   const session = useGetAuthSession();
@@ -230,6 +234,7 @@ export function Payroll() {
   useEffect(() => {
     setAdvanceAmounts({});
     setAdvanceDates({});
+    setAttendanceError(null);
   }, [month]);
   const payrollTotals = (query.data?.lines ?? []).reduce(
     (totals, line) => ({
@@ -245,12 +250,23 @@ export function Payroll() {
     const amount = Number(advanceAmounts[line.employeeId] ?? line.advanceAmount);
     return total + (Number.isFinite(amount) ? amount : 0);
   }, 0);
-  const pullLatestAttendance = async () => {
-    await query.refetch();
-    if (showAdvance && !advanceQuery.data?.approved) {
-      setAdvanceAmounts({});
-      setAdvanceDates({});
-      await advanceQuery.refetch();
+  const pullLatestAttendance = async (resetDraft = true) => {
+    const requestedMonth = month;
+    setAttendanceError(null);
+    try {
+      await Promise.all([
+        qc.cancelQueries({ queryKey: getGetPayrollQueryKey({ month: requestedMonth }) }),
+        qc.cancelQueries({ queryKey: getGetPayrollAdvanceQueryKey({ month: requestedMonth }) }),
+      ]);
+      const result = await pullAttendance.mutateAsync({ data: { month: requestedMonth } });
+      qc.setQueryData(getGetPayrollQueryKey({ month: requestedMonth }), result.payroll);
+      qc.setQueryData(getGetPayrollAdvanceQueryKey({ month: requestedMonth }), result.advance);
+      if (selectedMonth.current === requestedMonth && resetDraft && !result.advance.approved) {
+        setAdvanceAmounts({});
+        setAdvanceDates({});
+      }
+    } catch (error) {
+      if (selectedMonth.current === requestedMonth) setAttendanceError(error instanceof Error ? error.message : 'Цаг татах үед алдаа гарлаа.');
     }
   };
   const refreshAdvanceEmployee = async (employeeId: number) => {
@@ -261,7 +277,7 @@ export function Payroll() {
       return next;
     });
     try {
-      await advanceQuery.refetch();
+      await pullLatestAttendance(false);
     } finally {
       setRefreshingAdvanceEmployeeId(null);
     }
@@ -369,17 +385,19 @@ export function Payroll() {
     <div className="mb-6 flex flex-wrap items-center justify-end gap-2">
       {(session.data?.role === 'admin' || session.data?.role === 'accountant') && <Button onClick={downloadInsurance} variant="outline" disabled={downloadingInsurance || query.isFetching || query.isError || !month} data-testid="button-download-insurance-report"><Download className="size-4" />{downloadingInsurance ? 'Тайлан бэлдэж байна...' : 'НДШ тайлан · Excel'}</Button>}
       <Button onClick={() => setShowScheduleSettings(true)} variant="outline" data-testid="button-payroll-schedule-settings"><CalendarDays className="size-4" />Цалингийн хуваарь</Button>
-      <Button onClick={pullLatestAttendance} variant="outline" disabled={query.isFetching || advanceQuery.isFetching} data-testid="button-pull-payroll-attendance"><RefreshCw className={cn('size-4', (query.isFetching || advanceQuery.isFetching) && 'animate-spin')} />{query.isFetching || advanceQuery.isFetching ? 'Татаж байна...' : 'Цаг татах'}</Button>
+      {['admin', 'accountant', 'hr'].includes(session.data?.role ?? '') && <Button onClick={() => void pullLatestAttendance()} variant="outline" disabled={pullAttendance.isPending} data-testid="button-pull-payroll-attendance"><RefreshCw className={cn('size-4', pullAttendance.isPending && 'animate-spin')} />{pullAttendance.isPending ? 'Татаж байна...' : 'Цаг татах'}</Button>}
       <Button onClick={() => setShowAdvance((value) => !value)} variant={showAdvance ? 'default' : 'outline'} data-testid="button-payroll-advance"><Coins className="size-4" />Урьдчилгаа цалин</Button>
       <div className="flex items-center overflow-hidden rounded-xl border border-border bg-card"><button type="button" onClick={() => setMonth((value) => shiftMonth(value, -1))} className="grid size-10 place-items-center border-r border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Өмнөх сар" data-testid="button-payroll-previous-month"><ChevronRight className="size-4 rotate-180" /></button><div className="flex items-center gap-2 px-3"><CalendarDays className="size-4 text-primary" /><label className="relative flex h-10 min-w-28 cursor-pointer items-center text-sm font-medium"><span>{mongolianMonthLabel(month)}</span><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="Цалингийн сар сонгох" data-testid="input-payroll-month" /></label></div><button type="button" onClick={() => setMonth((value) => shiftMonth(value, 1))} className="grid size-10 place-items-center border-l border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Дараагийн сар" data-testid="button-payroll-next-month"><ChevronRight className="size-4" /></button></div>
     </div>
 
-    {query.isError && 'status' in query.error && query.error.status === 409 && <div className="mb-5 space-y-3 rounded-xl border border-border bg-card p-4" data-testid="payroll-balances-required">
+    {((query.isError && query.error instanceof Error && query.error.message.includes('өмнөх сарын')) || attendanceError?.includes('өмнөх сарын')) && <div className="mb-5 space-y-3 rounded-xl border border-border bg-card p-4" data-testid="payroll-balances-required">
       <p className="text-sm">Өмнөх сарын хадгалсан авлага/өглөгийг нэг удаа бэлтгэх, эсвэл хуучин сарын засварыг тусгах шаардлагатай. Ердийн цалин бодолт зөвхөн сонгосон цалингийн хугацааны ирцийг уншина.</p>
       {(session.data?.role === 'admin' || session.data?.role === 'accountant') && <Button onClick={prepareBalances} disabled={preparingBalances} data-testid="button-prepare-payroll-balances">{preparingBalances ? 'Шинэчилж байна…' : 'Өмнөх үлдэгдэл шинэчлэх'}</Button>}
       {balanceProgress && <p aria-live="polite" className="text-sm text-muted-foreground" data-testid="payroll-balances-progress">{balanceProgress}</p>}
       {balanceError && <p role="alert" className="whitespace-pre-line text-sm text-destructive" data-testid="payroll-balances-error">{balanceError}</p>}
     </div>}
+    {attendanceError && <p role="alert" className="mb-5 whitespace-pre-line text-sm text-destructive" data-testid="payroll-attendance-error">{attendanceError}</p>}
+    {query.data?.attendancePulledAt && <p className="mb-4 text-sm text-muted-foreground" data-testid="payroll-attendance-status">Сүүлд цаг татсан: {new Date(query.data.attendancePulledAt).toLocaleString('mn-MN')}. {query.data.attendanceNeedsRefresh ? 'Эх бүртгэл өөрчлөгдсөн. Хадгалсан тооцоог харуулж байна; «Цаг татах» дарж шинэчилнэ үү.' : 'Хадгалсан тооцоог харуулж байна.'}</p>}
     {insuranceError && <div role="alert" className="mb-5 whitespace-pre-line rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" data-testid="error-insurance-report">{insuranceError}</div>}
     {query.isError && query.error instanceof Error && <p role="alert" className="mb-5 whitespace-pre-line text-sm text-destructive">{query.error.message}</p>}
     {!query.isLoading && !query.isError && query.data && (

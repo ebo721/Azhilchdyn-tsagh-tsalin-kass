@@ -165,6 +165,8 @@ import * as shared from "../lib/route-shared.js";
 import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-shared.js";
 import { RebuildPayrollBalancesQueryParams, RebuildPayrollBalancesResponse } from "@workspace/api-zod";
 import { rebuildPayrollBalances } from "../lib/payroll-balance-store.js";
+import { readSavedPayroll, pullPayrollAttendance } from "../lib/payroll-attendance-snapshot.js";
+import { PullPayrollAttendanceBody, PullPayrollAttendanceResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, operatingExpenseAccountName, inventoryMaterialLabel, defaultChartOfAccounts, operatingExpenseAccountCodes, inventoryPurchaseAccountCodes, reservedAccountTypes, chartOfAccountResponse, ensureDefaultChartOfAccounts, inventoryPurchaseAccount, lockedExpenseAccount, fallbackExpenseAccount, today, currentMonth, money, InventoryBankPaymentConflictError, OperatingExpenseBankPaymentConflictError, calendarDateOffset, descriptionTokens, inventoryBankSuggestionScore, deletionTargetPatterns, roleCanRequestDeletion, deletionRequestResponse, monthlyIncomeTaxRelief, hoursBetween, previousMonth, nextMonth, daysInMonth, isValidCalendarDate, calendarDateText, weekdayCount, monthWeekdays, defaultPayrollSchedule, getPayrollSchedule, scheduleDate, payrollPeriod, selectPayrollScheduleVersion, scheduleVersionAffectsMonth, shiftDailyRate, weekdayDatesBetween, salaryAt, getPayrollSummary, getPayrollAdvanceSummary, calculatePayrollAdvanceLine, InventoryInsufficientStockError, planInventoryFifoConsumption, applyInventoryFifoConsumption, reverseInventoryFifoConsumption, inventoryPurchaseResponse } = shared;
@@ -282,7 +284,7 @@ router.get("/payroll/social-insurance-report", async (req, res, next) => {
       return;
     }
     const { month } = DownloadSocialInsuranceReportQueryParams.parse(req.query);
-    const summary = await getPayrollSummary(month);
+    const summary = await readSavedPayroll(month);
     const employees = await db.select().from(employeesTable);
     const workbook = await buildInsuranceWorkbook(summary.lines, employees);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -301,10 +303,26 @@ router.get("/payroll/social-insurance-report", async (req, res, next) => {
 router.get("/payroll", async (req, res, next) => {
   try {
     const { month } = GetPayrollQueryParams.parse(req.query);
-    res.json(GetPayrollResponse.parse(await getPayrollSummary(month ?? currentMonth())));
+    res.json(GetPayrollResponse.parse(await readSavedPayroll(month ?? currentMonth())));
   } catch (error) {
     next(error);
   }
+});
+
+router.post("/payroll/pull-attendance", async (req, res, next): Promise<void> => {
+  try {
+    const session = await getStaffSession(req);
+    if (!session || !["admin", "accountant", "hr"].includes(session.role)) {
+      res.status(403).json({ error: "Цаг татах эрхгүй." });
+      return;
+    }
+    const { month } = PullPayrollAttendanceBody.parse(req.body);
+    if (month.startsWith("0000")) {
+      res.status(400).json({ error: "Бодит сар сонгоно уу." });
+      return;
+    }
+    res.json(PullPayrollAttendanceResponse.parse(await pullPayrollAttendance(month)));
+  } catch (error) { next(error); }
 });
 
 router.post("/payroll/balances/recalculate", async (req, res, next): Promise<void> => {
@@ -661,7 +679,7 @@ router.delete("/payroll-adjustments/:month/:employeeId/transactions/:sequence", 
 router.get("/payroll-advance", async (req, res, next) => {
   try {
     const { month } = GetPayrollAdvanceQueryParams.parse(req.query);
-    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month ?? currentMonth())));
+    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month ?? currentMonth(), db, { savedOnly: true })));
   } catch (error) {
     next(error);
   }
@@ -684,7 +702,7 @@ router.post("/payroll-advance/approve", async (req, res, next) => {
     }
     await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
-      const existing = await getPayrollAdvanceSummary(month);
+      const existing = await getPayrollAdvanceSummary(month, tx, { savedOnly: true });
       if (!existing.approved) {
         const currentLines = existing.lines as Array<Record<string, unknown> & {
           employeeId: number;
@@ -708,7 +726,7 @@ router.post("/payroll-advance/approve", async (req, res, next) => {
         }).onConflictDoNothing();
       }
     });
-    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month)));
+    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month, db, { savedOnly: true })));
   } catch (error) {
     next(error);
   }
@@ -721,25 +739,20 @@ router.delete("/payroll-advance/approval", async (req, res, next) => {
       return;
     }
     const { month } = RevertPayrollAdvanceApprovalQueryParams.parse(req.query);
-    const [approval] = await db
-      .select()
-      .from(payrollAdvanceApprovalsTable)
-      .where(eq(payrollAdvanceApprovalsTable.month, month));
-    if (!approval) {
-      res.status(404).json({ error: "Батлагдсан урьдчилгаа цалин олдсонгүй" });
-      return;
-    }
-    const lines = Array.isArray(approval.lines)
-      ? approval.lines as Array<{ paid?: boolean }>
-      : [];
-    if (lines.some((line) => line.paid === true)) {
-      res.status(409).json({ error: "Эхлээд олгосон урьдчилгаа цалингийн мөрүүдийг Олгоогүй болгоно уу" });
-      return;
-    }
-    await db
-      .delete(payrollAdvanceApprovalsTable)
-      .where(eq(payrollAdvanceApprovalsTable.id, approval.id));
-    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month)));
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
+      const [approval] = await tx.select().from(payrollAdvanceApprovalsTable)
+        .where(eq(payrollAdvanceApprovalsTable.month, month)).for("update");
+      if (!approval) return { status: 404, error: "Батлагдсан урьдчилгаа цалин олдсонгүй" } as const;
+      const lines = GetPayrollAdvanceResponse.shape.lines.parse(approval.lines);
+      if (lines.some((line) => line.paid === true)) return { status: 409, error: "Эхлээд олгосон урьдчилгаа цалингийн мөрүүдийг Олгоогүй болгоно уу" } as const;
+      // Validate the saved draft before deletion so failure cannot leave a half-completed reversal.
+      const draft = await getPayrollAdvanceSummary(month, tx, { savedOnly: true, ignoreApproval: true });
+      await tx.delete(payrollAdvanceApprovalsTable).where(eq(payrollAdvanceApprovalsTable.id, approval.id));
+      return { status: 200, draft } as const;
+    });
+    if (result.status !== 200) { res.status(result.status).json({ error: result.error }); return; }
+    res.json(GetPayrollAdvanceResponse.parse(result.draft));
   } catch (error) {
     next(error);
   }
@@ -758,6 +771,7 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
       return;
     }
     const paymentResult = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
       const [approval] = await tx
         .select()
         .from(payrollAdvanceApprovalsTable)
@@ -783,40 +797,8 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
           .where(eq(cashClosuresTable.date, date));
         if (closure) return "cash_closed" as const;
       }
-      let paymentInput = input;
-      let paymentSourceLines = sourceLines;
-      if (!input.paid) {
-        const [scheduleRow] = await tx.select().from(payrollScheduleSettingsTable)
-          .where(lte(payrollScheduleSettingsTable.effectiveFromMonth, input.month))
-          .orderBy(desc(payrollScheduleSettingsTable.effectiveFromMonth))
-          .limit(1);
-        const schedule = scheduleRow ?? { ...defaultPayrollSchedule };
-        const period = payrollPeriod(input.month, schedule);
-        const attendanceRecords = await tx.select().from(attendanceTable).where(and(
-          eq(attendanceTable.employeeId, input.employeeId),
-          gte(attendanceTable.date, period.periodStart),
-          lte(attendanceTable.date, period.advancePeriodEnd),
-        ));
-        const firstHalfRecords = attendanceRecords.filter((record) =>
-          String(record.date) >= period.periodStart
-          && String(record.date) <= period.advancePeriodEnd
-        );
-        const history = await tx.select().from(employeeSalaryHistoryTable)
-          .where(eq(employeeSalaryHistoryTable.employeeId, input.employeeId));
-        const refreshedLine = calculatePayrollAdvanceLine(
-          employee,
-          firstHalfRecords,
-          history,
-          period.periodStart,
-          period.periodEnd,
-          period.advancePeriodEnd,
-        );
-        paymentSourceLines = sourceLines.map((line) =>
-          Number(line.employeeId) === input.employeeId ? refreshedLine : line
-        );
-        paymentInput = { ...input, advanceAmount: refreshedLine.advanceAmount };
-      }
-      const { lines, totalAmount, cashTransaction } = planPayrollAdvancePayment(paymentSourceLines, paymentInput);
+      const paymentInput = input.paid ? input : { ...input, advanceAmount: Number(previousLine!.advanceAmount) };
+      const { lines, totalAmount, cashTransaction } = planPayrollAdvancePayment(sourceLines, paymentInput);
 
       await tx
         .update(payrollAdvanceApprovalsTable)
@@ -904,7 +886,7 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
       res.status(409).json({ error: "Банкны хуулгаар баталгаажсан урьдчилгаа цалинг эхлээд журналаас буцаана уу" });
       return;
     }
-    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(input.month)));
+    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(input.month, db, { savedOnly: true })));
   } catch (error) {
     next(error);
   }

@@ -160,7 +160,9 @@ it("preserves complete summaries across ten years, schedule versions and salary 
   };
   for (const month of Object.keys(expected) as Array<keyof typeof expected>) {
     const summary = calculateThrough(month, data, schedules);
-    assert.equal(digest(summary), expected[month], `${month}: all response fields must match legacy calculation`);
+    // Goldens predate recipient-account metadata. Compare every legacy calculation field.
+    assert.equal(digest({ ...summary, lines: summary.lines.map(({ bankAccountNumber: _account, ...line }) => line) }),
+      expected[month], `${month}: all calculation fields must match legacy calculation`);
     if (month === "2025-12") {
       assert.equal(summary.lines.find(line => line.employeeId === 3)?.carryoverAmount, 1190);
       assert.equal(summary.lines.find(line => line.employeeId === 3)?.balanceAmount, 1200);
@@ -171,7 +173,8 @@ it("preserves complete summaries across ten years, schedule versions and salary 
   assert.deepEqual(data, before, "calculation must not mutate payments or inputs");
   data.salaryHistory.find(row => row.id === 11)!.baseSalary = 2_100_000;
   const corrected = calculateThrough("2025-12", data, schedules);
-  assert.equal(digest(corrected), "8fd60bc83cbabcb192d76cd73556368929ac8fed1f1b8dea7602353a55f41a05");
+  assert.equal(digest({ ...corrected, lines: corrected.lines.map(({ bankAccountNumber: _account, ...line }) => line) }),
+    "8fd60bc83cbabcb192d76cd73556368929ac8fed1f1b8dea7602353a55f41a05");
   assert.equal(corrected.lines[0].paidAmount, 1_920_000);
   assert.equal(corrected.lines[0].secondPaidAmount, 20_000);
 });

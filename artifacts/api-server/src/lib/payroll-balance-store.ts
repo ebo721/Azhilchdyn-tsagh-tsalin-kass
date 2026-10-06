@@ -85,16 +85,17 @@ async function rebaseLater(tx: Tx, month: string, opening: PayrollBalanceEntry[]
   }
 }
 
-/** Normal payroll/report path: precisely one period of attendance plus saved prior finances. */
-export async function readMonthlyPayroll(month: string) {
-  return db.transaction(async tx => {
+/** Calculation path for explicit pull/repair: one period of attendance plus saved prior finances. */
+export async function readMonthlyPayroll(month: string, connection?: Tx) {
+  const calculate = async (tx: Tx) => {
     await lockBalances(tx);
     const loaded = await loadMonth(tx, month);
     const opening = await openingBalances(tx, month, loaded.data.allEmployees);
     const result = await saveMonth(tx, month, loaded, opening);
     await rebaseLater(tx, month, result.lines);
     return result.summary;
-  });
+  };
+  return connection ? calculate(connection) : db.transaction(calculate);
 }
 
 /** Explicit, resumable initialization/repair, NOT part of a normal payroll GET.
