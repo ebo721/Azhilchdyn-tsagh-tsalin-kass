@@ -5,7 +5,7 @@ import type { employeesTable } from "@workspace/db";
 import { buildInsuranceWorkbook, insuranceUploadHeaders, InsuranceReportValidationError } from "./social-insurance-report.js";
 
 const employee: typeof employeesTable.$inferSelect = {
-  id: 1, name: "Fixture only", role: "Test", phone: "0012345678",
+  id: 1, name: "Fixture only", role: "Test", phone: "0012345678", bankAccountNumber: "",
   employeeType: "shift", salaryType: "daily", baseSalary: 100_000,
   socialInsuranceSalary: 1_200_000, payrollTaxExempt: false,
   fullSalaryRegardlessAttendance: false, payFrequency: "twice", monthlyExpectedWorkDays: 15,

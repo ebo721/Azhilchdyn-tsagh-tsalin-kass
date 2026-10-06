@@ -18,6 +18,7 @@ export interface Employee {
   role: string;
   phone: string;
   salaryType: EmployeeSalaryType;
+  bankAccountNumber?: string;
   employeeType: EmployeeEmployeeType;
   baseSalary: number;
   socialInsuranceSalary: number;

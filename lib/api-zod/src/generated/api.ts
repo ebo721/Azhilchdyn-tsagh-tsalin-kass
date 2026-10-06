@@ -216,6 +216,7 @@ export const ListEmployeesResponseItem = zod.object({
   "role": zod.string(),
   "phone": zod.string(),
   "salaryType": zod.enum(['daily', 'monthly']),
+  "bankAccountNumber": zod.string().optional(),
   "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "socialInsuranceSalary": zod.number(),
@@ -249,6 +250,10 @@ export const createEmployeeBodySocialInsuranceProfileEmailMax = 200;
 
 
 
+export const createEmployeeBodyBankAccountNumberMax = 34;
+
+
+export const createEmployeeBodyBankAccountNumberRegExp = new RegExp('^(|[0-9]{6,34}|MN[0-9]{18})$');
 export const createEmployeeBodyBaseSalaryMin = 0;
 
 export const createEmployeeBodySocialInsuranceSalaryMin = 0;
@@ -271,6 +276,7 @@ export const CreateEmployeeBody = zod.object({
   "name": zod.string().min(1),
   "role": zod.string().min(1),
   "phone": zod.string(),
+  "bankAccountNumber": zod.string().max(createEmployeeBodyBankAccountNumberMax).regex(createEmployeeBodyBankAccountNumberRegExp).optional(),
   "employeeType": zod.enum(['shift', 'office']),
   "salaryType": zod.enum(['daily', 'monthly']).optional(),
   "baseSalary": zod.number().min(createEmployeeBodyBaseSalaryMin),
@@ -313,6 +319,7 @@ export const CreateEmployeeResponse = zod.object({
   "role": zod.string(),
   "phone": zod.string(),
   "salaryType": zod.enum(['daily', 'monthly']),
+  "bankAccountNumber": zod.string().optional(),
   "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "socialInsuranceSalary": zod.number(),
@@ -349,6 +356,10 @@ export const updateEmployeeBodySocialInsuranceProfileEmailMax = 200;
 
 
 
+export const updateEmployeeBodyBankAccountNumberMax = 34;
+
+
+export const updateEmployeeBodyBankAccountNumberRegExp = new RegExp('^(|[0-9]{6,34}|MN[0-9]{18})$');
 export const updateEmployeeBodyMonthlyExpectedWorkDaysMin = 0;
 export const updateEmployeeBodyMonthlyExpectedWorkDaysMax = 31;
 
@@ -371,6 +382,7 @@ export const UpdateEmployeeBody = zod.object({
   "name": zod.string().min(1).optional(),
   "role": zod.string().min(1).optional(),
   "phone": zod.string().optional(),
+  "bankAccountNumber": zod.string().max(updateEmployeeBodyBankAccountNumberMax).regex(updateEmployeeBodyBankAccountNumberRegExp).optional(),
   "employeeType": zod.enum(['shift', 'office']).optional(),
   "salaryType": zod.enum(['daily', 'monthly']).optional(),
   "monthlyExpectedWorkDays": zod.number().int().min(updateEmployeeBodyMonthlyExpectedWorkDaysMin).max(updateEmployeeBodyMonthlyExpectedWorkDaysMax).optional(),
@@ -416,6 +428,7 @@ export const UpdateEmployeeResponse = zod.object({
   "role": zod.string(),
   "phone": zod.string(),
   "salaryType": zod.enum(['daily', 'monthly']),
+  "bankAccountNumber": zod.string().optional(),
   "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "socialInsuranceSalary": zod.number(),
@@ -1029,6 +1042,7 @@ export const GetPayrollResponse = zod.object({
   "lines": zod.array(zod.object({
   "employeeId": zod.number().int(),
   "employeeName": zod.string(),
+  "bankAccountNumber": zod.string().optional(),
   "role": zod.string(),
   "employeeType": zod.enum(['shift', 'office']),
   "daysWorked": zod.number(),

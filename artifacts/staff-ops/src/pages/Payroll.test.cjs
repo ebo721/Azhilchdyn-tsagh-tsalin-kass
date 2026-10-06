@@ -32,7 +32,7 @@ const compiled = ts.transpileModule(source, {
 });
 assert.equal(compiled.diagnostics.length, 0);
 const pageModule = { exports: {} };
-vm.runInNewContext(compiled.outputText, {
+vm.runInNewContext(compiled.outputText + '\nexports.AdjustmentFixture = PayrollAdjustmentModal;', {
   module: pageModule, exports: pageModule.exports, console,
   require(id) {
     if (id === 'react') return {
@@ -44,7 +44,7 @@ vm.runInNewContext(compiled.outputText, {
       get: (object, key) => key in object ? object[key] : mutation,
     });
     if (id === '@tanstack/react-query') return { useQueryClient: () => ({ invalidateQueries() {} }) };
-    if (id === 'react-hook-form') return { useForm: () => ({}) };
+    if (id === 'react-hook-form') return { useForm: () => ({ handleSubmit: (handler) => handler, register: () => ({}) }) };
     if (id === '@/lib/utils') return { cn: (...args) => args.filter(Boolean).join(' ') };
     if (id === '@/lib/app-shared') return {
       money, currentMonth: () => '2026-09', today: () => '2026-09-30', dateLabel: (date) => date,
@@ -96,4 +96,18 @@ test('remaining total occupies column 15 in the 16-column footer; empty data has
   }
   assert.equal(column, 17);
   assert.doesNotMatch(render([]), /value-payroll-total-remaining/);
+});
+
+test('adjustment shows the full recipient account without truncation or masking', () => {
+  const renderAdjustment = (account) => renderToStaticMarkup(React.createElement(pageModule.exports.AdjustmentFixture, {
+    line: { ...baseLine, bankAccountNumber: account }, month: '2026-09', onClose() {},
+  }));
+  const account = 'MN000000000000000002';
+  const html = renderAdjustment(account);
+  const accountCell = html.match(/<p[^>]*data-testid="value-payroll-bank-account"[^>]*>([^<]*)<\/p>/);
+  assert.equal(accountCell[1], account);
+  assert.match(accountCell[0], /break-all/);
+  assert.doesNotMatch(accountCell[0], /truncate|\*|ellipsis/);
+  assert.match(renderAdjustment(''), /Бүртгээгүй/);
+  assert.match(renderAdjustment('001234567890'), />001234567890<\/p>/);
 });
