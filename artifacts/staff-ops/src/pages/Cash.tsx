@@ -47,6 +47,8 @@ import {
 } from 'lucide-react';
 import {
   CashTransactionType,
+  useUnlinkBankTransactionCash,
+  useRestoreBankCashJournal,
   getGetCashSummaryQueryKey,
   getGetDashboardQueryKey,
   getGetAuthSessionQueryKey,
@@ -228,6 +230,8 @@ export function Cash() {
   const update = useUpdateCashTransaction();
   const postJournal = usePostCashTransactionJournal();
   const linkJournalToBank = useLinkBankTransactionToCash();
+  const unlinkBankCash = useUnlinkBankTransactionCash();
+  const restoreBankJournal = useRestoreBankCashJournal();
   const deletion = useQueueDeletion();
   const remove = deletion;
   const qc = useQueryClient();
@@ -247,7 +251,7 @@ export function Cash() {
   const bankSuggestions = useListCashTransactionBankSuggestions(journalCash?.id ?? 0, {
     query: {
       queryKey: getListCashTransactionBankSuggestionsQueryKey(journalCash?.id ?? 0),
-      enabled: Boolean(journalCash),
+      enabled: Boolean(journalCash) && journalCash?.bankTransactionId === null,
     },
   });
   const filteredTransactions = (list.data ?? []).filter((row) =>
@@ -286,6 +290,13 @@ export function Cash() {
     if (!window.confirm(`${row.description} гүйлгээг устгах уу?`)) return;
     deletion.request(`/cash/transactions/${row.id}`, `${row.description} кассын гүйлгээ`);
   };
+  const unlinkCash = (row: CashTransaction) => {
+    if (!row.bankTransactionId || !window.confirm('Банк–кассын холбоосыг салгах уу? Хоёр гүйлгээ үлдэнэ. Холбоотой журнал байвал эсрэг бичилтээр цуцална.')) return;
+    unlinkBankCash.mutate({ id: row.bankTransactionId }, {
+      onSuccess: () => { qc.invalidateQueries(); },
+      onError: (error) => window.alert(error instanceof Error ? error.message : 'Холбоос салгаж чадсангүй.'),
+    });
+  };
   const startJournal = (row: CashTransaction) => {
     const preferredAccount = journalAccounts.find((account) => account.id === row.accountId);
     setJournalCash(row);
@@ -299,6 +310,14 @@ export function Cash() {
   };
   const submitJournal = () => {
     if (!journalCash) return;
+    if (journalCash.bankTransactionId !== null) {
+      if (!journalAccountId) return;
+      restoreBankJournal.mutate({ id: journalCash.bankTransactionId, data: { accountId: Number(journalAccountId) } }, {
+        onSuccess: () => { qc.invalidateQueries(); closeJournal(); },
+        onError: (error) => window.alert(error instanceof Error ? error.message : 'Журнал дахин бичиж чадсангүй.'),
+      });
+      return;
+    }
     if (journalBankTransactionId) {
       linkJournalToBank.mutate({ id: Number(journalBankTransactionId), data: { cashTransactionId: journalCash.id } }, {
         onSuccess: () => {
@@ -333,15 +352,14 @@ export function Cash() {
       </div>
       {list.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : list.isError ? <ErrorBlock onRetry={() => list.refetch()} /> : !filteredTransactions.length ? <EmptyState title="Шүүлтэд тохирох гүйлгээ алга" detail="Өөр сар эсвэл гүйлгээний төрөл сонгоно уу." icon={WalletCards} /> : <div className="divide-y divide-border">{filteredTransactions.map((row) => {
         const closed = closedDates.has(row.date);
-        const journalEligible = canPostJournal
-          && row.journalEntryId === null
-          && row.bankTransactionId === null
-          && !row.bankVerifiedAt
-          && ['manual', 'payroll', 'payroll_advance'].includes(row.transactionKind);
+        const bankLinked = row.bankTransactionId !== null;
+        const supportedPair = ['manual', 'payroll', 'payroll_advance', 'bank_transaction'].includes(row.transactionKind);
+        const journalEligible = canPostJournal && row.journalEntryId === null && supportedPair
+          && (bankLinked ? Boolean(row.bankVerifiedAt) : !row.bankVerifiedAt);
         return <div className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-secondary/35" key={row.id} data-testid={`row-cash-${row.id}`}>
           <span className={cn('grid size-9 shrink-0 place-items-center rounded-xl', row.type === CashTransactionType.income ? 'bg-primary/10 text-primary' : 'bg-orange-100 text-orange-800')}>{row.type === CashTransactionType.income ? <ArrowDownLeft className="size-4" /> : <ArrowUpRight className="size-4" />}</span>
           <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold">{row.description}</p><span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-800">{row.category}</span>{row.journalEntryId && <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-800" data-testid={`badge-cash-journal-${row.id}`}>Журнал бичигдсэн #{row.journalEntryId}</span>}{(row.bankVerifiedAt || row.bankTransactionId) && <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">Банкны хуулгаар баталгаажсан</span>}</div><p className="mt-0.5 text-xs text-muted-foreground">{dateLabel(row.date)}{row.type === CashTransactionType.income && row.incomeMonth ? ` · ${mongolianMonthLabel(row.incomeMonth)}-ийн орлого` : ''}{closed ? ' · Өндөрлөсөн' : ''}</p><AccountLabel code={row.accountCode} name={row.accountName} className="mt-1" /></div>
-          {(session.data?.role === 'admin' || row.editable || journalEligible) && <div className="flex flex-wrap justify-end gap-1">{journalEligible && <Button size="sm" variant="outline" disabled={closed || postJournal.isPending} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Журнал бичих'} onClick={() => startJournal(row)} data-testid={`button-post-cash-journal-${row.id}`}><BookOpen className="size-4" />Журнал бичих</Button>}{session.data?.role === 'admin' && <Button size="icon" variant="ghost" disabled={closed} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Засах'} onClick={() => startEdit(row)} data-testid={`button-edit-cash-${row.id}`}><Pencil className="size-4" /></Button>}{row.editable && <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={closed || deletion.isPending} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : deletion.isAdmin ? 'Гүйлгээ устгах' : 'Устгах хүсэлт илгээх'} aria-label={`${row.description} гүйлгээг устгах`} onClick={() => deleteRow(row)} data-testid={`button-delete-cash-${row.id}`}><Trash2 className="size-4" />Устгах</Button>}</div>}
+          {(session.data?.role === 'admin' || row.editable || journalEligible || (canPostJournal && bankLinked && supportedPair)) && <div className="flex flex-wrap justify-end gap-1">{journalEligible && <Button size="sm" variant="outline" disabled={closed || postJournal.isPending || restoreBankJournal.isPending || unlinkBankCash.isPending} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : bankLinked ? 'Журнал дахин бичих' : 'Журнал бичих'} onClick={() => startJournal(row)} data-testid={`button-post-cash-journal-${row.id}`}><BookOpen className="size-4" />{bankLinked ? 'Журнал дахин бичих' : 'Журнал бичих'}</Button>}{canPostJournal && bankLinked && supportedPair && <Button size="sm" variant="outline" disabled={closed || unlinkBankCash.isPending || restoreBankJournal.isPending} onClick={() => unlinkCash(row)} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Буруу холбосон банк–кассын холбоос салгах'} data-testid={`button-unlink-bank-cash-${row.id}`}>Холбоос салгах</Button>}{session.data?.role === 'admin' && <Button size="icon" variant="ghost" disabled={closed} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Засах'} onClick={() => startEdit(row)} data-testid={`button-edit-cash-${row.id}`}><Pencil className="size-4" /></Button>}{row.editable && <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={closed || deletion.isPending} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : deletion.isAdmin ? 'Гүйлгээ устгах' : 'Устгах хүсэлт илгээх'} aria-label={`${row.description} гүйлгээг устгах`} onClick={() => deleteRow(row)} data-testid={`button-delete-cash-${row.id}`}><Trash2 className="size-4" />Устгах</Button>}</div>}
           <p className={cn('font-mono text-sm font-bold', row.type === CashTransactionType.income ? 'text-primary' : 'text-orange-800')}>{row.type === CashTransactionType.income ? '+' : '−'}{money(row.amount)}</p>
         </div>;
       })}</div>}
@@ -362,24 +380,24 @@ export function Cash() {
         <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Болих</Button><Button type="submit" disabled={create.isPending || update.isPending}>{create.isPending || update.isPending ? 'Хадгалж байна...' : 'Хадгалах'}</Button></div>
       </form></Form>
     </Modal>}
-    {journalCash && <Modal title="Кассын журнал бичих" detail="Тохирох банкны гүйлгээ сонгох эсвэл кассын 1000 дансаар шууд журнал бичнэ." onClose={closeJournal} wide>
+    {journalCash && <Modal title={journalCash.bankTransactionId !== null ? 'Банкны журнал дахин бичих' : 'Кассын журнал бичих'} detail={journalCash.bankTransactionId !== null ? 'Банк–кассын холбоосыг хэвээр хадгалж, банкны 1010 дансаар журнал дахин бичнэ.' : 'Тохирох банкны гүйлгээ сонгох эсвэл кассын 1000 дансаар шууд журнал бичнэ.'} onClose={closeJournal} wide>
       <form className="space-y-5" onSubmit={(event) => { event.preventDefault(); submitJournal(); }} data-testid="form-post-cash-journal">
         <div className="rounded-xl border border-border bg-secondary/35 px-4 py-3">
           <p className="text-sm font-semibold">{journalCash.description}</p>
           <p className="mt-1 text-xs text-muted-foreground">{dateLabel(journalCash.date)} · {journalCash.type === CashTransactionType.income ? 'Орлого' : 'Зарлага'} · {money(journalCash.amount)}</p>
         </div>
-        <section className="space-y-2">
+        {journalCash.bankTransactionId === null && <section className="space-y-2">
           <div><p className="text-xs font-semibold">Тохирох банкны гүйлгээ</p><p className="mt-1 text-xs text-muted-foreground">Сонговол банк, касс, журнал нэг холбоостой болно.</p></div>
           {bankSuggestions.isLoading ? <LoadingBlock className="h-20" /> : bankSuggestions.isError ? <ErrorBlock onRetry={() => bankSuggestions.refetch()} /> : !bankSuggestions.data?.length ? <p className="rounded-xl border border-dashed border-border px-4 py-4 text-center text-xs text-muted-foreground" data-testid="empty-cash-bank-suggestions">Тохирох банкны гүйлгээ олдсонгүй.</p> : <div className="max-h-56 space-y-2 overflow-y-auto">{bankSuggestions.data.map((suggestion: CashBankSuggestion) => <label key={suggestion.id} className={cn('flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors', journalBankTransactionId === String(suggestion.id) ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/35')} data-testid={`cash-bank-suggestion-${suggestion.id}`}><input type="radio" name="cash-bank-suggestion" value={suggestion.id} checked={journalBankTransactionId === String(suggestion.id)} onChange={(event) => setJournalBankTransactionId(event.target.value)} className="mt-1" /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold">{suggestion.description || suggestion.counterparty || 'Банкны гүйлгээ'}</p><p className="font-mono text-sm font-bold">{money(suggestion.amount)}</p></div><p className="mt-1 text-xs text-muted-foreground">{bankDateTimeLabel(suggestion.transactionAt)} · {suggestion.bankName || 'Банк'} · {suggestion.account || suggestion.counterparty || 'Харьцсан дансгүй'}</p><p className="mt-1 text-xs text-primary">Тохирц: {suggestion.score.toFixed(2)}%</p></div></label>)}</div>}
           {journalBankTransactionId && <Button type="button" size="sm" variant="ghost" onClick={() => setJournalBankTransactionId('')}>Банкны сонголтыг арилгах</Button>}
-        </section>
+        </section>}
         {!journalBankTransactionId && <label className="block space-y-2 text-xs font-semibold">Эсрэг GL данс
           <select value={journalAccountId} onChange={(event) => setJournalAccountId(event.target.value)} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" required data-testid="select-cash-journal-account">
             <option value="">Данс сонгох</option>
             {journalAccounts.map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}
           </select>
         </label>}
-        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={closeJournal}>Болих</Button><Button type="submit" disabled={(!journalBankTransactionId && !journalAccountId) || postJournal.isPending || linkJournalToBank.isPending} data-testid="button-confirm-cash-journal">{postJournal.isPending || linkJournalToBank.isPending ? 'Бичиж байна...' : journalBankTransactionId ? 'Банктай холбож журнал бичих' : 'Журнал бичих'}</Button></div>
+        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={closeJournal}>Болих</Button><Button type="submit" disabled={(!journalBankTransactionId && !journalAccountId) || postJournal.isPending || linkJournalToBank.isPending || restoreBankJournal.isPending} data-testid="button-confirm-cash-journal">{postJournal.isPending || linkJournalToBank.isPending || restoreBankJournal.isPending ? 'Бичиж байна...' : journalBankTransactionId ? 'Банктай холбож журнал бичих' : 'Журнал бичих'}</Button></div>
       </form>
     </Modal>}
   </div>;

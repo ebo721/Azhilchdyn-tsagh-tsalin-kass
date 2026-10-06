@@ -36,6 +36,9 @@ import type {
   BadRequestResponse,
   BankAccount,
   BankAccountInput,
+  BankCashJournalInput,
+  BankCashJournalResult,
+  BankCashUnlinkResult,
   BankExpenseLinkInput,
   BankExpenseLinkResult,
   BankFixedAssetLinkInput,
@@ -5243,6 +5246,149 @@ export const useDeleteBankTransactionJournal = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getDeleteBankTransactionJournalMutationOptions(options));
+    }
+
+export const getUnlinkBankTransactionCashUrl = (id: number,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}/unlink-cash`
+}
+
+/**
+ * @summary Unlink an incorrect bank-cash pair without deleting either transaction
+ */
+export const unlinkBankTransactionCash = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<BankCashUnlinkResult> => {
+
+  return customFetch<BankCashUnlinkResult>(getUnlinkBankTransactionCashUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getUnlinkBankTransactionCashMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unlinkBankTransactionCash>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unlinkBankTransactionCash>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['unlinkBankTransactionCash'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unlinkBankTransactionCash>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  unlinkBankTransactionCash(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnlinkBankTransactionCashMutationResult = NonNullable<Awaited<ReturnType<typeof unlinkBankTransactionCash>>>
+
+    export type UnlinkBankTransactionCashMutationError = ErrorType<void>
+
+    /**
+ * @summary Unlink an incorrect bank-cash pair without deleting either transaction
+ */
+export const useUnlinkBankTransactionCash = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unlinkBankTransactionCash>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unlinkBankTransactionCash>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getUnlinkBankTransactionCashMutationOptions(options));
+    }
+
+export const getRestoreBankCashJournalUrl = (id: number,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}/restore-cash-journal`
+}
+
+/**
+ * @summary Restore a deleted journal for an existing bank-cash pair
+ */
+export const restoreBankCashJournal = async (id: number,
+    bankCashJournalInput: BankCashJournalInput, options?: Parameters<typeof customFetch>[1]): Promise<BankCashJournalResult> => {
+
+  return customFetch<BankCashJournalResult>(getRestoreBankCashJournalUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bankCashJournalInput)
+  }
+);}
+
+
+
+
+
+export const getRestoreBankCashJournalMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreBankCashJournal>>, TError,{id: number;data: BodyType<BankCashJournalInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof restoreBankCashJournal>>, TError,{id: number;data: BodyType<BankCashJournalInput>}, TContext> => {
+
+const mutationKey = ['restoreBankCashJournal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restoreBankCashJournal>>, {id: number;data: BodyType<BankCashJournalInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  restoreBankCashJournal(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RestoreBankCashJournalMutationResult = NonNullable<Awaited<ReturnType<typeof restoreBankCashJournal>>>
+    export type RestoreBankCashJournalMutationBody = BodyType<BankCashJournalInput>
+    export type RestoreBankCashJournalMutationError = ErrorType<void>
+
+    /**
+ * @summary Restore a deleted journal for an existing bank-cash pair
+ */
+export const useRestoreBankCashJournal = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreBankCashJournal>>, TError,{id: number;data: BodyType<BankCashJournalInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof restoreBankCashJournal>>,
+        TError,
+        {id: number;data: BodyType<BankCashJournalInput>},
+        TContext
+      > => {
+      return useMutation(getRestoreBankCashJournalMutationOptions(options));
     }
 
 export const getRejectBankTransactionSuggestionUrl = (id: number,) => {

@@ -1173,6 +1173,45 @@ paths:
           description: Bank transaction not found
         "409":
           description: No supported bank journal can be deleted
+  /bank-transactions/{id}/unlink-cash:
+    post:
+      operationId: unlinkBankTransactionCash
+      tags: [bank-transactions]
+      summary: Unlink an incorrect bank-cash pair without deleting either transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Bank-cash link removed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankCashUnlinkResult" }
+        "404":
+          description: Bank transaction not found
+        "409":
+          description: Closed date, inconsistent link or document-managed payment
+  /bank-transactions/{id}/restore-cash-journal:
+    post:
+      operationId: restoreBankCashJournal
+      tags: [bank-transactions]
+      summary: Restore a deleted journal for an existing bank-cash pair
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankCashJournalInput" }
+      responses:
+        "200":
+          description: Existing or restored bank-funded journal
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankCashJournalResult" }
+        "404":
+          description: Bank transaction not found
+        "409":
+          description: Closed date, inconsistent link or document-managed payment
   /bank-transactions/{id}/reject-suggestion:
     post:
       operationId: rejectBankTransactionSuggestion
@@ -2902,6 +2941,26 @@ components:
         title: { type: string }
         detail: { type: string }
         createdAt: { type: string }
+    BankCashUnlinkResult:
+      type: object
+      required: [bankTransactionId, cashTransactionId, voidedJournalEntryId, reversalJournalEntryId]
+      properties:
+        bankTransactionId: { type: integer }
+        cashTransactionId: { type: integer }
+        voidedJournalEntryId: { type: ["integer", "null"] }
+        reversalJournalEntryId: { type: ["integer", "null"] }
+    BankCashJournalInput:
+      type: object
+      required: [accountId]
+      properties:
+        accountId: { type: integer, minimum: 1 }
+    BankCashJournalResult:
+      type: object
+      required: [bankTransactionId, cashTransactionId, journalEntryId]
+      properties:
+        bankTransactionId: { type: integer }
+        cashTransactionId: { type: integer }
+        journalEntryId: { type: integer }
     EmployeeSalaryBankAccount:
       type: object
       required: [bankAccountNumber, bankTransactionId]

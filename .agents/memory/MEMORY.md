@@ -26,3 +26,4 @@
 - [Bank-funded purchase groups](bank-funded-purchase-groups.md) — Full purchase totals must exactly match the bank; purchase dates may precede the payment date.
 - [PostgreSQL schema fingerprint portability](postgres-schema-fingerprint-portability.md) — PG versions may expose NOT NULL as extra constraints; fingerprint nullability once, through column metadata.
 - [Employee recipient accounts](employee-recipient-accounts.md) — Historical bank reconciliation is not permission to silently replace a saved salary-payment account.
+- [Integration fixture reconciliation](integration-fixture-reconciliation.md) — Parallel list requests can create expense mirrors for another suite's fixtures; clean owned dependencies first.

@@ -1,7 +1,12 @@
-import { Router, raw, type IRouter } from "express";
+import { Router, raw, type IRouter, type Response, type NextFunction } from "express";
 import { createHash } from "node:crypto";
 import { inflateRawSync } from "node:zlib";
 import {
+  UnlinkBankTransactionCashParams,
+  UnlinkBankTransactionCashResponse,
+  RestoreBankCashJournalParams,
+  RestoreBankCashJournalBody,
+  RestoreBankCashJournalResponse,
   DeleteBankTransactionParams,
   DeleteBankTransactionJournalParams,
   DeleteBankTransactionJournalResponse,
@@ -54,6 +59,7 @@ import { loadBankRecognitionContext, recognizeBankTransaction } from "../lib/ban
 import { inventoryPurchaseAccountCodes } from "../lib/route-shared.js";
 import { bankSuggestionScore } from "../lib/bank-suggestion-score.js";
 import { checkBankLinkEligibility } from "../lib/bank-link-eligibility.js";
+import { accountByCode, postBankCashJournal, unlinkBankCash, restoreBankCashJournal } from "../lib/bank-cash-lifecycle.js";
 import {
   cancelBankPurchaseGroup,
   linkBankPurchase,
@@ -75,16 +81,6 @@ const payrollBankRoundingTolerance = 1;
 
 class BankCashLinkConflictError extends Error {}
 
-async function accountByCode(tx: any, code: string, type: string) {
-  const [account] = await tx.select().from(chartOfAccountsTable).where(and(
-    eq(chartOfAccountsTable.code, code),
-    eq(chartOfAccountsTable.type, type),
-    eq(chartOfAccountsTable.isActive, true),
-  ));
-  if (!account) throw new Error(`Journal account ${code} is missing or inactive`);
-  return account;
-}
-
 async function counterAccount(tx: any, type: string, category: string, mapped: any) {
   if (type === "income" && mapped?.isActive && mapped.type === "revenue") return mapped;
   if (type === "expense" && mapped?.isActive && ["expense", "asset"].includes(mapped.type)) return mapped;
@@ -93,21 +89,12 @@ async function counterAccount(tx: any, type: string, category: string, mapped: a
     : accountByCode(tx, "6900", "expense");
 }
 
-async function postBankCashJournal(tx: any, bankTransaction: any, cash: any, counter: any) {
-  const bankAccount = await accountByCode(tx, "1010", "asset");
-  const journalAmount = Number(bankTransaction.amount);
-  const result = await postJournalEntry(tx, {
-    date: bankTransaction.transactionAt.toISOString().slice(0, 10),
-    description: bankTransaction.description.trim() || bankTransaction.counterparty.trim() || cash.description.trim(),
-    sourceType: "bank_transaction",
-    sourceId: bankTransaction.id,
-    createdBy: null,
-    lines: cash.type === "income"
-      ? [{ accountId: bankAccount.id, debit: journalAmount, credit: 0 }, { accountId: counter.id, debit: 0, credit: journalAmount }]
-      : [{ accountId: counter.id, debit: journalAmount, credit: 0 }, { accountId: bankAccount.id, debit: 0, credit: journalAmount }],
-  });
-  if (result.status !== "posted") throw new Error("Bank cash journal entry must be balanced");
-  return result.journalEntryId;
+function lifecycleFailure(error: unknown, res: Response, next: NextFunction) {
+  if (error && typeof error === "object" && "status" in error) {
+    res.status(Number(error.status)).json({ error: error instanceof Error ? error.message : "Холбоос өөрчилж чадсангүй." });
+    return;
+  }
+  next(error);
 }
 
 router.use(async (req, res, next) => {
@@ -600,11 +587,33 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+router.post("/bank-transactions/:id/unlink-cash", async (req, res, next): Promise<void> => {
+  try {
+    const { id } = UnlinkBankTransactionCashParams.parse(req.params);
+    const session = await getStaffSession(req);
+    const result = await db.transaction((tx) => unlinkBankCash(tx, id, session?.id ?? null));
+    res.json(UnlinkBankTransactionCashResponse.parse(result));
+  } catch (error) { lifecycleFailure(error, res, next); }
+});
+
+router.post("/bank-transactions/:id/restore-cash-journal", async (req, res, next): Promise<void> => {
+  try {
+    const { id } = RestoreBankCashJournalParams.parse(req.params);
+    const { accountId } = RestoreBankCashJournalBody.parse(req.body);
+    const result = await db.transaction((tx) => restoreBankCashJournal(tx, id, accountId));
+    res.json(RestoreBankCashJournalResponse.parse(result));
+  } catch (error) { lifecycleFailure(error, res, next); }
+});
+
 router.delete("/bank-transactions/:id/journal", async (req, res, next) => {
   try {
     const { id } = DeleteBankTransactionJournalParams.parse(req.params);
     const session = await getStaffSession(req);
     const result = await db.transaction(async (tx) => {
+      const [snapshot] = await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id));
+      if (snapshot?.cashTransactionId !== null && snapshot?.cashTransactionId !== undefined) {
+        return unlinkBankCash(tx, id, session?.id ?? null, true);
+      }
       const [bank] = await tx.select().from(bankTransactionsTable)
         .where(eq(bankTransactionsTable.id, id))
         .for("update");
@@ -618,66 +627,18 @@ router.delete("/bank-transactions/:id/journal", async (req, res, next) => {
         return "source_managed" as const;
       }
       if (entry.sourceType === "inventory_purchase_group") return "grouped_purchase_group" as const;
-      let linkedCashId: number | null = null;
-      let linkedCashSourceType: string | null = null;
-      if (entry.sourceType === "bank") {
-        if (bank.cashTransactionId !== null || bank.transferredAt !== null) return "source_managed" as const;
-      } else if (entry.sourceType === "bank_transaction") {
-        if (bank.cashTransactionId === null || bank.transferredAt === null) return "source_managed" as const;
-        const [cash] = await tx.select().from(cashTransactionsTable)
-          .where(eq(cashTransactionsTable.id, bank.cashTransactionId))
-          .for("update");
-        if (!cash
-          || cash.bankTransactionId !== bank.id
-          || cash.journalEntryId !== entry.id
-          || !["bank_transaction", "payroll", "payroll_advance"].includes(cash.sourceType ?? "")) {
-          return "source_managed" as const;
-        }
-        const [linkedExpense] = await tx.select({ id: operatingExpensesTable.id })
-          .from(operatingExpensesTable)
-          .where(or(
-            eq(operatingExpensesTable.bankTransactionId, bank.id),
-            eq(operatingExpensesTable.cashTransactionId, cash.id),
-          ))
-          .limit(1)
-          .for("update");
-        if (linkedExpense) return "source_managed" as const;
-        linkedCashId = cash.id;
-        linkedCashSourceType = cash.sourceType;
-      } else {
-        return "source_managed" as const;
-      }
+      if (entry.sourceType !== "bank" || bank.cashTransactionId !== null || bank.transferredAt !== null) return "source_managed" as const;
 
       const { reversalEntryId } = await voidJournalEntry(tx, {
         journalEntryId: entry.id,
         voidedBy: session?.id ?? null,
       });
-      if (linkedCashId === null) {
-        const rejectedAccountIds = bank.accountId === null
-          ? bank.rejectedAccountIds
-          : [...new Set([...bank.rejectedAccountIds, bank.accountId])];
-        await tx.update(bankTransactionsTable).set({
-          accountId: null,
-          journalEntryId: null,
-          rejectedAccountIds,
-        }).where(eq(bankTransactionsTable.id, bank.id));
-      } else {
-        await Promise.all([
-          tx.update(bankTransactionsTable).set({
-            cashTransactionId: null,
-            transferredAt: null,
-            journalEntryId: null,
-          }).where(eq(bankTransactionsTable.id, bank.id)),
-          tx.update(cashTransactionsTable).set({
-            bankTransactionId: null,
-            bankVerifiedAt: null,
-            journalEntryId: null,
-            ...(linkedCashSourceType === "bank_transaction"
-              ? { sourceType: null, sourceKey: null }
-              : {}),
-          }).where(eq(cashTransactionsTable.id, linkedCashId)),
-        ]);
-      }
+      const rejectedAccountIds = bank.accountId === null
+        ? bank.rejectedAccountIds
+        : [...new Set([...bank.rejectedAccountIds, bank.accountId])];
+      await tx.update(bankTransactionsTable).set({
+        accountId: null, journalEntryId: null, rejectedAccountIds,
+      }).where(eq(bankTransactionsTable.id, bank.id));
       return {
         bankTransactionId: bank.id,
         voidedJournalEntryId: entry.id,
@@ -701,7 +662,7 @@ router.delete("/bank-transactions/:id/journal", async (req, res, next) => {
       return;
     }
     res.json(DeleteBankTransactionJournalResponse.parse(result));
-  } catch (error) { next(error); }
+  } catch (error) { lifecycleFailure(error, res, next); }
 });
 
 router.post("/bank-transactions/:id/reject-suggestion", async (req, res, next) => {
