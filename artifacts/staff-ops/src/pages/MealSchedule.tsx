@@ -333,7 +333,7 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
   const deletion = useQueueDeletion();
 
   const isEdit = !!cell.entry;
-  const [kind, setKind] = useState<'meal' | 'break'>(cell.entry?.kind || 'meal');
+  const kind = cell.entry?.kind || 'meal';
   const [mealType, setMealType] = useState<Meal['type']>(cell.entry?.mealType || 'set');
   const [mealIds, setMealIds] = useState<number[]>(cell.entry?.meals.map((meal) => meal.id) || []);
   const [refreshing, setRefreshing] = useState(false);
@@ -413,37 +413,7 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
     >
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-4">
-          <div>
-            <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Төрөл</label>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                className={cn(
-                  "flex-1 flex flex-col items-center justify-center gap-2 p-3 rounded-xl border-2 transition-all",
-                  kind === 'meal' ? "border-orange-500 bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300" : "border-border bg-card hover:bg-secondary text-muted-foreground"
-                )}
-                onClick={() => setKind('meal')}
-                aria-pressed={kind === 'meal'}
-                data-testid="button-kind-meal"
-              >
-                <Utensils className="size-5" />
-                <span className="text-sm font-semibold">Хоол</span>
-              </button>
-              <button
-                type="button"
-                className={cn(
-                  "flex-1 flex flex-col items-center justify-center gap-2 p-3 rounded-xl border-2 transition-all",
-                  kind === 'break' ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300" : "border-border bg-card hover:bg-secondary text-muted-foreground"
-                )}
-                onClick={() => { setKind('break'); setMealIds([]); }}
-                aria-pressed={kind === 'break'}
-                data-testid="button-kind-break"
-              >
-                <Coffee className="size-5" />
-                <span className="text-sm font-semibold">Завсарлага</span>
-              </button>
-            </div>
-          </div>
+          {kind === 'break' && <p className="text-sm text-muted-foreground">Өмнө бүртгэсэн завсарлагын хуваарь.</p>}
 
           {kind === 'meal' && (
             <div className="animate-in fade-in slide-in-from-top-2">

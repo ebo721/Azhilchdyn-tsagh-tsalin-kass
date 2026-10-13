@@ -41,6 +41,8 @@ test("click meal to edit type; save several meals in one schedule and retain the
     const cell = page.locator(`[data-testid^="cell-"][data-testid$="-${slotId}"]`).first();
     const cellId = await cell.getAttribute("data-testid");
     await cell.click();
+    await expect(page.getByTestId("button-kind-meal")).toHaveCount(0);
+    await expect(page.getByTestId("button-kind-break")).toHaveCount(0);
     await page.getByTestId(`checkbox-schedule-meal-${mealIds[0]}`).check();
     await page.getByTestId(`checkbox-schedule-meal-${mealIds[1]}`).check();
     await expect(page.getByTestId("text-schedule-selected-meals")).toContainText("Сонгосон 2 хоол");
@@ -49,6 +51,8 @@ test("click meal to edit type; save several meals in one schedule and retain the
     await expect(cell).toContainText(names[1]);
     await page.reload();
     await page.getByTestId(cellId!).click();
+    await expect(page.getByTestId("button-kind-meal")).toHaveCount(0);
+    await expect(page.getByTestId("button-kind-break")).toHaveCount(0);
     await expect(page.getByTestId(`checkbox-schedule-meal-${mealIds[0]}`)).toBeChecked();
     await expect(page.getByTestId(`checkbox-schedule-meal-${mealIds[1]}`)).toBeChecked();
     await page.setViewportSize({ width: 390, height: 844 });
@@ -72,6 +76,19 @@ test("click meal to edit type; save several meals in one schedule and retain the
     await page.getByTestId("select-meal-type").selectOption("packed");
     await page.getByTestId("button-save-meal").click();
     await expect(page.getByTestId("status-meal-save-error")).toContainText("хуваариас нь хасна уу");
+    await page.goto("/meal-schedule");
+    const oldBreakCell = page.locator(`[data-testid^="cell-"][data-testid$="-${slotId}"]`).nth(1);
+    const oldBreakCellId = await oldBreakCell.getAttribute("data-testid");
+    const oldBreakDate = oldBreakCellId!.slice(5, -(String(slotId).length + 1));
+    await db.insert(mealScheduleEntriesTable).values({ date: oldBreakDate, slotId: slotId!, kind: "break", mealType: null });
+    await page.reload();
+    await page.getByTestId(oldBreakCellId!).click();
+    await expect(page.getByTestId("modal")).toContainText("Өмнө бүртгэсэн завсарлагын хуваарь.");
+    await expect(page.getByTestId("button-kind-break")).toHaveCount(0);
+    await page.getByTestId("button-save-entry").click();
+    await expect(page.getByTestId("modal")).toHaveCount(0);
+    const entries = await db.select().from(mealScheduleEntriesTable).where(eq(mealScheduleEntriesTable.slotId, slotId!));
+    expect(entries.find(entry => entry.date === oldBreakDate)?.kind).toBe("break");
   } finally {
     if (slotId) {
       await db.delete(mealScheduleEntriesTable).where(eq(mealScheduleEntriesTable.slotId, slotId));
