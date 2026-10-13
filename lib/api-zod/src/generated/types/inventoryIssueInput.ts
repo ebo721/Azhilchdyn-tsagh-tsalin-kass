@@ -10,7 +10,10 @@ export interface InventoryIssueInput {
   inventoryItemId: number;
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
   date: string;
-  /** @exclusiveMinimum 0 */
+  /**
+     * @maximum 999999999.999
+     * @exclusiveMinimum 0
+     */
   quantity: number;
   /** @minLength 1 */
   purpose: string;

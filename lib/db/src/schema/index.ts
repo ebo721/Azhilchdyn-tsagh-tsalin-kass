@@ -559,6 +559,20 @@ export const inventoryPurchaseItemsTable = pgTable("inventory_purchase_items", {
   totalAmount: numeric("total_amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
 });
 
+export const inventoryOpeningBalancesTable = pgTable("inventory_opening_balances", {
+  id: serial("id").primaryKey(),
+  inventoryItemId: integer("inventory_item_id").notNull().references(() => inventoryItemsTable.id, { onDelete: "restrict" }),
+  date: date("date", { mode: "string" }).notNull(),
+  quantity: numeric("quantity", { precision: 12, scale: 3, mode: "number" }).notNull(),
+  remainingQuantity: numeric("remaining_quantity", { precision: 12, scale: 3, mode: "number" }).notNull(),
+  unitPrice: numeric("unit_price", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("inventory_opening_balances_item_idx").on(table.inventoryItemId),
+  check("inventory_opening_balances_quantity_check", sql`${table.quantity} > 0 AND ${table.remainingQuantity} >= 0 AND ${table.remainingQuantity} <= ${table.quantity}`),
+  check("inventory_opening_balances_price_check", sql`${table.unitPrice} >= 0`),
+]);
+
 export const inventoryIssuesTable = pgTable("inventory_issues", {
   id: serial("id").primaryKey(),
   inventoryItemId: integer("inventory_item_id").notNull().references(() => inventoryItemsTable.id, { onDelete: "restrict" }),
@@ -567,6 +581,19 @@ export const inventoryIssuesTable = pgTable("inventory_issues", {
   purpose: text("purpose").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const inventoryOpeningConsumptionsTable = pgTable("inventory_opening_consumptions", {
+  id: serial("id").primaryKey(),
+  issueId: integer("issue_id").notNull().references(() => inventoryIssuesTable.id, { onDelete: "cascade" }),
+  openingBalanceId: integer("opening_balance_id").notNull().references(() => inventoryOpeningBalancesTable.id, { onDelete: "restrict" }),
+  quantity: numeric("quantity", { precision: 12, scale: 3, mode: "number" }).notNull(),
+  unitPrice: numeric("unit_price", { precision: 14, scale: 2, mode: "number" }).notNull(),
+}, (table) => [
+  index("inventory_opening_consumptions_issue_idx").on(table.issueId),
+  index("inventory_opening_consumptions_balance_idx").on(table.openingBalanceId),
+  check("inventory_opening_consumptions_quantity_check", sql`${table.quantity} > 0`),
+  check("inventory_opening_consumptions_price_check", sql`${table.unitPrice} >= 0`),
+]);
 
 export const inventoryMaterialRequestsTable = pgTable("inventory_material_requests", {
   id: serial("id").primaryKey(),

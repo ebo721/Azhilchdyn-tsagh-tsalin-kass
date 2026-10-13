@@ -3633,6 +3633,127 @@ export const DeleteInventorySupplierParams = zod.object({
 export const DeleteInventorySupplierResponse = zod.void()
 
 
+export const ListInventoryOpeningBalancesResponseItem = zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "materialType": zod.enum(['food', 'supply']),
+  "name": zod.string(),
+  "category": zod.string(),
+  "unit": zod.string(),
+  "date": zod.string(),
+  "quantity": zod.number(),
+  "remainingQuantity": zod.number(),
+  "unitPrice": zod.number(),
+  "totalAmount": zod.number(),
+  "editable": zod.boolean(),
+  "createdAt": zod.string()
+})
+export const ListInventoryOpeningBalancesResponse = zod.array(ListInventoryOpeningBalancesResponseItem)
+
+
+
+
+
+
+export const createInventoryOpeningBalanceBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const createInventoryOpeningBalanceBodyQuantityExclusiveMin = 0;
+export const createInventoryOpeningBalanceBodyQuantityMax = 999999999.999;
+export const createInventoryOpeningBalanceBodyQuantityMultipleOf = 0.001;
+
+export const createInventoryOpeningBalanceBodyUnitPriceMin = 0;
+export const createInventoryOpeningBalanceBodyUnitPriceMax = 99999999999.99;
+export const createInventoryOpeningBalanceBodyUnitPriceMultipleOf = 0.01;
+
+
+
+export const CreateInventoryOpeningBalanceBody = zod.object({
+  "inventoryItemId": zod.number().int().min(1).optional(),
+  "materialType": zod.enum(['food', 'supply']),
+  "name": zod.string().min(1),
+  "category": zod.string().min(1),
+  "unit": zod.string().min(1),
+  "date": zod.string().regex(createInventoryOpeningBalanceBodyDateRegExp),
+  "quantity": zod.number().gt(createInventoryOpeningBalanceBodyQuantityExclusiveMin).max(createInventoryOpeningBalanceBodyQuantityMax).multipleOf(createInventoryOpeningBalanceBodyQuantityMultipleOf),
+  "unitPrice": zod.number().min(createInventoryOpeningBalanceBodyUnitPriceMin).max(createInventoryOpeningBalanceBodyUnitPriceMax).multipleOf(createInventoryOpeningBalanceBodyUnitPriceMultipleOf)
+})
+
+export const CreateInventoryOpeningBalanceResponse = zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "materialType": zod.enum(['food', 'supply']),
+  "name": zod.string(),
+  "category": zod.string(),
+  "unit": zod.string(),
+  "date": zod.string(),
+  "quantity": zod.number(),
+  "remainingQuantity": zod.number(),
+  "unitPrice": zod.number(),
+  "totalAmount": zod.number(),
+  "editable": zod.boolean(),
+  "createdAt": zod.string()
+})
+
+
+
+
+
+export const UpdateInventoryOpeningBalanceParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+
+
+
+
+export const updateInventoryOpeningBalanceBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const updateInventoryOpeningBalanceBodyQuantityExclusiveMin = 0;
+export const updateInventoryOpeningBalanceBodyQuantityMax = 999999999.999;
+export const updateInventoryOpeningBalanceBodyQuantityMultipleOf = 0.001;
+
+export const updateInventoryOpeningBalanceBodyUnitPriceMin = 0;
+export const updateInventoryOpeningBalanceBodyUnitPriceMax = 99999999999.99;
+export const updateInventoryOpeningBalanceBodyUnitPriceMultipleOf = 0.01;
+
+
+
+export const UpdateInventoryOpeningBalanceBody = zod.object({
+  "inventoryItemId": zod.number().int().min(1).optional(),
+  "materialType": zod.enum(['food', 'supply']),
+  "name": zod.string().min(1),
+  "category": zod.string().min(1),
+  "unit": zod.string().min(1),
+  "date": zod.string().regex(updateInventoryOpeningBalanceBodyDateRegExp),
+  "quantity": zod.number().gt(updateInventoryOpeningBalanceBodyQuantityExclusiveMin).max(updateInventoryOpeningBalanceBodyQuantityMax).multipleOf(updateInventoryOpeningBalanceBodyQuantityMultipleOf),
+  "unitPrice": zod.number().min(updateInventoryOpeningBalanceBodyUnitPriceMin).max(updateInventoryOpeningBalanceBodyUnitPriceMax).multipleOf(updateInventoryOpeningBalanceBodyUnitPriceMultipleOf)
+})
+
+export const UpdateInventoryOpeningBalanceResponse = zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "materialType": zod.enum(['food', 'supply']),
+  "name": zod.string(),
+  "category": zod.string(),
+  "unit": zod.string(),
+  "date": zod.string(),
+  "quantity": zod.number(),
+  "remainingQuantity": zod.number(),
+  "unitPrice": zod.number(),
+  "totalAmount": zod.number(),
+  "editable": zod.boolean(),
+  "createdAt": zod.string()
+})
+
+
+
+
+
+export const DeleteInventoryOpeningBalanceParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const DeleteInventoryOpeningBalanceResponse = zod.void()
+
+
 /**
  * @summary List inventory catalog and stock
  */
@@ -3809,6 +3930,8 @@ export const ListInventoryIssuesResponse = zod.array(ListInventoryIssuesResponse
  */
 export const createInventoryIssueBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
 export const createInventoryIssueBodyQuantityExclusiveMin = 0;
+export const createInventoryIssueBodyQuantityMax = 999999999.999;
+export const createInventoryIssueBodyQuantityMultipleOf = 0.001;
 
 
 
@@ -3816,7 +3939,7 @@ export const createInventoryIssueBodyQuantityExclusiveMin = 0;
 export const CreateInventoryIssueBody = zod.object({
   "inventoryItemId": zod.number().int(),
   "date": zod.string().regex(createInventoryIssueBodyDateRegExp),
-  "quantity": zod.number().gt(createInventoryIssueBodyQuantityExclusiveMin),
+  "quantity": zod.number().gt(createInventoryIssueBodyQuantityExclusiveMin).max(createInventoryIssueBodyQuantityMax).multipleOf(createInventoryIssueBodyQuantityMultipleOf),
   "purpose": zod.string().min(1)
 })
 
@@ -3842,6 +3965,8 @@ export const UpdateInventoryIssueParams = zod.object({
 
 export const updateInventoryIssueBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
 export const updateInventoryIssueBodyQuantityExclusiveMin = 0;
+export const updateInventoryIssueBodyQuantityMax = 999999999.999;
+export const updateInventoryIssueBodyQuantityMultipleOf = 0.001;
 
 
 
@@ -3849,7 +3974,7 @@ export const updateInventoryIssueBodyQuantityExclusiveMin = 0;
 export const UpdateInventoryIssueBody = zod.object({
   "inventoryItemId": zod.number().int(),
   "date": zod.string().regex(updateInventoryIssueBodyDateRegExp),
-  "quantity": zod.number().gt(updateInventoryIssueBodyQuantityExclusiveMin),
+  "quantity": zod.number().gt(updateInventoryIssueBodyQuantityExclusiveMin).max(updateInventoryIssueBodyQuantityMax).multipleOf(updateInventoryIssueBodyQuantityMultipleOf),
   "purpose": zod.string().min(1)
 })
 

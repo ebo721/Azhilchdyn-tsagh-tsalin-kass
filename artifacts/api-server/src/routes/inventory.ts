@@ -1,4 +1,6 @@
 import { Router, type IRouter } from "express";
+import inventoryOpeningBalancesRouter from "./inventory-opening-balances.js";
+import { inventoryOpeningBalancesTable, inventoryOpeningConsumptionsTable } from "@workspace/db";
 import { createServer } from "node:http";
 import {
   CreateAttendanceBody,
@@ -156,6 +158,7 @@ import { bankSuggestionScore } from "../lib/bank-suggestion-score.js";
 import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-shared.js";
 
 const router: IRouter = Router();
+router.use(inventoryOpeningBalancesRouter);
 const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, operatingExpenseAccountName, inventoryMaterialLabel, defaultChartOfAccounts, operatingExpenseAccountCodes, inventoryPurchaseAccountCodes, reservedAccountTypes, chartOfAccountResponse, ensureDefaultChartOfAccounts, inventoryPurchaseAccount, lockedExpenseAccount, fallbackExpenseAccount, today, currentMonth, money, InventoryBankPaymentConflictError, OperatingExpenseBankPaymentConflictError, calendarDateOffset, descriptionTokens, inventoryBankSuggestionScore, deletionTargetPatterns, roleCanRequestDeletion, deletionRequestResponse, monthlyIncomeTaxRelief, hoursBetween, previousMonth, nextMonth, daysInMonth, isValidCalendarDate, calendarDateText, weekdayCount, monthWeekdays, defaultPayrollSchedule, getPayrollSchedule, scheduleDate, payrollPeriod, selectPayrollScheduleVersion, scheduleVersionAffectsMonth, shiftDailyRate, weekdayDatesBetween, salaryAt, getPayrollSummary, getPayrollAdvanceSummary, calculatePayrollAdvanceLine, InventoryInsufficientStockError, planInventoryFifoConsumption, applyInventoryFifoConsumption, reverseInventoryFifoConsumption, inventoryPurchaseResponse } = shared;
 
 router.get("/inventory/purchases", async (_req, res, next) => {
@@ -357,19 +360,23 @@ router.delete("/inventory/suppliers/:id", async (req, res, next) => {
 
 router.get("/inventory/items", async (_req, res, next) => {
   try {
-    const [items, lots] = await Promise.all([
+    const [items, lots, openingLots] = await Promise.all([
       db.select().from(inventoryItemsTable).orderBy(inventoryItemsTable.category, inventoryItemsTable.name),
       db.select({
         inventoryItemId: inventoryPurchaseItemsTable.inventoryItemId,
         remainingQuantity: inventoryPurchaseItemsTable.remainingQuantity,
         unitPrice: inventoryPurchaseItemsTable.unitPrice,
       }).from(inventoryPurchaseItemsTable),
+      db.select().from(inventoryOpeningBalancesTable),
     ]);
     const valueByItem = new Map<number, number>();
     for (const lot of lots) {
       if (lot.inventoryItemId === null) continue;
       const current = valueByItem.get(lot.inventoryItemId) ?? 0;
       valueByItem.set(lot.inventoryItemId, current + Number(lot.remainingQuantity) * Number(lot.unitPrice));
+    }
+    for (const lot of openingLots) {
+      valueByItem.set(lot.inventoryItemId, (valueByItem.get(lot.inventoryItemId) ?? 0) + lot.remainingQuantity * lot.unitPrice);
     }
     res.json(ListInventoryItemsResponse.parse(items.map((item) => ({
       id: item.id,
@@ -432,7 +439,7 @@ router.put("/inventory/items/:id", async (req, res, next) => {
 
 router.get("/inventory/issues", async (_req, res, next) => {
   try {
-    const [rows, consumptions] = await Promise.all([
+    const [rows, consumptions, openingConsumptions] = await Promise.all([
       db
         .select({
           id: inventoryIssuesTable.id,
@@ -452,9 +459,10 @@ router.get("/inventory/issues", async (_req, res, next) => {
         quantity: inventoryIssueConsumptionsTable.quantity,
         unitPrice: inventoryIssueConsumptionsTable.unitPrice,
       }).from(inventoryIssueConsumptionsTable),
+      db.select().from(inventoryOpeningConsumptionsTable),
     ]);
     const costByIssue = new Map<number, number>();
-    for (const consumption of consumptions) {
+    for (const consumption of [...consumptions, ...openingConsumptions]) {
       const current = costByIssue.get(consumption.issueId) ?? 0;
       costByIssue.set(consumption.issueId, current + Number(consumption.quantity) * Number(consumption.unitPrice));
     }
@@ -535,8 +543,11 @@ router.put("/inventory/issues/:id", async (req, res, next) => {
       return;
     }
     const result = await db.transaction(async (tx) => {
-      const [existing] = await tx.select().from(inventoryIssuesTable).where(eq(inventoryIssuesTable.id, id));
+      const [existing] = await tx.select().from(inventoryIssuesTable).where(eq(inventoryIssuesTable.id, id)).for("update");
       if (!existing) return { status: "not-found" as const };
+      await tx.select({ id: inventoryItemsTable.id }).from(inventoryItemsTable)
+        .where(inArray(inventoryItemsTable.id, [existing.inventoryItemId, input.inventoryItemId]))
+        .orderBy(inventoryItemsTable.id).for("update");
       const [newItem] = await tx.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, input.inventoryItemId));
       if (!newItem) return { status: "item-not-found" as const };
       // Reverse the old consumption so its lots are free again, then re-plan

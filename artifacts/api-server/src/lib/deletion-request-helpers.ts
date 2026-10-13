@@ -47,6 +47,7 @@ export const deletionTargetPatterns = [
   /^\/bank-transactions\/\d+$/,
   /^\/fixed-assets\/\d+$/,
   /^\/inventory\/issues\/\d+$/,
+  /^\/inventory\/opening-balances\/\d+$/,
   /^\/inventory\/purchases\/\d+$/,
   /^\/inventory\/suppliers\/\d+$/,
   /^\/meal-schedule\/\d+$/,

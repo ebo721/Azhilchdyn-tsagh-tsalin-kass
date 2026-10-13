@@ -100,6 +100,8 @@ import type {
   InventoryMaterialRequest,
   InventoryMaterialRequestInput,
   InventoryMaterialRequestStatusUpdate,
+  InventoryOpeningBalance,
+  InventoryOpeningBalanceInput,
   InventoryPurchase,
   InventoryPurchaseBankSuggestion,
   InventoryPurchaseInput,
@@ -9415,6 +9417,273 @@ export const useDeleteInventorySupplier = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteInventorySupplierMutationOptions(options));
+    }
+
+export const getListInventoryOpeningBalancesUrl = () => {
+
+
+
+
+  return `/api/inventory/opening-balances`
+}
+
+export const listInventoryOpeningBalances = async ( options?: Parameters<typeof customFetch>[1]): Promise<InventoryOpeningBalance[]> => {
+
+  return customFetch<InventoryOpeningBalance[]>(getListInventoryOpeningBalancesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListInventoryOpeningBalancesQueryKey = () => {
+    return [
+    `/api/inventory/opening-balances`
+    ] as const;
+    }
+
+
+export const getListInventoryOpeningBalancesQueryOptions = <TData = Awaited<ReturnType<typeof listInventoryOpeningBalances>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInventoryOpeningBalances>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListInventoryOpeningBalancesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listInventoryOpeningBalances>>> = ({ signal }) => listInventoryOpeningBalances({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listInventoryOpeningBalances>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListInventoryOpeningBalancesQueryResult = NonNullable<Awaited<ReturnType<typeof listInventoryOpeningBalances>>>
+export type ListInventoryOpeningBalancesQueryError = ErrorType<unknown>
+
+
+
+export function useListInventoryOpeningBalances<TData = Awaited<ReturnType<typeof listInventoryOpeningBalances>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInventoryOpeningBalances>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListInventoryOpeningBalancesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateInventoryOpeningBalanceUrl = () => {
+
+
+
+
+  return `/api/inventory/opening-balances`
+}
+
+export const createInventoryOpeningBalance = async (inventoryOpeningBalanceInput: InventoryOpeningBalanceInput, options?: Parameters<typeof customFetch>[1]): Promise<InventoryOpeningBalance> => {
+
+  return customFetch<InventoryOpeningBalance>(getCreateInventoryOpeningBalanceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(inventoryOpeningBalanceInput)
+  }
+);}
+
+
+
+
+
+export const getCreateInventoryOpeningBalanceMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createInventoryOpeningBalance>>, TError,{data: BodyType<InventoryOpeningBalanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createInventoryOpeningBalance>>, TError,{data: BodyType<InventoryOpeningBalanceInput>}, TContext> => {
+
+const mutationKey = ['createInventoryOpeningBalance'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createInventoryOpeningBalance>>, {data: BodyType<InventoryOpeningBalanceInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createInventoryOpeningBalance(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateInventoryOpeningBalanceMutationResult = NonNullable<Awaited<ReturnType<typeof createInventoryOpeningBalance>>>
+    export type CreateInventoryOpeningBalanceMutationBody = BodyType<InventoryOpeningBalanceInput>
+    export type CreateInventoryOpeningBalanceMutationError = ErrorType<unknown>
+
+    export const useCreateInventoryOpeningBalance = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createInventoryOpeningBalance>>, TError,{data: BodyType<InventoryOpeningBalanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createInventoryOpeningBalance>>,
+        TError,
+        {data: BodyType<InventoryOpeningBalanceInput>},
+        TContext
+      > => {
+      return useMutation(getCreateInventoryOpeningBalanceMutationOptions(options));
+    }
+
+export const getUpdateInventoryOpeningBalanceUrl = (id: number,) => {
+
+
+
+
+  return `/api/inventory/opening-balances/${id}`
+}
+
+export const updateInventoryOpeningBalance = async (id: number,
+    inventoryOpeningBalanceInput: InventoryOpeningBalanceInput, options?: Parameters<typeof customFetch>[1]): Promise<InventoryOpeningBalance> => {
+
+  return customFetch<InventoryOpeningBalance>(getUpdateInventoryOpeningBalanceUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(inventoryOpeningBalanceInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateInventoryOpeningBalanceMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInventoryOpeningBalance>>, TError,{id: number;data: BodyType<InventoryOpeningBalanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateInventoryOpeningBalance>>, TError,{id: number;data: BodyType<InventoryOpeningBalanceInput>}, TContext> => {
+
+const mutationKey = ['updateInventoryOpeningBalance'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateInventoryOpeningBalance>>, {id: number;data: BodyType<InventoryOpeningBalanceInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateInventoryOpeningBalance(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateInventoryOpeningBalanceMutationResult = NonNullable<Awaited<ReturnType<typeof updateInventoryOpeningBalance>>>
+    export type UpdateInventoryOpeningBalanceMutationBody = BodyType<InventoryOpeningBalanceInput>
+    export type UpdateInventoryOpeningBalanceMutationError = ErrorType<unknown>
+
+    export const useUpdateInventoryOpeningBalance = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInventoryOpeningBalance>>, TError,{id: number;data: BodyType<InventoryOpeningBalanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateInventoryOpeningBalance>>,
+        TError,
+        {id: number;data: BodyType<InventoryOpeningBalanceInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateInventoryOpeningBalanceMutationOptions(options));
+    }
+
+export const getDeleteInventoryOpeningBalanceUrl = (id: number,) => {
+
+
+
+
+  return `/api/inventory/opening-balances/${id}`
+}
+
+export const deleteInventoryOpeningBalance = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteInventoryOpeningBalanceUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteInventoryOpeningBalanceMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteInventoryOpeningBalance>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteInventoryOpeningBalance>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteInventoryOpeningBalance'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteInventoryOpeningBalance>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteInventoryOpeningBalance(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteInventoryOpeningBalanceMutationResult = NonNullable<Awaited<ReturnType<typeof deleteInventoryOpeningBalance>>>
+
+    export type DeleteInventoryOpeningBalanceMutationError = ErrorType<unknown>
+
+    export const useDeleteInventoryOpeningBalance = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteInventoryOpeningBalance>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteInventoryOpeningBalance>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteInventoryOpeningBalanceMutationOptions(options));
     }
 
 export const getListInventoryItemsUrl = () => {

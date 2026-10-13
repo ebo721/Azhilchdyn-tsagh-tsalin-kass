@@ -80,7 +80,11 @@
     {
       "filename": "20261010_payroll_attendance_snapshots.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20261011_inventory_opening_balances.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "66d6aa8050f2f583692f4b55dd810425d22c4b32efb78f64ee776ea53d35f139"
+  "schemaFingerprint": "2dcf7989317226e6d970f5e06209a0d1571edba242f1c1e81560fc84735c8011"
 }
