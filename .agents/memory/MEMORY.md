@@ -31,3 +31,4 @@
 - [Historical opening stock](inventory-opening-stock-scope.md) — Opening stock is not a new purchase or payment; financial opening journals need an explicit counteraccount.
 - [Inventory responsibility history](inventory-responsibility-history.md) — Multiple custodians come from employee search; settings and employee edits must not rewrite historical document names.
 - [Notebook post-execution errors](notebook-postexecution-errors.md) — A memory-capture failure can follow successful writes; verify results before retrying.
+- [Fast reopen UI verification](fast-reopen-ui-verification.md) — Off-screen action scrolling can hide cache races; verify phone viewport bounds and immediate reopening after saves.

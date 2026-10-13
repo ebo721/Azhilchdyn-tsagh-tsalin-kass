@@ -336,6 +336,7 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
   const [kind, setKind] = useState<'meal' | 'break'>(cell.entry?.kind || 'meal');
   const [mealType, setMealType] = useState<Meal['type']>(cell.entry?.mealType || 'set');
   const [mealIds, setMealIds] = useState<number[]>(cell.entry?.meals.map((meal) => meal.id) || []);
+  const [refreshing, setRefreshing] = useState(false);
 
   const meals = (mealsQuery.data || []).filter((meal) => meal.isActive && meal.type === mealType);
   const selectedCalories = mealsQuery.data
@@ -385,21 +386,15 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
       mealIds: kind === 'meal' ? mealIds : [],
     };
 
-    if (isEdit) {
-      update.mutate({ id: cell.entry!.id, data }, {
-        onSuccess: () => {
-          qc.invalidateQueries({ queryKey: getListMealScheduleQueryKey({ weekStart }) });
-          onClose();
-        }
-      });
-    } else {
-      create.mutate({ data }, {
-        onSuccess: () => {
-          qc.invalidateQueries({ queryKey: getListMealScheduleQueryKey({ weekStart }) });
-          onClose();
-        }
-      });
-    }
+    const onSuccess = async () => {
+      setRefreshing(true);
+      try {
+        await qc.invalidateQueries({ queryKey: getListMealScheduleQueryKey({ weekStart }) });
+        onClose();
+      } finally { setRefreshing(false); }
+    };
+    if (isEdit) update.mutate({ id: cell.entry!.id, data }, { onSuccess });
+    else create.mutate({ data }, { onSuccess });
   };
 
   const handleDelete = () => {
@@ -465,7 +460,8 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
               >
                 {MEAL_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
-              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Хоол сонгох</span>
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Хоол сонгох — олон сонголт</span>
+              <p className="mb-3 text-xs text-muted-foreground">Нэг хуваарьт хэд хэдэн хоол нэмж болно. Оруулах хоолнуудаа чагтална уу.</p>
               {mealsQuery.isLoading ? (
                 <div className="h-10 rounded-md border border-input bg-secondary/50 animate-pulse" />
               ) : meals.length === 0 ? (
@@ -492,12 +488,12 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
                   ))}
                 </fieldset>
               )}
-              {mealIds.length > 0 && <p className="mt-2 text-right text-sm font-semibold text-orange-600">Сонгосон {mealIds.length} хоол · {selectedCalories} ккал</p>}
+              {mealIds.length > 0 && <p className="mt-2 text-right text-sm font-semibold text-orange-600" data-testid="text-schedule-selected-meals">Сонгосон {mealIds.length} хоол · {selectedCalories} ккал</p>}
             </div>
           )}
         </div>
 
-        <div className="flex items-center justify-between pt-4 border-t border-border">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-border">
           <div className="flex gap-2">
             {isEdit && (
               <Button type="button" variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={handleDelete} disabled={deletion.isPending} data-testid="button-delete-entry">
@@ -510,9 +506,9 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
               </Button>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex w-full justify-end gap-2 sm:w-auto">
             <Button type="button" variant="outline" onClick={onClose} data-testid="button-cancel-entry">Болих</Button>
-            <Button type="submit" disabled={create.isPending || update.isPending} className="bg-orange-600 hover:bg-orange-700 text-white" data-testid="button-save-entry">
+            <Button type="submit" disabled={create.isPending || update.isPending || refreshing} className="bg-orange-600 hover:bg-orange-700 text-white" data-testid="button-save-entry">
               {isEdit ? 'Хадгалах' : 'Нэмэх'}
             </Button>
           </div>

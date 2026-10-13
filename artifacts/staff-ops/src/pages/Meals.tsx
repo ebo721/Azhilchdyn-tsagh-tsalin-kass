@@ -27,6 +27,7 @@ import {
   useListInventoryItems,
   useGetAuthSession,
   getListMealsQueryKey,
+  getListMealScheduleQueryKey,
   getListInventoryItemsQueryKey,
   type Meal,
   type MealIngredient,
@@ -186,6 +187,7 @@ export function Meals() {
             meal={meals.find(m => m.id === selectedMeal.id) || selectedMeal}
             catalog={catalog}
             onClose={() => setSelectedMeal(null)}
+            onEdit={() => openEditMealInfo(meals.find(m => m.id === selectedMeal.id) || selectedMeal)}
             onUpdate={() => {
               qc.invalidateQueries({ queryKey: getListMealsQueryKey() });
               qc.invalidateQueries({ queryKey: getListInventoryItemsQueryKey() });
@@ -209,8 +211,9 @@ export function Meals() {
           onClose={() => setIsMealFormOpen(false)}
           onSuccess={(savedMeal) => {
             qc.invalidateQueries({ queryKey: getListMealsQueryKey() });
+            qc.invalidateQueries({ queryKey: getListMealScheduleQueryKey() });
             setIsMealFormOpen(false);
-            if (!editingMealInfo) setSelectedMeal(savedMeal);
+            setSelectedMeal(savedMeal);
           }}
         />
       )}
@@ -239,6 +242,10 @@ function MealFormModal({
   const [requestStatus, setRequestStatus] = useState<'success' | 'error' | null>(null);
   const [requestError, setRequestError] = useState('');
   const [requestSubmitted, setRequestSubmitted] = useState(false);
+  const saveError = create.error ?? update.error;
+  const errorData = saveError && 'data' in saveError ? saveError.data : null;
+  const saveErrorMessage = errorData && typeof errorData === 'object' && 'error' in errorData && typeof errorData.error === 'string'
+    ? errorData.error : 'Хоол хадгалахад алдаа гарлаа. Нэр давхардсан эсэхийг шалгана уу.';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -347,7 +354,7 @@ function MealFormModal({
           <Button type="button" variant="outline" onClick={onClose} data-testid="button-cancel-meal">Болих</Button>
           <Button type="submit" disabled={create.isPending || update.isPending || requestPending || requestSubmitted} data-testid="button-save-meal" className="bg-orange-600 hover:bg-orange-700 text-white">{meal ? (requestOnly ? (requestSubmitted ? 'Хүсэлт илгээгдсэн' : 'Хүсэлт илгээх') : 'Хадгалах') : 'Үүсгэх'}</Button>
         </div>
-        {(create.isError || update.isError) && <p className="text-sm text-destructive" data-testid="status-meal-save-error">Хоол хадгалахад алдаа гарлаа. Нэр давхардсан эсэхийг шалгана уу.</p>}
+        {(create.isError || update.isError) && <p className="text-sm text-destructive" data-testid="status-meal-save-error">{saveErrorMessage}</p>}
         {requestStatus === 'success' && <p className="text-sm text-green-600" data-testid="status-meal-edit-request-success">Өөрчлөлтийн хүсэлт админд илгээгдлээ.</p>}
         {requestStatus === 'error' && <p className="text-sm text-destructive" data-testid="status-meal-edit-request-error">{requestError || 'Өөрчлөлтийн хүсэлт илгээхэд алдаа гарлаа. Дахин оролдоно уу.'}</p>}
       </form>
@@ -359,11 +366,13 @@ function MealDetailsPanel({
   meal,
   catalog,
   onClose,
+  onEdit,
   onUpdate
 }: {
   meal: Meal;
   catalog: InventoryItem[];
   onClose: () => void;
+  onEdit: () => void;
   onUpdate: () => void;
 }) {
   const createIngredient = useCreateMealIngredient();
@@ -463,6 +472,9 @@ function MealDetailsPanel({
             <span className="text-xs font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400">{meal.category}</span>
             <span className="rounded bg-purple-100 dark:bg-purple-900/50 px-1.5 py-0.5 text-[10px] font-bold text-purple-700 dark:text-purple-300">{mealTypeLabel(meal.type)}</span>
           </div>
+          <Button type="button" variant="outline" size="sm" onClick={onEdit} data-testid="button-edit-selected-meal" className="mb-2">
+            <Pencil className="size-4" />Мэдээлэл засах
+          </Button>
           <h2 className="text-xl font-bold tracking-tight text-foreground">{meal.name}</h2>
           <div className="flex items-center gap-4 mt-3">
             <div className="flex items-center gap-1.5 text-sm">
