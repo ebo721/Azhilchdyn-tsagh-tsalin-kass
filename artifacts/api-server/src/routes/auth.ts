@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Response } from "express";
-import { and, count, eq } from "drizzle-orm";
-import { db, usersTable } from "@workspace/db";
+import { and, count, eq, inArray } from "drizzle-orm";
+import { db, employeesTable, inventoryCustodianEmployeesTable, usersTable } from "@workspace/db";
 import {
   createStaffSession,
   getStaffSession,
@@ -46,8 +46,8 @@ export async function bootstrapCanonicalUsers() {
   }
 }
 
-function safeUser(user: { id: number; username: string; role: string; fullName?: string | null }) {
-  return { id: user.id, username: user.username, role: user.role, fullName: user.fullName ?? null };
+function safeUser(user: { id: number; username: string; role: string; fullName?: string | null }, custodianEmployeeIds: number[] = []) {
+  return { id: user.id, username: user.username, role: user.role, fullName: user.fullName ?? null, custodianEmployeeIds };
 }
 
 async function requireAdmin(req: Parameters<typeof getStaffSession>[0], res: Response) {
@@ -94,7 +94,8 @@ router.get("/users", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   const users = await db.select({ id: usersTable.id, username: usersTable.username, role: usersTable.role, fullName: usersTable.fullName })
     .from(usersTable).orderBy(usersTable.id);
-  res.json(users.map(safeUser));
+  const links = await db.select().from(inventoryCustodianEmployeesTable);
+  res.json(users.map((user) => safeUser(user, links.filter((link) => link.userId === user.id).map((link) => link.employeeId))));
 });
 
 router.put("/users/:id", async (req, res) => {
@@ -105,6 +106,13 @@ router.put("/users/:id", async (req, res) => {
   const role = req.body?.role;
   const newPassword = req.body?.newPassword;
   const rawName = req.body?.fullName;
+  const employeeIds = req.body?.custodianEmployeeIds;
+  if (employeeIds !== undefined && (!Array.isArray(employeeIds) || employeeIds.length > 1000
+    || employeeIds.some((id: unknown) => !Number.isInteger(id) || Number(id) <= 0)
+    || new Set(employeeIds).size !== employeeIds.length || role !== "warehouse")) {
+    res.status(400).json({ error: "Няравуудыг ажилчдын жагсаалтаас сонгоно уу" });
+    return;
+  }
   if (rawName !== undefined && rawName !== null && (typeof rawName !== "string" || rawName.length > 120)) {
     res.status(400).json({ error: "Няравын нэр 120 тэмдэгтээс хэтрэхгүй байна" });
     return;
@@ -138,9 +146,22 @@ router.put("/users/:id", async (req, res) => {
   };
   if (fullName !== undefined) values.fullName = fullName;
   if (newPassword) values.passwordHash = await hashPassword(newPassword);
-  const [updated] = await db.update(usersTable).set(values).where(eq(usersTable.id, id))
-    .returning({ id: usersTable.id, username: usersTable.username, role: usersTable.role, fullName: usersTable.fullName });
-  res.json(safeUser(updated!));
+  const result = await db.transaction(async (tx) => {
+    if (employeeIds?.length) {
+      const employees = await tx.select({ id: employeesTable.id }).from(employeesTable).where(inArray(employeesTable.id, employeeIds)).for("share");
+      if (employees.length !== employeeIds.length) return null;
+    }
+    const [updated] = await tx.update(usersTable).set(values).where(eq(usersTable.id, id))
+      .returning({ id: usersTable.id, username: usersTable.username, role: usersTable.role, fullName: usersTable.fullName });
+    if (employeeIds !== undefined) {
+      await tx.delete(inventoryCustodianEmployeesTable).where(eq(inventoryCustodianEmployeesTable.userId, id));
+      if (employeeIds.length) await tx.insert(inventoryCustodianEmployeesTable).values(employeeIds.map((employeeId: number) => ({ userId: id, employeeId })));
+    }
+    const links = await tx.select().from(inventoryCustodianEmployeesTable).where(eq(inventoryCustodianEmployeesTable.userId, id));
+    return safeUser(updated!, links.map((link) => link.employeeId));
+  });
+  if (!result) { res.status(400).json({ error: "Сонгосон ажилтан олдсонгүй" }); return; }
+  res.json(result);
 });
 
 router.delete("/users/:id", async (req, res) => {

@@ -19,6 +19,8 @@ export interface InventoryIssue {
   /** @nullable */
   responsibleUserId?: number | null;
   /** @nullable */
+  responsibleEmployeeId?: number | null;
+  /** @nullable */
   responsibleName?: string | null;
   createdAt: string;
 }

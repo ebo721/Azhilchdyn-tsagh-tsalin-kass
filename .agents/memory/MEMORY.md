@@ -29,4 +29,5 @@
 - [Employee recipient accounts](employee-recipient-accounts.md) — Historical bank reconciliation is not permission to silently replace a saved salary-payment account.
 - [Integration fixture reconciliation](integration-fixture-reconciliation.md) — Parallel list requests can create expense mirrors for another suite's fixtures; clean owned dependencies first.
 - [Historical opening stock](inventory-opening-stock-scope.md) — Opening stock is not a new purchase or payment; financial opening journals need an explicit counteraccount.
-- [Inventory responsibility history](inventory-responsibility-history.md) — Configured custodian names are choices; account edits/deletion must not rewrite historical responsibility.
+- [Inventory responsibility history](inventory-responsibility-history.md) — Multiple custodians come from employee search; settings and employee edits must not rewrite historical document names.
+- [Notebook post-execution errors](notebook-postexecution-errors.md) — A memory-capture failure can follow successful writes; verify results before retrying.

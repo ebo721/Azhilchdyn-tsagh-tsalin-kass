@@ -291,6 +291,7 @@ export interface User {
   username: string;
   /** @nullable */
   fullName?: string | null;
+  custodianEmployeeIds?: number[];
   role: UserRole;
 }
 
@@ -317,6 +318,8 @@ export interface UserUpdateInput {
      * @nullable
      */
   fullName?: string | null;
+  /** @items.minimum 1 */
+  custodianEmployeeIds?: number[];
 }
 
 export type ChartOfAccountType = typeof ChartOfAccountType[keyof typeof ChartOfAccountType];
@@ -1407,6 +1410,11 @@ export interface InventoryPurchaseInput {
      * @nullable
      */
   responsibleUserId?: number | null;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  responsibleEmployeeId?: number | null;
   hasReceipt: boolean;
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
   date: string;
@@ -1840,6 +1848,8 @@ export interface InventoryPurchase {
   /** @nullable */
   responsibleUserId?: number | null;
   /** @nullable */
+  responsibleEmployeeId?: number | null;
+  /** @nullable */
   responsibleName?: string | null;
   hasReceipt: boolean;
   date: string;
@@ -2074,6 +2084,8 @@ export interface InventoryIssue {
   /** @nullable */
   responsibleUserId?: number | null;
   /** @nullable */
+  responsibleEmployeeId?: number | null;
+  /** @nullable */
   responsibleName?: string | null;
   createdAt: string;
 }
@@ -2094,6 +2106,11 @@ export interface InventoryIssueInput {
      * @nullable
      */
   responsibleUserId?: number | null;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  responsibleEmployeeId?: number | null;
 }
 
 export interface OperatingExpense {

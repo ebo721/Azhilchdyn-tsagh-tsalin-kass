@@ -75,6 +75,16 @@ export const usersTable = pgTable("users", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
+export const inventoryCustodianEmployeesTable = pgTable("inventory_custodian_employees", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  employeeId: integer("employee_id").notNull().references(() => employeesTable.id, { onDelete: "cascade" }),
+}, (table) => [
+  uniqueIndex("inventory_custodian_user_employee_idx").on(table.userId, table.employeeId),
+]);
+export const insertInventoryCustodianEmployeeSchema = createInsertSchema(inventoryCustodianEmployeesTable).omit({ id: true });
+export type InventoryCustodianEmployee = typeof inventoryCustodianEmployeesTable.$inferSelect;
+
 export const payrollScheduleSettingsTable = pgTable("payroll_schedule_settings", {
   id: serial("id").primaryKey(),
   effectiveFromMonth: text("effective_from_month").notNull().default("0001-01"),
@@ -387,6 +397,7 @@ export const bankTransactionsTable = pgTable("bank_transactions", {
 
 export const inventoryPurchasesTable = pgTable("inventory_purchases", {
   id: serial("id").primaryKey(),
+  responsibleEmployeeId: integer("responsible_employee_id").references(() => employeesTable.id, { onDelete: "set null" }),
   responsibleUserId: integer("responsible_user_id").references(() => usersTable.id, { onDelete: "set null" }),
   responsibleName: text("responsible_name"),
   materialType: text("material_type").notNull().default("supply"),
@@ -578,6 +589,7 @@ export const inventoryOpeningBalancesTable = pgTable("inventory_opening_balances
 
 export const inventoryIssuesTable = pgTable("inventory_issues", {
   id: serial("id").primaryKey(),
+  responsibleEmployeeId: integer("responsible_employee_id").references(() => employeesTable.id, { onDelete: "set null" }),
   responsibleUserId: integer("responsible_user_id").references(() => usersTable.id, { onDelete: "set null" }),
   responsibleName: text("responsible_name"),
   inventoryItemId: integer("inventory_item_id").notNull().references(() => inventoryItemsTable.id, { onDelete: "restrict" }),

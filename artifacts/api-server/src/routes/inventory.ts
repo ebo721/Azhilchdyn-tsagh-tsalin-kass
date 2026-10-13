@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import inventoryOpeningBalancesRouter from "./inventory-opening-balances.js";
-import { usersTable } from "@workspace/db";
+import { inventoryCustodianEmployeesTable, usersTable } from "@workspace/db";
 import { InventoryCustodianError, inventoryCustodian } from "../lib/inventory-custodian.js";
 import { ListInventoryCustodiansResponse } from "@workspace/api-zod";
 import { inventoryOpeningBalancesTable, inventoryOpeningConsumptionsTable } from "@workspace/db";
@@ -166,9 +166,12 @@ const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, op
 
 router.get("/inventory/custodians", async (_req, res, next) => {
   try {
-    const users = await db.select({ id: usersTable.id, name: usersTable.fullName })
-      .from(usersTable).where(eq(usersTable.role, "warehouse")).orderBy(usersTable.id);
-    res.json(ListInventoryCustodiansResponse.parse(users.filter((user) => user.name?.trim())));
+    const employees = await db.selectDistinct({ id: employeesTable.id, name: employeesTable.name })
+      .from(inventoryCustodianEmployeesTable)
+      .innerJoin(employeesTable, eq(employeesTable.id, inventoryCustodianEmployeesTable.employeeId))
+      .innerJoin(usersTable, eq(usersTable.id, inventoryCustodianEmployeesTable.userId))
+      .where(eq(usersTable.role, "warehouse")).orderBy(employeesTable.name, employeesTable.id);
+    res.json(ListInventoryCustodiansResponse.parse(employees));
   } catch (error) { next(error); }
 });
 
@@ -204,6 +207,7 @@ router.get("/inventory/purchases", async (_req, res, next) => {
       accountName: row.accountName,
       supplierName: row.purchase.documentName,
       responsibleUserId: row.purchase.responsibleUserId,
+      responsibleEmployeeId: row.purchase.responsibleEmployeeId,
       responsibleName: row.purchase.responsibleName,
       hasReceipt: row.purchase.hasReceipt,
       date: row.purchase.date,
@@ -463,6 +467,7 @@ router.get("/inventory/issues", async (_req, res, next) => {
           quantity: inventoryIssuesTable.quantity,
           purpose: inventoryIssuesTable.purpose,
           responsibleUserId: inventoryIssuesTable.responsibleUserId,
+          responsibleEmployeeId: inventoryIssuesTable.responsibleEmployeeId,
           responsibleName: inventoryIssuesTable.responsibleName,
           createdAt: inventoryIssuesTable.createdAt,
         })
@@ -511,7 +516,7 @@ router.post("/inventory/issues", async (req, res, next) => {
       // half-written issue behind: nothing is written until the plan succeeds.
       const plan = await planInventoryFifoConsumption(tx, input.inventoryItemId, input.quantity);
       if (!plan) return { status: "insufficient" as const };
-      const responsible = await inventoryCustodian(tx, input.responsibleUserId);
+      const responsible = await inventoryCustodian(tx, input.responsibleUserId, undefined, input.responsibleEmployeeId);
       const [issue] = await tx.insert(inventoryIssuesTable).values({
         ...responsible,
         inventoryItemId: input.inventoryItemId,
@@ -540,6 +545,7 @@ router.post("/inventory/issues", async (req, res, next) => {
       totalCost: result.totalCost,
       purpose: result.issue.purpose,
       responsibleUserId: result.issue.responsibleUserId,
+      responsibleEmployeeId: result.issue.responsibleEmployeeId,
       responsibleName: result.issue.responsibleName,
       createdAt: result.issue.createdAt.toISOString(),
     }));
@@ -577,7 +583,7 @@ router.put("/inventory/issues/:id", async (req, res, next) => {
       await reverseInventoryFifoConsumption(tx, existing.id, existing.inventoryItemId);
       const plan = await planInventoryFifoConsumption(tx, input.inventoryItemId, input.quantity);
       if (!plan) throw new InventoryInsufficientStockError();
-      const responsible = await inventoryCustodian(tx, input.responsibleUserId, existing);
+      const responsible = await inventoryCustodian(tx, input.responsibleUserId, existing, input.responsibleEmployeeId);
       const [issue] = await tx.update(inventoryIssuesTable).set({
         ...responsible,
         inventoryItemId: input.inventoryItemId,
@@ -606,6 +612,7 @@ router.put("/inventory/issues/:id", async (req, res, next) => {
       totalCost: result.totalCost,
       purpose: result.issue.purpose,
       responsibleUserId: result.issue.responsibleUserId,
+      responsibleEmployeeId: result.issue.responsibleEmployeeId,
       responsibleName: result.issue.responsibleName,
       createdAt: result.issue.createdAt.toISOString(),
     }));
@@ -667,7 +674,7 @@ router.post("/inventory/purchases", async (req, res, next) => {
     const totalAmount = money(normalizedItems.reduce((total, item) => total + item.totalAmount, 0));
     const result = await db.transaction(async (tx) => {
       const account = await inventoryPurchaseAccount(tx, input.materialType);
-      const responsible = await inventoryCustodian(tx, input.responsibleUserId);
+      const responsible = await inventoryCustodian(tx, input.responsibleUserId, undefined, input.responsibleEmployeeId);
       const normalizedSupplierName = supplierName.toLocaleLowerCase("mn-MN");
       let [supplier] = await tx.select().from(inventorySuppliersTable)
         .where(eq(inventorySuppliersTable.normalizedName, normalizedSupplierName));
@@ -727,6 +734,7 @@ router.post("/inventory/purchases", async (req, res, next) => {
       accountName: result.account.name,
       supplierName: result.purchase.documentName,
       responsibleUserId: result.purchase.responsibleUserId,
+      responsibleEmployeeId: result.purchase.responsibleEmployeeId,
       responsibleName: result.purchase.responsibleName,
       hasReceipt: result.purchase.hasReceipt,
       date: result.purchase.date,
@@ -791,7 +799,7 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
         .where(eq(inventoryPurchasesTable.id, id)).for("update");
       if (!lockedPurchase) return { kind: "missing" as const };
       if (await activePurchasePaymentGroup(tx, id)) return { kind: "grouped" as const };
-      const responsible = await inventoryCustodian(tx, input.responsibleUserId, lockedPurchase);
+      const responsible = await inventoryCustodian(tx, input.responsibleUserId, lockedPurchase, input.responsibleEmployeeId);
       const account = await inventoryPurchaseAccount(tx, input.materialType);
       const normalizedSupplierName = supplierName.toLocaleLowerCase("mn-MN");
       let [supplier] = await tx.select().from(inventorySuppliersTable)
@@ -895,6 +903,7 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
       accountName: result.account.name,
       supplierName: result.purchase.documentName,
       responsibleUserId: result.purchase.responsibleUserId,
+      responsibleEmployeeId: result.purchase.responsibleEmployeeId,
       responsibleName: result.purchase.responsibleName,
       hasReceipt: result.purchase.hasReceipt,
       date: result.purchase.date,

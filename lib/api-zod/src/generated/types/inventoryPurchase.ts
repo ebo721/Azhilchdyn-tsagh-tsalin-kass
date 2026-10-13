@@ -18,6 +18,8 @@ export interface InventoryPurchase {
   /** @nullable */
   responsibleUserId?: number | null;
   /** @nullable */
+  responsibleEmployeeId?: number | null;
+  /** @nullable */
   responsibleName?: string | null;
   hasReceipt: boolean;
   date: string;

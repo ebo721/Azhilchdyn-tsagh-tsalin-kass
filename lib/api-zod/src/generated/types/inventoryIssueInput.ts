@@ -22,4 +22,9 @@ export interface InventoryIssueInput {
      * @nullable
      */
   responsibleUserId?: number | null;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  responsibleEmployeeId?: number | null;
 }

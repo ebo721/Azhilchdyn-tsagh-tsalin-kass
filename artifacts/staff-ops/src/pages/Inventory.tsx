@@ -207,7 +207,7 @@ type InventoryForm = {
   supplierName: string;
   hasReceipt: boolean;
   date: string;
-  responsibleUserId: string;
+  responsibleEmployeeId: string;
   items: Array<{ inventoryItemId?: number; name: string; category: string; unit: typeof inventoryUnits[number]; quantity: string; unitPrice: string }>;
 };
 
@@ -252,11 +252,11 @@ export function Inventory() {
   const [purchaseMonth, setPurchaseMonth] = useState(currentMonth());
   const [reclassifyPurchase, setReclassifyPurchase] = useState<InventoryPurchase | null>(null);
   const form = useForm<InventoryForm>({
-    defaultValues: { materialType: 'food', supplierName: '', hasReceipt: false, date: today(), responsibleUserId: '', items: [{ name: '', category: '', unit: 'ширхэг', quantity: '1', unitPrice: '' }] },
+    defaultValues: { materialType: 'food', supplierName: '', hasReceipt: false, date: today(), responsibleEmployeeId: '', items: [{ name: '', category: '', unit: 'ширхэг', quantity: '1', unitPrice: '' }] },
   });
   const rows = useFieldArray({ control: form.control, name: 'items' });
-  const issueForm = useForm<{ inventoryItemId: string; date: string; quantity: string; purpose: string; responsibleUserId: string }>({
-    defaultValues: { inventoryItemId: '', date: today(), quantity: '', purpose: '', responsibleUserId: '' },
+  const issueForm = useForm<{ inventoryItemId: string; date: string; quantity: string; purpose: string; responsibleEmployeeId: string }>({
+    defaultValues: { inventoryItemId: '', date: today(), quantity: '', purpose: '', responsibleEmployeeId: '' },
   });
   const categoryForm = useForm<{ name: string; category: string }>({ defaultValues: { name: '', category: '' } });
   const reclassifyForm = useForm<{ accountId: string }>({ defaultValues: { accountId: '' } });
@@ -298,7 +298,7 @@ export function Inventory() {
   useEffect(() => setPurchasePage(1), [materialTypeTab, purchaseMonth]);
   const openForm = () => {
     setEditing(null);
-    form.reset({ materialType: materialTypeTab, supplierName: '', hasReceipt: false, date: today(), responsibleUserId: '', items: [{ name: '', category: '', unit: 'ширхэг', quantity: '1', unitPrice: '' }] });
+    form.reset({ materialType: materialTypeTab, supplierName: '', hasReceipt: false, date: today(), responsibleEmployeeId: '', items: [{ name: '', category: '', unit: 'ширхэг', quantity: '1', unitPrice: '' }] });
     setOpen(true);
   };
   const editPurchase = (purchase: InventoryPurchase) => {
@@ -308,7 +308,7 @@ export function Inventory() {
       supplierName: purchase.supplierName,
       hasReceipt: purchase.hasReceipt,
       date: purchase.date,
-      responsibleUserId: purchase.responsibleUserId != null ? String(purchase.responsibleUserId) : '',
+      responsibleEmployeeId: purchase.responsibleEmployeeId != null ? String(purchase.responsibleEmployeeId) : '',
       items: purchase.items.map((item) => ({
         inventoryItemId: item.inventoryItemId,
         name: item.name,
@@ -321,9 +321,9 @@ export function Inventory() {
     setOpen(true);
   };
   const submit = (values: InventoryForm) => {
-    if (!editing && !values.responsibleUserId) return;
+    if (!editing && !values.responsibleEmployeeId) return;
     const data = {
-      responsibleUserId: values.responsibleUserId ? Number(values.responsibleUserId) : undefined,
+      responsibleEmployeeId: values.responsibleEmployeeId ? Number(values.responsibleEmployeeId) : undefined,
       materialType: values.materialType,
       supplierName: values.supplierName,
       hasReceipt: values.hasReceipt,
@@ -472,7 +472,7 @@ export function Inventory() {
     : [];
   const openIssueForm = () => {
     setEditingIssue(null);
-    issueForm.reset({ inventoryItemId: '', date: today(), quantity: '', purpose: '', responsibleUserId: '' });
+    issueForm.reset({ inventoryItemId: '', date: today(), quantity: '', purpose: '', responsibleEmployeeId: '' });
     catalog.refetch();
     setIssueOpen(true);
   };
@@ -483,15 +483,15 @@ export function Inventory() {
       date: issue.date,
       quantity: String(issue.quantity),
       purpose: issue.purpose,
-      responsibleUserId: issue.responsibleUserId != null ? String(issue.responsibleUserId) : '',
+      responsibleEmployeeId: issue.responsibleEmployeeId != null ? String(issue.responsibleEmployeeId) : '',
     });
     catalog.refetch();
     setIssueOpen(true);
   };
-  const submitIssue = (values: { inventoryItemId: string; date: string; quantity: string; purpose: string; responsibleUserId: string }) => {
-    if (!editingIssue && !values.responsibleUserId) return;
+  const submitIssue = (values: { inventoryItemId: string; date: string; quantity: string; purpose: string; responsibleEmployeeId: string }) => {
+    if (!editingIssue && !values.responsibleEmployeeId) return;
     const data = {
-      responsibleUserId: values.responsibleUserId ? Number(values.responsibleUserId) : undefined,
+      responsibleEmployeeId: values.responsibleEmployeeId ? Number(values.responsibleEmployeeId) : undefined,
       inventoryItemId: Number(values.inventoryItemId),
       date: values.date,
       quantity: Number(values.quantity),
@@ -675,10 +675,10 @@ export function Inventory() {
       <Form {...issueForm}><form onSubmit={issueForm.handleSubmit(submitIssue)} className="space-y-5">
         <label className="block space-y-2 text-xs font-semibold">Бараа материал<select className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...issueForm.register('inventoryItemId', { required: true })} data-testid="select-inventory-issue-item"><option value="">Сонгох</option>{issueOptions.map((item) => <option value={item.id} key={item.id}>{item.name} · {item.available} {item.unit}</option>)}</select>{catalog.isFetching && !catalog.data ? <span className="text-xs text-muted-foreground">Үлдэгдэл шинэчилж байна...</span> : catalog.isError ? <span className="flex items-center gap-2 text-xs font-semibold text-destructive">Үлдэгдлийг ачаалж чадсангүй.<button type="button" className="underline" onClick={() => catalog.refetch()}>Дахин оролдох</button></span> : !issueOptions.length ? <span className="text-xs text-muted-foreground" data-testid="text-inventory-issue-no-stock">Зарлагадах үлдэгдэлтэй бараа алга.</span> : null}</label>
         <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-xs font-semibold">Огноо<input type="date" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...issueForm.register('date', { required: true })} data-testid="input-inventory-issue-date" /></label><label className="space-y-2 text-xs font-semibold">Тоо хэмжээ<input type="number" min="0.001" max={issueMax} step="0.001" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...issueForm.register('quantity', { required: true, min: 0.001, ...(issueMax !== undefined ? { max: issueMax } : {}) })} data-testid="input-inventory-issue-quantity" /></label></div>
-        <InventoryCustodianSelect testId="select-inventory-issue-custodian" isNew={!editingIssue} value={issueForm.watch('responsibleUserId')} onChange={(v) => issueForm.setValue('responsibleUserId', v)} savedId={editingIssue?.responsibleUserId} savedName={editingIssue?.responsibleName} />
+        <InventoryCustodianSelect testId="select-inventory-issue-custodian" isNew={!editingIssue} value={issueForm.watch('responsibleEmployeeId')} onChange={(v) => issueForm.setValue('responsibleEmployeeId', v)} savedId={editingIssue?.responsibleEmployeeId} savedName={editingIssue?.responsibleName} />
         <label className="block space-y-2 text-xs font-semibold">Зориулалт<select className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...issueForm.register('purpose', { required: true })} data-testid="select-inventory-issue-purpose"><option value="">Сонгох</option>{editingIssue?.purpose && !inventoryIssuePurposes.includes(editingIssue.purpose as typeof inventoryIssuePurposes[number]) && <option value={editingIssue.purpose}>{editingIssue.purpose}</option>}{inventoryIssuePurposes.map((purpose) => <option value={purpose} key={purpose}>{purpose}</option>)}</select></label>
         {(createIssue.isError || updateIssue.isError) && <p className="text-xs font-semibold text-destructive">Үлдэгдэл хүрэлцэхгүй эсвэл мэдээлэл буруу байна.</p>}
-        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setIssueOpen(false)}>Болих</Button><Button type="submit" disabled={createIssue.isPending || updateIssue.isPending || (!editingIssue && !issueForm.watch('responsibleUserId'))} data-testid="button-save-inventory-issue">{createIssue.isPending || updateIssue.isPending ? 'Хадгалж байна...' : editingIssue ? 'Засварыг хадгалах' : 'Зарлага хадгалах'}</Button></div>
+        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setIssueOpen(false)}>Болих</Button><Button type="submit" disabled={createIssue.isPending || updateIssue.isPending || (!editingIssue && !issueForm.watch('responsibleEmployeeId'))} data-testid="button-save-inventory-issue">{createIssue.isPending || updateIssue.isPending ? 'Хадгалж байна...' : editingIssue ? 'Засварыг хадгалах' : 'Зарлага хадгалах'}</Button></div>
       </form></Form>
     </Modal>}
     {open && <Modal wide fullScreen title={editing ? 'Худалдан авалт засах' : 'Бараа материалын худалдан авалт'} detail="Сангаас хайж сонгох эсвэл шинэ бараа бүртгэнэ." onClose={() => setOpen(false)}>
@@ -686,7 +686,7 @@ export function Inventory() {
       <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-3">
         <label className="block space-y-2 text-xs font-semibold">Бараа материалын төрөл<select className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('materialType', { required: true })} data-testid="select-inventory-material-type">{inventoryMaterialTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label>
         <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-xs font-semibold">Харилцагч<input list="inventory-supplier-options" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('supplierName', { required: true })} placeholder="Жишээ: Номин" data-testid="input-inventory-supplier-name" /></label><label className="space-y-2 text-xs font-semibold">Худалдан авалтын огноо<input type="date" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('date', { required: true })} data-testid="input-inventory-purchase-date" /></label></div>
-        <InventoryCustodianSelect testId="select-inventory-purchase-custodian" isNew={!editing} value={form.watch('responsibleUserId')} onChange={(v) => form.setValue('responsibleUserId', v)} savedId={editing?.responsibleUserId} savedName={editing?.responsibleName} />
+        <InventoryCustodianSelect testId="select-inventory-purchase-custodian" isNew={!editing} value={form.watch('responsibleEmployeeId')} onChange={(v) => form.setValue('responsibleEmployeeId', v)} savedId={editing?.responsibleEmployeeId} savedName={editing?.responsibleName} />
         <label className="flex items-center gap-3 rounded-xl border border-border bg-secondary/35 px-4 py-3 text-sm font-semibold"><input type="checkbox" className="size-4 accent-primary" {...form.register('hasReceipt')} data-testid="checkbox-inventory-has-receipt" /><span>Баримттай</span></label>
         <datalist id="inventory-supplier-options">{suppliers.data?.map((supplier) => <option value={supplier.name} key={supplier.id} />)}</datalist>
         <datalist id="inventory-catalog-options">{catalog.data?.filter((item) => item.materialType === form.watch('materialType')).map((item) => <option value={item.name} key={item.id}>{item.category} · {item.unit}</option>)}</datalist>
@@ -710,7 +710,7 @@ export function Inventory() {
         })}</div>
         <Button type="button" variant="outline" className="w-full" onClick={() => rows.append({ name: '', category: '', unit: 'ширхэг', quantity: '1', unitPrice: '' })} data-testid="button-add-inventory-row"><Plus className="size-4" />Бараа нэмэх</Button>
         <div className="flex items-center justify-between rounded-xl bg-primary/10 px-4 py-3"><span className="text-sm font-bold">Нийт дүн</span><strong className="font-mono text-lg text-primary">{money(grandTotal)}</strong></div>
-        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Болих</Button><Button type="submit" disabled={create.isPending || update.isPending || (!editing && !form.watch('responsibleUserId'))} data-testid="button-save-inventory-purchase">{create.isPending || update.isPending ? 'Хадгалж байна...' : editing ? 'Засварыг хадгалах' : 'Бүртгэх'}</Button></div>
+        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Болих</Button><Button type="submit" disabled={create.isPending || update.isPending || (!editing && !form.watch('responsibleEmployeeId'))} data-testid="button-save-inventory-purchase">{create.isPending || update.isPending ? 'Хадгалж байна...' : editing ? 'Засварыг хадгалах' : 'Бүртгэх'}</Button></div>
       </form></Form>
     </Modal>}
   </div>;

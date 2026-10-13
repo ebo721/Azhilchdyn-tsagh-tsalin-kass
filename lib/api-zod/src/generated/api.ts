@@ -46,6 +46,7 @@ export const ListUsersResponseItem = zod.object({
   "id": zod.number().int(),
   "username": zod.string(),
   "fullName": zod.string().nullish(),
+  "custodianEmployeeIds": zod.array(zod.number().int()).optional(),
   "role": zod.enum(['admin', 'hr', 'accountant', 'warehouse', 'viewer', 'technologist'])
 })
 export const ListUsersResponse = zod.array(ListUsersResponseItem)
@@ -64,17 +65,20 @@ export const updateUserBodyFullNameMax = 120;
 
 
 
+
 export const UpdateUserBody = zod.object({
   "username": zod.string().min(1),
   "role": zod.enum(['admin', 'hr', 'accountant', 'warehouse', 'viewer', 'technologist']),
   "newPassword": zod.string().min(1).optional(),
-  "fullName": zod.string().max(updateUserBodyFullNameMax).nullish()
+  "fullName": zod.string().max(updateUserBodyFullNameMax).nullish(),
+  "custodianEmployeeIds": zod.array(zod.number().int().min(1)).optional()
 })
 
 export const UpdateUserResponse = zod.object({
   "id": zod.number().int(),
   "username": zod.string(),
   "fullName": zod.string().nullish(),
+  "custodianEmployeeIds": zod.array(zod.number().int()).optional(),
   "role": zod.enum(['admin', 'hr', 'accountant', 'warehouse', 'viewer', 'technologist'])
 })
 
@@ -2085,6 +2089,7 @@ export const LinkBankTransactionPurchaseParams = zod.object({
 
 
 
+
 export const linkBankTransactionPurchaseBodyTwoDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
 
 
@@ -2101,6 +2106,7 @@ export const LinkBankTransactionPurchaseBody = zod.union([zod.object({
   "materialType": zod.enum(['food', 'supply']),
   "supplierName": zod.string().min(1),
   "responsibleUserId": zod.number().int().min(1).nullish(),
+  "responsibleEmployeeId": zod.number().int().min(1).nullish(),
   "hasReceipt": zod.boolean(),
   "date": zod.string().regex(linkBankTransactionPurchaseBodyTwoDateRegExp),
   "items": zod.array(zod.object({
@@ -3117,6 +3123,7 @@ export const ListInventoryPurchasesResponseItem = zod.object({
   "accountName": zod.string().nullable(),
   "supplierName": zod.string(),
   "responsibleUserId": zod.number().int().nullish(),
+  "responsibleEmployeeId": zod.number().int().nullish(),
   "responsibleName": zod.string().nullish(),
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
@@ -3146,6 +3153,7 @@ export const ListInventoryPurchasesResponse = zod.array(ListInventoryPurchasesRe
  */
 
 
+
 export const createInventoryPurchaseBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
 
 
@@ -3160,6 +3168,7 @@ export const CreateInventoryPurchaseBody = zod.object({
   "materialType": zod.enum(['food', 'supply']),
   "supplierName": zod.string().min(1),
   "responsibleUserId": zod.number().int().min(1).nullish(),
+  "responsibleEmployeeId": zod.number().int().min(1).nullish(),
   "hasReceipt": zod.boolean(),
   "date": zod.string().regex(createInventoryPurchaseBodyDateRegExp),
   "items": zod.array(zod.object({
@@ -3183,6 +3192,7 @@ export const CreateInventoryPurchaseResponse = zod.object({
   "accountName": zod.string().nullable(),
   "supplierName": zod.string(),
   "responsibleUserId": zod.number().int().nullish(),
+  "responsibleEmployeeId": zod.number().int().nullish(),
   "responsibleName": zod.string().nullish(),
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
@@ -3215,6 +3225,7 @@ export const UpdateInventoryPurchaseParams = zod.object({
 
 
 
+
 export const updateInventoryPurchaseBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
 
 
@@ -3229,6 +3240,7 @@ export const UpdateInventoryPurchaseBody = zod.object({
   "materialType": zod.enum(['food', 'supply']),
   "supplierName": zod.string().min(1),
   "responsibleUserId": zod.number().int().min(1).nullish(),
+  "responsibleEmployeeId": zod.number().int().min(1).nullish(),
   "hasReceipt": zod.boolean(),
   "date": zod.string().regex(updateInventoryPurchaseBodyDateRegExp),
   "items": zod.array(zod.object({
@@ -3252,6 +3264,7 @@ export const UpdateInventoryPurchaseResponse = zod.object({
   "accountName": zod.string().nullable(),
   "supplierName": zod.string(),
   "responsibleUserId": zod.number().int().nullish(),
+  "responsibleEmployeeId": zod.number().int().nullish(),
   "responsibleName": zod.string().nullish(),
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
@@ -3314,6 +3327,7 @@ export const ConfirmInventoryPurchasePaymentResponse = zod.object({
   "accountName": zod.string().nullable(),
   "supplierName": zod.string(),
   "responsibleUserId": zod.number().int().nullish(),
+  "responsibleEmployeeId": zod.number().int().nullish(),
   "responsibleName": zod.string().nullish(),
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
@@ -3355,6 +3369,7 @@ export const CancelInventoryPurchasePaymentResponse = zod.object({
   "accountName": zod.string().nullable(),
   "supplierName": zod.string(),
   "responsibleUserId": zod.number().int().nullish(),
+  "responsibleEmployeeId": zod.number().int().nullish(),
   "responsibleName": zod.string().nullish(),
   "hasReceipt": zod.boolean(),
   "date": zod.string(),
@@ -3949,6 +3964,7 @@ export const ListInventoryIssuesResponseItem = zod.object({
   "totalCost": zod.number().describe('FIFO cost of the stock consumed by this issue'),
   "purpose": zod.string(),
   "responsibleUserId": zod.number().int().nullish(),
+  "responsibleEmployeeId": zod.number().int().nullish(),
   "responsibleName": zod.string().nullish(),
   "createdAt": zod.string()
 })
@@ -3967,12 +3983,14 @@ export const createInventoryIssueBodyQuantityMultipleOf = 0.001;
 
 
 
+
 export const CreateInventoryIssueBody = zod.object({
   "inventoryItemId": zod.number().int(),
   "date": zod.string().regex(createInventoryIssueBodyDateRegExp),
   "quantity": zod.number().gt(createInventoryIssueBodyQuantityExclusiveMin).max(createInventoryIssueBodyQuantityMax).multipleOf(createInventoryIssueBodyQuantityMultipleOf),
   "purpose": zod.string().min(1),
-  "responsibleUserId": zod.number().int().min(1).nullish()
+  "responsibleUserId": zod.number().int().min(1).nullish(),
+  "responsibleEmployeeId": zod.number().int().min(1).nullish()
 })
 
 export const CreateInventoryIssueResponse = zod.object({
@@ -3985,6 +4003,7 @@ export const CreateInventoryIssueResponse = zod.object({
   "totalCost": zod.number().describe('FIFO cost of the stock consumed by this issue'),
   "purpose": zod.string(),
   "responsibleUserId": zod.number().int().nullish(),
+  "responsibleEmployeeId": zod.number().int().nullish(),
   "responsibleName": zod.string().nullish(),
   "createdAt": zod.string()
 })
@@ -4006,12 +4025,14 @@ export const updateInventoryIssueBodyQuantityMultipleOf = 0.001;
 
 
 
+
 export const UpdateInventoryIssueBody = zod.object({
   "inventoryItemId": zod.number().int(),
   "date": zod.string().regex(updateInventoryIssueBodyDateRegExp),
   "quantity": zod.number().gt(updateInventoryIssueBodyQuantityExclusiveMin).max(updateInventoryIssueBodyQuantityMax).multipleOf(updateInventoryIssueBodyQuantityMultipleOf),
   "purpose": zod.string().min(1),
-  "responsibleUserId": zod.number().int().min(1).nullish()
+  "responsibleUserId": zod.number().int().min(1).nullish(),
+  "responsibleEmployeeId": zod.number().int().min(1).nullish()
 })
 
 export const UpdateInventoryIssueResponse = zod.object({
@@ -4024,6 +4045,7 @@ export const UpdateInventoryIssueResponse = zod.object({
   "totalCost": zod.number().describe('FIFO cost of the stock consumed by this issue'),
   "purpose": zod.string(),
   "responsibleUserId": zod.number().int().nullish(),
+  "responsibleEmployeeId": zod.number().int().nullish(),
   "responsibleName": zod.string().nullish(),
   "createdAt": zod.string()
 })

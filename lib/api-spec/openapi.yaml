@@ -39,7 +39,7 @@ paths:
       tags: [Inventory]
       responses:
         "200":
-          description: Named warehouse users available as inventory custodians
+          description: Employees selected as custodians in warehouse user settings
           content:
             application/json:
               schema:
@@ -2972,6 +2972,9 @@ components:
         id: { type: integer }
         username: { type: string }
         fullName: { type: ["string", "null"] }
+        custodianEmployeeIds:
+          type: array
+          items: { type: integer }
         role: { type: string, enum: [admin, hr, accountant, warehouse, viewer, technologist] }
     UserUpdateInput:
       type: object
@@ -2981,6 +2984,10 @@ components:
         role: { type: string, enum: [admin, hr, accountant, warehouse, viewer, technologist] }
         newPassword: { type: string, minLength: 1 }
         fullName: { type: ["string", "null"], maxLength: 120 }
+        custodianEmployeeIds:
+          type: array
+          uniqueItems: true
+          items: { type: integer, minimum: 1 }
     ChartOfAccount:
       type: object
       required: [id, code, name, type, isActive, createdAt]
@@ -3948,6 +3955,7 @@ components:
         accountName: { type: string, nullable: true }
         supplierName: { type: string }
         responsibleUserId: { type: ["integer", "null"] }
+        responsibleEmployeeId: { type: ["integer", "null"] }
         responsibleName: { type: ["string", "null"] }
         hasReceipt: { type: boolean }
         date: { type: string }
@@ -3983,6 +3991,7 @@ components:
           enum: [food, supply]
         supplierName: { type: string, minLength: 1 }
         responsibleUserId: { type: ["integer", "null"], minimum: 1 }
+        responsibleEmployeeId: { type: ["integer", "null"], minimum: 1 }
         hasReceipt: { type: boolean }
         date:
           type: string
@@ -4166,6 +4175,7 @@ components:
         totalCost: { type: number, description: "FIFO cost of the stock consumed by this issue" }
         purpose: { type: string }
         responsibleUserId: { type: ["integer", "null"] }
+        responsibleEmployeeId: { type: ["integer", "null"] }
         responsibleName: { type: ["string", "null"] }
         createdAt: { type: string }
     InventoryIssueInput:
@@ -4179,6 +4189,7 @@ components:
         quantity: { type: number, exclusiveMinimum: 0, maximum: 999999999.999, multipleOf: 0.001 }
         purpose: { type: string, minLength: 1 }
         responsibleUserId: { type: ["integer", "null"], minimum: 1 }
+        responsibleEmployeeId: { type: ["integer", "null"], minimum: 1 }
     OperatingExpense:
       type: object
       required: [id, description, category, accountId, date, amount, paymentDate, paymentAmount, bankTransactionId, cashTransactionId, createdAt]
