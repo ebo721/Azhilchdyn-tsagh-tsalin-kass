@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import inventoryOpeningBalancesRouter from "./inventory-opening-balances.js";
+import inventoryClosingBalancesRouter from "./inventory-closing-balances.js";
+import { inventoryClosingBalancesTable } from "@workspace/db";
 import { inventoryCustodianEmployeesTable, usersTable } from "@workspace/db";
 import { InventoryCustodianError, inventoryCustodian } from "../lib/inventory-custodian.js";
 import { ListInventoryCustodiansResponse } from "@workspace/api-zod";
@@ -162,6 +164,7 @@ import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-
 
 const router: IRouter = Router();
 router.use(inventoryOpeningBalancesRouter);
+router.use(inventoryClosingBalancesRouter);
 const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, operatingExpenseAccountName, inventoryMaterialLabel, defaultChartOfAccounts, operatingExpenseAccountCodes, inventoryPurchaseAccountCodes, reservedAccountTypes, chartOfAccountResponse, ensureDefaultChartOfAccounts, inventoryPurchaseAccount, lockedExpenseAccount, fallbackExpenseAccount, today, currentMonth, money, InventoryBankPaymentConflictError, OperatingExpenseBankPaymentConflictError, calendarDateOffset, descriptionTokens, inventoryBankSuggestionScore, deletionTargetPatterns, roleCanRequestDeletion, deletionRequestResponse, monthlyIncomeTaxRelief, hoursBetween, previousMonth, nextMonth, daysInMonth, isValidCalendarDate, calendarDateText, weekdayCount, monthWeekdays, defaultPayrollSchedule, getPayrollSchedule, scheduleDate, payrollPeriod, selectPayrollScheduleVersion, scheduleVersionAffectsMonth, shiftDailyRate, weekdayDatesBetween, salaryAt, getPayrollSummary, getPayrollAdvanceSummary, calculatePayrollAdvanceLine, InventoryInsufficientStockError, planInventoryFifoConsumption, applyInventoryFifoConsumption, reverseInventoryFifoConsumption, inventoryPurchaseResponse } = shared;
 
 router.get("/inventory/custodians", async (_req, res, next) => {
@@ -466,6 +469,9 @@ router.get("/inventory/issues", async (_req, res, next) => {
           date: inventoryIssuesTable.date,
           quantity: inventoryIssuesTable.quantity,
           purpose: inventoryIssuesTable.purpose,
+          closingBalanceId: inventoryClosingBalancesTable.id,
+          closingApprovedAt: inventoryClosingBalancesTable.approvedAt,
+          closingUnitPrice: inventoryClosingBalancesTable.unitPrice,
           responsibleUserId: inventoryIssuesTable.responsibleUserId,
           responsibleEmployeeId: inventoryIssuesTable.responsibleEmployeeId,
           responsibleName: inventoryIssuesTable.responsibleName,
@@ -473,6 +479,7 @@ router.get("/inventory/issues", async (_req, res, next) => {
         })
         .from(inventoryIssuesTable)
         .innerJoin(inventoryItemsTable, eq(inventoryIssuesTable.inventoryItemId, inventoryItemsTable.id))
+        .leftJoin(inventoryClosingBalancesTable, eq(inventoryClosingBalancesTable.issueId, inventoryIssuesTable.id))
         .orderBy(desc(inventoryIssuesTable.date), desc(inventoryIssuesTable.id)),
       db.select({
         issueId: inventoryIssueConsumptionsTable.issueId,
@@ -489,7 +496,9 @@ router.get("/inventory/issues", async (_req, res, next) => {
     res.json(ListInventoryIssuesResponse.parse(rows.map((row) => ({
       ...row,
       quantity: Number(row.quantity),
-      totalCost: money(costByIssue.get(row.id) ?? 0),
+      status: row.closingBalanceId !== null && row.closingApprovedAt === null ? "pending" : "confirmed",
+      totalCost: row.closingBalanceId !== null && row.closingApprovedAt === null
+        ? money(Number(row.quantity) * Number(row.closingUnitPrice)) : money(costByIssue.get(row.id) ?? 0),
       createdAt: row.createdAt.toISOString(),
     }))));
   } catch (error) {
@@ -570,6 +579,9 @@ router.put("/inventory/issues/:id", async (req, res, next) => {
     const result = await db.transaction(async (tx) => {
       const [existing] = await tx.select().from(inventoryIssuesTable).where(eq(inventoryIssuesTable.id, id)).for("update");
       if (!existing) return { status: "not-found" as const };
+      const [closing] = await tx.select({ id: inventoryClosingBalancesTable.id }).from(inventoryClosingBalancesTable)
+        .where(eq(inventoryClosingBalancesTable.issueId, id));
+      if (closing) return { status: "closing-linked" as const };
       await tx.select({ id: inventoryItemsTable.id }).from(inventoryItemsTable)
         .where(inArray(inventoryItemsTable.id, [existing.inventoryItemId, input.inventoryItemId]))
         .orderBy(inventoryItemsTable.id).for("update");
@@ -596,6 +608,10 @@ router.put("/inventory/issues/:id", async (req, res, next) => {
     });
     if (result.status === "not-found") {
       res.status(404).json({ error: "Зарлагын бүртгэл олдсонгүй" });
+      return;
+    }
+    if (result.status === "closing-linked") {
+      res.status(409).json({ error: "Эцсийн үлдэгдлийн зөрүүг зарлагаас шууд засахгүй. Эцсийн үлдэгдлийн бүртгэлийг засна уу." });
       return;
     }
     if (result.status === "item-not-found") {
@@ -629,12 +645,19 @@ router.delete("/inventory/issues/:id", async (req, res, next) => {
   try {
     const { id } = DeleteInventoryIssueParams.parse(req.params);
     const deleted = await db.transaction(async (tx) => {
-      const [existing] = await tx.select().from(inventoryIssuesTable).where(eq(inventoryIssuesTable.id, id));
+      const [existing] = await tx.select().from(inventoryIssuesTable).where(eq(inventoryIssuesTable.id, id)).for("update");
       if (!existing) return false;
+      const [closing] = await tx.select({ id: inventoryClosingBalancesTable.id }).from(inventoryClosingBalancesTable)
+        .where(eq(inventoryClosingBalancesTable.issueId, id));
+      if (closing) return "closing-linked" as const;
       await reverseInventoryFifoConsumption(tx, existing.id, existing.inventoryItemId);
       await tx.delete(inventoryIssuesTable).where(eq(inventoryIssuesTable.id, id));
       return true;
     });
+    if (deleted === "closing-linked") {
+      res.status(409).json({ error: "Эцсийн үлдэгдлийн зөрүүг шууд устгахгүй. Баталгаажаагүй эцсийн үлдэгдлийн бүртгэлийг устгана уу." });
+      return;
+    }
     if (!deleted) {
       res.status(404).json({ error: "Зарлагын бүртгэл олдсонгүй" });
       return;

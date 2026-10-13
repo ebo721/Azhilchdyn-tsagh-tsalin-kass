@@ -1,4 +1,4 @@
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, eq, gt, lte, sql } from "drizzle-orm";
 import {
   bankTransactionsTable,
   cashClosuresTable,
@@ -29,7 +29,7 @@ export { descriptionTokens, bankSuggestionScore as inventoryBankSuggestionScore 
  * would draw from. Read-only -- writes nothing. Returns null if the eligible
  * lots don't cover the requested quantity.
  */
-export async function planInventoryFifoConsumption(tx: Tx, inventoryItemId: number, quantity: number) {
+export async function planInventoryFifoConsumption(tx: Tx, inventoryItemId: number, quantity: number, asOfDate?: string) {
   await tx.select({ id: inventoryItemsTable.id }).from(inventoryItemsTable)
     .where(eq(inventoryItemsTable.id, inventoryItemId)).for("update");
   const lots = await tx
@@ -44,11 +44,13 @@ export async function planInventoryFifoConsumption(tx: Tx, inventoryItemId: numb
     .where(and(
       eq(inventoryPurchaseItemsTable.inventoryItemId, inventoryItemId),
       gt(inventoryPurchaseItemsTable.remainingQuantity, 0),
+      asOfDate ? lte(inventoryPurchasesTable.date, asOfDate) : undefined,
     ))
     .orderBy(inventoryPurchasesTable.date, inventoryPurchaseItemsTable.id)
     .for("update");
   const openingLots = await tx.select().from(inventoryOpeningBalancesTable)
-    .where(and(eq(inventoryOpeningBalancesTable.inventoryItemId, inventoryItemId), gt(inventoryOpeningBalancesTable.remainingQuantity, 0)))
+    .where(and(eq(inventoryOpeningBalancesTable.inventoryItemId, inventoryItemId), gt(inventoryOpeningBalancesTable.remainingQuantity, 0),
+      asOfDate ? lte(inventoryOpeningBalancesTable.date, asOfDate) : undefined))
     .orderBy(inventoryOpeningBalancesTable.date, inventoryOpeningBalancesTable.id).for("update");
   return planInventoryLots([
     ...lots.map((lot) => ({ ...lot, source: "purchase" as const })),

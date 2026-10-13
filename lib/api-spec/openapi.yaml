@@ -2158,6 +2158,81 @@ paths:
       responses:
         "204":
           description: Supplier removed
+  /inventory/closing-balances/quote:
+    get:
+      operationId: getInventoryClosingQuote
+      tags: [inventory]
+      parameters:
+        - { name: inventoryItemId, in: query, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: date, in: query, required: true, schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' } }
+      responses:
+        "200":
+          description: Stock at end of date and last purchase price as of that date
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryClosingQuote" }
+  /inventory/closing-balances:
+    get:
+      operationId: listInventoryClosingBalances
+      tags: [inventory]
+      responses:
+        "200":
+          description: Saved stock counts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/InventoryClosingBalance" }
+    post:
+      operationId: createInventoryClosingBalance
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryClosingBalanceInput" }
+      responses:
+        "201":
+          description: Saved count and pending shortage issue, without changing stock
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryClosingBalance" }
+  /inventory/closing-balances/{id}:
+    put:
+      operationId: updateInventoryClosingBalance
+      tags: [inventory]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryClosingBalanceInput" }
+      responses:
+        "200":
+          description: Unapproved count and its pending issue updated atomically
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryClosingBalance" }
+    delete:
+      operationId: deleteInventoryClosingBalance
+      tags: [inventory]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "204": { description: Unapproved count and its pending issue removed }
+  /inventory/issues/{id}/confirm:
+    post:
+      operationId: confirmInventoryClosingIssue
+      tags: [inventory]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: Shortage confirmed once using existing FIFO stock costing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryClosingBalance" }
   /inventory/opening-balances:
     get:
       operationId: listInventoryOpeningBalances
@@ -4162,6 +4237,44 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/InventoryMaterialRequestLine"
+    InventoryClosingQuote:
+      type: object
+      required: [inventoryItemId, date, bookQuantity, unitPrice, priceSource]
+      properties:
+        inventoryItemId: { type: integer }
+        date: { type: string }
+        bookQuantity: { type: number }
+        unitPrice: { type: ["number", "null"] }
+        priceSource: { type: string, enum: [purchase, opening, none] }
+    InventoryClosingBalanceInput:
+      type: object
+      required: [inventoryItemId, date, quantity, responsibleEmployeeId]
+      properties:
+        inventoryItemId: { type: integer, minimum: 1 }
+        date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        quantity: { type: number, minimum: 0, maximum: 999999999.999, multipleOf: 0.001 }
+        responsibleEmployeeId: { type: ["integer", "null"], minimum: 1 }
+    InventoryClosingBalance:
+      type: object
+      required: [id, inventoryItemId, materialType, itemName, unit, date, quantity, bookQuantity, unitPrice, priceSource, totalAmount, difference, issueId, status, responsibleEmployeeId, responsibleName, createdAt]
+      properties:
+        id: { type: integer }
+        inventoryItemId: { type: integer }
+        materialType: { type: string, enum: [food, supply] }
+        itemName: { type: string }
+        unit: { type: string }
+        date: { type: string }
+        quantity: { type: number }
+        bookQuantity: { type: number }
+        unitPrice: { type: number }
+        priceSource: { type: string, enum: [purchase, opening] }
+        totalAmount: { type: number }
+        difference: { type: number, description: "Book minus counted quantity; positive is shortage" }
+        issueId: { type: ["integer", "null"] }
+        status: { type: string, enum: [recorded, pending, confirmed] }
+        responsibleEmployeeId: { type: ["integer", "null"] }
+        responsibleName: { type: string }
+        createdAt: { type: string }
     InventoryIssue:
       type: object
       required: [id, inventoryItemId, itemName, unit, date, quantity, totalCost, purpose, createdAt]
@@ -4174,6 +4287,8 @@ components:
         quantity: { type: number }
         totalCost: { type: number, description: "FIFO cost of the stock consumed by this issue" }
         purpose: { type: string }
+        status: { type: string, enum: [pending, confirmed] }
+        closingBalanceId: { type: ["integer", "null"] }
         responsibleUserId: { type: ["integer", "null"] }
         responsibleEmployeeId: { type: ["integer", "null"] }
         responsibleName: { type: ["string", "null"] }

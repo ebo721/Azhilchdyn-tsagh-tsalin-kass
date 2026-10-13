@@ -92,7 +92,11 @@
     {
       "filename": "20261013_inventory_employee_custodians.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20261013_inventory_stock_counts.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "b0d4c7b1ab6b7691c2584addd556f699036a90130dbb3a63a28cbb2ef2799715"
+  "schemaFingerprint": "894224ff0a6c89a70561d0776515541b422591fbfa6f90dd39716c3799fc6c1f"
 }
