@@ -60,3 +60,9 @@ When recreating a local commit through GitHub's Git Commits API, preserve its tr
 **Why:** The API preserves the message verbatim, whereas ordinary Git commits end the message with a newline. Omitting it produces a different commit SHA even when all files and metadata match; retaining it allowed the remote commit to match the local commit exactly.
 
 **How to apply:** Use the original message without trimming its final newline when exact commit identity matters. Still verify the resulting tree and expected remote head before updating the branch.
+
+For baseline comparisons through the CodeExecution shell callback, use an explicit space-separated Git tree format and restrict the tree query to the changed paths.
+
+**Why:** Tab separators were absent from the callback output, and a full workspace tree exceeded its output budget. A tab-based parser consequently found no baseline entries, making a conflict check falsely appear clean.
+
+**How to apply:** Use `git ls-tree -r --format="%(objectname) %(path)" HEAD -- <changed paths>`, validate parsed hash/path entries, and confirm every modified tracked file has a baseline before creating a remote commit.

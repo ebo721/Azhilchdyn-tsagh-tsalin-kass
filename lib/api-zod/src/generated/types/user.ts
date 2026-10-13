@@ -12,5 +12,6 @@ export interface User {
   username: string;
   /** @nullable */
   fullName?: string | null;
+  custodianEmployeeIds?: number[];
   role: UserRole;
 }

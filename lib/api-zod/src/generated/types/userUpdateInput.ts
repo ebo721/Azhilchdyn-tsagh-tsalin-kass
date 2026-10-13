@@ -18,4 +18,6 @@ export interface UserUpdateInput {
      * @nullable
      */
   fullName?: string | null;
+  /** @items.minimum 1 */
+  custodianEmployeeIds?: number[];
 }

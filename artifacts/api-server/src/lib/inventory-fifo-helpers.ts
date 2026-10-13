@@ -155,6 +155,7 @@ export async function inventoryPurchaseResponse(id: number) {
     accountName: row.accountName,
     supplierName: purchase.documentName,
     responsibleUserId: purchase.responsibleUserId,
+    responsibleEmployeeId: purchase.responsibleEmployeeId,
     responsibleName: purchase.responsibleName,
     hasReceipt: purchase.hasReceipt,
     date: purchase.date,

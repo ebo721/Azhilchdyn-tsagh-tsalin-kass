@@ -17,6 +17,11 @@ export interface InventoryPurchaseInput {
      * @nullable
      */
   responsibleUserId?: number | null;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  responsibleEmployeeId?: number | null;
   hasReceipt: boolean;
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
   date: string;
