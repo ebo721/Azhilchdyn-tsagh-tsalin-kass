@@ -87,12 +87,16 @@ import type {
   FixedAsset,
   FixedAssetInput,
   GetHourBalanceParams,
+  GetInventoryClosingQuoteParams,
   GetPayroll409,
   GetPayrollAdvanceParams,
   GetPayrollParams,
   HealthStatus,
   HourBalanceLine,
   ImportKapitronBankTransactionsParams,
+  InventoryClosingBalance,
+  InventoryClosingBalanceInput,
+  InventoryClosingQuote,
   InventoryCustodian,
   InventoryIssue,
   InventoryIssueInput,
@@ -9489,6 +9493,416 @@ export const useDeleteInventorySupplier = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteInventorySupplierMutationOptions(options));
+    }
+
+export const getGetInventoryClosingQuoteUrl = (params: GetInventoryClosingQuoteParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/inventory/closing-balances/quote?${stringifiedParams}` : `/api/inventory/closing-balances/quote`
+}
+
+export const getInventoryClosingQuote = async (params: GetInventoryClosingQuoteParams, options?: Parameters<typeof customFetch>[1]): Promise<InventoryClosingQuote> => {
+
+  return customFetch<InventoryClosingQuote>(getGetInventoryClosingQuoteUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetInventoryClosingQuoteQueryKey = (params?: GetInventoryClosingQuoteParams,) => {
+    return [
+    `/api/inventory/closing-balances/quote`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetInventoryClosingQuoteQueryOptions = <TData = Awaited<ReturnType<typeof getInventoryClosingQuote>>, TError = ErrorType<unknown>>(params: GetInventoryClosingQuoteParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getInventoryClosingQuote>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetInventoryClosingQuoteQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getInventoryClosingQuote>>> = ({ signal }) => getInventoryClosingQuote(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getInventoryClosingQuote>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetInventoryClosingQuoteQueryResult = NonNullable<Awaited<ReturnType<typeof getInventoryClosingQuote>>>
+export type GetInventoryClosingQuoteQueryError = ErrorType<unknown>
+
+
+
+export function useGetInventoryClosingQuote<TData = Awaited<ReturnType<typeof getInventoryClosingQuote>>, TError = ErrorType<unknown>>(
+ params: GetInventoryClosingQuoteParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getInventoryClosingQuote>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetInventoryClosingQuoteQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListInventoryClosingBalancesUrl = () => {
+
+
+
+
+  return `/api/inventory/closing-balances`
+}
+
+export const listInventoryClosingBalances = async ( options?: Parameters<typeof customFetch>[1]): Promise<InventoryClosingBalance[]> => {
+
+  return customFetch<InventoryClosingBalance[]>(getListInventoryClosingBalancesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListInventoryClosingBalancesQueryKey = () => {
+    return [
+    `/api/inventory/closing-balances`
+    ] as const;
+    }
+
+
+export const getListInventoryClosingBalancesQueryOptions = <TData = Awaited<ReturnType<typeof listInventoryClosingBalances>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInventoryClosingBalances>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListInventoryClosingBalancesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listInventoryClosingBalances>>> = ({ signal }) => listInventoryClosingBalances({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listInventoryClosingBalances>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListInventoryClosingBalancesQueryResult = NonNullable<Awaited<ReturnType<typeof listInventoryClosingBalances>>>
+export type ListInventoryClosingBalancesQueryError = ErrorType<unknown>
+
+
+
+export function useListInventoryClosingBalances<TData = Awaited<ReturnType<typeof listInventoryClosingBalances>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInventoryClosingBalances>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListInventoryClosingBalancesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateInventoryClosingBalanceUrl = () => {
+
+
+
+
+  return `/api/inventory/closing-balances`
+}
+
+export const createInventoryClosingBalance = async (inventoryClosingBalanceInput: InventoryClosingBalanceInput, options?: Parameters<typeof customFetch>[1]): Promise<InventoryClosingBalance> => {
+
+  return customFetch<InventoryClosingBalance>(getCreateInventoryClosingBalanceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(inventoryClosingBalanceInput)
+  }
+);}
+
+
+
+
+
+export const getCreateInventoryClosingBalanceMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createInventoryClosingBalance>>, TError,{data: BodyType<InventoryClosingBalanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createInventoryClosingBalance>>, TError,{data: BodyType<InventoryClosingBalanceInput>}, TContext> => {
+
+const mutationKey = ['createInventoryClosingBalance'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createInventoryClosingBalance>>, {data: BodyType<InventoryClosingBalanceInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createInventoryClosingBalance(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateInventoryClosingBalanceMutationResult = NonNullable<Awaited<ReturnType<typeof createInventoryClosingBalance>>>
+    export type CreateInventoryClosingBalanceMutationBody = BodyType<InventoryClosingBalanceInput>
+    export type CreateInventoryClosingBalanceMutationError = ErrorType<unknown>
+
+    export const useCreateInventoryClosingBalance = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createInventoryClosingBalance>>, TError,{data: BodyType<InventoryClosingBalanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createInventoryClosingBalance>>,
+        TError,
+        {data: BodyType<InventoryClosingBalanceInput>},
+        TContext
+      > => {
+      return useMutation(getCreateInventoryClosingBalanceMutationOptions(options));
+    }
+
+export const getUpdateInventoryClosingBalanceUrl = (id: number,) => {
+
+
+
+
+  return `/api/inventory/closing-balances/${id}`
+}
+
+export const updateInventoryClosingBalance = async (id: number,
+    inventoryClosingBalanceInput: InventoryClosingBalanceInput, options?: Parameters<typeof customFetch>[1]): Promise<InventoryClosingBalance> => {
+
+  return customFetch<InventoryClosingBalance>(getUpdateInventoryClosingBalanceUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(inventoryClosingBalanceInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateInventoryClosingBalanceMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInventoryClosingBalance>>, TError,{id: number;data: BodyType<InventoryClosingBalanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateInventoryClosingBalance>>, TError,{id: number;data: BodyType<InventoryClosingBalanceInput>}, TContext> => {
+
+const mutationKey = ['updateInventoryClosingBalance'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateInventoryClosingBalance>>, {id: number;data: BodyType<InventoryClosingBalanceInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateInventoryClosingBalance(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateInventoryClosingBalanceMutationResult = NonNullable<Awaited<ReturnType<typeof updateInventoryClosingBalance>>>
+    export type UpdateInventoryClosingBalanceMutationBody = BodyType<InventoryClosingBalanceInput>
+    export type UpdateInventoryClosingBalanceMutationError = ErrorType<unknown>
+
+    export const useUpdateInventoryClosingBalance = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInventoryClosingBalance>>, TError,{id: number;data: BodyType<InventoryClosingBalanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateInventoryClosingBalance>>,
+        TError,
+        {id: number;data: BodyType<InventoryClosingBalanceInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateInventoryClosingBalanceMutationOptions(options));
+    }
+
+export const getDeleteInventoryClosingBalanceUrl = (id: number,) => {
+
+
+
+
+  return `/api/inventory/closing-balances/${id}`
+}
+
+export const deleteInventoryClosingBalance = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteInventoryClosingBalanceUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteInventoryClosingBalanceMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteInventoryClosingBalance>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteInventoryClosingBalance>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteInventoryClosingBalance'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteInventoryClosingBalance>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteInventoryClosingBalance(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteInventoryClosingBalanceMutationResult = NonNullable<Awaited<ReturnType<typeof deleteInventoryClosingBalance>>>
+
+    export type DeleteInventoryClosingBalanceMutationError = ErrorType<unknown>
+
+    export const useDeleteInventoryClosingBalance = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteInventoryClosingBalance>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteInventoryClosingBalance>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteInventoryClosingBalanceMutationOptions(options));
+    }
+
+export const getConfirmInventoryClosingIssueUrl = (id: number,) => {
+
+
+
+
+  return `/api/inventory/issues/${id}/confirm`
+}
+
+export const confirmInventoryClosingIssue = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<InventoryClosingBalance> => {
+
+  return customFetch<InventoryClosingBalance>(getConfirmInventoryClosingIssueUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getConfirmInventoryClosingIssueMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmInventoryClosingIssue>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmInventoryClosingIssue>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['confirmInventoryClosingIssue'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmInventoryClosingIssue>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  confirmInventoryClosingIssue(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmInventoryClosingIssueMutationResult = NonNullable<Awaited<ReturnType<typeof confirmInventoryClosingIssue>>>
+
+    export type ConfirmInventoryClosingIssueMutationError = ErrorType<unknown>
+
+    export const useConfirmInventoryClosingIssue = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmInventoryClosingIssue>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmInventoryClosingIssue>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getConfirmInventoryClosingIssueMutationOptions(options));
     }
 
 export const getListInventoryOpeningBalancesUrl = () => {

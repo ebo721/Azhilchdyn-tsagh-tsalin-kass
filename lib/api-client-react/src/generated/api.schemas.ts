@@ -2071,6 +2071,97 @@ export interface InventoryMaterialRequest {
   lines: InventoryMaterialRequestLine[];
 }
 
+export type InventoryClosingQuotePriceSource = typeof InventoryClosingQuotePriceSource[keyof typeof InventoryClosingQuotePriceSource];
+
+
+export const InventoryClosingQuotePriceSource = {
+  purchase: 'purchase',
+  opening: 'opening',
+  none: 'none',
+} as const;
+
+export interface InventoryClosingQuote {
+  inventoryItemId: number;
+  date: string;
+  bookQuantity: number;
+  /** @nullable */
+  unitPrice: number | null;
+  priceSource: InventoryClosingQuotePriceSource;
+}
+
+export interface InventoryClosingBalanceInput {
+  /** @minimum 1 */
+  inventoryItemId: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  date: string;
+  /**
+     * @minimum 0
+     * @maximum 999999999.999
+     */
+  quantity: number;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  responsibleEmployeeId: number | null;
+}
+
+export type InventoryClosingBalanceMaterialType = typeof InventoryClosingBalanceMaterialType[keyof typeof InventoryClosingBalanceMaterialType];
+
+
+export const InventoryClosingBalanceMaterialType = {
+  food: 'food',
+  supply: 'supply',
+} as const;
+
+export type InventoryClosingBalancePriceSource = typeof InventoryClosingBalancePriceSource[keyof typeof InventoryClosingBalancePriceSource];
+
+
+export const InventoryClosingBalancePriceSource = {
+  purchase: 'purchase',
+  opening: 'opening',
+} as const;
+
+export type InventoryClosingBalanceStatus = typeof InventoryClosingBalanceStatus[keyof typeof InventoryClosingBalanceStatus];
+
+
+export const InventoryClosingBalanceStatus = {
+  recorded: 'recorded',
+  pending: 'pending',
+  confirmed: 'confirmed',
+} as const;
+
+export interface InventoryClosingBalance {
+  id: number;
+  inventoryItemId: number;
+  materialType: InventoryClosingBalanceMaterialType;
+  itemName: string;
+  unit: string;
+  date: string;
+  quantity: number;
+  bookQuantity: number;
+  unitPrice: number;
+  priceSource: InventoryClosingBalancePriceSource;
+  totalAmount: number;
+  /** Book minus counted quantity; positive is shortage */
+  difference: number;
+  /** @nullable */
+  issueId: number | null;
+  status: InventoryClosingBalanceStatus;
+  /** @nullable */
+  responsibleEmployeeId: number | null;
+  responsibleName: string;
+  createdAt: string;
+}
+
+export type InventoryIssueStatus = typeof InventoryIssueStatus[keyof typeof InventoryIssueStatus];
+
+
+export const InventoryIssueStatus = {
+  pending: 'pending',
+  confirmed: 'confirmed',
+} as const;
+
 export interface InventoryIssue {
   id: number;
   inventoryItemId: number;
@@ -2081,6 +2172,9 @@ export interface InventoryIssue {
   /** FIFO cost of the stock consumed by this issue */
   totalCost: number;
   purpose: string;
+  status?: InventoryIssueStatus;
+  /** @nullable */
+  closingBalanceId?: number | null;
   /** @nullable */
   responsibleUserId?: number | null;
   /** @nullable */
@@ -2537,6 +2631,17 @@ export type ListMealScheduleParams = {
  * @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$
  */
 weekStart: string;
+};
+
+export type GetInventoryClosingQuoteParams = {
+/**
+ * @minimum 1
+ */
+inventoryItemId: number;
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+date: string;
 };
 
 export type ListFixedAssetBankSuggestionsParams = {

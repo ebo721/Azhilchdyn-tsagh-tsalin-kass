@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { InventoryIssueStatus } from './inventoryIssueStatus';
 
 export interface InventoryIssue {
   id: number;
@@ -16,6 +17,9 @@ export interface InventoryIssue {
   /** FIFO cost of the stock consumed by this issue */
   totalCost: number;
   purpose: string;
+  status?: InventoryIssueStatus;
+  /** @nullable */
+  closingBalanceId?: number | null;
   /** @nullable */
   responsibleUserId?: number | null;
   /** @nullable */

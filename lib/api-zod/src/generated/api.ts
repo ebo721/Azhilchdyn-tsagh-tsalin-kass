@@ -3676,6 +3676,165 @@ export const DeleteInventorySupplierParams = zod.object({
 export const DeleteInventorySupplierResponse = zod.void()
 
 
+
+export const getInventoryClosingQuoteQueryDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const GetInventoryClosingQuoteQueryParams = zod.object({
+  "inventoryItemId": zod.coerce.number().int().min(1),
+  "date": zod.coerce.string().regex(getInventoryClosingQuoteQueryDateRegExp)
+})
+
+export const GetInventoryClosingQuoteResponse = zod.object({
+  "inventoryItemId": zod.number().int(),
+  "date": zod.string(),
+  "bookQuantity": zod.number(),
+  "unitPrice": zod.number().nullable(),
+  "priceSource": zod.enum(['purchase', 'opening', 'none'])
+})
+
+
+export const ListInventoryClosingBalancesResponseItem = zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "materialType": zod.enum(['food', 'supply']),
+  "itemName": zod.string(),
+  "unit": zod.string(),
+  "date": zod.string(),
+  "quantity": zod.number(),
+  "bookQuantity": zod.number(),
+  "unitPrice": zod.number(),
+  "priceSource": zod.enum(['purchase', 'opening']),
+  "totalAmount": zod.number(),
+  "difference": zod.number().describe('Book minus counted quantity; positive is shortage'),
+  "issueId": zod.number().int().nullable(),
+  "status": zod.enum(['recorded', 'pending', 'confirmed']),
+  "responsibleEmployeeId": zod.number().int().nullable(),
+  "responsibleName": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListInventoryClosingBalancesResponse = zod.array(ListInventoryClosingBalancesResponseItem)
+
+
+
+export const createInventoryClosingBalanceBodyDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const createInventoryClosingBalanceBodyQuantityMin = 0;
+export const createInventoryClosingBalanceBodyQuantityMax = 999999999.999;
+export const createInventoryClosingBalanceBodyQuantityMultipleOf = 0.001;
+
+
+
+
+export const CreateInventoryClosingBalanceBody = zod.object({
+  "inventoryItemId": zod.number().int().min(1),
+  "date": zod.string().regex(createInventoryClosingBalanceBodyDateRegExp),
+  "quantity": zod.number().min(createInventoryClosingBalanceBodyQuantityMin).max(createInventoryClosingBalanceBodyQuantityMax).multipleOf(createInventoryClosingBalanceBodyQuantityMultipleOf),
+  "responsibleEmployeeId": zod.number().int().min(1).nullable()
+})
+
+export const CreateInventoryClosingBalanceResponse = zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "materialType": zod.enum(['food', 'supply']),
+  "itemName": zod.string(),
+  "unit": zod.string(),
+  "date": zod.string(),
+  "quantity": zod.number(),
+  "bookQuantity": zod.number(),
+  "unitPrice": zod.number(),
+  "priceSource": zod.enum(['purchase', 'opening']),
+  "totalAmount": zod.number(),
+  "difference": zod.number().describe('Book minus counted quantity; positive is shortage'),
+  "issueId": zod.number().int().nullable(),
+  "status": zod.enum(['recorded', 'pending', 'confirmed']),
+  "responsibleEmployeeId": zod.number().int().nullable(),
+  "responsibleName": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+
+
+
+export const UpdateInventoryClosingBalanceParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+
+export const updateInventoryClosingBalanceBodyDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const updateInventoryClosingBalanceBodyQuantityMin = 0;
+export const updateInventoryClosingBalanceBodyQuantityMax = 999999999.999;
+export const updateInventoryClosingBalanceBodyQuantityMultipleOf = 0.001;
+
+
+
+
+export const UpdateInventoryClosingBalanceBody = zod.object({
+  "inventoryItemId": zod.number().int().min(1),
+  "date": zod.string().regex(updateInventoryClosingBalanceBodyDateRegExp),
+  "quantity": zod.number().min(updateInventoryClosingBalanceBodyQuantityMin).max(updateInventoryClosingBalanceBodyQuantityMax).multipleOf(updateInventoryClosingBalanceBodyQuantityMultipleOf),
+  "responsibleEmployeeId": zod.number().int().min(1).nullable()
+})
+
+export const UpdateInventoryClosingBalanceResponse = zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "materialType": zod.enum(['food', 'supply']),
+  "itemName": zod.string(),
+  "unit": zod.string(),
+  "date": zod.string(),
+  "quantity": zod.number(),
+  "bookQuantity": zod.number(),
+  "unitPrice": zod.number(),
+  "priceSource": zod.enum(['purchase', 'opening']),
+  "totalAmount": zod.number(),
+  "difference": zod.number().describe('Book minus counted quantity; positive is shortage'),
+  "issueId": zod.number().int().nullable(),
+  "status": zod.enum(['recorded', 'pending', 'confirmed']),
+  "responsibleEmployeeId": zod.number().int().nullable(),
+  "responsibleName": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+
+
+
+export const DeleteInventoryClosingBalanceParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const DeleteInventoryClosingBalanceResponse = zod.void()
+
+
+
+
+
+export const ConfirmInventoryClosingIssueParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const ConfirmInventoryClosingIssueResponse = zod.object({
+  "id": zod.number().int(),
+  "inventoryItemId": zod.number().int(),
+  "materialType": zod.enum(['food', 'supply']),
+  "itemName": zod.string(),
+  "unit": zod.string(),
+  "date": zod.string(),
+  "quantity": zod.number(),
+  "bookQuantity": zod.number(),
+  "unitPrice": zod.number(),
+  "priceSource": zod.enum(['purchase', 'opening']),
+  "totalAmount": zod.number(),
+  "difference": zod.number().describe('Book minus counted quantity; positive is shortage'),
+  "issueId": zod.number().int().nullable(),
+  "status": zod.enum(['recorded', 'pending', 'confirmed']),
+  "responsibleEmployeeId": zod.number().int().nullable(),
+  "responsibleName": zod.string(),
+  "createdAt": zod.string()
+})
+
+
 export const ListInventoryOpeningBalancesResponseItem = zod.object({
   "id": zod.number().int(),
   "inventoryItemId": zod.number().int(),
@@ -3963,6 +4122,8 @@ export const ListInventoryIssuesResponseItem = zod.object({
   "quantity": zod.number(),
   "totalCost": zod.number().describe('FIFO cost of the stock consumed by this issue'),
   "purpose": zod.string(),
+  "status": zod.enum(['pending', 'confirmed']).optional(),
+  "closingBalanceId": zod.number().int().nullish(),
   "responsibleUserId": zod.number().int().nullish(),
   "responsibleEmployeeId": zod.number().int().nullish(),
   "responsibleName": zod.string().nullish(),
@@ -4002,6 +4163,8 @@ export const CreateInventoryIssueResponse = zod.object({
   "quantity": zod.number(),
   "totalCost": zod.number().describe('FIFO cost of the stock consumed by this issue'),
   "purpose": zod.string(),
+  "status": zod.enum(['pending', 'confirmed']).optional(),
+  "closingBalanceId": zod.number().int().nullish(),
   "responsibleUserId": zod.number().int().nullish(),
   "responsibleEmployeeId": zod.number().int().nullish(),
   "responsibleName": zod.string().nullish(),
@@ -4044,6 +4207,8 @@ export const UpdateInventoryIssueResponse = zod.object({
   "quantity": zod.number(),
   "totalCost": zod.number().describe('FIFO cost of the stock consumed by this issue'),
   "purpose": zod.string(),
+  "status": zod.enum(['pending', 'confirmed']).optional(),
+  "closingBalanceId": zod.number().int().nullish(),
   "responsibleUserId": zod.number().int().nullish(),
   "responsibleEmployeeId": zod.number().int().nullish(),
   "responsibleName": zod.string().nullish(),
