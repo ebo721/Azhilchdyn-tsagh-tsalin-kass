@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { test, expect } from "@playwright/test";
 import { eq, inArray } from "drizzle-orm";
-import { db, usersTable, mealsTable, mealScheduleSlotsTable, mealScheduleEntriesTable } from "@workspace/db";
+import { db, usersTable, mealsTable, mealScheduleSlotsTable, mealScheduleEntriesTable, deletionRequestsTable } from "@workspace/db";
 import { createStaffSession, hrCookie } from "../src/lib/hr-session.js";
 
 test("click meal to edit type; save several meals in one schedule and retain them after reload", async ({ page, context, baseURL }) => {
@@ -81,3 +81,62 @@ test("click meal to edit type; save several meals in one schedule and retain the
     if (userId) await db.delete(usersTable).where(eq(usersTable.id, userId));
   }
 });
+
+for (const role of ["admin", "technologist"] as const) {
+  test(`${role}: selected meal delete button confirms, cancels, and preserves deletion permissions`, async ({ page, context, baseURL }) => {
+    const suffix = randomUUID();
+    let userId: number | undefined;
+    let mealId: number | undefined;
+    try {
+      const username = `meal-delete-${suffix}`;
+      const [user] = await db.insert(usersTable).values({ username, normalizedUsername: username, role, passwordHash: "unused" }).returning();
+      userId = user.id;
+      await context.addCookies([{ name: hrCookie.name, value: createStaffSession({ ...user, role }), url: baseURL! }]);
+      const [meal] = await db.insert(mealsTable).values({ name: `Устгах UI ${suffix}`, normalizedName: `устгах ui ${suffix}`, category: "1-р хоол", type: "set" }).returning();
+      mealId = meal.id;
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto("/meals");
+      await page.getByTestId("input-search-meals").fill(suffix);
+      await page.getByTestId(`row-meal-${meal.id}`).click();
+      const button = page.getByTestId("button-delete-selected-meal");
+      await button.scrollIntoViewIfNeeded();
+      const bounds = await button.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+      await page.screenshot({ path: `../../.agents/outputs/meal-delete-${role}-mobile.png` });
+      page.once("dialog", async dialog => {
+        expect(dialog.type()).toBe("confirm");
+        expect(dialog.message()).toContain(meal.name);
+        await dialog.dismiss();
+      });
+      await button.click();
+      await expect(page.getByTestId(`row-meal-${meal.id}`)).toBeVisible();
+      page.on("dialog", async dialog => {
+        await dialog.accept();
+      });
+      const responsePromise = page.waitForResponse(response => role === "admin"
+        ? response.request().method() === "DELETE" && response.url().endsWith(`/api/meals/${meal.id}`)
+        : response.request().method() === "POST" && response.url().endsWith("/api/deletion-requests"));
+      await button.click();
+      expect((await responsePromise).ok()).toBe(true);
+      if (role === "admin") {
+        await expect(page.getByTestId(`row-meal-${meal.id}`)).toHaveCount(0);
+        await expect(button).toHaveCount(0);
+      } else {
+        const [queued] = await db.select().from(deletionRequestsTable).where(eq(deletionRequestsTable.targetPath, `/meals/${meal.id}`));
+        expect(queued.status).toBe("pending");
+        expect(queued.requesterRole).toBe(role);
+      }
+      await page.reload();
+      if (role === "admin") await expect(page.getByTestId(`row-meal-${meal.id}`)).toHaveCount(0);
+      else await expect(page.getByTestId(`row-meal-${meal.id}`)).toBeVisible();
+    } finally {
+      if (mealId) {
+        await db.delete(deletionRequestsTable).where(eq(deletionRequestsTable.targetPath, `/meals/${mealId}`));
+        await db.delete(mealsTable).where(eq(mealsTable.id, mealId));
+      }
+      if (userId) await db.delete(usersTable).where(eq(usersTable.id, userId));
+    }
+  });
+}

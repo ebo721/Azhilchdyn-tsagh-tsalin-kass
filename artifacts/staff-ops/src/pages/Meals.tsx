@@ -73,6 +73,7 @@ export function Meals() {
   };
 
   const handleDeleteMeal = (meal: Meal) => {
+    if (deleteMeal.isPending || deletion.isPending) return;
     if (window.confirm(`"${meal.name}" хоолыг устгах уу?`)) {
       if (readOnly) {
         void deletion.request(`/meals/${meal.id}`, meal.name);
@@ -81,7 +82,12 @@ export function Meals() {
           onSuccess: () => {
             qc.invalidateQueries({ queryKey: getListMealsQueryKey() });
             if (selectedMeal?.id === meal.id) setSelectedMeal(null);
-          }
+          },
+          onError: (error) => {
+            const data = 'data' in error ? error.data : null;
+            window.alert(data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
+              ? data.error : 'Хоол устгахад алдаа гарлаа. Дахин оролдоно уу.');
+          },
         });
       }
     }
@@ -169,7 +175,7 @@ export function Meals() {
                           <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); openEditMealInfo(meal); }} data-testid={`button-edit-meal-${meal.id}`}>
                             <Pencil className="size-4" />
                           </Button>
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDeleteMeal(meal); }} data-testid={`button-delete-meal-${meal.id}`}>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" aria-label={`${meal.name} хоолыг устгах`} disabled={deleteMeal.isPending || deletion.isPending} onClick={(e) => { e.stopPropagation(); handleDeleteMeal(meal); }} data-testid={`button-delete-meal-${meal.id}`}>
                             <Trash2 className="size-4" />
                           </Button>
                         </div>
@@ -188,6 +194,8 @@ export function Meals() {
             catalog={catalog}
             onClose={() => setSelectedMeal(null)}
             onEdit={() => openEditMealInfo(meals.find(m => m.id === selectedMeal.id) || selectedMeal)}
+            onDelete={() => handleDeleteMeal(meals.find(m => m.id === selectedMeal.id) || selectedMeal)}
+            deletePending={deleteMeal.isPending || deletion.isPending}
             onUpdate={() => {
               qc.invalidateQueries({ queryKey: getListMealsQueryKey() });
               qc.invalidateQueries({ queryKey: getListInventoryItemsQueryKey() });
@@ -367,12 +375,16 @@ function MealDetailsPanel({
   catalog,
   onClose,
   onEdit,
+  onDelete,
+  deletePending,
   onUpdate
 }: {
   meal: Meal;
   catalog: InventoryItem[];
   onClose: () => void;
   onEdit: () => void;
+  onDelete: () => void;
+  deletePending: boolean;
   onUpdate: () => void;
 }) {
   const createIngredient = useCreateMealIngredient();
@@ -472,9 +484,14 @@ function MealDetailsPanel({
             <span className="text-xs font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400">{meal.category}</span>
             <span className="rounded bg-purple-100 dark:bg-purple-900/50 px-1.5 py-0.5 text-[10px] font-bold text-purple-700 dark:text-purple-300">{mealTypeLabel(meal.type)}</span>
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={onEdit} data-testid="button-edit-selected-meal" className="mb-2">
-            <Pencil className="size-4" />Мэдээлэл засах
-          </Button>
+          <div className="mb-2 flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={onEdit} data-testid="button-edit-selected-meal">
+              <Pencil className="size-4" />Мэдээлэл засах
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={onDelete} disabled={deletePending} data-testid="button-delete-selected-meal" className="text-destructive hover:bg-destructive/10 hover:text-destructive">
+              <Trash2 className="size-4" />Хоол устгах
+            </Button>
+          </div>
           <h2 className="text-xl font-bold tracking-tight text-foreground">{meal.name}</h2>
           <div className="flex items-center gap-4 mt-3">
             <div className="flex items-center gap-1.5 text-sm">
