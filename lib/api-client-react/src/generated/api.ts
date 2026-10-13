@@ -93,6 +93,7 @@ import type {
   HealthStatus,
   HourBalanceLine,
   ImportKapitronBankTransactionsParams,
+  InventoryCustodian,
   InventoryIssue,
   InventoryIssueInput,
   InventoryItem,
@@ -203,6 +204,77 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getListInventoryCustodiansUrl = () => {
+
+
+
+
+  return `/api/inventory/custodians`
+}
+
+export const listInventoryCustodians = async ( options?: Parameters<typeof customFetch>[1]): Promise<InventoryCustodian[]> => {
+
+  return customFetch<InventoryCustodian[]>(getListInventoryCustodiansUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListInventoryCustodiansQueryKey = () => {
+    return [
+    `/api/inventory/custodians`
+    ] as const;
+    }
+
+
+export const getListInventoryCustodiansQueryOptions = <TData = Awaited<ReturnType<typeof listInventoryCustodians>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInventoryCustodians>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListInventoryCustodiansQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listInventoryCustodians>>> = ({ signal }) => listInventoryCustodians({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listInventoryCustodians>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListInventoryCustodiansQueryResult = NonNullable<Awaited<ReturnType<typeof listInventoryCustodians>>>
+export type ListInventoryCustodiansQueryError = ErrorType<unknown>
+
+
+
+export function useListInventoryCustodians<TData = Awaited<ReturnType<typeof listInventoryCustodians>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInventoryCustodians>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListInventoryCustodiansQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetAuthSessionUrl = () => {
 

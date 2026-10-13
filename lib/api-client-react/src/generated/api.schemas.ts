@@ -289,6 +289,8 @@ export const UserRole = {
 export interface User {
   id: number;
   username: string;
+  /** @nullable */
+  fullName?: string | null;
   role: UserRole;
 }
 
@@ -310,6 +312,11 @@ export interface UserUpdateInput {
   role: UserUpdateInputRole;
   /** @minLength 1 */
   newPassword?: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  fullName?: string | null;
 }
 
 export type ChartOfAccountType = typeof ChartOfAccountType[keyof typeof ChartOfAccountType];
@@ -1395,6 +1402,11 @@ export interface InventoryPurchaseInput {
   materialType: InventoryPurchaseInputMaterialType;
   /** @minLength 1 */
   supplierName: string;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  responsibleUserId?: number | null;
   hasReceipt: boolean;
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
   date: string;
@@ -1805,6 +1817,11 @@ export interface InventoryPurchaseItem {
   totalAmount: number;
 }
 
+export interface InventoryCustodian {
+  id: number;
+  name: string;
+}
+
 export type InventoryPurchaseMaterialType = typeof InventoryPurchaseMaterialType[keyof typeof InventoryPurchaseMaterialType];
 
 
@@ -1820,6 +1837,10 @@ export interface InventoryPurchase {
   accountCode: string | null;
   accountName: string | null;
   supplierName: string;
+  /** @nullable */
+  responsibleUserId?: number | null;
+  /** @nullable */
+  responsibleName?: string | null;
   hasReceipt: boolean;
   date: string;
   totalAmount: number;
@@ -2050,6 +2071,10 @@ export interface InventoryIssue {
   /** FIFO cost of the stock consumed by this issue */
   totalCost: number;
   purpose: string;
+  /** @nullable */
+  responsibleUserId?: number | null;
+  /** @nullable */
+  responsibleName?: string | null;
   createdAt: string;
 }
 
@@ -2064,6 +2089,11 @@ export interface InventoryIssueInput {
   quantity: number;
   /** @minLength 1 */
   purpose: string;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  responsibleUserId?: number | null;
 }
 
 export interface OperatingExpense {

@@ -154,6 +154,8 @@ export async function inventoryPurchaseResponse(id: number) {
     accountCode: row.accountCode,
     accountName: row.accountName,
     supplierName: purchase.documentName,
+    responsibleUserId: purchase.responsibleUserId,
+    responsibleName: purchase.responsibleName,
     hasReceipt: purchase.hasReceipt,
     date: purchase.date,
     totalAmount: Number(purchase.totalAmount),

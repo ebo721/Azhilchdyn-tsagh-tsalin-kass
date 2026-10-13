@@ -12,6 +12,11 @@ export interface InventoryPurchaseInput {
   materialType: InventoryPurchaseInputMaterialType;
   /** @minLength 1 */
   supplierName: string;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  responsibleUserId?: number | null;
   hasReceipt: boolean;
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
   date: string;

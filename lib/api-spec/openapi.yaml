@@ -33,6 +33,19 @@ tags:
   - name: journal
     description: General journal and accounting reports
 paths:
+  /inventory/custodians:
+    get:
+      operationId: listInventoryCustodians
+      tags: [Inventory]
+      responses:
+        "200":
+          description: Named warehouse users available as inventory custodians
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryCustodian"
   /auth/me:
     get:
       operationId: getAuthSession
@@ -2958,6 +2971,7 @@ components:
       properties:
         id: { type: integer }
         username: { type: string }
+        fullName: { type: ["string", "null"] }
         role: { type: string, enum: [admin, hr, accountant, warehouse, viewer, technologist] }
     UserUpdateInput:
       type: object
@@ -2966,6 +2980,7 @@ components:
         username: { type: string, minLength: 1 }
         role: { type: string, enum: [admin, hr, accountant, warehouse, viewer, technologist] }
         newPassword: { type: string, minLength: 1 }
+        fullName: { type: ["string", "null"], maxLength: 120 }
     ChartOfAccount:
       type: object
       required: [id, code, name, type, isActive, createdAt]
@@ -3914,6 +3929,12 @@ components:
         quantity: { type: number }
         unitPrice: { type: number }
         totalAmount: { type: number }
+    InventoryCustodian:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer }
+        name: { type: string }
     InventoryPurchase:
       type: object
       required: [id, materialType, accountId, accountCode, accountName, supplierName, hasReceipt, date, totalAmount, paid, paymentGroupBankTransactionId, createdAt, editable, items]
@@ -3926,6 +3947,8 @@ components:
         accountCode: { type: string, nullable: true }
         accountName: { type: string, nullable: true }
         supplierName: { type: string }
+        responsibleUserId: { type: ["integer", "null"] }
+        responsibleName: { type: ["string", "null"] }
         hasReceipt: { type: boolean }
         date: { type: string }
         totalAmount: { type: number }
@@ -3959,6 +3982,7 @@ components:
           type: string
           enum: [food, supply]
         supplierName: { type: string, minLength: 1 }
+        responsibleUserId: { type: ["integer", "null"], minimum: 1 }
         hasReceipt: { type: boolean }
         date:
           type: string
@@ -4141,6 +4165,8 @@ components:
         quantity: { type: number }
         totalCost: { type: number, description: "FIFO cost of the stock consumed by this issue" }
         purpose: { type: string }
+        responsibleUserId: { type: ["integer", "null"] }
+        responsibleName: { type: ["string", "null"] }
         createdAt: { type: string }
     InventoryIssueInput:
       type: object
@@ -4152,6 +4178,7 @@ components:
           pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$'
         quantity: { type: number, exclusiveMinimum: 0, maximum: 999999999.999, multipleOf: 0.001 }
         purpose: { type: string, minLength: 1 }
+        responsibleUserId: { type: ["integer", "null"], minimum: 1 }
     OperatingExpense:
       type: object
       required: [id, description, category, accountId, date, amount, paymentDate, paymentAmount, bankTransactionId, cashTransactionId, createdAt]

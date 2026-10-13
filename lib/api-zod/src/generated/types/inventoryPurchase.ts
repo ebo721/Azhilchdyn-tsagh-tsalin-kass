@@ -15,6 +15,10 @@ export interface InventoryPurchase {
   accountCode: string | null;
   accountName: string | null;
   supplierName: string;
+  /** @nullable */
+  responsibleUserId?: number | null;
+  /** @nullable */
+  responsibleName?: string | null;
   hasReceipt: boolean;
   date: string;
   totalAmount: number;

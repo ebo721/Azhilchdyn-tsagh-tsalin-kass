@@ -65,6 +65,7 @@ export const employeeSalaryHistoryTable = pgTable("employee_salary_history", {
 
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
+  fullName: text("full_name"),
   username: text("username").notNull(),
   normalizedUsername: text("normalized_username").notNull().unique(),
   role: text("role").notNull(),
@@ -386,6 +387,8 @@ export const bankTransactionsTable = pgTable("bank_transactions", {
 
 export const inventoryPurchasesTable = pgTable("inventory_purchases", {
   id: serial("id").primaryKey(),
+  responsibleUserId: integer("responsible_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+  responsibleName: text("responsible_name"),
   materialType: text("material_type").notNull().default("supply"),
   accountId: integer("account_id").references(() => chartOfAccountsTable.id, { onDelete: "restrict" }),
   documentName: text("document_name").notNull().default("Худалдан авалтын баримт"),
@@ -575,6 +578,8 @@ export const inventoryOpeningBalancesTable = pgTable("inventory_opening_balances
 
 export const inventoryIssuesTable = pgTable("inventory_issues", {
   id: serial("id").primaryKey(),
+  responsibleUserId: integer("responsible_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+  responsibleName: text("responsible_name"),
   inventoryItemId: integer("inventory_item_id").notNull().references(() => inventoryItemsTable.id, { onDelete: "restrict" }),
   date: date("date", { mode: "string" }).notNull(),
   quantity: numeric("quantity", { precision: 14, scale: 3, mode: "number" }).notNull(),

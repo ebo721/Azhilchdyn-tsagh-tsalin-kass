@@ -16,5 +16,9 @@ export interface InventoryIssue {
   /** FIFO cost of the stock consumed by this issue */
   totalCost: number;
   purpose: string;
+  /** @nullable */
+  responsibleUserId?: number | null;
+  /** @nullable */
+  responsibleName?: string | null;
   createdAt: string;
 }
