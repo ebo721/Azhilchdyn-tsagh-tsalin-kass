@@ -6,6 +6,8 @@ import {
   db,
   inventoryIssueConsumptionsTable,
   inventoryItemsTable,
+  inventoryOpeningBalancesTable,
+  inventoryOpeningConsumptionsTable,
   inventoryPurchaseItemsTable,
   inventoryPurchasesTable,
   inventoryPurchasePaymentGroupMembersTable,
@@ -13,6 +15,7 @@ import {
 } from "@workspace/db";
 import { money } from "./date-utils.js";
 import type { Tx } from "./route-shared.js";
+import { planInventoryLots, stockQuantity, type InventoryConsumption } from "./inventory-lot-plan.js";
 
 export class InventoryBankPaymentConflictError extends Error {}
 export class OperatingExpenseBankPaymentConflictError extends Error {}
@@ -27,9 +30,12 @@ export { descriptionTokens, bankSuggestionScore as inventoryBankSuggestionScore 
  * lots don't cover the requested quantity.
  */
 export async function planInventoryFifoConsumption(tx: Tx, inventoryItemId: number, quantity: number) {
+  await tx.select({ id: inventoryItemsTable.id }).from(inventoryItemsTable)
+    .where(eq(inventoryItemsTable.id, inventoryItemId)).for("update");
   const lots = await tx
     .select({
       id: inventoryPurchaseItemsTable.id,
+      date: inventoryPurchasesTable.date,
       remainingQuantity: inventoryPurchaseItemsTable.remainingQuantity,
       unitPrice: inventoryPurchaseItemsTable.unitPrice,
     })
@@ -41,17 +47,13 @@ export async function planInventoryFifoConsumption(tx: Tx, inventoryItemId: numb
     ))
     .orderBy(inventoryPurchasesTable.date, inventoryPurchaseItemsTable.id)
     .for("update");
-  let remaining = quantity;
-  const consumptions: Array<{ purchaseItemId: number; quantity: number; unitPrice: number }> = [];
-  for (const lot of lots) {
-    if (remaining <= 0) break;
-    const take = Math.min(Number(lot.remainingQuantity), remaining);
-    if (take <= 0) continue;
-    consumptions.push({ purchaseItemId: lot.id, quantity: take, unitPrice: Number(lot.unitPrice) });
-    remaining = money(remaining - take);
-  }
-  if (remaining > 0.0005) return null;
-  return consumptions;
+  const openingLots = await tx.select().from(inventoryOpeningBalancesTable)
+    .where(and(eq(inventoryOpeningBalancesTable.inventoryItemId, inventoryItemId), gt(inventoryOpeningBalancesTable.remainingQuantity, 0)))
+    .orderBy(inventoryOpeningBalancesTable.date, inventoryOpeningBalancesTable.id).for("update");
+  return planInventoryLots([
+    ...lots.map((lot) => ({ ...lot, source: "purchase" as const })),
+    ...openingLots.map((lot) => ({ ...lot, source: "opening" as const })),
+  ], quantity);
 }
 
 /** Writes a plan from planInventoryFifoConsumption: draws down the lots, records the
@@ -60,19 +62,32 @@ export async function applyInventoryFifoConsumption(
   tx: Tx,
   issueId: number,
   inventoryItemId: number,
-  consumptions: Array<{ purchaseItemId: number; quantity: number; unitPrice: number }>,
+  consumptions: InventoryConsumption[],
 ) {
   for (const consumption of consumptions) {
-    await tx.update(inventoryPurchaseItemsTable)
-      .set({ remainingQuantity: sql`${inventoryPurchaseItemsTable.remainingQuantity} - ${consumption.quantity}` })
-      .where(eq(inventoryPurchaseItemsTable.id, consumption.purchaseItemId));
+    if (consumption.purchaseItemId !== undefined) {
+      await tx.update(inventoryPurchaseItemsTable)
+        .set({ remainingQuantity: sql`${inventoryPurchaseItemsTable.remainingQuantity} - ${consumption.quantity}` })
+        .where(eq(inventoryPurchaseItemsTable.id, consumption.purchaseItemId));
+    } else if (consumption.openingBalanceId !== undefined) {
+      await tx.update(inventoryOpeningBalancesTable)
+        .set({ remainingQuantity: sql`${inventoryOpeningBalancesTable.remainingQuantity} - ${consumption.quantity}` })
+        .where(eq(inventoryOpeningBalancesTable.id, consumption.openingBalanceId));
+    }
   }
-  if (consumptions.length > 0) {
+  const purchased = consumptions.filter((line) => line.purchaseItemId !== undefined);
+  const opening = consumptions.filter((line) => line.openingBalanceId !== undefined);
+  if (purchased.length > 0) {
     await tx.insert(inventoryIssueConsumptionsTable).values(
-      consumptions.map((consumption) => ({ issueId, ...consumption })),
+      purchased.map((line) => ({ issueId, purchaseItemId: line.purchaseItemId!, quantity: line.quantity, unitPrice: line.unitPrice })),
     );
   }
-  const totalQuantity = money(consumptions.reduce((total, consumption) => total + consumption.quantity, 0));
+  if (opening.length > 0) {
+    await tx.insert(inventoryOpeningConsumptionsTable).values(
+      opening.map((line) => ({ issueId, openingBalanceId: line.openingBalanceId!, quantity: line.quantity, unitPrice: line.unitPrice })),
+    );
+  }
+  const totalQuantity = stockQuantity(consumptions.reduce((total, consumption) => total + consumption.quantity, 0));
   await tx.update(inventoryItemsTable)
     .set({ quantity: sql`${inventoryItemsTable.quantity} - ${totalQuantity}` })
     .where(eq(inventoryItemsTable.id, inventoryItemId));
@@ -83,19 +98,28 @@ export async function applyInventoryFifoConsumption(
  * consumed quantity back to its original lots and to the item's total, then
  * clears the consumption ledger for this issue. */
 export async function reverseInventoryFifoConsumption(tx: Tx, issueId: number, inventoryItemId: number) {
+  await tx.select({ id: inventoryItemsTable.id }).from(inventoryItemsTable)
+    .where(eq(inventoryItemsTable.id, inventoryItemId)).for("update");
   const consumptions = await tx.select().from(inventoryIssueConsumptionsTable).where(eq(inventoryIssueConsumptionsTable.issueId, issueId));
+  const opening = await tx.select().from(inventoryOpeningConsumptionsTable).where(eq(inventoryOpeningConsumptionsTable.issueId, issueId));
   for (const consumption of consumptions) {
     await tx.update(inventoryPurchaseItemsTable)
       .set({ remainingQuantity: sql`${inventoryPurchaseItemsTable.remainingQuantity} + ${consumption.quantity}` })
       .where(eq(inventoryPurchaseItemsTable.id, consumption.purchaseItemId));
   }
-  const totalQuantity = money(consumptions.reduce((total, consumption) => total + Number(consumption.quantity), 0));
+  for (const line of opening) {
+    await tx.update(inventoryOpeningBalancesTable)
+      .set({ remainingQuantity: sql`${inventoryOpeningBalancesTable.remainingQuantity} + ${line.quantity}` })
+      .where(eq(inventoryOpeningBalancesTable.id, line.openingBalanceId));
+  }
+  const totalQuantity = stockQuantity([...consumptions, ...opening].reduce((total, consumption) => total + Number(consumption.quantity), 0));
   if (totalQuantity > 0) {
     await tx.update(inventoryItemsTable)
       .set({ quantity: sql`${inventoryItemsTable.quantity} + ${totalQuantity}` })
       .where(eq(inventoryItemsTable.id, inventoryItemId));
   }
   await tx.delete(inventoryIssueConsumptionsTable).where(eq(inventoryIssueConsumptionsTable.issueId, issueId));
+  await tx.delete(inventoryOpeningConsumptionsTable).where(eq(inventoryOpeningConsumptionsTable.issueId, issueId));
 }
 
 export async function inventoryPurchaseResponse(id: number) {

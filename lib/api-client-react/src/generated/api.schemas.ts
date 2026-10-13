@@ -1900,6 +1900,62 @@ export interface InventoryItem {
   createdAt: string;
 }
 
+export type InventoryOpeningBalanceInputMaterialType = typeof InventoryOpeningBalanceInputMaterialType[keyof typeof InventoryOpeningBalanceInputMaterialType];
+
+
+export const InventoryOpeningBalanceInputMaterialType = {
+  food: 'food',
+  supply: 'supply',
+} as const;
+
+export interface InventoryOpeningBalanceInput {
+  /** @minimum 1 */
+  inventoryItemId?: number;
+  materialType: InventoryOpeningBalanceInputMaterialType;
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 1 */
+  category: string;
+  /** @minLength 1 */
+  unit: string;
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
+  date: string;
+  /**
+     * @maximum 999999999.999
+     * @exclusiveMinimum 0
+     */
+  quantity: number;
+  /**
+     * @minimum 0
+     * @maximum 99999999999.99
+     */
+  unitPrice: number;
+}
+
+export type InventoryOpeningBalanceMaterialType = typeof InventoryOpeningBalanceMaterialType[keyof typeof InventoryOpeningBalanceMaterialType];
+
+
+export const InventoryOpeningBalanceMaterialType = {
+  food: 'food',
+  supply: 'supply',
+} as const;
+
+export interface InventoryOpeningBalance {
+  id: number;
+  inventoryItemId: number;
+  materialType: InventoryOpeningBalanceMaterialType;
+  name: string;
+  category: string;
+  unit: string;
+  date: string;
+  quantity: number;
+  remainingQuantity: number;
+  unitPrice: number;
+  totalAmount: number;
+  editable: boolean;
+  createdAt: string;
+}
+
 export interface InventoryItemUpdate {
   /** @minLength 1 */
   name: string;
@@ -2001,7 +2057,10 @@ export interface InventoryIssueInput {
   inventoryItemId: number;
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
   date: string;
-  /** @exclusiveMinimum 0 */
+  /**
+     * @maximum 999999999.999
+     * @exclusiveMinimum 0
+     */
   quantity: number;
   /** @minLength 1 */
   purpose: string;

@@ -28,3 +28,4 @@
 - [PostgreSQL schema fingerprint portability](postgres-schema-fingerprint-portability.md) — PG versions may expose NOT NULL as extra constraints; fingerprint nullability once, through column metadata.
 - [Employee recipient accounts](employee-recipient-accounts.md) — Historical bank reconciliation is not permission to silently replace a saved salary-payment account.
 - [Integration fixture reconciliation](integration-fixture-reconciliation.md) — Parallel list requests can create expense mirrors for another suite's fixtures; clean owned dependencies first.
+- [Historical opening stock](inventory-opening-stock-scope.md) — Opening stock is not a new purchase or payment; financial opening journals need an explicit counteraccount.
