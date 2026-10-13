@@ -46,8 +46,8 @@ export async function bootstrapCanonicalUsers() {
   }
 }
 
-function safeUser(user: { id: number; username: string; role: string }) {
-  return { id: user.id, username: user.username, role: user.role };
+function safeUser(user: { id: number; username: string; role: string; fullName?: string | null }) {
+  return { id: user.id, username: user.username, role: user.role, fullName: user.fullName ?? null };
 }
 
 async function requireAdmin(req: Parameters<typeof getStaffSession>[0], res: Response) {
@@ -92,7 +92,7 @@ router.post("/auth/logout", (_req, res) => {
 
 router.get("/users", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
-  const users = await db.select({ id: usersTable.id, username: usersTable.username, role: usersTable.role })
+  const users = await db.select({ id: usersTable.id, username: usersTable.username, role: usersTable.role, fullName: usersTable.fullName })
     .from(usersTable).orderBy(usersTable.id);
   res.json(users.map(safeUser));
 });
@@ -104,6 +104,12 @@ router.put("/users/:id", async (req, res) => {
   const username = typeof req.body?.username === "string" ? req.body.username.normalize("NFKC").trim().replace(/\s+/g, " ") : "";
   const role = req.body?.role;
   const newPassword = req.body?.newPassword;
+  const rawName = req.body?.fullName;
+  if (rawName !== undefined && rawName !== null && (typeof rawName !== "string" || rawName.length > 120)) {
+    res.status(400).json({ error: "Няравын нэр 120 тэмдэгтээс хэтрэхгүй байна" });
+    return;
+  }
+  const fullName = typeof rawName === "string" ? rawName.normalize("NFKC").trim().replace(/\s+/g, " ") || null : rawName;
   if (!Number.isInteger(id) || !username || !isStaffRole(role) || (newPassword !== undefined && (typeof newPassword !== "string" || !newPassword))) {
     res.status(400).json({ error: "Хэрэглэгчийн мэдээлэл буруу байна" });
     return;
@@ -127,12 +133,13 @@ router.put("/users/:id", async (req, res) => {
     res.status(409).json({ error: "Энэ хэрэглэгчийн нэр ашиглагдаж байна" });
     return;
   }
-  const values: { username: string; normalizedUsername: string; role: string; tokenVersion: number; passwordHash?: string } = {
+  const values: { username: string; normalizedUsername: string; role: string; tokenVersion: number; passwordHash?: string; fullName?: string | null } = {
     username, normalizedUsername, role, tokenVersion: target.tokenVersion + 1,
   };
+  if (fullName !== undefined) values.fullName = fullName;
   if (newPassword) values.passwordHash = await hashPassword(newPassword);
   const [updated] = await db.update(usersTable).set(values).where(eq(usersTable.id, id))
-    .returning({ id: usersTable.id, username: usersTable.username, role: usersTable.role });
+    .returning({ id: usersTable.id, username: usersTable.username, role: usersTable.role, fullName: usersTable.fullName });
   res.json(safeUser(updated!));
 });
 

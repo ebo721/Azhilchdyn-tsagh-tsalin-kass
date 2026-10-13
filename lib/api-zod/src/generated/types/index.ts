@@ -120,6 +120,7 @@ export * from './getPayrollParams';
 export * from './healthStatus';
 export * from './hourBalanceLine';
 export * from './importKapitronBankTransactionsParams';
+export * from './inventoryCustodian';
 export * from './inventoryIssue';
 export * from './inventoryIssueInput';
 export * from './inventoryItem';

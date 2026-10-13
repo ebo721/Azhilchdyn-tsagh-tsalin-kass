@@ -84,7 +84,11 @@
     {
       "filename": "20261011_inventory_opening_balances.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20261012_inventory_custodians.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "2dcf7989317226e6d970f5e06209a0d1571edba242f1c1e81560fc84735c8011"
+  "schemaFingerprint": "dff10c5b29b71456b0dbe191c10094fdfab2e81142535c58fbb0c9ab03ecc3ab"
 }

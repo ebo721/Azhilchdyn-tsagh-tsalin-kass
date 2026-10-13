@@ -13,4 +13,9 @@ export interface UserUpdateInput {
   role: UserUpdateInputRole;
   /** @minLength 1 */
   newPassword?: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  fullName?: string | null;
 }

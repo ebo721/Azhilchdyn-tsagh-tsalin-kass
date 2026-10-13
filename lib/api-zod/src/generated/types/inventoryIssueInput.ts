@@ -17,4 +17,9 @@ export interface InventoryIssueInput {
   quantity: number;
   /** @minLength 1 */
   purpose: string;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  responsibleUserId?: number | null;
 }
