@@ -338,7 +338,10 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
   const [mealIds, setMealIds] = useState<number[]>(cell.entry?.meals.map((meal) => meal.id) || []);
   const [refreshing, setRefreshing] = useState(false);
 
-  const meals = (mealsQuery.data || []).filter((meal) => meal.isActive && meal.type === mealType);
+  const retainedMealIds = new Set(cell.entry?.mealType === mealType ? cell.entry.meals.map((meal) => meal.id) : []);
+  const meals = (mealsQuery.data || []).filter((meal) =>
+    (meal.isActive && meal.type === mealType) || retainedMealIds.has(meal.id));
+  const hasChangedScheduledMeals = meals.some((meal) => retainedMealIds.has(meal.id) && (meal.type !== mealType || !meal.isActive));
   const selectedCalories = mealsQuery.data
     ?.filter((meal) => mealIds.includes(meal.id))
     .reduce((total, meal) => total + (meal.totalCalories || 0), 0) ?? 0;
@@ -360,7 +363,7 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
                   {cell.entry.meals.map((meal) => (
                     <li key={meal.id} className="rounded-lg border border-border bg-background px-3 py-2">
                       <p className="font-medium">{meal.name}</p>
-                      <p className="text-sm text-muted-foreground">{meal.category}</p>
+                       <p className="text-sm text-muted-foreground">{meal.category} · {mealTypeLabel(meal.type)}</p>
                     </li>
                   ))}
                 </ul>
@@ -432,6 +435,9 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
               </select>
               <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Хоол сонгох — олон сонголт</span>
               <p className="mb-3 text-xs text-muted-foreground">Нэг хуваарьт хэд хэдэн хоол нэмж болно. Оруулах хоолнуудаа чагтална уу.</p>
+              {hasChangedScheduledMeals && <p className="mb-3 rounded-lg bg-orange-50 p-3 text-xs text-orange-700 dark:bg-orange-950/30 dark:text-orange-300" data-testid="text-retained-schedule-meals">
+                Өмнө сонгосон хоолны төрөл эсвэл төлөв өөрчлөгдсөн ч хуваарийн сонголт хэвээр хадгалагдана.
+              </p>}
               {mealsQuery.isLoading ? (
                 <div className="h-10 rounded-md border border-input bg-secondary/50 animate-pulse" />
               ) : meals.length === 0 ? (
@@ -452,7 +458,7 @@ function EntryModal({ cell, weekStart, onClose, onRequestMaterial, readOnly }: {
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-semibold">{meal.name}</span>
-                        <span className="block text-xs text-muted-foreground">{meal.category} · {meal.totalCalories} ккал</span>
+                        <span className="block text-xs text-muted-foreground">{meal.category} · {mealTypeLabel(meal.type)}{!meal.isActive && ' · Идэвхгүй'} · {meal.totalCalories} ккал</span>
                       </span>
                     </label>
                   ))}

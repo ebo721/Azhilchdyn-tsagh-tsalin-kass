@@ -147,7 +147,7 @@ describe("meals and ingredients", () => {
     assert.equal(deletedMeal, undefined);
   });
 
-  it("keeps a scheduled meal in its selected type until it is removed from the schedule", async () => {
+  it("updates a scheduled meal's information without removing its schedule link", async () => {
     const suffix = randomUUID();
     const [meal] = await db.insert(mealsTable).values({
       name: `Төлөвлөсөн хоол ${suffix}`, normalizedName: `төлөвлөсөн хоол ${suffix}`,
@@ -166,12 +166,19 @@ describe("meals and ingredients", () => {
       const response = await request(`/meals/${meal.id}`, {
         method: "PUT",
         body: JSON.stringify({
-          name: meal.name, category: meal.category, type: "therapeutic", isActive: true,
+          name: `${meal.name} зассан`, category: "хачир", type: "therapeutic", isActive: false,
         }),
       });
-      assert.equal(response.status, 409);
-      const [unchanged] = await db.select({ type: mealsTable.type }).from(mealsTable).where(eq(mealsTable.id, meal.id));
-      assert.equal(unchanged.type, "packed");
+      assert.equal(response.status, 200, await response.text());
+      const [updated] = await db.select().from(mealsTable).where(eq(mealsTable.id, meal.id));
+      assert.equal(updated.name, `${meal.name} зассан`);
+      assert.equal(updated.category, "хачир");
+      assert.equal(updated.type, "therapeutic");
+      assert.equal(updated.isActive, false);
+      const [link] = await db.select().from(mealScheduleEntryMealsTable).where(eq(mealScheduleEntryMealsTable.entryId, entry.id));
+      assert.equal(link.mealId, meal.id);
+      const [preserved] = await db.select().from(mealScheduleEntriesTable).where(eq(mealScheduleEntriesTable.id, entry.id));
+      assert.equal(preserved.mealType, "packed");
     } finally {
       await db.delete(mealScheduleEntriesTable).where(eq(mealScheduleEntriesTable.slotId, slot.id));
       await db.delete(mealScheduleSlotsTable).where(eq(mealScheduleSlotsTable.id, slot.id));

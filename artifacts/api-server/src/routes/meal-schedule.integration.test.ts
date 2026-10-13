@@ -409,4 +409,51 @@ describe("weekly meal schedule", () => {
     const emptyResponse = await request(`/meal-schedule?weekStart=${weekStart}`);
     assert.deepEqual(await emptyResponse.json(), []);
   });
+
+  it("retains changed meal types only for the same entry and unchanged planned type", async () => {
+    const suffix = randomUUID();
+    const [slot] = await db.insert(mealScheduleSlotsTable).values({
+      name: `Өөрчлөгдсөн хоол ${suffix}`, startTime: "12:00", endTime: "12:30",
+      sortOrder: 100_000_000 + Math.floor(Math.random() * 1_000_000),
+    }).returning();
+    slotIds.push(slot.id);
+    const date = nextMonday(80);
+    const data = { date, slotId: slot.id, kind: "meal", mealType: "packed", mealIds: mealIds.slice(0, 2) };
+    const created = await request("/meal-schedule", { method: "POST", body: JSON.stringify(data) });
+    assert.equal(created.status, 201);
+    const entry = await created.json() as { id: number };
+    entryIds.push(entry.id);
+    try {
+      await db.update(mealsTable).set({ type: "therapeutic", isActive: false }).where(eq(mealsTable.id, mealIds[0]));
+      const retained = await request(`/meal-schedule/${entry.id}`, { method: "PUT", body: JSON.stringify(data) });
+      assert.equal(retained.status, 200, await retained.text());
+      const read = await request(`/meal-schedule?weekStart=${date}`);
+      const entries = await read.json() as { id: number; mealType: string; meals: { id: number; type: string }[] }[];
+      const saved = entries.find(value => value.id === entry.id)!;
+      assert.equal(saved.mealType, "packed");
+      assert.deepEqual(saved.meals.map(meal => meal.id), data.mealIds);
+      assert.equal(saved.meals[0].type, "therapeutic");
+
+      const foreignType = await request(`/meal-schedule/${entry.id}`, {
+        method: "PUT", body: JSON.stringify({ ...data, mealIds: [mealIds[0], mealIds[3]] }),
+      });
+      assert.equal(foreignType.status, 400);
+      const newEntry = await request("/meal-schedule", {
+        method: "POST", body: JSON.stringify({ ...data, date: addDays(date, 1) }),
+      });
+      assert.equal(newEntry.status, 400);
+      const changedPlannedType = await request(`/meal-schedule/${entry.id}`, {
+        method: "PUT", body: JSON.stringify({ ...data, mealType: "therapeutic" }),
+      });
+      assert.equal(changedPlannedType.status, 400);
+      const removed = await request(`/meal-schedule/${entry.id}`, {
+        method: "PUT", body: JSON.stringify({ ...data, mealIds: [mealIds[1]] }),
+      });
+      assert.equal(removed.status, 200);
+      const readded = await request(`/meal-schedule/${entry.id}`, { method: "PUT", body: JSON.stringify(data) });
+      assert.equal(readded.status, 400);
+    } finally {
+      await db.update(mealsTable).set({ type: "packed", isActive: true }).where(eq(mealsTable.id, mealIds[0]));
+    }
+  });
 });

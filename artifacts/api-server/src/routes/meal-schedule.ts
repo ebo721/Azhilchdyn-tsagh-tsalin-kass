@@ -77,6 +77,7 @@ async function ensureReferences(
   slotId: number,
   mealIds: number[],
   mealType: "set" | "packed" | "therapeutic" | null,
+  retainedMealIds: ReadonlySet<number> = new Set(),
 ) {
   const [slot] = await client.select({ id: mealScheduleSlotsTable.id })
     .from(mealScheduleSlotsTable)
@@ -87,7 +88,7 @@ async function ensureReferences(
       .from(mealsTable).where(inArray(mealsTable.id, mealIds))
       .orderBy(asc(mealsTable.id)).for("share");
     if (meals.length !== mealIds.length) throw new Error("MEAL_NOT_FOUND");
-    if (meals.some((meal) => meal.type !== mealType)) throw new Error("MEAL_TYPE_MISMATCH");
+    if (meals.some((meal) => meal.type !== mealType && !retainedMealIds.has(meal.id))) throw new Error("MEAL_TYPE_MISMATCH");
   }
 }
 
@@ -313,10 +314,16 @@ router.put("/meal-schedule/:id", async (req, res, next): Promise<void> => {
       return;
     }
     const result = await db.transaction(async (tx) => {
-      await ensureReferences(tx, input.slotId, input.mealIds, input.mealType);
-      const [current] = await tx.select({ id: mealScheduleEntriesTable.id })
+      const [current] = await tx.select({ id: mealScheduleEntriesTable.id, mealType: mealScheduleEntriesTable.mealType })
         .from(mealScheduleEntriesTable).where(eq(mealScheduleEntriesTable.id, id)).for("update");
       if (!current) throw new Error("ENTRY_NOT_FOUND");
+      // Menu edits must not force previously selected meals out of a schedule.
+      // Only this entry's retained IDs qualify, and only if its planned type stays unchanged.
+      const retained = current.mealType === input.mealType
+        ? await tx.select({ mealId: mealScheduleEntryMealsTable.mealId }).from(mealScheduleEntryMealsTable)
+          .where(eq(mealScheduleEntryMealsTable.entryId, id))
+        : [];
+      await ensureReferences(tx, input.slotId, input.mealIds, input.mealType, new Set(retained.map((meal) => meal.mealId)));
       const [occupied] = await tx.select({ id: mealScheduleEntriesTable.id })
         .from(mealScheduleEntriesTable)
         .where(and(eq(mealScheduleEntriesTable.date, input.date), eq(mealScheduleEntriesTable.slotId, input.slotId)));

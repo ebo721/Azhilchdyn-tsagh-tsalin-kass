@@ -5,6 +5,7 @@ import { db, usersTable, mealsTable, mealScheduleSlotsTable, mealScheduleEntries
 import { createStaffSession, hrCookie } from "../src/lib/hr-session.js";
 
 test("click meal to edit type; save several meals in one schedule and retain them after reload", async ({ page, context, baseURL }) => {
+  test.setTimeout(75_000);
   const suffix = randomUUID();
   const names = [`Цэс UI ${suffix} нэг`, `Цэс UI ${suffix} хоёр`];
   const mealIds: number[] = [];
@@ -74,8 +75,27 @@ test("click meal to edit type; save several meals in one schedule and retain the
     await page.getByTestId(`row-meal-${mealIds[1]}`).click();
     await page.getByTestId("button-edit-selected-meal").click();
     await page.getByTestId("select-meal-type").selectOption("packed");
+    await page.getByTestId("input-meal-name").fill(`${names[1]} зассан`);
+    await page.getByTestId("input-meal-category").selectOption("хачир");
     await page.getByTestId("button-save-meal").click();
-    await expect(page.getByTestId("status-meal-save-error")).toContainText("хуваариас нь хасна уу");
+    await expect(page.getByTestId(`row-meal-${mealIds[1]}`)).toContainText("Боолтын хоол");
+    await expect(page.getByTestId(`row-meal-${mealIds[1]}`)).toContainText("хачир");
+    await page.reload();
+    await page.getByTestId(`row-meal-${mealIds[1]}`).click();
+    await page.getByTestId("button-edit-selected-meal").click();
+    await expect(page.getByTestId("select-meal-type")).toHaveValue("packed");
+    await expect(page.getByTestId("input-meal-name")).toHaveValue(`${names[1]} зассан`);
+    await page.getByTestId("button-cancel-meal").click();
+    await page.goto("/meal-schedule");
+    await page.getByTestId(cellId!).click();
+    await expect(page.getByTestId(`checkbox-schedule-meal-${mealIds[1]}`)).toBeChecked();
+    await expect(page.getByTestId("text-retained-schedule-meals")).toBeVisible();
+    await page.screenshot({ path: "../../.agents/outputs/scheduled-meal-edit-mobile.png" });
+    await page.getByTestId("button-save-entry").click();
+    await expect(page.getByTestId("modal")).toHaveCount(0);
+    await page.getByTestId(cellId!).click();
+    await expect(page.getByTestId(`checkbox-schedule-meal-${mealIds[1]}`)).toBeChecked();
+    await page.getByTestId("button-cancel-entry").click();
     await page.goto("/meal-schedule");
     const oldBreakCell = page.locator(`[data-testid^="cell-"][data-testid$="-${slotId}"]`).nth(1);
     const oldBreakCellId = await oldBreakCell.getAttribute("data-testid");
