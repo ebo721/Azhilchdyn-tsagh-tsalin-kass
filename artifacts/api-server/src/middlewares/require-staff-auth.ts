@@ -2,7 +2,7 @@ import type { RequestHandler } from "express";
 import { eq } from "drizzle-orm";
 import { db, deletionRequestsTable } from "@workspace/db";
 import { getStaffSession, type StaffRole } from "../lib/hr-session.js";
-import { canUseMenuApi } from "../lib/staff-menu-access.js";
+import { bankDocumentLookupMenu, canUseMenuApi } from "../lib/staff-menu-access.js";
 const requireStaffAuth: RequestHandler = async (req, res, next) => {
   const session = await getStaffSession(req);
   if (!session) {
@@ -104,7 +104,8 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
     return;
   }
   if (role === "accountant" && (
-    (req.method === "GET" && req.path === "/employees")
+    Boolean(bankDocumentLookupMenu(req.path, req.method))
+    || (req.method === "GET" && req.path === "/employees")
     || (req.method === "GET" && /^\/employees\/[1-9][0-9]*\/salary-bank-account$/.test(req.path))
     || (req.method === "GET" && (
       req.path === "/attendance/shifts"

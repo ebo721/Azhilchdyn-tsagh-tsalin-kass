@@ -315,6 +315,20 @@ export function BankTransactionJournalReview() {
                           </p>
                         )}
                         {isIncome === false && (
+                          !isFixedAssetAccount(selectedAccounts[row.id] || row.suggestedAccountId) && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openPurchaseLink(row.id, purchaseMaterialType(selectedAccounts[row.id] || row.suggestedAccountId) ?? 'food')}
+                              disabled={isPending}
+                              data-testid={`button-select-bank-purchases-${row.id}`}
+                            >
+                              Худалдан авалт сонгох
+                            </Button>
+                          )
+                        )}
+                        {isIncome === false && (
                           <Button
                             type="button"
                             size="sm"
