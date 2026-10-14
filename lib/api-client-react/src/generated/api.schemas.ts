@@ -137,6 +137,31 @@ export interface JournalVoidResult {
   reversalEntryId: number;
 }
 
+export interface EmployeeArApInput {
+  /**
+     * @minimum 1
+     * @maximum 2147483647
+     */
+  employeeId: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  date: string;
+  /**
+     * @minimum 0.01
+     * @maximum 999999999999.99
+     */
+  amount: number;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  description: string;
+  /**
+     * @minimum 1
+     * @maximum 2147483647
+     */
+  counterAccountId: number;
+}
+
 export type JournalReceivablePartyType = typeof JournalReceivablePartyType[keyof typeof JournalReceivablePartyType];
 
 
@@ -160,6 +185,9 @@ export interface JournalReceivable {
   partyType: JournalReceivablePartyType;
   partyId: number;
   partyLabel: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  date?: string;
+  description?: string;
   originalAmount: number;
   openAmount: number;
   status: JournalReceivableStatus;
@@ -189,6 +217,8 @@ export interface JournalPayable {
   partyType: JournalPayablePartyType;
   partyId: number;
   partyLabel: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  date?: string;
   originalAmount: number;
   remainingBalance: number;
   status: JournalPayableStatus;

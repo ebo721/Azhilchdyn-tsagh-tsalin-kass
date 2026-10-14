@@ -66,3 +66,9 @@ For baseline comparisons through the CodeExecution shell callback, use an explic
 **Why:** Tab separators were absent from the callback output, and a full workspace tree exceeded its output budget. A tab-based parser consequently found no baseline entries, making a conflict check falsely appear clean.
 
 **How to apply:** Use `git ls-tree -r --format="%(objectname) %(path)" HEAD -- <changed paths>`, validate parsed hash/path entries, and confirm every modified tracked file has a baseline before creating a remote commit.
+
+Restored workspaces can retain stale Git bookkeeping locks after their original processes have ended. Disable automatic maintenance and GC per command when these locks interfere; do not clear unrelated branch/ref locks.
+
+**Why:** A normal fetch triggered maintenance against old lock files, even though no matching Git process was running. Removing every lock would risk concurrent work or unrelated refs.
+
+**How to apply:** Check running Git processes and lock timestamps. Preserve and move only the proven-stale lock needed for the current operation; keep refs, history and backup branches intact.

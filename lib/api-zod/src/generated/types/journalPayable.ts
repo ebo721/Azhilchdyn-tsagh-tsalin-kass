@@ -15,6 +15,8 @@ export interface JournalPayable {
   partyType: JournalPayablePartyType;
   partyId: number;
   partyLabel: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  date?: string;
   originalAmount: number;
   remainingBalance: number;
   status: JournalPayableStatus;

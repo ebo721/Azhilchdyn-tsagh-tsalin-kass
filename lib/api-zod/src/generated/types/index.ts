@@ -86,6 +86,7 @@ export * from './downloadSocialInsuranceReport409';
 export * from './downloadSocialInsuranceReport422';
 export * from './downloadSocialInsuranceReportParams';
 export * from './employee';
+export * from './employeeArApInput';
 export * from './employeeEmployeeType';
 export * from './employeeInput';
 export * from './employeeInputEmployeeType';
