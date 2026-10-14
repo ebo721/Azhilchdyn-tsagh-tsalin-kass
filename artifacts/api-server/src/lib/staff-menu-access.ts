@@ -9,7 +9,7 @@ function requiredMenus(path: string, method: string): StaffMenuPath[] {
   if (starts("/attendance/devices")) return ["/attendance/devices"];
   if (read && ["/attendance/shifts", "/attendance/shift-plans"].some(starts)) return ["/attendance", "/hour-balance", "/payroll"];
   if (starts("/attendance")) return ["/attendance"];
-  if (p === "/employees" && read) return ["/employees", "/attendance", "/cash", "/payroll", "/users"];
+  if (p === "/employees" && read) return ["/employees", "/attendance", "/cash", "/payroll", "/users", "/ar-ap"];
   if (read && /^\/employees\/\d+\/salary-bank-account$/.test(p)) return ["/employees", "/cash", "/payroll", "/bank-transactions"];
   if (starts("/employees")) return ["/employees"];
   if (starts("/hour-balance")) return ["/hour-balance"];

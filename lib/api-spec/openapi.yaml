@@ -2656,6 +2656,25 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
   /journal/receivables:
+    post:
+      operationId: createEmployeeReceivable
+      tags: [journal]
+      summary: Register an employee receivable with a balanced journal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmployeeArApInput" }
+      responses:
+        "201":
+          description: Employee receivable registered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalReceivable" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Not authorized to register employee balances
     get:
       operationId: listJournalReceivables
       tags: [journal]
@@ -2676,6 +2695,25 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
   /journal/payables:
+    post:
+      operationId: createEmployeePayable
+      tags: [journal]
+      summary: Register an employee payable with a balanced journal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmployeeArApInput" }
+      responses:
+        "201":
+          description: Employee payable registered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalPayable" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Not authorized to register employee balances
     get:
       operationId: listJournalPayables
       tags: [journal]
@@ -2976,6 +3014,15 @@ components:
       required: [reversalEntryId]
       properties:
         reversalEntryId: { type: integer }
+    EmployeeArApInput:
+      type: object
+      required: [employeeId, date, amount, description, counterAccountId]
+      properties:
+        employeeId: { type: integer, minimum: 1, maximum: 2147483647 }
+        date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        amount: { type: number, minimum: 0.01, maximum: 999999999999.99 }
+        description: { type: string, minLength: 1, maxLength: 500 }
+        counterAccountId: { type: integer, minimum: 1, maximum: 2147483647 }
     JournalReceivable:
       type: object
       required: [id, originJournalEntryId, originJournalLineId, partyType, partyId, partyLabel, originalAmount, openAmount, status, createdAt]
@@ -2986,6 +3033,8 @@ components:
         partyType: { type: string, enum: [employee, supplier] }
         partyId: { type: integer }
         partyLabel: { type: string }
+        date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        description: { type: string }
         originalAmount: { type: number }
         openAmount: { type: number }
         status: { type: string, enum: [open, settled] }
@@ -3000,6 +3049,7 @@ components:
         partyType: { type: string, enum: [employee, supplier] }
         partyId: { type: integer }
         partyLabel: { type: string }
+        date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
         originalAmount: { type: number }
         remainingBalance: { type: number }
         status: { type: string, enum: [open, closed] }

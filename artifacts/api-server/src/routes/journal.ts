@@ -6,6 +6,8 @@ import {
   GetJournalAccountLedgerParams, GetJournalAccountLedgerResponse, GetJournalTrialBalanceResponse,
   ListJournalReceivablesQueryParams, ListJournalReceivablesResponse, ListJournalPayablesQueryParams,
   ListJournalPayablesResponse, ListJournalSuppliersResponse,
+  CreateEmployeeReceivableBody, CreateEmployeeReceivableResponse,
+  CreateEmployeePayableResponse,
 } from "@workspace/api-zod";
 import { and, asc, desc, eq, gte, lte, inArray, sql } from "drizzle-orm";
 import { db, bankTransactionsTable, cashTransactionsTable, chartOfAccountsTable, journalEntriesTable, journalLinesTable, receivablesTable, receivableAllocationsTable, payablesTable, payableAllocationsTable, employeesTable, inventorySuppliersTable, type JournalEntry, type JournalLine } from "@workspace/db";
@@ -16,6 +18,66 @@ import {
 import type { Tx } from "../lib/route-shared.js";
 
 const router: IRouter = Router();
+
+// Both employee balance forms use the same journal posting/allocation lifecycle.
+function registerEmployeeBalance(kind: "receivable" | "payable") {
+  return async (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => {
+    const parsed = CreateEmployeeReceivableBody.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Ажилтан, огноо, дүн, тайлбар болон харгалзах дансыг зөв оруулна уу" });
+    try {
+      const input = parsed.data;
+      if (Number(input.amount.toFixed(2)) !== input.amount || !input.description.trim()) {
+        throw new JournalValidationError("Дүнг хоёр хүртэл бутархай оронтой, тайлбарыг хоосон биш оруулна уу");
+      }
+      const date = journalDate(input.date);
+      const session = await getStaffSession(req);
+      if (!session || (session.role !== "admin" && session.role !== "accountant")) {
+        return res.status(403).json({ error: "Зөвхөн админ, нягтлан бүртгэл үүсгэнэ" });
+      }
+      const record = await db.transaction(async tx => {
+        const [employee] = await tx.select({ id: employeesTable.id, name: employeesTable.name })
+          .from(employeesTable).where(and(eq(employeesTable.id, input.employeeId), eq(employeesTable.status, "active"))).for("share");
+        if (!employee) throw new JournalValidationError("Идэвхтэй ажилтан сонгоно уу");
+        const code = kind === "receivable" ? "1200" : "2000";
+        const [account] = await tx.select().from(chartOfAccountsTable)
+          .where(and(eq(chartOfAccountsTable.code, code), eq(chartOfAccountsTable.isActive, true))).for("share");
+        if (!account) throw new JournalValidationError(`${code} данс идэвхгүй эсвэл олдсонгүй`);
+        const [counter] = await tx.select().from(chartOfAccountsTable)
+          .where(and(eq(chartOfAccountsTable.id, input.counterAccountId), eq(chartOfAccountsTable.isActive, true))).for("share");
+        if (!counter || counter.code === "1200" || counter.code === "2000") {
+          throw new JournalValidationError("Авлага, өглөгийн данснаас өөр идэвхтэй харгалзах данс сонгоно уу");
+        }
+        const description = input.description.trim();
+        const receivable = kind === "receivable";
+        const result = await postJournalEntry(tx, {
+          date, description, sourceType: "manual", sourceId: null, createdBy: session.id,
+          lines: [
+            { accountId: account.id, debit: receivable ? input.amount : 0, credit: receivable ? 0 : input.amount,
+              memo: description, allocation: { kind: "create", partyType: "employee", employeeId: employee.id } },
+            { accountId: counter.id, debit: receivable ? 0 : input.amount, credit: receivable ? input.amount : 0, memo: description },
+          ],
+        });
+        if (result.status !== "posted") throw new JournalValidationError("Журнал тэнцэж батлагдсангүй");
+        if (receivable) {
+          const [row] = await tx.select({ record: receivablesTable }).from(receivablesTable)
+            .innerJoin(journalLinesTable, eq(journalLinesTable.id, receivablesTable.originJournalLineId))
+            .where(eq(journalLinesTable.journalEntryId, result.journalEntryId));
+          return CreateEmployeeReceivableResponse.parse({
+            ...row.record, partyType: "employee", partyId: employee.id, partyLabel: employee.name, date, description,
+          });
+        }
+        const [row] = await tx.select().from(payablesTable).where(eq(payablesTable.journalEntryId, result.journalEntryId));
+        return CreateEmployeePayableResponse.parse({ ...row, partyLabel: employee.name, date });
+      });
+      return res.status(201).json(record);
+    } catch (error) {
+      if (error instanceof JournalValidationError) return res.status(400).json({ error: error.message });
+      return next(error);
+    }
+  };
+}
+router.post("/journal/receivables", registerEmployeeBalance("receivable"));
+router.post("/journal/payables", registerEmployeeBalance("payable"));
 
 async function isFixedAssetJournal(tx: Tx, entry: { sourceType: string; sourceId: number | null }): Promise<boolean> {
   if (entry.sourceType === "fixed_asset") return true;
@@ -102,9 +164,13 @@ router.get("/journal/receivables", async (req, res, next) => {
       openAmount: receivablesTable.openAmount,
       status: receivablesTable.status,
       createdAt: receivablesTable.createdAt,
+      date: journalEntriesTable.date,
+      description: sql<string>`coalesce(${journalLinesTable.memo}, ${journalEntriesTable.description})`,
       employeeName: employeesTable.name,
       supplierName: inventorySuppliersTable.name,
     }).from(receivablesTable)
+      .innerJoin(journalEntriesTable, eq(journalEntriesTable.id, receivablesTable.originJournalEntryId))
+      .innerJoin(journalLinesTable, eq(journalLinesTable.id, receivablesTable.originJournalLineId))
       .leftJoin(employeesTable, eq(employeesTable.id, receivablesTable.employeeId))
       .leftJoin(inventorySuppliersTable, eq(inventorySuppliersTable.id, receivablesTable.supplierId))
       .where(filters).orderBy(desc(receivablesTable.createdAt));
@@ -132,9 +198,11 @@ router.get("/journal/payables", async (req, res, next) => {
       remainingBalance: payablesTable.remainingBalance,
       status: payablesTable.status,
       createdAt: payablesTable.createdAt,
+      date: journalEntriesTable.date,
       employeeName: employeesTable.name,
       supplierName: inventorySuppliersTable.name,
     }).from(payablesTable)
+      .innerJoin(journalEntriesTable, eq(journalEntriesTable.id, payablesTable.journalEntryId))
       .leftJoin(employeesTable, and(eq(payablesTable.partyType, "employee"), eq(employeesTable.id, payablesTable.partyId)))
       .leftJoin(inventorySuppliersTable, and(eq(payablesTable.partyType, "supplier"), eq(inventorySuppliersTable.id, payablesTable.partyId)))
       .where(status === "all" ? undefined : eq(payablesTable.status, status))
@@ -151,6 +219,7 @@ router.get("/journal/payables", async (req, res, next) => {
       remainingBalance: row.remainingBalance,
       status: row.status,
       createdAt: row.createdAt,
+      date: row.date,
     }))));
   } catch (error) { return next(error); }
 });

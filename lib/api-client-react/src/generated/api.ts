@@ -78,6 +78,7 @@ import type {
   DownloadSocialInsuranceReport422,
   DownloadSocialInsuranceReportParams,
   Employee,
+  EmployeeArApInput,
   EmployeeInput,
   EmployeeSalaryBankAccount,
   EmployeeSalaryHistory,
@@ -11801,6 +11802,77 @@ export const useCreateJournalEntry = <TError = ErrorType<BadRequestResponse | No
       return useMutation(getCreateJournalEntryMutationOptions(options));
     }
 
+export const getCreateEmployeeReceivableUrl = () => {
+
+
+
+
+  return `/api/journal/receivables`
+}
+
+/**
+ * @summary Register an employee receivable with a balanced journal
+ */
+export const createEmployeeReceivable = async (employeeArApInput: EmployeeArApInput, options?: Parameters<typeof customFetch>[1]): Promise<JournalReceivable> => {
+
+  return customFetch<JournalReceivable>(getCreateEmployeeReceivableUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(employeeArApInput)
+  }
+);}
+
+
+
+
+
+export const getCreateEmployeeReceivableMutationOptions = <TError = ErrorType<BadRequestResponse | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEmployeeReceivable>>, TError,{data: BodyType<EmployeeArApInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createEmployeeReceivable>>, TError,{data: BodyType<EmployeeArApInput>}, TContext> => {
+
+const mutationKey = ['createEmployeeReceivable'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createEmployeeReceivable>>, {data: BodyType<EmployeeArApInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createEmployeeReceivable(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateEmployeeReceivableMutationResult = NonNullable<Awaited<ReturnType<typeof createEmployeeReceivable>>>
+    export type CreateEmployeeReceivableMutationBody = BodyType<EmployeeArApInput>
+    export type CreateEmployeeReceivableMutationError = ErrorType<BadRequestResponse | void>
+
+    /**
+ * @summary Register an employee receivable with a balanced journal
+ */
+export const useCreateEmployeeReceivable = <TError = ErrorType<BadRequestResponse | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEmployeeReceivable>>, TError,{data: BodyType<EmployeeArApInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createEmployeeReceivable>>,
+        TError,
+        {data: BodyType<EmployeeArApInput>},
+        TContext
+      > => {
+      return useMutation(getCreateEmployeeReceivableMutationOptions(options));
+    }
+
 export const getListJournalReceivablesUrl = (params?: ListJournalReceivablesParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -11884,6 +11956,77 @@ export function useListJournalReceivables<TData = Awaited<ReturnType<typeof list
 
 
 
+
+export const getCreateEmployeePayableUrl = () => {
+
+
+
+
+  return `/api/journal/payables`
+}
+
+/**
+ * @summary Register an employee payable with a balanced journal
+ */
+export const createEmployeePayable = async (employeeArApInput: EmployeeArApInput, options?: Parameters<typeof customFetch>[1]): Promise<JournalPayable> => {
+
+  return customFetch<JournalPayable>(getCreateEmployeePayableUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(employeeArApInput)
+  }
+);}
+
+
+
+
+
+export const getCreateEmployeePayableMutationOptions = <TError = ErrorType<BadRequestResponse | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEmployeePayable>>, TError,{data: BodyType<EmployeeArApInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createEmployeePayable>>, TError,{data: BodyType<EmployeeArApInput>}, TContext> => {
+
+const mutationKey = ['createEmployeePayable'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createEmployeePayable>>, {data: BodyType<EmployeeArApInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createEmployeePayable(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateEmployeePayableMutationResult = NonNullable<Awaited<ReturnType<typeof createEmployeePayable>>>
+    export type CreateEmployeePayableMutationBody = BodyType<EmployeeArApInput>
+    export type CreateEmployeePayableMutationError = ErrorType<BadRequestResponse | void>
+
+    /**
+ * @summary Register an employee payable with a balanced journal
+ */
+export const useCreateEmployeePayable = <TError = ErrorType<BadRequestResponse | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEmployeePayable>>, TError,{data: BodyType<EmployeeArApInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createEmployeePayable>>,
+        TError,
+        {data: BodyType<EmployeeArApInput>},
+        TContext
+      > => {
+      return useMutation(getCreateEmployeePayableMutationOptions(options));
+    }
 
 export const getListJournalPayablesUrl = (params?: ListJournalPayablesParams,) => {
   const normalizedParams = new URLSearchParams();

@@ -4608,6 +4608,48 @@ export const CreateJournalEntryResponse = zod.object({
 
 
 /**
+ * @summary Register an employee receivable with a balanced journal
+ */
+export const createEmployeeReceivableBodyEmployeeIdMax = 2147483647;
+
+export const createEmployeeReceivableBodyDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const createEmployeeReceivableBodyAmountMin = 0.01;
+export const createEmployeeReceivableBodyAmountMax = 999999999999.99;
+
+export const createEmployeeReceivableBodyDescriptionMax = 500;
+
+export const createEmployeeReceivableBodyCounterAccountIdMax = 2147483647;
+
+
+
+export const CreateEmployeeReceivableBody = zod.object({
+  "employeeId": zod.number().int().min(1).max(createEmployeeReceivableBodyEmployeeIdMax),
+  "date": zod.string().regex(createEmployeeReceivableBodyDateRegExp),
+  "amount": zod.number().min(createEmployeeReceivableBodyAmountMin).max(createEmployeeReceivableBodyAmountMax),
+  "description": zod.string().min(1).max(createEmployeeReceivableBodyDescriptionMax),
+  "counterAccountId": zod.number().int().min(1).max(createEmployeeReceivableBodyCounterAccountIdMax)
+})
+
+export const createEmployeeReceivableResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const CreateEmployeeReceivableResponse = zod.object({
+  "id": zod.number().int(),
+  "originJournalEntryId": zod.number().int(),
+  "originJournalLineId": zod.number().int(),
+  "partyType": zod.enum(['employee', 'supplier']),
+  "partyId": zod.number().int(),
+  "partyLabel": zod.string(),
+  "date": zod.string().regex(createEmployeeReceivableResponseDateRegExp).optional(),
+  "description": zod.string().optional(),
+  "originalAmount": zod.number(),
+  "openAmount": zod.number(),
+  "status": zod.enum(['open', 'settled']),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary List receivables and their open balances
  */
 export const listJournalReceivablesQueryStatusDefault = `open`;
@@ -4616,6 +4658,9 @@ export const ListJournalReceivablesQueryParams = zod.object({
   "status": zod.enum(['open', 'settled', 'all']).default(listJournalReceivablesQueryStatusDefault)
 })
 
+export const listJournalReceivablesResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
 export const ListJournalReceivablesResponseItem = zod.object({
   "id": zod.number().int(),
   "originJournalEntryId": zod.number().int(),
@@ -4623,12 +4668,55 @@ export const ListJournalReceivablesResponseItem = zod.object({
   "partyType": zod.enum(['employee', 'supplier']),
   "partyId": zod.number().int(),
   "partyLabel": zod.string(),
+  "date": zod.string().regex(listJournalReceivablesResponseDateRegExp).optional(),
+  "description": zod.string().optional(),
   "originalAmount": zod.number(),
   "openAmount": zod.number(),
   "status": zod.enum(['open', 'settled']),
   "createdAt": zod.coerce.date()
 })
 export const ListJournalReceivablesResponse = zod.array(ListJournalReceivablesResponseItem)
+
+
+/**
+ * @summary Register an employee payable with a balanced journal
+ */
+export const createEmployeePayableBodyEmployeeIdMax = 2147483647;
+
+export const createEmployeePayableBodyDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const createEmployeePayableBodyAmountMin = 0.01;
+export const createEmployeePayableBodyAmountMax = 999999999999.99;
+
+export const createEmployeePayableBodyDescriptionMax = 500;
+
+export const createEmployeePayableBodyCounterAccountIdMax = 2147483647;
+
+
+
+export const CreateEmployeePayableBody = zod.object({
+  "employeeId": zod.number().int().min(1).max(createEmployeePayableBodyEmployeeIdMax),
+  "date": zod.string().regex(createEmployeePayableBodyDateRegExp),
+  "amount": zod.number().min(createEmployeePayableBodyAmountMin).max(createEmployeePayableBodyAmountMax),
+  "description": zod.string().min(1).max(createEmployeePayableBodyDescriptionMax),
+  "counterAccountId": zod.number().int().min(1).max(createEmployeePayableBodyCounterAccountIdMax)
+})
+
+export const createEmployeePayableResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const CreateEmployeePayableResponse = zod.object({
+  "id": zod.number().int(),
+  "journalEntryId": zod.number().int(),
+  "description": zod.string(),
+  "partyType": zod.enum(['employee', 'supplier']),
+  "partyId": zod.number().int(),
+  "partyLabel": zod.string(),
+  "date": zod.string().regex(createEmployeePayableResponseDateRegExp).optional(),
+  "originalAmount": zod.number(),
+  "remainingBalance": zod.number(),
+  "status": zod.enum(['open', 'closed']),
+  "createdAt": zod.coerce.date()
+})
 
 
 /**
@@ -4640,6 +4728,9 @@ export const ListJournalPayablesQueryParams = zod.object({
   "status": zod.enum(['open', 'closed', 'all']).default(listJournalPayablesQueryStatusDefault)
 })
 
+export const listJournalPayablesResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
 export const ListJournalPayablesResponseItem = zod.object({
   "id": zod.number().int(),
   "journalEntryId": zod.number().int(),
@@ -4647,6 +4738,7 @@ export const ListJournalPayablesResponseItem = zod.object({
   "partyType": zod.enum(['employee', 'supplier']),
   "partyId": zod.number().int(),
   "partyLabel": zod.string(),
+  "date": zod.string().regex(listJournalPayablesResponseDateRegExp).optional(),
   "originalAmount": zod.number(),
   "remainingBalance": zod.number(),
   "status": zod.enum(['open', 'closed']),

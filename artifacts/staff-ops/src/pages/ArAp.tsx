@@ -3,11 +3,12 @@ import { useLocation } from 'wouter';
 import { Plus, Search } from 'lucide-react';
 import {
   getListJournalPayablesQueryKey, getListJournalReceivablesQueryKey,
-  useListJournalPayables, useListJournalReceivables,
+  useGetAuthSession, useListJournalPayables, useListJournalReceivables,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { EmptyState, ErrorBlock, LoadingBlock, PageHeading } from '@/components/ui-primitives';
 import { formatDate } from '@/pages/Journal/utils';
+import { EmployeeArApForm, type SavedArAp } from '@/pages/EmployeeArApForm';
 
 type Tab = 'receivables' | 'payables';
 const money = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -16,6 +17,11 @@ export function ArAp({ canCreate }: { canCreate: boolean }) {
   const [tab, setTab] = useState<Tab>('receivables');
   const [party, setParty] = useState('');
   const [, navigate] = useLocation();
+  const session = useGetAuthSession();
+  const menuPaths = session.data?.menuPaths as string[] | null | undefined;
+  const canOpenJournal = canCreate && !!session.data?.authenticated && (menuPaths == null || menuPaths.includes('/journal'));
+  const [formOpen, setFormOpen] = useState(false);
+  const [saved, setSaved] = useState('');
   const receivables = useListJournalReceivables({ status: 'all' }, {
     query: { queryKey: getListJournalReceivablesQueryKey({ status: 'all' }), enabled: tab === 'receivables', refetchOnMount: 'always' },
   });
@@ -40,10 +46,15 @@ export function ArAp({ canCreate }: { canCreate: boolean }) {
         eyebrow="Нягтлан бодох бүртгэл"
         title="Авлага, Өглөг"
         detail="Ажилтан, харилцагчийн бүртгэл болон үлдэгдэл"
-        action={canCreate && (
-          <Button onClick={() => navigate(`/journal/new?account=${tab === 'receivables' ? '1200' : '2000'}`)}>
-            <Plus className="mr-2 size-4" /> Шинээр үүсгэх
-          </Button>
+        action={canCreate && (<>
+          {canOpenJournal && (
+            <Button variant="outline" onClick={() => navigate(`/journal/new?account=${tab === 'receivables' ? '1200' : '2000'}`)} data-testid="button-create-journal-entry">
+              Журналаар бүртгэх
+            </Button>
+          )}
+          <Button onClick={() => { setSaved(''); setFormOpen(true); }} data-testid="button-create-employee-balance">
+            <Plus className="mr-2 size-4" /> {tab === 'receivables' ? 'Ажилтны авлага бүртгэх' : 'Ажилтны өглөг бүртгэх'}
+          </Button></>
         )}
       />
 
@@ -59,7 +70,7 @@ export function ArAp({ canCreate }: { canCreate: boolean }) {
               role="tab"
               aria-selected={tab === value}
               aria-controls="ar-ap-table"
-              onClick={() => { setTab(value); setParty(''); }}
+              onClick={() => { setTab(value); setParty(''); setSaved(''); }}
               className={`border-b-2 px-1 pb-3 text-sm font-semibold transition-colors ${tab === value ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
             >
               {label}
@@ -79,6 +90,19 @@ export function ArAp({ canCreate }: { canCreate: boolean }) {
           </select>
         </div>
       </div>
+
+      {saved && <p className="rounded-lg bg-primary/10 px-4 py-2 text-sm font-semibold text-primary" role="status" data-testid="status-ar-ap-saved">{saved}</p>}
+      {canCreate && formOpen && (
+        <EmployeeArApForm
+          kind={tab}
+          onClose={() => setFormOpen(false)}
+          onSaved={(row: SavedArAp) => {
+            setParty('');
+            setFormOpen(false);
+            setSaved(`${row.partyLabel} - ${tab === 'receivables' ? 'авлага' : 'өглөг'} бүртгэгдлээ.`);
+          }}
+        />
+      )}
 
       <div id="ar-ap-table" role="tabpanel" className="overflow-hidden rounded-xl border bg-card shadow-sm">
         {current.isLoading ? (
@@ -101,14 +125,15 @@ export function ArAp({ canCreate }: { canCreate: boolean }) {
               </thead>
               <tbody className="divide-y">
                 {filteredRows.map((row) => (
-                  <tr key={row.id} className="hover:bg-muted/50">
+                  <tr key={row.id} className="hover:bg-muted/50" data-testid={`row-ar-ap-${row.id}`}>
                     <td className="px-4 py-3">
                       <span className="font-medium">{row.partyLabel}</span>
                       <span className="ml-2 text-xs text-muted-foreground">{row.partyType === 'employee' ? 'Ажилтан' : 'Харилцагч'}</span>
+                      {row.description && <span className="block text-xs text-muted-foreground">{row.description}</span>}
                     </td>
                     <td className="px-4 py-3 text-right font-mono tabular-nums">{money.format(row.originalAmount)}</td>
                     <td className="px-4 py-3 text-right font-mono tabular-nums">{money.format(row.balance)}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{formatDate(row.createdAt)}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{formatDate(row.date ?? row.createdAt)}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${row.status === 'open' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
                         {row.status === 'open' ? 'Нээлттэй' : tab === 'receivables' ? 'Төлөгдсөн' : 'Хаагдсан'}
