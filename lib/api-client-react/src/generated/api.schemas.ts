@@ -1840,6 +1840,8 @@ export const InventoryPurchaseMaterialType = {
 
 export interface InventoryPurchase {
   id: number;
+  /** Daily purchase document number based on the selected date, formatted YYYY/MM/DD/001. */
+  readonly documentNumber: string;
   materialType: InventoryPurchaseMaterialType;
   accountId: number | null;
   accountCode: string | null;
@@ -1921,6 +1923,8 @@ export const InventoryItemMaterialType = {
 
 export interface InventoryItem {
   id: number;
+  /** Document numbers of purchase lots that still contribute to stock; opening balances are not purchases. */
+  readonly purchaseDocumentNumbers: readonly string[];
   materialType: InventoryItemMaterialType;
   name: string;
   category: string;

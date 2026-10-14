@@ -96,7 +96,11 @@
     {
       "filename": "20261013_inventory_stock_counts.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20261014_inventory_purchase_document_numbers.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "894224ff0a6c89a70561d0776515541b422591fbfa6f90dd39716c3799fc6c1f"
+  "schemaFingerprint": "8e7ac79d2a9b4102a9db89fc3f991e9d99af4d7fade9f0fccb5d3c18e83b55c9"
 }

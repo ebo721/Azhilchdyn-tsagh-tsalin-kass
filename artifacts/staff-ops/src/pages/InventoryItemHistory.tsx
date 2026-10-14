@@ -12,6 +12,7 @@ type HistoryRow = {
   unit: string;
   unitPrice: number;
   totalAmount: number;
+  documentNumber?: string;
 };
 
 function HistorySection({ title, kind, rows, loading, error, retry }: {
@@ -29,12 +30,14 @@ function HistorySection({ title, kind, rows, loading, error, retry }: {
       : <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-left">
         <thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr>
           <th className="px-3 py-2">Огноо</th><th className="px-3 py-2 text-right">Тоо</th>
+          {kind === 'purchase' && <th className="px-3 py-2">Баримтын дугаар</th>}
           <th className="px-3 py-2">Нэгж</th><th className="px-3 py-2 text-right">Нэгж үнэ</th>
           <th className="px-3 py-2 text-right">Нийт үнэ</th>
         </tr></thead>
         <tbody className="divide-y divide-border">{rows.map(row => <tr key={row.id} data-testid={`row-inventory-item-${kind}-${row.id}`}>
           <td className="px-3 py-3 text-sm font-semibold"><time dateTime={row.date}>{dateLabel(row.date)}</time></td>
           <td className="px-3 py-3 text-right font-mono text-sm">{row.quantity}</td>
+          {kind === 'purchase' && <td className="whitespace-nowrap px-3 py-3 font-mono text-xs">{row.documentNumber}</td>}
           <td className="px-3 py-3 text-sm text-muted-foreground">{row.unit}</td>
           <td className="px-3 py-3 text-right font-mono text-sm">{money(row.unitPrice)}</td>
           <td className="px-3 py-3 text-right font-mono text-sm font-bold">{money(row.totalAmount)}</td>
@@ -50,7 +53,7 @@ export function InventoryItemHistory({ itemId }: { itemId: number }) {
   const openings = useListInventoryOpeningBalances({ query: { queryKey: getListInventoryOpeningBalancesQueryKey(), staleTime: 15000, refetchOnMount: 'always' } });
   const purchaseRows = purchases.data?.flatMap(purchase => purchase.items
     .filter(line => line.inventoryItemId === itemId)
-    .map(line => ({ ...line, date: purchase.date }))).sort(newestFirst) ?? [];
+    .map(line => ({ ...line, date: purchase.date, documentNumber: purchase.documentNumber }))).sort(newestFirst) ?? [];
   const openingRows = openings.data?.filter(row => row.inventoryItemId === itemId).sort(newestFirst) ?? [];
 
   return <div className="max-h-[60vh] space-y-6 overflow-y-auto" data-testid="inventory-item-history">

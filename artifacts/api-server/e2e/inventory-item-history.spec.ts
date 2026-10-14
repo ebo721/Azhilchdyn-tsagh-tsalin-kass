@@ -1,12 +1,14 @@
 import { test, expect, type Page } from "@playwright/test";
-import type { InventoryItem, InventoryOpeningBalance, InventoryPurchase } from "@workspace/api-client-react";
+import type { InventoryItem, InventoryOpeningBalance, InventoryPurchase } from "@workspace/api-zod";
 
 const items: InventoryItem[] = [95001, 95002, 95003].map(id => ({
   id, name: `History item ${id}`, category: "Тест", materialType: "food",
-  unit: "кг", quantity: 3, totalValue: 3000, createdAt: "2098-12-01T00:00:00Z",
+  unit: "кг", quantity: 3, totalValue: 3000, purchaseDocumentNumbers: id === 95001 ? ["2098/12/02/001"] : [],
+  createdAt: "2098-12-01T00:00:00Z",
 }));
 const purchase = (id: number, date: string, item = items[0]): InventoryPurchase => ({
   id, date, materialType: "food", supplierName: "Тест нийлүүлэгч",
+  documentNumber: `${date.replaceAll("-", "/")}/${String(id - 96000 + 1).padStart(3, "0")}`,
   accountId: null, accountCode: null, accountName: null, hasReceipt: false,
   totalAmount: 30000, paid: false, paymentGroupBankTransactionId: null,
   createdAt: `${date}T00:00:00Z`, editable: true,
@@ -46,6 +48,7 @@ test("item history ignores purchase month, type and pagination; shows distinct o
   await mockApi(page);
   await page.getByTestId("tab-inventory-purchases").click();
   await page.getByTestId("input-inventory-purchase-month").fill("2099-01");
+  await expect(page.getByTestId("text-inventory-purchase-document-96000")).toHaveText("2099/01/02/001");
   await page.getByTestId("tab-inventory-stock").click();
   await page.getByTestId("row-inventory-stock-95001").click();
   const history = page.getByTestId("inventory-item-history");
@@ -56,11 +59,13 @@ test("item history ignores purchase month, type and pagination; shows distinct o
   await expect(history.getByTestId("row-inventory-item-opening-97001")).toHaveCount(0);
   await expect(history.getByTestId("inventory-item-history-opening").getByRole("heading")).toHaveText("Эхний үлдэгдэл");
   await expect(history.getByTestId("inventory-item-history-purchase").getByRole("heading")).toContainText("бүх сар");
+  await expect(history.getByTestId("row-inventory-item-purchase-96016")).toContainText("2098/12/02/017");
 });
 
 test("opening-only item on phone shows opening provenance without another item's purchases", async ({ page }) => {
   await page.setViewportSize({ width: 402, height: 874 });
   await mockApi(page);
+  await expect(page.getByTestId("text-inventory-stock-documents-95001")).toHaveText("2098/12/02/001");
   await page.getByTestId("row-inventory-stock-95001").click();
   await expect(page.getByTestId("row-inventory-item-purchase-96016")).toBeVisible();
   await page.getByTestId("button-close-modal").click();
@@ -70,6 +75,10 @@ test("opening-only item on phone shows opening provenance without another item's
   await expect(history.locator('[data-testid^="row-inventory-item-purchase-"]')).toHaveCount(0);
   await expect(history.getByTestId("inventory-item-history-purchase")).toContainText("Худалдан авалт бүртгэгдээгүй.");
   await expect(history).toContainText("Эхний үлдэгдэл нь худалдан авалт биш.");
+  await page.getByTestId("button-close-modal").click();
+  await page.getByTestId("tab-inventory-purchases").click();
+  await page.getByTestId("input-inventory-purchase-month").fill("2099-01");
+  await expect(page.getByTestId("text-inventory-purchase-mobile-document-96000")).toHaveText("2099/01/02/001");
 });
 
 test("failed opening-history request shows retry, not a false empty history", async ({ page }) => {

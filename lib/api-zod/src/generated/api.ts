@@ -3117,6 +3117,7 @@ export const MoveMealScheduleEntryResponse = zod.array(MoveMealScheduleEntryResp
 
 export const ListInventoryPurchasesResponseItem = zod.object({
   "id": zod.number().int(),
+  "documentNumber": zod.string().describe('Daily purchase document number based on the selected date, formatted YYYY\/MM\/DD\/001.'),
   "materialType": zod.enum(['food', 'supply']),
   "accountId": zod.number().int().nullable(),
   "accountCode": zod.string().nullable(),
@@ -3186,6 +3187,7 @@ export const CreateInventoryPurchaseBody = zod.object({
 
 export const CreateInventoryPurchaseResponse = zod.object({
   "id": zod.number().int(),
+  "documentNumber": zod.string().describe('Daily purchase document number based on the selected date, formatted YYYY\/MM\/DD\/001.'),
   "materialType": zod.enum(['food', 'supply']),
   "accountId": zod.number().int().nullable(),
   "accountCode": zod.string().nullable(),
@@ -3258,6 +3260,7 @@ export const UpdateInventoryPurchaseBody = zod.object({
 
 export const UpdateInventoryPurchaseResponse = zod.object({
   "id": zod.number().int(),
+  "documentNumber": zod.string().describe('Daily purchase document number based on the selected date, formatted YYYY\/MM\/DD\/001.'),
   "materialType": zod.enum(['food', 'supply']),
   "accountId": zod.number().int().nullable(),
   "accountCode": zod.string().nullable(),
@@ -3321,6 +3324,7 @@ export const ConfirmInventoryPurchasePaymentBody = zod.object({
 
 export const ConfirmInventoryPurchasePaymentResponse = zod.object({
   "id": zod.number().int(),
+  "documentNumber": zod.string().describe('Daily purchase document number based on the selected date, formatted YYYY\/MM\/DD\/001.'),
   "materialType": zod.enum(['food', 'supply']),
   "accountId": zod.number().int().nullable(),
   "accountCode": zod.string().nullable(),
@@ -3363,6 +3367,7 @@ export const CancelInventoryPurchasePaymentParams = zod.object({
 
 export const CancelInventoryPurchasePaymentResponse = zod.object({
   "id": zod.number().int(),
+  "documentNumber": zod.string().describe('Daily purchase document number based on the selected date, formatted YYYY\/MM\/DD\/001.'),
   "materialType": zod.enum(['food', 'supply']),
   "accountId": zod.number().int().nullable(),
   "accountCode": zod.string().nullable(),
@@ -3961,6 +3966,7 @@ export const DeleteInventoryOpeningBalanceResponse = zod.void()
  */
 export const ListInventoryItemsResponseItem = zod.object({
   "id": zod.number().int(),
+  "purchaseDocumentNumbers": zod.array(zod.string()).describe('Document numbers of purchase lots that still contribute to stock; opening balances are not purchases.'),
   "materialType": zod.enum(['food', 'supply']),
   "name": zod.string(),
   "category": zod.string(),
@@ -3990,6 +3996,7 @@ export const UpdateInventoryItemBody = zod.object({
 
 export const UpdateInventoryItemResponse = zod.object({
   "id": zod.number().int(),
+  "purchaseDocumentNumbers": zod.array(zod.string()).describe('Document numbers of purchase lots that still contribute to stock; opening balances are not purchases.'),
   "materialType": zod.enum(['food', 'supply']),
   "name": zod.string(),
   "category": zod.string(),

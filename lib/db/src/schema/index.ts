@@ -404,6 +404,8 @@ export const inventoryPurchasesTable = pgTable("inventory_purchases", {
   materialType: text("material_type").notNull().default("supply"),
   accountId: integer("account_id").references(() => chartOfAccountsTable.id, { onDelete: "restrict" }),
   documentName: text("document_name").notNull().default("Худалдан авалтын баримт"),
+  // Assigned by the database trigger; omitted inserts from older builds remain compatible.
+  documentNumber: text("document_number").notNull().default(""),
   hasReceipt: boolean("has_receipt").notNull().default(false),
   date: date("date", { mode: "string" }).notNull(),
   totalAmount: numeric("total_amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
@@ -413,6 +415,14 @@ export const inventoryPurchasesTable = pgTable("inventory_purchases", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("inventory_purchases_account_id_idx").on(table.accountId),
+  uniqueIndex("inventory_purchases_document_number_idx").on(table.documentNumber),
+]);
+
+export const inventoryPurchaseDocumentCountersTable = pgTable("inventory_purchase_document_counters", {
+  date: date("date", { mode: "string" }).primaryKey(),
+  lastSequence: integer("last_sequence").notNull(),
+}, (table) => [
+  check("inventory_purchase_document_counters_sequence_check", sql`${table.lastSequence} > 0`),
 ]);
 
 export const inventoryPurchasePaymentGroupsTable = pgTable("inventory_purchase_payment_groups", {
