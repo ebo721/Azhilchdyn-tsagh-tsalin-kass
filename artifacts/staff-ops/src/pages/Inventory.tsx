@@ -383,7 +383,7 @@ export function Inventory() {
       },
     });
   };
-  const filteredCatalog = catalog.data?.filter((item) => item.materialType === materialTypeTab && `${item.name} ${item.category}`.toLocaleLowerCase('mn-MN').includes(stockSearch.toLocaleLowerCase('mn-MN'))) ?? [];
+  const filteredCatalog = catalog.data?.filter((item) => item.quantity > 0 && item.materialType === materialTypeTab && `${item.name} ${item.category}`.toLocaleLowerCase('mn-MN').includes(stockSearch.toLocaleLowerCase('mn-MN'))) ?? [];
   const selectedItemHistory = selectedItem
     ? query.data?.flatMap((purchase) => purchase.items
       .filter((item) => item.inventoryItemId === selectedItem.id)
