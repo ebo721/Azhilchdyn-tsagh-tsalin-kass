@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { formatInventoryStock } from "../lib/inventory-stock-view.js";
 import inventoryOpeningBalancesRouter from "./inventory-opening-balances.js";
 import inventoryClosingBalancesRouter from "./inventory-closing-balances.js";
 import { inventoryClosingBalancesTable } from "@workspace/db";
@@ -204,6 +205,7 @@ router.get("/inventory/purchases", async (_req, res, next) => {
     const paymentGroupByPurchase = new Map(paymentGroups.map((group) => [group.purchaseId, group.bankTransactionId]));
     res.json(ListInventoryPurchasesResponse.parse(purchases.map((row) => ({
       id: row.purchase.id,
+      documentNumber: row.purchase.documentNumber,
       materialType: row.purchase.materialType,
       accountId: row.purchase.accountId,
       accountCode: row.accountCode,
@@ -386,28 +388,12 @@ router.get("/inventory/items", async (_req, res, next) => {
         inventoryItemId: inventoryPurchaseItemsTable.inventoryItemId,
         remainingQuantity: inventoryPurchaseItemsTable.remainingQuantity,
         unitPrice: inventoryPurchaseItemsTable.unitPrice,
-      }).from(inventoryPurchaseItemsTable),
+        documentNumber: inventoryPurchasesTable.documentNumber,
+      }).from(inventoryPurchaseItemsTable)
+        .innerJoin(inventoryPurchasesTable, eq(inventoryPurchasesTable.id, inventoryPurchaseItemsTable.purchaseId)),
       db.select().from(inventoryOpeningBalancesTable),
     ]);
-    const valueByItem = new Map<number, number>();
-    for (const lot of lots) {
-      if (lot.inventoryItemId === null) continue;
-      const current = valueByItem.get(lot.inventoryItemId) ?? 0;
-      valueByItem.set(lot.inventoryItemId, current + Number(lot.remainingQuantity) * Number(lot.unitPrice));
-    }
-    for (const lot of openingLots) {
-      valueByItem.set(lot.inventoryItemId, (valueByItem.get(lot.inventoryItemId) ?? 0) + lot.remainingQuantity * lot.unitPrice);
-    }
-    res.json(ListInventoryItemsResponse.parse(items.map((item) => ({
-      id: item.id,
-      materialType: item.materialType,
-      name: item.name,
-      category: item.category,
-      unit: item.unit,
-      quantity: Number(item.quantity),
-      totalValue: money(valueByItem.get(item.id) ?? 0),
-      createdAt: item.createdAt.toISOString(),
-    }))));
+    res.json(ListInventoryItemsResponse.parse(formatInventoryStock(items, lots, openingLots)));
   } catch (error) {
     next(error);
   }
@@ -447,11 +433,18 @@ router.put("/inventory/items/:id", async (req, res, next) => {
       res.status(404).json({ error: "Бараа материал олдсонгүй" });
       return;
     }
-    res.json(UpdateInventoryItemResponse.parse({
-      ...item,
-      quantity: Number(item.quantity),
-      createdAt: item.createdAt.toISOString(),
-    }));
+    const [lots, openingLots] = await Promise.all([
+      db.select({
+        inventoryItemId: inventoryPurchaseItemsTable.inventoryItemId,
+        remainingQuantity: inventoryPurchaseItemsTable.remainingQuantity,
+        unitPrice: inventoryPurchaseItemsTable.unitPrice,
+        documentNumber: inventoryPurchasesTable.documentNumber,
+      }).from(inventoryPurchaseItemsTable)
+        .innerJoin(inventoryPurchasesTable, eq(inventoryPurchasesTable.id, inventoryPurchaseItemsTable.purchaseId))
+        .where(eq(inventoryPurchaseItemsTable.inventoryItemId, id)),
+      db.select().from(inventoryOpeningBalancesTable).where(eq(inventoryOpeningBalancesTable.inventoryItemId, id)),
+    ]);
+    res.json(UpdateInventoryItemResponse.parse(formatInventoryStock([item], lots, openingLots)[0]));
   } catch (error) {
     next(error);
   }
@@ -751,6 +744,7 @@ router.post("/inventory/purchases", async (req, res, next) => {
     });
     res.status(201).json(CreateInventoryPurchaseResponse.parse({
       id: result.purchase.id,
+      documentNumber: result.purchase.documentNumber,
       materialType: result.purchase.materialType,
       accountId: result.purchase.accountId,
       accountCode: result.account.code,
@@ -845,6 +839,17 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
       if (consumedLine) {
         return { kind: "consumed" as const };
       }
+      // Match creation's lock order: daily document counter before item stock.
+      // Otherwise a date edit and a new purchase can deadlock on the same item.
+      const [purchase] = await tx.update(inventoryPurchasesTable).set({
+        materialType: input.materialType,
+        accountId: account.id,
+        documentName: supplier.name,
+        ...responsible,
+        hasReceipt: input.hasReceipt,
+        date: input.date,
+        totalAmount,
+      }).where(eq(inventoryPurchasesTable.id, id)).returning();
       for (const oldLine of oldLines) {
         if (oldLine.inventoryItemId) {
           await tx.update(inventoryItemsTable)
@@ -885,15 +890,6 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
         });
       }
       const savedItems = await tx.insert(inventoryPurchaseItemsTable).values(purchaseLines).returning();
-      const [purchase] = await tx.update(inventoryPurchasesTable).set({
-        materialType: input.materialType,
-        accountId: account.id,
-        documentName: supplier.name,
-        ...responsible,
-        hasReceipt: input.hasReceipt,
-        date: input.date,
-        totalAmount,
-      }).where(eq(inventoryPurchasesTable.id, id)).returning();
       if (existing.paymentDate) {
         const cashCategory = inventoryMaterialLabel(input.materialType);
         const cashAccount = await cashAccountForCategory(tx, cashCategory);
@@ -920,6 +916,7 @@ router.put("/inventory/purchases/:id", async (req, res, next) => {
     }
     res.json(UpdateInventoryPurchaseResponse.parse({
       id: result.purchase.id,
+      documentNumber: result.purchase.documentNumber,
       materialType: result.purchase.materialType,
       accountId: result.purchase.accountId,
       accountCode: result.account.code,

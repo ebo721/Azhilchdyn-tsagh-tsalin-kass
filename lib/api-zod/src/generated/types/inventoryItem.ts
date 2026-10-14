@@ -9,6 +9,8 @@ import type { InventoryItemMaterialType } from './inventoryItemMaterialType';
 
 export interface InventoryItem {
   id: number;
+  /** Document numbers of purchase lots that still contribute to stock; opening balances are not purchases. */
+  readonly purchaseDocumentNumbers: readonly string[];
   materialType: InventoryItemMaterialType;
   name: string;
   category: string;

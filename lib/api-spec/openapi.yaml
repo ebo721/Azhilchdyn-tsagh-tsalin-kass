@@ -4019,9 +4019,10 @@ components:
         name: { type: string }
     InventoryPurchase:
       type: object
-      required: [id, materialType, accountId, accountCode, accountName, supplierName, hasReceipt, date, totalAmount, paid, paymentGroupBankTransactionId, createdAt, editable, items]
+      required: [id, documentNumber, materialType, accountId, accountCode, accountName, supplierName, hasReceipt, date, totalAmount, paid, paymentGroupBankTransactionId, createdAt, editable, items]
       properties:
         id: { type: integer }
+        documentNumber: { type: string, readOnly: true, description: "Daily purchase document number based on the selected date, formatted YYYY/MM/DD/001." }
         materialType:
           type: string
           enum: [food, supply]
@@ -4127,9 +4128,14 @@ components:
             $ref: "#/components/schemas/InventorySupplierItem"
     InventoryItem:
       type: object
-      required: [id, materialType, name, category, unit, quantity, totalValue, createdAt]
+      required: [id, materialType, name, category, unit, quantity, totalValue, purchaseDocumentNumbers, createdAt]
       properties:
         id: { type: integer }
+        purchaseDocumentNumbers:
+          type: array
+          readOnly: true
+          description: Document numbers of purchase lots that still contribute to stock; opening balances are not purchases.
+          items: { type: string }
         materialType:
           type: string
           enum: [food, supply]

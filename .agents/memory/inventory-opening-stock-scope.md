@@ -14,3 +14,9 @@ Historical opening stock adds to inventory quantity and FIFO value; do not silen
 **Why:** The user approved fixing stock-item details that incorrectly reported no history when purchases fell outside the month selected in the purchase list.
 
 **How to apply:** Purchase-list month, material-type, and pagination filters must not restrict an individual item's history. Label historical opening stock separately, never as a purchase.
+
+Худалдан авалт бүрийн баримтын дугаар `он/сар/өдөр/001` байна. Огноо нь худалдан авалтын сонгосон огноо; тухайн өдрийн эхний шивэлт 1-ээс эхэлнэ. Барааны үлдэгдэл харахад баримтын дугаар харагдана.
+
+**Why:** The user explicitly chose the purchase's selected date rather than the system entry date for daily numbering.
+
+**How to apply:** Display source purchase numbers on stock and individual purchase history. Do not invent purchase numbers for historical opening stock.
