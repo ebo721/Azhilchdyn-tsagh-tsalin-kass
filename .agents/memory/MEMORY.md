@@ -34,3 +34,4 @@
 - [Fast reopen UI verification](fast-reopen-ui-verification.md) — Off-screen action scrolling can hide cache races; verify phone viewport bounds and immediate reopening after saves.
 - [Meal planning scope](meal-planning-scope.md) — No food-versus-break selector; allow scheduled meal edits without rewriting previous selections or planned classifications.
 - [Inventory closing scope](inventory-closing-scope.md) — Only shortages become pending issues; no stock change before confirmation; distinguish last-price estimates from FIFO cost.
+- [User menu scope](user-menu-scope.md) — Per-user menus stay within existing role ceilings; menu selection must not grant new mutation rights or lock out administrators.

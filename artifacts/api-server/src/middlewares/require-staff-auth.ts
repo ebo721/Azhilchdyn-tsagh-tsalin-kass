@@ -2,10 +2,15 @@ import type { RequestHandler } from "express";
 import { eq } from "drizzle-orm";
 import { db, deletionRequestsTable } from "@workspace/db";
 import { getStaffSession, type StaffRole } from "../lib/hr-session.js";
+import { canUseMenuApi } from "../lib/staff-menu-access.js";
 const requireStaffAuth: RequestHandler = async (req, res, next) => {
   const session = await getStaffSession(req);
   if (!session) {
     res.status(401).json({ error: "Нэвтрэх шаардлагатай" });
+    return;
+  }
+  if (!canUseMenuApi(session, req.path, req.method, req.body?.targetPath)) {
+    res.status(403).json({ error: "Энэ хэрэглэгчид уг цэсийг нээгээгүй байна" });
     return;
   }
   if (req.method === "POST" && req.path === "/meal-counts/import") {

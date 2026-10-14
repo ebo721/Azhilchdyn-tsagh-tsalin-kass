@@ -70,6 +70,7 @@ export const usersTable = pgTable("users", {
   username: text("username").notNull(),
   normalizedUsername: text("normalized_username").notNull().unique(),
   role: text("role").notNull(),
+  menuPaths: text("menu_paths").array(),
   passwordHash: text("password_hash").notNull(),
   tokenVersion: integer("token_version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

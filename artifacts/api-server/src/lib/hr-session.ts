@@ -56,7 +56,7 @@ export function createStaffSession(user: Pick<User, "id" | "role" | "tokenVersio
   return `${payload}.${signature(payload)}`;
 }
 
-export async function getStaffSession(req: Request): Promise<Pick<User, "id" | "username" | "role" | "tokenVersion"> | null> {
+export async function getStaffSession(req: Request): Promise<(Pick<User, "id" | "username" | "tokenVersion" | "menuPaths"> & { role: StaffRole }) | null> {
   const rawCookie = req.headers.cookie?.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${COOKIE_NAME}=`));
   const token = rawCookie?.slice(COOKIE_NAME.length + 1);
   if (!token) return null;
@@ -75,8 +75,10 @@ export async function getStaffSession(req: Request): Promise<Pick<User, "id" | "
       username: usersTable.username,
       role: usersTable.role,
       tokenVersion: usersTable.tokenVersion,
+      menuPaths: usersTable.menuPaths,
     }).from(usersTable).where(eq(usersTable.id, userId));
-    return user && isStaffRole(user.role) && user.tokenVersion === data.tokenVersion ? user as Pick<User, "id" | "username" | "role" | "tokenVersion"> : null;
+    return user && isStaffRole(user.role) && user.tokenVersion === data.tokenVersion
+      ? user as Pick<User, "id" | "username" | "tokenVersion" | "menuPaths"> & { role: StaffRole } : null;
   } catch {
     return null;
   }

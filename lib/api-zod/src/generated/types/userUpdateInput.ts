@@ -14,6 +14,11 @@ export interface UserUpdateInput {
   /** @minLength 1 */
   newPassword?: string;
   /**
+     * @maxItems 18
+     * @nullable
+     */
+  menuPaths?: string[] | null;
+  /**
      * @maxLength 120
      * @nullable
      */
