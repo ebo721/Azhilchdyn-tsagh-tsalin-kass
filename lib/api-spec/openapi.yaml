@@ -79,6 +79,25 @@ paths:
         "204":
           description: Logged out
   /users:
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a staff user (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserInput" }
+      responses:
+        "201":
+          description: Created user without password data
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400":
+          description: Invalid user or menu selection
+        "409":
+          description: Username already exists
     get:
       operationId: listUsers
       tags: [users]
@@ -3040,6 +3059,9 @@ components:
         id: { type: [integer, "null"] }
         role: { type: [string, "null"], enum: [admin, hr, accountant, warehouse, viewer, technologist, null] }
         username: { type: [string, "null"] }
+        menuPaths:
+          type: [array, "null"]
+          items: { type: string }
     User:
       type: object
       required: [id, username, role]
@@ -3051,6 +3073,27 @@ components:
           type: array
           items: { type: integer }
         role: { type: string, enum: [admin, hr, accountant, warehouse, viewer, technologist] }
+        menuPaths:
+          type: [array, "null"]
+          items: { type: string }
+    UserInput:
+      type: object
+      required: [username, role, password]
+      properties:
+        username: { type: string, minLength: 1, maxLength: 80 }
+        role: { type: string, enum: [admin, hr, accountant, warehouse, viewer, technologist] }
+        password: { type: string, minLength: 8, maxLength: 128 }
+        fullName: { type: ["string", "null"], maxLength: 120 }
+        menuPaths:
+          type: [array, "null"]
+          uniqueItems: true
+          maxItems: 18
+          items: { type: string }
+        custodianEmployeeIds:
+          type: array
+          uniqueItems: true
+          maxItems: 1000
+          items: { type: integer, minimum: 1 }
     UserUpdateInput:
       type: object
       required: [username, role]
@@ -3058,6 +3101,11 @@ components:
         username: { type: string, minLength: 1 }
         role: { type: string, enum: [admin, hr, accountant, warehouse, viewer, technologist] }
         newPassword: { type: string, minLength: 1 }
+        menuPaths:
+          type: [array, "null"]
+          uniqueItems: true
+          maxItems: 18
+          items: { type: string }
         fullName: { type: ["string", "null"], maxLength: 120 }
         custodianEmployeeIds:
           type: array

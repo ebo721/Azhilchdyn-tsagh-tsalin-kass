@@ -2,49 +2,30 @@ import { type ReactNode, useState } from 'react';
 import { BriefcaseBusiness, ChevronRight, LogOut, Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { cn } from '@/lib/utils';
+import { STAFF_MENUS, visibleMenuPaths, type StaffMenuPath } from '@workspace/api-zod/staff-menu-policy';
 import { Banknote, Clock3, Landmark, LayoutDashboard, MonitorSmartphone, PackageOpen, Receipt, ShieldCheck, Timer, UserRound, UsersRound, WalletCards, Library, Utensils, CalendarDays, ClipboardList, ArrowLeftRight } from 'lucide-react';
 
-export const nav = [
-  { href: '/', label: 'Статистик', icon: LayoutDashboard },
-  { href: '/employees', label: 'Ажилчид', icon: UsersRound },
-  { href: '/attendance', label: 'Ирц', icon: Clock3 },
-  { href: '/attendance/devices', label: 'Ирцийн төхөөрөмж', icon: MonitorSmartphone },
-  { href: '/hour-balance', label: 'Цагийн баланс', icon: Timer },
-  { href: '/payroll', label: 'Цалин', icon: Banknote },
-  { href: '/cash', label: 'Касс', icon: WalletCards },
-  { href: '/bank-transactions', label: 'Банкны гүйлгээ', icon: Landmark },
-  { href: '/operating-expenses', label: 'Үйл ажиллагааны зардал', icon: Receipt },
-  { href: '/inventory', label: 'Бараа материал', icon: PackageOpen },
-  { href: '/meals', label: 'Хоолны цэс', icon: Utensils },
-  { href: '/meal-schedule', label: 'Хоолны хуваарь', icon: CalendarDays },
-  { href: '/meal-counts', label: 'Хоолны тоо', icon: ClipboardList },
-  { href: '/fixed-assets', label: 'Эд хөрөнгө', icon: BriefcaseBusiness },
-  { href: '/journal', label: 'Ерөнхий журнал', icon: Library },
-  { href: '/ar-ap', label: 'Авлага, Өглөг', icon: ArrowLeftRight },
-  { href: '/deletion-requests', label: 'Устгах хүсэлт', icon: ShieldCheck },
-  { href: '/users', label: 'Хэрэглэгчийн тохиргоо', icon: UserRound },
-];
+const menuIcons: Record<StaffMenuPath, typeof LayoutDashboard> = {
+  '/': LayoutDashboard, '/employees': UsersRound, '/attendance': Clock3,
+  '/attendance/devices': MonitorSmartphone, '/hour-balance': Timer, '/payroll': Banknote,
+  '/cash': WalletCards, '/bank-transactions': Landmark, '/operating-expenses': Receipt,
+  '/inventory': PackageOpen, '/meals': Utensils, '/meal-schedule': CalendarDays,
+  '/meal-counts': ClipboardList, '/fixed-assets': BriefcaseBusiness, '/journal': Library,
+  '/ar-ap': ArrowLeftRight, '/deletion-requests': ShieldCheck, '/users': UserRound,
+};
+export const nav = STAFF_MENUS.map(menu => ({ href: menu.path, label: menu.label, icon: menuIcons[menu.path] }));
 
-export function AppShell({ children, role, onLogout }: { children: ReactNode; role: 'admin' | 'hr' | 'accountant' | 'warehouse' | 'viewer' | 'technologist'; onLogout: () => void }) {
+export function AppShell({ children, role, menuPaths, onLogout }: { children: ReactNode; role: 'admin' | 'hr' | 'accountant' | 'warehouse' | 'viewer' | 'technologist'; menuPaths?: string[] | null; onLogout: () => void }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const visibleNav = role === 'hr'
-    ? nav.filter((item) => ['/employees', '/attendance', '/attendance/devices', '/hour-balance', '/meal-counts'].includes(item.href))
-    : role === 'accountant'
-       ? nav.filter((item) => ['/employees', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/journal', '/ar-ap', '/meal-counts'].includes(item.href))
-      : role === 'warehouse'
-        ? nav.filter((item) => ['/inventory', '/fixed-assets', '/meals', '/meal-schedule', '/meal-counts'].includes(item.href))
-        : role === 'technologist'
-          ? nav.filter((item) => ['/meals', '/meal-schedule', '/meal-counts'].includes(item.href))
-        : role === 'viewer'
-           ? nav.filter((item) => ['/employees', '/attendance', '/hour-balance', '/payroll', '/cash', '/bank-transactions', '/operating-expenses', '/inventory', '/fixed-assets', '/journal', '/ar-ap', '/meals', '/meal-schedule', '/meal-counts'].includes(item.href))
-          : nav;
+  const selected = visibleMenuPaths(role, menuPaths);
+  const visibleNav = nav.filter(item => selected.includes(item.href as typeof selected[number]));
   const active = (visibleNav.find((item) => item.href === location) ?? visibleNav.find((item) => item.href !== '/' && location.startsWith(`${item.href}/`)))?.label ?? 'Статистик';
   return (
     <div className="min-h-[100dvh] bg-background app-grid" data-role={role}>
       <aside className={cn('fixed inset-y-0 left-0 z-40 flex w-[248px] flex-col bg-sidebar px-4 py-5 text-sidebar-foreground transition-transform duration-200 lg:translate-x-0', mobileOpen ? 'translate-x-0' : '-translate-x-full')} data-testid="navigation-sidebar">
         <div className="flex items-center justify-between px-2">
-          <Link href="/" className="flex items-center gap-3" data-testid="link-brand">
+          <Link href={visibleNav[0]?.href ?? '/'} className="flex items-center gap-3" data-testid="link-brand">
             <span className="grid size-10 place-items-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground"><BriefcaseBusiness className="size-5" /></span>
             <span className="text-sm font-bold tracking-tight">САМАСАА</span>
           </Link>

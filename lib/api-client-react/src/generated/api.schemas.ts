@@ -272,6 +272,8 @@ export interface AuthSession {
   role: AuthSessionRole;
   /** @nullable */
   username: string | null;
+  /** @nullable */
+  menuPaths?: string[] | null;
 }
 
 export type UserRole = typeof UserRole[keyof typeof UserRole];
@@ -293,6 +295,49 @@ export interface User {
   fullName?: string | null;
   custodianEmployeeIds?: number[];
   role: UserRole;
+  /** @nullable */
+  menuPaths?: string[] | null;
+}
+
+export type UserInputRole = typeof UserInputRole[keyof typeof UserInputRole];
+
+
+export const UserInputRole = {
+  admin: 'admin',
+  hr: 'hr',
+  accountant: 'accountant',
+  warehouse: 'warehouse',
+  viewer: 'viewer',
+  technologist: 'technologist',
+} as const;
+
+export interface UserInput {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  username: string;
+  role: UserInputRole;
+  /**
+     * @minLength 8
+     * @maxLength 128
+     */
+  password: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  fullName?: string | null;
+  /**
+     * @maxItems 18
+     * @nullable
+     */
+  menuPaths?: string[] | null;
+  /**
+     * @maxItems 1000
+     * @items.minimum 1
+     */
+  custodianEmployeeIds?: number[];
 }
 
 export type UserUpdateInputRole = typeof UserUpdateInputRole[keyof typeof UserUpdateInputRole];
@@ -313,6 +358,11 @@ export interface UserUpdateInput {
   role: UserUpdateInputRole;
   /** @minLength 1 */
   newPassword?: string;
+  /**
+     * @maxItems 18
+     * @nullable
+     */
+  menuPaths?: string[] | null;
   /**
      * @maxLength 120
      * @nullable

@@ -100,7 +100,11 @@
     {
       "filename": "20261014_inventory_purchase_document_numbers.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20261014_user_menu_access.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "8e7ac79d2a9b4102a9db89fc3f991e9d99af4d7fade9f0fccb5d3c18e83b55c9"
+  "schemaFingerprint": "553bce17c0e54cd5ecc90a76e0a0a33f851fd863b1bf906eee667d69fc0bafee"
 }

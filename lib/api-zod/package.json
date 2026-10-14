@@ -8,6 +8,11 @@
       "workspace": "./src/index.ts",
       "types": "./src/index.ts",
       "default": "./dist/index.js"
+    },
+    "./staff-menu-policy": {
+      "workspace": "./src/staff-menu-policy.ts",
+      "types": "./src/staff-menu-policy.ts",
+      "default": "./src/staff-menu-policy.ts"
     }
   },
   "dependencies": {

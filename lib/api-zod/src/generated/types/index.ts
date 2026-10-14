@@ -275,6 +275,8 @@ export * from './unclearTransactionList';
 export * from './unclearTransactionSource';
 export * from './unclearTransactionType';
 export * from './user';
+export * from './userInput';
+export * from './userInputRole';
 export * from './userRole';
 export * from './userUpdateInput';
 export * from './userUpdateInputRole';

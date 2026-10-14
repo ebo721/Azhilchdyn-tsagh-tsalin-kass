@@ -14,4 +14,6 @@ export interface User {
   fullName?: string | null;
   custodianEmployeeIds?: number[];
   role: UserRole;
+  /** @nullable */
+  menuPaths?: string[] | null;
 }

@@ -19,7 +19,8 @@ export const GetAuthSessionResponse = zod.object({
   "authenticated": zod.boolean(),
   "id": zod.number().int().nullable(),
   "role": zod.union([zod.literal('admin'),zod.literal('hr'),zod.literal('accountant'),zod.literal('warehouse'),zod.literal('viewer'),zod.literal('technologist'),zod.literal(null)]).nullable(),
-  "username": zod.string().nullable()
+  "username": zod.string().nullable(),
+  "menuPaths": zod.array(zod.string()).nullish()
 })
 
 
@@ -32,11 +33,48 @@ export const LoginHrManagerResponse = zod.object({
   "authenticated": zod.boolean(),
   "id": zod.number().int().nullable(),
   "role": zod.union([zod.literal('admin'),zod.literal('hr'),zod.literal('accountant'),zod.literal('warehouse'),zod.literal('viewer'),zod.literal('technologist'),zod.literal(null)]).nullable(),
-  "username": zod.string().nullable()
+  "username": zod.string().nullable(),
+  "menuPaths": zod.array(zod.string()).nullish()
 })
 
 
 export const LogoutHrManagerResponse = zod.void()
+
+
+/**
+ * @summary Create a staff user (admin only)
+ */
+export const createUserBodyUsernameMax = 80;
+
+export const createUserBodyPasswordMin = 8;
+export const createUserBodyPasswordMax = 128;
+
+export const createUserBodyFullNameMax = 120;
+
+export const createUserBodyMenuPathsMax = 18;
+
+
+export const createUserBodyCustodianEmployeeIdsMax = 1000;
+
+
+
+export const CreateUserBody = zod.object({
+  "username": zod.string().min(1).max(createUserBodyUsernameMax),
+  "role": zod.enum(['admin', 'hr', 'accountant', 'warehouse', 'viewer', 'technologist']),
+  "password": zod.string().min(createUserBodyPasswordMin).max(createUserBodyPasswordMax),
+  "fullName": zod.string().max(createUserBodyFullNameMax).nullish(),
+  "menuPaths": zod.array(zod.string()).max(createUserBodyMenuPathsMax).nullish(),
+  "custodianEmployeeIds": zod.array(zod.number().int().min(1)).max(createUserBodyCustodianEmployeeIdsMax).optional()
+})
+
+export const CreateUserResponse = zod.object({
+  "id": zod.number().int(),
+  "username": zod.string(),
+  "fullName": zod.string().nullish(),
+  "custodianEmployeeIds": zod.array(zod.number().int()).optional(),
+  "role": zod.enum(['admin', 'hr', 'accountant', 'warehouse', 'viewer', 'technologist']),
+  "menuPaths": zod.array(zod.string()).nullish()
+})
 
 
 /**
@@ -47,7 +85,8 @@ export const ListUsersResponseItem = zod.object({
   "username": zod.string(),
   "fullName": zod.string().nullish(),
   "custodianEmployeeIds": zod.array(zod.number().int()).optional(),
-  "role": zod.enum(['admin', 'hr', 'accountant', 'warehouse', 'viewer', 'technologist'])
+  "role": zod.enum(['admin', 'hr', 'accountant', 'warehouse', 'viewer', 'technologist']),
+  "menuPaths": zod.array(zod.string()).nullish()
 })
 export const ListUsersResponse = zod.array(ListUsersResponseItem)
 
@@ -61,6 +100,8 @@ export const UpdateUserParams = zod.object({
 
 
 
+export const updateUserBodyMenuPathsMax = 18;
+
 export const updateUserBodyFullNameMax = 120;
 
 
@@ -70,6 +111,7 @@ export const UpdateUserBody = zod.object({
   "username": zod.string().min(1),
   "role": zod.enum(['admin', 'hr', 'accountant', 'warehouse', 'viewer', 'technologist']),
   "newPassword": zod.string().min(1).optional(),
+  "menuPaths": zod.array(zod.string()).max(updateUserBodyMenuPathsMax).nullish(),
   "fullName": zod.string().max(updateUserBodyFullNameMax).nullish(),
   "custodianEmployeeIds": zod.array(zod.number().int().min(1)).optional()
 })
@@ -79,7 +121,8 @@ export const UpdateUserResponse = zod.object({
   "username": zod.string(),
   "fullName": zod.string().nullish(),
   "custodianEmployeeIds": zod.array(zod.number().int()).optional(),
-  "role": zod.enum(['admin', 'hr', 'accountant', 'warehouse', 'viewer', 'technologist'])
+  "role": zod.enum(['admin', 'hr', 'accountant', 'warehouse', 'viewer', 'technologist']),
+  "menuPaths": zod.array(zod.string()).nullish()
 })
 
 

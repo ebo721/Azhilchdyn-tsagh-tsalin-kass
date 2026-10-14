@@ -15,4 +15,6 @@ export interface AuthSession {
   role: AuthSessionRole;
   /** @nullable */
   username: string | null;
+  /** @nullable */
+  menuPaths?: string[] | null;
 }
