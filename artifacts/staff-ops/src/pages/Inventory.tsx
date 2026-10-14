@@ -185,6 +185,7 @@ import { HourBalance } from '@/pages/HourBalance';
 import { InventoryCustodianSelect } from '@/pages/InventoryCustodianSelect';
 import { InventoryClosingBalances } from '@/pages/InventoryClosingBalances';
 import { InventoryOpeningBalances } from '@/pages/InventoryOpeningBalances';
+import { InventoryItemHistory } from '@/pages/InventoryItemHistory';
 import { issueCatalogOptions } from '@/pages/inventoryIssueOptions';
 import { Dashboard } from '@/pages/Dashboard';
 import { Employees } from '@/pages/Employees';
@@ -384,11 +385,6 @@ export function Inventory() {
     });
   };
   const filteredCatalog = catalog.data?.filter((item) => item.quantity > 0 && item.materialType === materialTypeTab && `${item.name} ${item.category}`.toLocaleLowerCase('mn-MN').includes(stockSearch.toLocaleLowerCase('mn-MN'))) ?? [];
-  const selectedItemHistory = selectedItem
-    ? query.data?.flatMap((purchase) => purchase.items
-      .filter((item) => item.inventoryItemId === selectedItem.id)
-      .map((item) => ({ ...item, purchaseId: purchase.id, date: purchase.date }))) ?? []
-    : [];
   const deletePurchase = (purchase: InventoryPurchase) => {
     if (!window.confirm(`"${purchase.supplierName}" худалдан авалтыг устгах уу?`)) return;
     deletion.request(`/inventory/purchases/${purchase.id}`, `${purchase.supplierName} · ${money(purchase.totalAmount)}`);
@@ -672,7 +668,7 @@ export function Inventory() {
       </div>}
     </section>}
     {selectedItem && <Modal title={selectedItem.name} detail={`${selectedItem.category} · Үлдэгдэл ${selectedItem.quantity} ${selectedItem.unit}`} onClose={() => setSelectedItem(null)}>
-      {!selectedItemHistory.length ? <EmptyState title="Худалдан авалтын түүх алга" detail="Энэ бараанд холбогдох худалдан авалт олдсонгүй." icon={PackageOpen} /> : <div className="max-h-[60vh] overflow-y-auto"><div className="overflow-x-auto"><table className="w-full min-w-[560px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-3 py-2">Огноо</th><th className="px-3 py-2 text-right">Тоо</th><th className="px-3 py-2">Нэгж</th><th className="px-3 py-2 text-right">Нэгж үнэ</th><th className="px-3 py-2 text-right">Нийт үнэ</th></tr></thead><tbody className="divide-y divide-border">{selectedItemHistory.map((line) => <tr key={`${line.purchaseId}-${line.id}`}><td className="px-3 py-3 text-sm font-semibold">{dateLabel(line.date)}</td><td className="px-3 py-3 text-right font-mono text-sm">{line.quantity}</td><td className="px-3 py-3 text-sm text-muted-foreground">{line.unit}</td><td className="px-3 py-3 text-right font-mono text-sm">{money(line.unitPrice)}</td><td className="px-3 py-3 text-right font-mono text-sm font-bold">{money(line.totalAmount)}</td></tr>)}</tbody></table></div></div>}
+      <InventoryItemHistory itemId={selectedItem.id} />
     </Modal>}
     {categoryItem && <Modal title="Бараа материал засах" detail={`${categoryItem.quantity} ${categoryItem.unit} үлдэгдэлтэй`} onClose={() => setCategoryItem(null)}>
       <Form {...categoryForm}><form onSubmit={categoryForm.handleSubmit(submitCategory)} className="space-y-5" data-testid="form-inventory-category">
