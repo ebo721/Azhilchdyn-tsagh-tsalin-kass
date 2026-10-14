@@ -11,7 +11,7 @@ import {
   useListEmployees,
   type User,
 } from '@workspace/api-client-react';
-import { STAFF_MENUS, visibleMenuPaths, type MenuStaffRole } from '@workspace/api-zod';
+import { STAFF_MENUS, visibleMenuPaths, type MenuStaffRole } from '@workspace/api-zod/staff-menu-policy';
 import { UserFormModal, userRoleLabels } from './UserForm';
 
 export function UserEditModal({ user, onClose }: { user: User; onClose: () => void }) {

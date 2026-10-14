@@ -12,7 +12,7 @@ import {
   useUpdateUser,
   type User,
 } from '@workspace/api-client-react';
-import { STAFF_MENUS, ROLE_MENU_PATHS, defaultMenuPaths, visibleMenuPaths, validMenuSelection, type MenuStaffRole } from '@workspace/api-zod';
+import { STAFF_MENUS, ROLE_MENU_PATHS, defaultMenuPaths, visibleMenuPaths, validMenuSelection, type MenuStaffRole } from '@workspace/api-zod/staff-menu-policy';
 
 export const userRoleLabels: Record<string, string> = {
   admin: 'Админ',

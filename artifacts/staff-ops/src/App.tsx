@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { accessibleMenuPaths, menuForPage, visibleMenuPaths } from '@workspace/api-zod';
+import { accessibleMenuPaths, menuForPage, visibleMenuPaths } from '@workspace/api-zod/staff-menu-policy';
 import { getGetAuthSessionQueryKey } from '@workspace/api-client-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';

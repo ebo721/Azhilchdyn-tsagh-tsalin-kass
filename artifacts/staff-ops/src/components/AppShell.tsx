@@ -2,7 +2,7 @@ import { type ReactNode, useState } from 'react';
 import { BriefcaseBusiness, ChevronRight, LogOut, Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { cn } from '@/lib/utils';
-import { STAFF_MENUS, visibleMenuPaths, type StaffMenuPath } from '@workspace/api-zod';
+import { STAFF_MENUS, visibleMenuPaths, type StaffMenuPath } from '@workspace/api-zod/staff-menu-policy';
 import { Banknote, Clock3, Landmark, LayoutDashboard, MonitorSmartphone, PackageOpen, Receipt, ShieldCheck, Timer, UserRound, UsersRound, WalletCards, Library, Utensils, CalendarDays, ClipboardList, ArrowLeftRight } from 'lucide-react';
 
 const menuIcons: Record<StaffMenuPath, typeof LayoutDashboard> = {
