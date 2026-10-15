@@ -50,11 +50,11 @@ import {
   UpdateBankTransactionAccountResponse,
 } from "@workspace/api-zod";
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
-import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable, journalEntriesTable, operatingExpensesTable } from "@workspace/db";
+import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable, employeesTable, inventorySuppliersTable, journalEntriesTable, journalLinesTable, operatingExpensesTable } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.js";
 import { cashAccountForCategory } from "../lib/cash-account.js";
-import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
+import { JournalValidationError, postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
 import { loadBankRecognitionContext, recognizeBankTransaction } from "../lib/bank-recognition.js";
 import { inventoryPurchaseAccountCodes } from "../lib/route-shared.js";
 import { bankSuggestionScore } from "../lib/bank-suggestion-score.js";
@@ -517,13 +517,48 @@ router.post("/bank-transactions/:id/link-fixed-asset", async (req, res, next) =>
 router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
   try {
     const { id } = PostBankTransactionJournalParams.parse(req.params);
-    const { accountId } = PostBankTransactionJournalBody.parse(req.body);
+    const { accountId, allocation } = PostBankTransactionJournalBody.parse(req.body);
+    if (id > 2147483647 || accountId > 2147483647) {
+      res.status(400).json({ error: "Гүйлгээ болон дансны дугаар буруу байна" });
+      return;
+    }
+    const session = await getStaffSession(req);
+    if (!session || !["admin", "accountant"].includes(session.role)) {
+      res.status(403).json({ error: "Зөвхөн админ, нягтлан банкны журнал бүртгэнэ" });
+      return;
+    }
+    if (allocation) {
+      const partyId = allocation.partyType === "employee" ? allocation.employeeId : allocation.supplierId;
+      const otherId = allocation.partyType === "employee" ? allocation.supplierId : allocation.employeeId;
+      if (!partyId || !Number.isInteger(partyId) || partyId > 2147483647 || otherId !== undefined) {
+        res.status(400).json({ error: "Нэг ажилтан эсвэл харилцагч зөв сонгоно уу" });
+        return;
+      }
+    }
     const result = await db.transaction(async (tx) => {
       const [bank] = await tx.select().from(bankTransactionsTable)
         .where(eq(bankTransactionsTable.id, id))
         .for("update");
       if (!bank) return "missing" as const;
-      if (bank.journalEntryId !== null) return { id: bank.id, journalEntryId: bank.journalEntryId };
+      if (bank.journalEntryId !== null) {
+        if (allocation) {
+          const [existing] = await tx.select({ allocation: journalLinesTable.allocation, status: journalEntriesTable.status })
+            .from(journalLinesTable)
+            .innerJoin(journalEntriesTable, eq(journalEntriesTable.id, journalLinesTable.journalEntryId))
+            .where(and(
+              eq(journalLinesTable.journalEntryId, bank.journalEntryId),
+              eq(journalLinesTable.accountId, accountId),
+              eq(journalEntriesTable.sourceType, "bank"),
+              eq(journalEntriesTable.sourceId, bank.id),
+            ));
+          const prior = existing?.allocation as { kind?: string; partyType?: string; employeeId?: number; supplierId?: number } | null;
+          if (existing?.status !== "posted" || prior?.kind !== "create" || prior.partyType !== allocation.partyType
+            || prior.employeeId !== allocation.employeeId || prior.supplierId !== allocation.supplierId) {
+            return "balance-conflict" as const;
+          }
+        }
+        return { id: bank.id, journalEntryId: bank.journalEntryId };
+      }
       if (bank.cashTransactionId !== null || bank.transferredAt !== null || bank.unclearAt !== null) {
         return "resolved" as const;
       }
@@ -531,6 +566,19 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
         eq(chartOfAccountsTable.id, accountId),
         eq(chartOfAccountsTable.isActive, true),
       ));
+      if (allocation) {
+        const requiredCode = bank.type === "expense" ? "1200" : bank.type === "income" ? "2000" : null;
+        if (!requiredCode || account?.code !== requiredCode) {
+          throw new JournalValidationError("Банкны зарлагаар 1200 авлага, орлогоор 2000 өглөг шинээр үүсгэнэ");
+        }
+        // Share the employee deletion lock, including polymorphic payable origins.
+        const [party] = allocation.partyType === "employee"
+          ? await tx.select({ id: employeesTable.id }).from(employeesTable)
+            .where(and(eq(employeesTable.id, allocation.employeeId!), eq(employeesTable.status, "active"))).for("share")
+          : await tx.select({ id: inventorySuppliersTable.id }).from(inventorySuppliersTable)
+            .where(eq(inventorySuppliersTable.id, allocation.supplierId!)).for("share");
+        if (!party) throw new JournalValidationError("Идэвхтэй ажилтан эсвэл бүртгэлтэй харилцагч сонгоно уу");
+      }
       if (bank.type === "expense") {
         const [assignedAccount] = bank.accountId === null || bank.accountId === accountId
           ? [] : await tx.select({ code: chartOfAccountsTable.code })
@@ -541,7 +589,7 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
         if (account?.code === "1800" || assignedAccount?.code === "1800") return "fixed-asset-document-required" as const;
       }
       const allowed = bank.type === "income"
-        ? account?.type === "revenue"
+        ? account?.type === "revenue" || (account?.code === "2000" && allocation !== undefined)
         : account !== undefined && ["expense", "asset", "liability"].includes(account.type);
       if (!allowed) return "invalid_account" as const;
       const bankAccount = await accountByCode(tx, "1010", "asset");
@@ -551,10 +599,10 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
         description: bank.description.trim() || bank.counterparty.trim() || "Банкны гүйлгээ",
         sourceType: "bank",
         sourceId: bank.id,
-        createdBy: null,
+        createdBy: session.id,
         lines: bank.type === "income"
-          ? [{ accountId: bankAccount.id, debit: amount, credit: 0 }, { accountId: account.id, debit: 0, credit: amount }]
-          : [{ accountId: account.id, debit: amount, credit: 0 }, { accountId: bankAccount.id, debit: 0, credit: amount }],
+          ? [{ accountId: bankAccount.id, debit: amount, credit: 0 }, { accountId: account.id, debit: 0, credit: amount, allocation }]
+          : [{ accountId: account.id, debit: amount, credit: 0, allocation }, { accountId: bankAccount.id, debit: 0, credit: amount }],
       });
       if (posting.status !== "posted") throw new Error("Bank journal entry must be balanced");
       await tx.update(bankTransactionsTable).set({
@@ -571,6 +619,10 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
       res.status(409).json({ error: "Банкны гүйлгээ аль хэдийн шийдвэрлэгдсэн байна" });
       return;
     }
+    if (result === "balance-conflict") {
+      res.status(409).json({ error: "Гүйлгээ өөр журнал эсвэл өөр талын авлага/өглөгт бүртгэгдсэн байна" });
+      return;
+    }
     if (result === "invalid_account") {
       res.status(400).json({ error: "Гүйлгээний төрөлд тохирох идэвхтэй GL данс сонгоно уу" });
       return;
@@ -584,7 +636,13 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
       return;
     }
     res.json(PostBankTransactionJournalResponse.parse(result));
-  } catch (error) { next(error); }
+  } catch (error) {
+    if (error instanceof JournalValidationError) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+    next(error);
+  }
 });
 
 router.post("/bank-transactions/:id/unlink-cash", async (req, res, next): Promise<void> => {

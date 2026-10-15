@@ -1610,6 +1610,7 @@ export interface BankFixedAssetLinkResult {
 export interface BankTransactionJournalPostInput {
   /** @minimum 1 */
   accountId: number;
+  allocation?: ReceivableCreateAllocation;
 }
 
 export interface BankTransactionJournalPostResult {
@@ -1922,6 +1923,7 @@ export interface InventoryPurchase {
   id: number;
   /** Daily purchase document number based on the selected date, formatted YYYY/MM/DD/001. */
   readonly documentNumber: string;
+  readonly documentName?: string;
   materialType: InventoryPurchaseMaterialType;
   accountId: number | null;
   accountCode: string | null;

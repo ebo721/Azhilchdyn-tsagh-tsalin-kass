@@ -35,3 +35,5 @@
 - [Meal planning scope](meal-planning-scope.md) — No food-versus-break selector; allow scheduled meal edits without rewriting previous selections or planned classifications.
 - [Inventory closing scope](inventory-closing-scope.md) — Only shortages become pending issues; no stock change before confirmation; distinguish last-price estimates from FIFO cost.
 - [User menu scope](user-menu-scope.md) — Per-user menus stay within existing role ceilings; menu selection must not grant new mutation rights or lock out administrators.
+- [Bank-sourced balances](bank-sourced-balances.md) — Direct bank receivables/payables use the stored transaction date and amount; new debt is distinct from repayment.
+- [Browser test pool lifetime](browser-test-pool-lifetime.md) — Run DB-backed browser specs separately until shared-pool teardown is worker-scoped.
