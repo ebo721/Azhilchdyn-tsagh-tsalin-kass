@@ -3894,6 +3894,8 @@ components:
       required: [accountId]
       properties:
         accountId: { type: integer, minimum: 1 }
+        allocation:
+          $ref: "#/components/schemas/ReceivableCreateAllocation"
     BankTransactionJournalPostResult:
       type: object
       required: [id, journalEntryId]
@@ -4121,6 +4123,7 @@ components:
       properties:
         id: { type: integer }
         documentNumber: { type: string, readOnly: true, description: "Daily purchase document number based on the selected date, formatted YYYY/MM/DD/001." }
+        documentName: { type: string, readOnly: true }
         materialType:
           type: string
           enum: [food, supply]

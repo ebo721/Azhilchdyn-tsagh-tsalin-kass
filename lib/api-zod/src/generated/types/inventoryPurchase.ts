@@ -12,6 +12,7 @@ export interface InventoryPurchase {
   id: number;
   /** Daily purchase document number based on the selected date, formatted YYYY/MM/DD/001. */
   readonly documentNumber: string;
+  readonly documentName?: string;
   materialType: InventoryPurchaseMaterialType;
   accountId: number | null;
   accountCode: string | null;

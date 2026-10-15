@@ -19,7 +19,7 @@ function requiredMenus(path: string, method: string): StaffMenuPath[] {
   if (starts("/attendance/devices")) return ["/attendance/devices"];
   if (read && ["/attendance/shifts", "/attendance/shift-plans"].some(starts)) return ["/attendance", "/hour-balance", "/payroll"];
   if (starts("/attendance")) return ["/attendance"];
-  if (p === "/employees" && read) return ["/employees", "/attendance", "/cash", "/payroll", "/users", "/ar-ap"];
+  if (p === "/employees" && read) return ["/employees", "/attendance", "/cash", "/payroll", "/users", "/ar-ap", "/bank-transactions"];
   if (read && /^\/employees\/\d+\/salary-bank-account$/.test(p)) return ["/employees", "/cash", "/payroll", "/bank-transactions"];
   if (starts("/employees")) return ["/employees"];
   if (starts("/hour-balance")) return ["/hour-balance"];
@@ -37,6 +37,7 @@ function requiredMenus(path: string, method: string): StaffMenuPath[] {
   if (starts("/operating-expenses")) return ["/operating-expenses"];
   if (starts("/journal/receivables") || starts("/journal/payables")) return read
     ? ["/journal", "/ar-ap", "/payroll"] : ["/journal", "/ar-ap"];
+  if (read && p === "/journal/suppliers") return ["/journal", "/bank-transactions"];
   if (starts("/journal")) return ["/journal"];
   if (starts("/meal-schedule")) return ["/meal-schedule"];
   if (starts("/meal-counts")) return ["/meal-counts"];
