@@ -102,7 +102,9 @@ export function BankDocumentLinkPanel({
   const assetMatchesBank = Math.round(assetTotal * 100) === Math.round(row.amount * 100);
   const error = linkExpense.error ?? linkPurchase.error ?? linkPurchases.error ?? linkFixedAsset.error;
   const linking = linkExpense.isPending || linkPurchase.isPending || linkPurchases.isPending || linkFixedAsset.isPending;
-  const loading = expenses.isLoading || purchases.isLoading || fixedAssets.isLoading || accounts.isLoading;
+  const documents = type === 'purchase' ? purchases : type === 'fixed-asset' ? fixedAssets : expenses;
+  const loading = documents.isLoading || accounts.isLoading;
+  const loadFailed = documents.isError || accounts.isError;
   const invalidate = () => {
     [getListBankTransactionJournalReviewQueryKey(), getListBankTransactionsQueryKey(), getListCashTransactionsQueryKey(),
       getListInventoryPurchasesQueryKey(), getListOperatingExpensesQueryKey(), getListFixedAssetsQueryKey(),
@@ -158,7 +160,12 @@ export function BankDocumentLinkPanel({
         <div><p className="text-sm font-bold">Баримт холбох</p><p className="text-xs text-muted-foreground">{row.date} · {money(row.amount)}</p></div>
         <Button type="button" size="sm" variant="ghost" onClick={onClose}>Болих</Button>
       </div>
-      {loading ? <p className="text-sm text-muted-foreground">Баримтуудыг уншиж байна...</p> : (
+      {loading ? <p className="text-sm text-muted-foreground">Баримтуудыг уншиж байна...</p> : loadFailed ? (
+        <div role="alert" className="space-y-2 text-sm text-destructive">
+          <p>Баримтын жагсаалтыг ачаалж чадсангүй. Энэ нь баримт байхгүй гэсэн үг биш.</p>
+          <Button type="button" size="sm" variant="outline" onClick={() => { void documents.refetch(); void accounts.refetch(); }}>Дахин оролдох</Button>
+        </div>
+      ) : (
         <>
           {initialFixedAsset ? (
             <div className="mb-3 rounded-lg border border-primary/20 bg-background p-3">
@@ -203,7 +210,7 @@ export function BankDocumentLinkPanel({
                           event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))}
                         data-testid={`checkbox-link-purchase-${row.id}-${item.id}`}
                       />
-                       <span className="min-w-0 flex-1 truncate">{item.date} · #{item.id} · {item.materialType === 'supply' ? 'Хангамж' : 'Бараа'} · {item.supplierName}</span>
+                       <span className="min-w-0 flex-1 truncate">{item.date} · #{item.id} · {item.materialType === 'supply' ? 'Хангамж' : 'Бараа'} · {item.documentName} · {item.supplierName}</span>
                       <span className="shrink-0 font-mono">{money(item.totalAmount)}</span>
                     </label>
                   ))}

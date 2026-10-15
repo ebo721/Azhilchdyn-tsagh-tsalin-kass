@@ -135,6 +135,20 @@ describe("ordered bank recognition", () => {
     );
   });
 
+  it("recognizes inventory wording instead of inheriting the supplier's old transport account", () => {
+    const previousTransport = context({ historical: [{
+      id: 1, type: "expense", accountId: 6200,
+      account: "99112233 / Нийлүүлэгч", counterparty: "99112233 / Нийлүүлэгч", bankAccountNumber: "1234567890",
+    }] });
+    for (const description of ["Бараа материал", "Бараа материалын худалдан авалт", "Барааны төлбөр", "Барааны үнэ"]) {
+      assert.deepEqual(recognizeBankTransaction(transaction({ description }), previousTransport),
+        { accountId: 1500, rule: "keyword", existingPurchaseMatch: null });
+    }
+    for (const description of ["Бараа материалын тээврийн хөлс", "Бараа материал тээврийн төлбөр"]) {
+      assert.equal(recognizeBankTransaction(transaction({ description }), context()).accountId, 6200);
+    }
+  });
+
   it("does not match on the company's bank account number alone", () => {
     const result = recognizeBankTransaction(transaction({
       counterparty: "Өөр харилцагч",

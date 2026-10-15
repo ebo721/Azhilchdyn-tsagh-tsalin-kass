@@ -1,5 +1,15 @@
 import { accessibleMenuPaths, type MenuStaffRole, type StaffMenuPath } from "@workspace/api-zod";
 
+/** Bank settlement may read source lists, but not source details or mutations. */
+export function bankDocumentLookupMenu(path: string, method: string): StaffMenuPath | undefined {
+  if (method !== "GET") return undefined;
+  const p = path.toLowerCase().replace(/\/+$/, "");
+  if (p === "/inventory/purchases") return "/inventory";
+  if (p === "/operating-expenses") return "/operating-expenses";
+  if (p === "/fixed-assets") return "/fixed-assets";
+  return undefined;
+}
+
 /** Read-only dependencies keep a chosen page usable; they never grant mutations. */
 function requiredMenus(path: string, method: string): StaffMenuPath[] {
   const p = path.toLowerCase().replace(/\/+$/, "") || "/";
@@ -18,6 +28,8 @@ function requiredMenus(path: string, method: string): StaffMenuPath[] {
   if (starts("/cash")) return ["/cash"];
   if (starts("/bank-accounts")) return read ? ["/bank-transactions", "/cash", "/journal", "/ar-ap"] : ["/bank-transactions"];
   if (starts("/bank-transactions")) return ["/bank-transactions"];
+  const documentMenu = bankDocumentLookupMenu(p, method);
+  if (documentMenu) return [documentMenu, "/bank-transactions"];
   if (read && p === "/inventory/items") return ["/inventory", "/meals", "/meal-schedule"];
   if (starts("/inventory/material-requests")) return ["/inventory", "/meals", "/meal-schedule"];
   if (starts("/inventory")) return ["/inventory"];
