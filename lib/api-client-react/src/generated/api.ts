@@ -65,6 +65,7 @@ import type {
   CashJournalPostingInput,
   CashSummary,
   CashTransaction,
+  CashTransactionDetail,
   CashTransactionInput,
   CashTransactionSuggestion,
   ChartOfAccount,
@@ -4662,6 +4663,83 @@ export const useCreateCashTransaction = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getCreateCashTransactionMutationOptions(options));
     }
+
+export const getGetCashTransactionDetailUrl = (id: number,) => {
+
+
+
+
+  return `/api/cash/transactions/${id}`
+}
+
+/**
+ * @summary Read a cash transaction and only its directly linked bank transaction
+ */
+export const getCashTransactionDetail = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<CashTransactionDetail> => {
+
+  return customFetch<CashTransactionDetail>(getGetCashTransactionDetailUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCashTransactionDetailQueryKey = (id: number,) => {
+    return [
+    `/api/cash/transactions/${id}`
+    ] as const;
+    }
+
+
+export const getGetCashTransactionDetailQueryOptions = <TData = Awaited<ReturnType<typeof getCashTransactionDetail>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCashTransactionDetail>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCashTransactionDetailQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCashTransactionDetail>>> = ({ signal }) => getCashTransactionDetail(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCashTransactionDetail>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCashTransactionDetailQueryResult = NonNullable<Awaited<ReturnType<typeof getCashTransactionDetail>>>
+export type GetCashTransactionDetailQueryError = ErrorType<void>
+
+
+/**
+ * @summary Read a cash transaction and only its directly linked bank transaction
+ */
+
+export function useGetCashTransactionDetail<TData = Awaited<ReturnType<typeof getCashTransactionDetail>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCashTransactionDetail>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCashTransactionDetailQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getUpdateCashTransactionUrl = (id: number,) => {
 

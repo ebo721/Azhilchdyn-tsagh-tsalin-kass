@@ -1027,6 +1027,20 @@ paths:
               schema:
                 $ref: "#/components/schemas/CashTransaction"
   /cash/transactions/{id}:
+    get:
+      operationId: getCashTransactionDetail
+      tags: [cash]
+      summary: Read a cash transaction and only its directly linked bank transaction
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Cash details with an optional linked bank transaction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CashTransactionDetail" }
+        "404":
+          description: Cash transaction or its linked bank transaction not found
     put:
       operationId: updateCashTransaction
       tags: [cash]
@@ -3626,6 +3640,15 @@ components:
         createdAt: { type: string }
         editable: { type: boolean }
         transactionKind: { type: string, enum: [manual, payroll, payroll_advance, inventory_purchase, inventory_purchase_group, fixed_asset_purchase, operating_expense, bank_transaction] }
+    CashTransactionDetail:
+      type: object
+      required: [cashTransaction, bankTransaction]
+      properties:
+        cashTransaction: { $ref: "#/components/schemas/CashTransaction" }
+        bankTransaction:
+          anyOf:
+            - $ref: "#/components/schemas/BankTransaction"
+            - type: "null"
     BankAccount:
       type: object
       required: [id, bankName, accountNumber, createdAt]
