@@ -3895,7 +3895,10 @@ components:
       properties:
         accountId: { type: integer, minimum: 1 }
         allocation:
-          $ref: "#/components/schemas/ReceivableCreateAllocation"
+          oneOf:
+            - $ref: "#/components/schemas/ReceivableCreateAllocation"
+            - $ref: "#/components/schemas/ReceivableSettleAllocation"
+            - $ref: "#/components/schemas/PayableSettleAllocation"
     BankTransactionJournalPostResult:
       type: object
       required: [id, journalEntryId]

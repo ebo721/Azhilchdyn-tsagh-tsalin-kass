@@ -36,7 +36,7 @@ function requiredMenus(path: string, method: string): StaffMenuPath[] {
   if (starts("/fixed-assets")) return ["/fixed-assets"];
   if (starts("/operating-expenses")) return ["/operating-expenses"];
   if (starts("/journal/receivables") || starts("/journal/payables")) return read
-    ? ["/journal", "/ar-ap", "/payroll"] : ["/journal", "/ar-ap"];
+    ? ["/journal", "/ar-ap", "/payroll", "/bank-transactions"] : ["/journal", "/ar-ap"];
   if (read && p === "/journal/suppliers") return ["/journal", "/bank-transactions"];
   if (starts("/journal")) return ["/journal"];
   if (starts("/meal-schedule")) return ["/meal-schedule"];

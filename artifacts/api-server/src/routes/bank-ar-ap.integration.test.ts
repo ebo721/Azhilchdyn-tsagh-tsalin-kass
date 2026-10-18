@@ -3,10 +3,11 @@ import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { before, after, describe, it } from "node:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   db, bankTransactionsTable, chartOfAccountsTable, employeesTable, inventorySuppliersTable,
-  journalEntriesTable, journalLinesTable, receivablesTable, receivableAllocationsTable, payablesTable, usersTable,
+  journalEntriesTable, journalLinesTable, receivablesTable, receivableAllocationsTable, payablesTable, payableAllocationsTable,
+  operatingExpensesTable, cashTransactionsTable, usersTable,
 } from "@workspace/db";
 import app from "../app.js";
 import { createStaffSession, hrCookie } from "../lib/hr-session.js";
@@ -33,6 +34,30 @@ describe("bank-sourced new receivables and payables", () => {
     accountId: accounts.get(type === "expense" ? "1200" : "2000"),
     allocation: { kind: "create", partyType, ...(partyType === "employee" ? { employeeId } : { supplierId }) },
   });
+  const newDebt = async (paymentType: "income" | "expense", partyType: "employee" | "supplier" = "employee") => {
+    const originType = paymentType === "income" ? "expense" : "income";
+    const bank = await newBank(originType, { amount: 100.25, transactionAt: new Date("2099-04-01T09:00:00Z") });
+    const response = await call(`/bank-transactions/${bank.id}/post-journal`, "POST", payload(originType, partyType));
+    assert.equal(response.status, 200, await response.clone().text());
+    const { journalEntryId } = await response.json();
+    const [debt] = paymentType === "income"
+      ? await db.select({ id: receivablesTable.id }).from(receivablesTable).where(eq(receivablesTable.originJournalEntryId, journalEntryId))
+      : await db.select({ id: payablesTable.id }).from(payablesTable).where(eq(payablesTable.journalEntryId, journalEntryId));
+    return {
+      id: debt.id,
+      data: {
+        accountId: accounts.get(paymentType === "income" ? "1200" : "2000"),
+        allocation: paymentType === "income"
+          ? { kind: "settle", receivableId: debt.id } : { kind: "settle", payableId: debt.id },
+      },
+    };
+  };
+  const balance = async (type: "income" | "expense", id: number) => {
+    const [row] = type === "income"
+      ? await db.select({ amount: receivablesTable.openAmount, status: receivablesTable.status }).from(receivablesTable).where(eq(receivablesTable.id, id))
+      : await db.select({ amount: payablesTable.remainingBalance, status: payablesTable.status }).from(payablesTable).where(eq(payablesTable.id, id));
+    return { amount: Number(row.amount), status: row.status };
+  };
   before(async () => {
     process.env.SESSION_SECRET = "bank-debt-test-session";
     for (const role of ["admin", "accountant", "viewer"] as const) {
@@ -52,7 +77,7 @@ describe("bank-sourced new receivables and payables", () => {
     [employeeId, otherEmployeeId] = employees.map(e => e.id);
     const [supplier] = await db.insert(inventorySuppliersTable).values({ name: prefix, normalizedName: prefix }).returning();
     supplierId = supplier.id;
-    for (const row of await db.select().from(chartOfAccountsTable).where(inArray(chartOfAccountsTable.code, ["1010", "1200", "2000", "1500", "1800"]))) {
+    for (const row of await db.select().from(chartOfAccountsTable).where(inArray(chartOfAccountsTable.code, ["1010", "1200", "2000", "1500", "1510", "1800"]))) {
       accounts.set(row.code, row.id);
     }
     server = app.listen(0, "127.0.0.1");
@@ -65,6 +90,7 @@ describe("bank-sourced new receivables and payables", () => {
     if (banks.length) await db.delete(bankTransactionsTable).where(inArray(bankTransactionsTable.id, banks));
     if (ids.length) {
       await db.delete(receivableAllocationsTable).where(inArray(receivableAllocationsTable.settlementJournalEntryId, ids));
+      await db.delete(payableAllocationsTable).where(inArray(payableAllocationsTable.settlementJournalEntryId, ids));
       await db.delete(receivablesTable).where(inArray(receivablesTable.originJournalEntryId, ids));
       await db.delete(payablesTable).where(inArray(payablesTable.journalEntryId, ids));
       await db.delete(journalEntriesTable).where(inArray(journalEntriesTable.id, ids));
@@ -197,5 +223,141 @@ describe("bank-sourced new receivables and payables", () => {
     assert.equal((await call(`/bank-transactions/${bank.id}/journal`, "DELETE", undefined, adminCookie)).status, 409);
     const [saved] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bank.id));
     assert.equal(saved.journalEntryId, journalEntryId);
+  });
+
+  it("settles employee/supplier receivables and payables partially using authoritative bank values, without expenses or cash mirrors", async () => {
+    for (const type of ["income", "expense"] as const) for (const partyType of ["employee", "supplier"] as const) {
+      const debt = await newDebt(type, partyType);
+      const bank = await newBank(type, { amount: 40.25 });
+      const response = await call(`/bank-transactions/${bank.id}/post-journal`, "POST", {
+        ...debt.data, date: "2000-01-01", amount: 1,
+      });
+      assert.equal(response.status, 200, await response.clone().text());
+      const { journalEntryId } = await response.json();
+      assert.deepEqual(await balance(type, debt.id), { amount: 60, status: "open" });
+      const [entry] = await db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, journalEntryId));
+      assert.equal(entry.date, "2099-04-13");
+      assert.equal(entry.description, bank.description);
+      assert.equal(entry.createdBy, actorId);
+      assert.equal(entry.sourceType, "bank");
+      assert.equal(entry.sourceId, bank.id);
+      const lines = await db.select().from(journalLinesTable).where(eq(journalLinesTable.journalEntryId, journalEntryId));
+      assert.equal(lines.length, 2);
+      assert.equal(lines.reduce((sum, line) => sum + Number(line.debit) - Number(line.credit), 0), 0);
+      const debtLine = lines.find(line => line.accountId === debt.data.accountId)!;
+      assert.equal(Number(type === "income" ? debtLine.credit : debtLine.debit), 40.25);
+      assert.deepEqual(debtLine.allocation, debt.data.allocation);
+      const [saved] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bank.id));
+      assert.equal(saved.journalEntryId, journalEntryId);
+      assert.equal(saved.cashTransactionId, null);
+      assert.equal(saved.transferredAt, null);
+      assert.equal((await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.bankTransactionId, bank.id))).length, 0);
+      assert.equal((await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.bankTransactionId, bank.id))).length, 0);
+    }
+  });
+
+  it("full settlement closes debt, rejects stale re-payment, and cancellation restores the original balance", async () => {
+    for (const type of ["income", "expense"] as const) {
+      const debt = await newDebt(type);
+      const bank = await newBank(type, { amount: 100.25 });
+      const paid = await call(`/bank-transactions/${bank.id}/post-journal`, "POST", debt.data);
+      assert.equal(paid.status, 200, await paid.clone().text());
+      assert.deepEqual(await balance(type, debt.id), { amount: 0, status: type === "income" ? "settled" : "closed" });
+      const otherBank = await newBank(type, { amount: 1 });
+      assert.equal((await call(`/bank-transactions/${otherBank.id}/post-journal`, "POST", debt.data)).status, 409);
+      assert.equal((await call(`/bank-transactions/${bank.id}/journal`, "DELETE")).status, 403);
+      const canceled = await call(`/bank-transactions/${bank.id}/journal`, "DELETE", undefined, adminCookie);
+      assert.equal(canceled.status, 200, await canceled.clone().text());
+      assert.deepEqual(await balance(type, debt.id), { amount: 100.25, status: "open" });
+      const [saved] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bank.id));
+      assert.equal(saved.journalEntryId, null);
+    }
+  });
+
+  it("duplicate bank settlement is idempotent, while switching debt or allocation kind is a conflict", async () => {
+    for (const type of ["income", "expense"] as const) {
+      const debt = await newDebt(type), otherDebt = await newDebt(type);
+      const bank = await newBank(type, { amount: 40.25 });
+      const responses = await Promise.all([1, 2].map(() => call(`/bank-transactions/${bank.id}/post-journal`, "POST", debt.data)));
+      assert.deepEqual(responses.map(r => r.status), [200, 200]);
+      const entries = await Promise.all(responses.map(async r => (await r.json()).journalEntryId));
+      assert.equal(entries[0], entries[1]);
+      assert.deepEqual(await balance(type, debt.id), { amount: 60, status: "open" });
+      const allocations = type === "income"
+        ? await db.select().from(receivableAllocationsTable).where(eq(receivableAllocationsTable.settlementJournalEntryId, entries[0]))
+        : await db.select().from(payableAllocationsTable).where(eq(payableAllocationsTable.settlementJournalEntryId, entries[0]));
+      assert.equal(allocations.length, 1);
+      assert.equal((await call(`/bank-transactions/${bank.id}/post-journal`, "POST", otherDebt.data)).status, 409);
+      assert.equal((await call(`/bank-transactions/${bank.id}/post-journal`, "POST", payload(type))).status, 409);
+      assert.deepEqual(await balance(type, otherDebt.id), { amount: 100.25, status: "open" });
+    }
+  });
+
+  it("two different bank payments cannot concurrently over-settle one debt", async () => {
+    for (const type of ["income", "expense"] as const) {
+      const debt = await newDebt(type);
+      const bankA = await newBank(type, { amount: 70 }), bankB = await newBank(type, { amount: 70 });
+      const responses = await Promise.all([bankA, bankB].map(bank => call(`/bank-transactions/${bank.id}/post-journal`, "POST", debt.data)));
+      assert.deepEqual(responses.map(r => r.status).sort(), [200, 409]);
+      assert.deepEqual(await balance(type, debt.id), { amount: 30.25, status: "open" });
+      const rows = await db.select().from(bankTransactionsTable).where(inArray(bankTransactionsTable.id, [bankA.id, bankB.id]));
+      assert.equal(rows.filter(row => row.journalEntryId !== null).length, 1);
+    }
+  });
+
+  it("invalid/mixed targets, overpayments, wrong directions/accounts and pre-origin dates roll back completely", async () => {
+    const payable = await newDebt("expense"), receivable = await newDebt("income");
+    const cases = [
+      { data: payable.data, amount: 100.26, status: 409 },
+      { data: receivable.data, amount: 1, status: 400 },
+      { data: { ...payable.data, accountId: accounts.get("1010") }, amount: 1, status: 400 },
+      { data: { ...payable.data, allocation: { kind: "settle", payableId: 2147483647 } }, amount: 1, status: 404 },
+      { data: { ...payable.data, allocation: { kind: "settle", payableId: 2147483648 } }, amount: 1, status: 400 },
+      { data: { ...payable.data, allocation: { kind: "settle", payableId: 0 } }, amount: 1, status: 400 },
+      { data: { ...payable.data, allocation: { kind: "settle", payableId: payable.id, receivableId: receivable.id } }, amount: 1, status: 400 },
+      { data: { ...payable.data, allocation: { kind: "settle", payableId: payable.id, employeeId } }, amount: 1, status: 400 },
+      { data: payable.data, amount: 1, status: 400, date: "2099-03-31T12:00:00Z" },
+    ];
+    for (const item of cases) {
+      const bank = await newBank("expense", { amount: item.amount, ...(item.date ? { transactionAt: new Date(item.date) } : {}) });
+      const response = await call(`/bank-transactions/${bank.id}/post-journal`, "POST", item.data);
+      assert.equal(response.status, item.status, await response.clone().text());
+      const [saved] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bank.id));
+      assert.equal(saved.journalEntryId, null);
+      assert.equal((await db.select().from(journalEntriesTable).where(and(
+        eq(journalEntriesTable.sourceType, "bank"), eq(journalEntriesTable.sourceId, bank.id),
+      ))).length, 0);
+    }
+    assert.deepEqual(await balance("income", receivable.id), { amount: 100.25, status: "open" });
+    assert.deepEqual(await balance("expense", payable.id), { amount: 100.25, status: "open" });
+  });
+
+  it("bank settlement retains purchase/fixed-asset guards and bank-only menu role boundaries", async () => {
+    const debt = await newDebt("expense");
+    for (const code of ["1500", "1510", "1800"]) {
+      const bank = await newBank("expense", { amount: 1, accountId: accounts.get(code) });
+      assert.equal((await call(`/bank-transactions/${bank.id}/post-journal`, "POST", debt.data)).status, 409);
+    }
+    for (const path of ["/journal/receivables", "/journal/payables"]) assert.equal((await call(path)).status, 200);
+    assert.equal((await call("/journal/entries")).status, 403);
+    assert.equal((await call("/journal/entries", "POST", {})).status, 403);
+    const bank = await newBank("expense", { amount: 1 });
+    assert.equal((await call(`/bank-transactions/${bank.id}/post-journal`, "POST", debt.data, viewerCookie)).status, 403);
+    assert.deepEqual(await balance("expense", debt.id), { amount: 100.25, status: "open" });
+  });
+
+  it("canceling one partial payment preserves another payment and restores only the canceled allocation", async () => {
+    for (const type of ["income", "expense"] as const) {
+      const debt = await newDebt(type);
+      const bankA = await newBank(type, { amount: 40 }), bankB = await newBank(type, { amount: 20 });
+      for (const bank of [bankA, bankB]) {
+        assert.equal((await call(`/bank-transactions/${bank.id}/post-journal`, "POST", debt.data)).status, 200);
+      }
+      assert.deepEqual(await balance(type, debt.id), { amount: 40.25, status: "open" });
+      assert.equal((await call(`/bank-transactions/${bankA.id}/journal`, "DELETE", undefined, adminCookie)).status, 200);
+      assert.deepEqual(await balance(type, debt.id), { amount: 80.25, status: "open" });
+      const [preserved] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankB.id));
+      assert.notEqual(preserved.journalEntryId, null);
+    }
   });
 });

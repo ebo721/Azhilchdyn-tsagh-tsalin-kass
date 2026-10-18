@@ -2049,14 +2049,22 @@ export const PostBankTransactionJournalParams = zod.object({
 
 
 
+
+
 export const PostBankTransactionJournalBody = zod.object({
   "accountId": zod.number().int().min(1),
-  "allocation": zod.object({
+  "allocation": zod.union([zod.object({
   "kind": zod.enum(['create']),
   "partyType": zod.enum(['employee', 'supplier']),
   "employeeId": zod.number().int().min(1).optional(),
   "supplierId": zod.number().int().min(1).optional()
-}).optional()
+}),zod.object({
+  "kind": zod.enum(['settle']),
+  "receivableId": zod.number().int().min(1)
+}),zod.object({
+  "kind": zod.enum(['settle']),
+  "payableId": zod.number().int().min(1)
+})]).optional()
 })
 
 export const PostBankTransactionJournalResponse = zod.object({
