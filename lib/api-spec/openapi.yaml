@@ -3894,11 +3894,25 @@ components:
       required: [accountId]
       properties:
         accountId: { type: integer, minimum: 1 }
+        settlements:
+          description: Explicit repayment amounts; mutually exclusive with allocation. Total must equal the stored bank amount.
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/BankDebtSettlement"
         allocation:
           oneOf:
             - $ref: "#/components/schemas/ReceivableCreateAllocation"
             - $ref: "#/components/schemas/ReceivableSettleAllocation"
             - $ref: "#/components/schemas/PayableSettleAllocation"
+    BankDebtSettlement:
+      type: object
+      required: [amount]
+      properties:
+        receivableId: { type: integer, minimum: 1, maximum: 2147483647 }
+        payableId: { type: integer, minimum: 1, maximum: 2147483647 }
+        amount: { type: number, exclusiveMinimum: 0 }
     BankTransactionJournalPostResult:
       type: object
       required: [id, journalEntryId]

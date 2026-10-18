@@ -7,7 +7,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import {
   db, bankTransactionsTable, chartOfAccountsTable, employeesTable, inventorySuppliersTable,
   journalEntriesTable, journalLinesTable, receivablesTable, receivableAllocationsTable, payablesTable, payableAllocationsTable,
-  operatingExpensesTable, cashTransactionsTable, usersTable,
+  operatingExpensesTable, cashTransactionsTable, usersTable, payrollAdjustmentsTable,
 } from "@workspace/db";
 import app from "../app.js";
 import { createStaffSession, hrCookie } from "../lib/hr-session.js";
@@ -359,5 +359,119 @@ describe("bank-sourced new receivables and payables", () => {
       const [preserved] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankB.id));
       assert.notEqual(preserved.journalEntryId, null);
     }
+  });
+
+  const splitData = (type: "income" | "expense", rows: { id: number; amount: number }[]) => ({
+    accountId: accounts.get(type === "income" ? "1200" : "2000"),
+    settlements: rows.map(row => ({ amount: row.amount, ...(type === "income" ? { receivableId: row.id } : { payableId: row.id }) })),
+  });
+
+  it("splits one bank across employee and supplier debts, retries order-independently, and cancels all lines without side effects", async () => {
+    const payrollBefore = await db.select().from(payrollAdjustmentsTable).where(eq(payrollAdjustmentsTable.employeeId, employeeId));
+    for (const type of ["income", "expense"] as const) {
+      const first = await newDebt(type), second = await newDebt(type, "supplier");
+      const bank = await newBank(type, { amount: 140.5 });
+      const data = splitData(type, [{ id: second.id, amount: 40.25 }, { id: first.id, amount: 100.25 }]);
+      const responses = await Promise.all([data, { ...data, settlements: [...data.settlements].reverse() }]
+        .map(data => call(`/bank-transactions/${bank.id}/post-journal`, "POST", data)));
+      assert.deepEqual(responses.map(r => r.status), [200, 200], await responses[0].clone().text());
+      const ids = await Promise.all(responses.map(async r => (await r.json()).journalEntryId));
+      assert.equal(ids[0], ids[1]);
+      const lines = await db.select().from(journalLinesTable).where(eq(journalLinesTable.journalEntryId, ids[0]));
+      assert.equal(lines.length, 3);
+      assert.equal(lines.reduce((sum, l) => sum + Math.round(Number(l.debit) * 100) - Math.round(Number(l.credit) * 100), 0), 0);
+      const allocations = type === "income"
+        ? await db.select().from(receivableAllocationsTable).where(eq(receivableAllocationsTable.settlementJournalEntryId, ids[0]))
+        : await db.select().from(payableAllocationsTable).where(eq(payableAllocationsTable.settlementJournalEntryId, ids[0]));
+      assert.equal(allocations.length, 2);
+      assert.deepEqual(await balance(type, first.id), { amount: 0, status: type === "income" ? "settled" : "closed" });
+      assert.deepEqual(await balance(type, second.id), { amount: 60, status: "open" });
+      const changed = splitData(type, [{ id: first.id, amount: 100 }, { id: second.id, amount: 40.5 }]);
+      assert.equal((await call(`/bank-transactions/${bank.id}/post-journal`, "POST", changed)).status, 409);
+      assert.equal((await call(`/bank-transactions/${bank.id}/post-journal`, "POST", first.data)).status, 409);
+      const another = await newBank(type, { amount: 20 });
+      assert.equal((await call(`/bank-transactions/${another.id}/post-journal`, "POST", second.data)).status, 200);
+      const cancel = await call(`/bank-transactions/${bank.id}/journal`, "DELETE", undefined, adminCookie);
+      assert.equal(cancel.status, 200, await cancel.clone().text());
+      assert.deepEqual(await balance(type, first.id), { amount: 100.25, status: "open" });
+      assert.deepEqual(await balance(type, second.id), { amount: 80.25, status: "open" });
+      const [saved] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bank.id));
+      assert.equal(saved.journalEntryId, null);
+      assert.equal(saved.cashTransactionId, null);
+      assert.equal(saved.transferredAt, null);
+      assert.equal((await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.bankTransactionId, bank.id))).length, 0);
+      assert.equal((await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.bankTransactionId, bank.id))).length, 0);
+    }
+    assert.deepEqual(await db.select().from(payrollAdjustmentsTable).where(eq(payrollAdjustmentsTable.employeeId, employeeId)), payrollBefore);
+  });
+
+  it("rejects malformed splits and rolls back earlier lines when a later debt fails", async () => {
+    for (const type of ["income", "expense"] as const) {
+      const first = await newDebt(type), second = await newDebt(type);
+      const valid = splitData(type, [{ id: first.id, amount: 10 }, { id: second.id, amount: 10 }]);
+      const key = type === "income" ? "receivableId" : "payableId";
+      const opposite = type === "income" ? "payableId" : "receivableId";
+      const cases: { data: unknown; status: number; amount?: number; date?: string }[] = [
+        { data: { ...valid, settlements: [] }, status: 400 },
+        { data: { ...valid, allocation: first.data.allocation }, status: 400 },
+        { data: splitData(type, [{ id: first.id, amount: 10 }, { id: first.id, amount: 10 }]), status: 400 },
+        { data: splitData(type, [{ id: first.id, amount: 9.99 }, { id: second.id, amount: 10 }]), status: 400 },
+        { data: splitData(type, [{ id: first.id, amount: 10.01 }, { id: second.id, amount: 10 }]), status: 400 },
+        ...[0, -1, 10.001].map(amount => ({ data: { ...valid, settlements: [{ [key]: first.id, amount }, { [key]: second.id, amount: 20 - amount }] }, status: 400 })),
+        { data: { ...valid, settlements: [{ [key]: first.id, [opposite]: second.id, amount: 20 }] }, status: 400 },
+        { data: { ...valid, settlements: [{ [opposite]: first.id, amount: 20 }] }, status: 400 },
+        { data: { ...valid, settlements: [{ amount: 20 }] }, status: 400 },
+        { data: { ...valid, settlements: [{ [key]: 2147483648, amount: 20 }] }, status: 400 },
+        { data: { ...valid, settlements: [{ [key]: first.id, amount: 20, partyType: "employee" }] }, status: 400 },
+        { data: splitData(type, [{ id: first.id, amount: 10 }, { id: 2147483647, amount: 10 }]), status: 404 },
+        { data: splitData(type, [{ id: first.id, amount: 10 }, { id: second.id, amount: 101 }]), amount: 111, status: 409 },
+        { data: valid, date: "2099-03-31T08:00:00Z", status: 400 },
+      ];
+      for (const item of cases) {
+        const bank = await newBank(type, { amount: item.amount ?? 20, ...(item.date ? { transactionAt: new Date(item.date) } : {}) });
+        const response = await call(`/bank-transactions/${bank.id}/post-journal`, "POST", item.data);
+        assert.equal(response.status, item.status, await response.clone().text());
+        const [saved] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bank.id));
+        assert.equal(saved.journalEntryId, null);
+        assert.equal((await db.select().from(journalEntriesTable).where(and(eq(journalEntriesTable.sourceType, "bank"), eq(journalEntriesTable.sourceId, bank.id)))).length, 0);
+      }
+      assert.deepEqual(await balance(type, first.id), { amount: 100.25, status: "open" });
+      assert.deepEqual(await balance(type, second.id), { amount: 100.25, status: "open" });
+    }
+  });
+
+  it("serializes opposite-order overlapping splits and concurrent cancellation without partial updates or deadlocks", async () => {
+    for (const type of ["income", "expense"] as const) {
+      const first = await newDebt(type), second = await newDebt(type);
+      const banksPair = [await newBank(type, { amount: 140 }), await newBank(type, { amount: 140 })];
+      const data = splitData(type, [{ id: first.id, amount: 70 }, { id: second.id, amount: 70 }]);
+      const responses = await Promise.all(banksPair.map((bank, i) => call(`/bank-transactions/${bank.id}/post-journal`, "POST",
+        { ...data, settlements: i ? [...data.settlements].reverse() : data.settlements })));
+      assert.deepEqual(responses.map(r => r.status).sort(), [200, 409]);
+      assert.deepEqual(await balance(type, first.id), { amount: 30.25, status: "open" });
+      assert.deepEqual(await balance(type, second.id), { amount: 30.25, status: "open" });
+      const winner = banksPair[responses.findIndex(r => r.status === 200)];
+      const other = await newBank(type, { amount: 40 });
+      assert.equal((await call(`/bank-transactions/${other.id}/post-journal`, "POST",
+        splitData(type, [{ id: first.id, amount: 20 }, { id: second.id, amount: 20 }]))).status, 200);
+      const cancels = await Promise.all([winner, other].map(bank => call(`/bank-transactions/${bank.id}/journal`, "DELETE", undefined, adminCookie)));
+      assert.deepEqual(cancels.map(r => r.status), [200, 200]);
+      assert.deepEqual(await balance(type, first.id), { amount: 100.25, status: "open" });
+      assert.deepEqual(await balance(type, second.id), { amount: 100.25, status: "open" });
+    }
+  });
+
+  it("keeps multi-debt settlement inside bank-only accountant permissions and source-document guards", async () => {
+    const first = await newDebt("expense"), second = await newDebt("expense");
+    const data = splitData("expense", [{ id: first.id, amount: 10 }, { id: second.id, amount: 10 }]);
+    for (const code of ["1500", "1510", "1800"]) {
+      const bank = await newBank("expense", { amount: 20, accountId: accounts.get(code) });
+      assert.equal((await call(`/bank-transactions/${bank.id}/post-journal`, "POST", data)).status, 409);
+    }
+    const bank = await newBank("expense", { amount: 20 });
+    for (const suffix of ["", "/"]) {
+      assert.equal((await call(`/bank-transactions/${bank.id}/post-journal${suffix}`, "POST", data, viewerCookie)).status, 403);
+    }
+    assert.equal((await call(`/bank-transactions/${bank.id}/post-journal`, "POST", data)).status, 200);
   });
 });

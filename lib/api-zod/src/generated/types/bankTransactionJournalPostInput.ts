@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BankDebtSettlement } from './bankDebtSettlement';
 import type { PayableSettleAllocation } from './payableSettleAllocation';
 import type { ReceivableCreateAllocation } from './receivableCreateAllocation';
 import type { ReceivableSettleAllocation } from './receivableSettleAllocation';
@@ -12,5 +13,11 @@ import type { ReceivableSettleAllocation } from './receivableSettleAllocation';
 export interface BankTransactionJournalPostInput {
   /** @minimum 1 */
   accountId: number;
+  /**
+     * Explicit repayment amounts; mutually exclusive with allocation. Total must equal the stored bank amount.
+     * @minItems 1
+     * @maxItems 100
+     */
+  settlements?: BankDebtSettlement[];
   allocation?: ReceivableCreateAllocation | ReceivableSettleAllocation | PayableSettleAllocation;
 }

@@ -14,3 +14,9 @@ description: User-required dates and financial meaning of creating new receivabl
 **Why:** The user separately requested repayment of existing debt from bank transactions, not only creation of new debt.
 
 **How to apply:** Keep explicit actions for creation versus repayment. Incoming funds repay a chosen receivable; outgoing funds repay a chosen payable. Repayment must not become another operating expense or a payroll deduction. The accountant explicitly chooses the existing debt; a GL classification alone is not authorization to reduce its balance.
+
+“Нэг шилжүүлгээр хэд хэдэн өр төлсөн үед үлдэгдлээс хэтрүүлэхгүйгээр олон өр сонгож дүн хуваарилдаг болгох.”
+
+**Why:** One real bank transfer may repay several existing debts, rather than create a new expense or debt.
+
+**How to apply:** The full stored bank amount must be allocated exactly once across distinct debts in the correct direction. Keep the allocation atomic, including cancellation; never turn an unallocated remainder into a new cash, expense, or payroll record.

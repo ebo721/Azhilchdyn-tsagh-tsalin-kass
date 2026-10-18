@@ -55,6 +55,7 @@ import { getStaffSession } from "../lib/hr-session.js";
 import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.js";
 import { cashAccountForCategory } from "../lib/cash-account.js";
 import { JournalValidationError, postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
+import { bankRepayments, matchesBankRepayments, validateBankSettlements } from "../lib/bank-debt-settlement.js";
 import { loadBankRecognitionContext, recognizeBankTransaction } from "../lib/bank-recognition.js";
 import { inventoryPurchaseAccountCodes } from "../lib/route-shared.js";
 import { bankSuggestionScore } from "../lib/bank-suggestion-score.js";
@@ -517,7 +518,8 @@ router.post("/bank-transactions/:id/link-fixed-asset", async (req, res, next) =>
 router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
   try {
     const { id } = PostBankTransactionJournalParams.parse(req.params);
-    const { accountId, allocation } = PostBankTransactionJournalBody.parse(req.body);
+    const { accountId, allocation, settlements } = PostBankTransactionJournalBody.parse(req.body);
+    validateBankSettlements(settlements, allocation, req.body.settlements);
     if (id > 2147483647 || accountId > 2147483647) {
       res.status(400).json({ error: "Гүйлгээ болон дансны дугаар буруу байна" });
       return;
@@ -548,9 +550,10 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
         .where(eq(bankTransactionsTable.id, id))
         .for("update");
       if (!bank) return "missing" as const;
+      const repayments = bankRepayments(settlements, allocation, Number(bank.amount), bank.type);
       if (bank.journalEntryId !== null) {
-        if (allocation) {
-          const [existing] = await tx.select({ allocation: journalLinesTable.allocation, status: journalEntriesTable.status })
+        if (allocation || settlements) {
+          const existingLines = await tx.select({ allocation: journalLinesTable.allocation, status: journalEntriesTable.status, debit: journalLinesTable.debit, credit: journalLinesTable.credit })
             .from(journalLinesTable)
             .innerJoin(journalEntriesTable, eq(journalEntriesTable.id, journalLinesTable.journalEntryId))
             .where(and(
@@ -559,14 +562,13 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
               eq(journalEntriesTable.sourceType, "bank"),
               eq(journalEntriesTable.sourceId, bank.id),
             ));
+          const existing = existingLines[0];
           const prior = existing?.allocation as {
             kind?: string; partyType?: string; employeeId?: number; supplierId?: number; receivableId?: number; payableId?: number;
           } | null;
-          const matches = prior?.kind === allocation.kind && (allocation.kind === "create"
-            ? prior.partyType === allocation.partyType && prior.employeeId === allocation.employeeId && prior.supplierId === allocation.supplierId
-            : "receivableId" in allocation
-              ? prior.receivableId === allocation.receivableId && prior.payableId === undefined
-              : prior.payableId === allocation.payableId && prior.receivableId === undefined);
+          const matches = repayments.length ? matchesBankRepayments(repayments, existingLines, bank.type)
+            : allocation?.kind === "create" && existingLines.length === 1 && prior?.kind === allocation.kind
+              && prior.partyType === allocation.partyType && prior.employeeId === allocation.employeeId && prior.supplierId === allocation.supplierId;
           if (existing?.status !== "posted" || !matches) {
             return "balance-conflict" as const;
           }
@@ -580,13 +582,12 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
         eq(chartOfAccountsTable.id, accountId),
         eq(chartOfAccountsTable.isActive, true),
       ));
-      if (allocation) {
-        const requiredCode = allocation.kind === "create"
+      if (allocation || settlements) {
+        const requiredCode = allocation?.kind === "create"
           ? bank.type === "expense" ? "1200" : bank.type === "income" ? "2000" : null
-          : bank.type === "income" && "receivableId" in allocation ? "1200"
-            : bank.type === "expense" && "payableId" in allocation ? "2000" : null;
+          : bank.type === "income" ? "1200" : bank.type === "expense" ? "2000" : null;
         if (!requiredCode || account?.code !== requiredCode) {
-          throw new JournalValidationError(allocation.kind === "create"
+          throw new JournalValidationError(allocation?.kind === "create"
             ? "Банкны зарлагаар 1200 авлага, орлогоор 2000 өглөг шинээр үүсгэнэ"
             : "Банкны орлогоор 1200 авлагын төлөлт, зарлагаар 2000 өглөгийн төлбөр бүртгэнэ");
         }
@@ -599,7 +600,8 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
           : await tx.select({ id: inventorySuppliersTable.id }).from(inventorySuppliersTable)
             .where(eq(inventorySuppliersTable.id, allocation.supplierId!)).for("share");
         if (!party) throw new JournalValidationError("Идэвхтэй ажилтан эсвэл бүртгэлтэй харилцагч сонгоно уу");
-      } else if (allocation?.kind === "settle") {
+      }
+      for (const { allocation } of repayments) {
         const [origin] = "receivableId" in allocation
           ? await tx.select({ date: journalEntriesTable.date }).from(receivablesTable)
             .innerJoin(journalEntriesTable, eq(journalEntriesTable.id, receivablesTable.originJournalEntryId))
@@ -622,11 +624,14 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
         if (account?.code === "1800" || assignedAccount?.code === "1800") return "fixed-asset-document-required" as const;
       }
       const allowed = bank.type === "income"
-        ? account?.type === "revenue" || (allocation !== undefined && ["1200", "2000"].includes(account?.code ?? ""))
+        ? account?.type === "revenue" || ((allocation !== undefined || settlements !== undefined) && ["1200", "2000"].includes(account?.code ?? ""))
         : account !== undefined && ["expense", "asset", "liability"].includes(account.type);
       if (!allowed) return "invalid_account" as const;
       const bankAccount = await accountByCode(tx, "1010", "asset");
       const amount = Number(bank.amount);
+      const debtLines = repayments.length
+        ? repayments.map(item => ({ accountId: account!.id, debit: bank.type === "expense" ? item.amount : 0, credit: bank.type === "income" ? item.amount : 0, allocation: item.allocation }))
+        : [{ accountId: account!.id, debit: bank.type === "expense" ? amount : 0, credit: bank.type === "income" ? amount : 0, allocation }];
       const posting = await postJournalEntry(tx, {
         date: bank.transactionAt.toISOString().slice(0, 10),
         description: bank.description.trim() || bank.counterparty.trim() || "Банкны гүйлгээ",
@@ -634,8 +639,8 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
         sourceId: bank.id,
         createdBy: session.id,
         lines: bank.type === "income"
-          ? [{ accountId: bankAccount.id, debit: amount, credit: 0 }, { accountId: account.id, debit: 0, credit: amount, allocation }]
-          : [{ accountId: account.id, debit: amount, credit: 0, allocation }, { accountId: bankAccount.id, debit: 0, credit: amount }],
+          ? [{ accountId: bankAccount.id, debit: amount, credit: 0 }, ...debtLines]
+          : [...debtLines, { accountId: bankAccount.id, debit: 0, credit: amount }],
       });
       if (posting.status !== "posted") throw new Error("Bank journal entry must be balanced");
       await tx.update(bankTransactionsTable).set({

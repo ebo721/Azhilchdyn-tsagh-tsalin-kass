@@ -258,7 +258,8 @@ async function reverseReceivableEffects(tx: Tx, entryId: number) {
     .where(eq(chartOfAccountsTable.code, "1200")).limit(1);
   if (!account) return;
   const lines = await tx.select().from(journalLinesTable)
-    .where(and(eq(journalLinesTable.journalEntryId, entryId), eq(journalLinesTable.accountId, account.id)));
+    .where(and(eq(journalLinesTable.journalEntryId, entryId), eq(journalLinesTable.accountId, account.id)))
+    .orderBy(journalLinesTable.id);
   for (const line of lines) {
     const allocation = line.allocation as ReceivableAllocationInput | null;
     if (!allocation) continue;
@@ -288,7 +289,8 @@ async function reversePayableEffects(tx: Tx, entryId: number) {
     .where(eq(chartOfAccountsTable.code, "2000")).limit(1);
   if (!account) return;
   const lines = await tx.select().from(journalLinesTable)
-    .where(and(eq(journalLinesTable.journalEntryId, entryId), eq(journalLinesTable.accountId, account.id)));
+    .where(and(eq(journalLinesTable.journalEntryId, entryId), eq(journalLinesTable.accountId, account.id)))
+    .orderBy(journalLinesTable.id);
   for (const line of lines) {
     const allocation = line.allocation as (PayableAllocationInput & { payableId?: number }) | null;
     if (!allocation) continue;
