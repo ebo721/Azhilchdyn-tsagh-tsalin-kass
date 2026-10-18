@@ -183,6 +183,7 @@ import { EmptyState, ErrorBlock, LoadingBlock, Modal, PageHeading, StatCard } fr
 import { currentMonth, dateLabel, money, shiftMonth, today } from '@/lib/app-shared';
 import { BankArApForm, BankArApOpenButton } from '@/components/BankArApForm';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
+import { CashTransactionDetailDialog } from '@/components/CashTransactionDetailDialog';
 const mongolianMonthLabel = (value: string) => {
   const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value);
   return match ? `${match[1]} он ${Number(match[2])} сар` : value;
@@ -241,6 +242,7 @@ export function Cash() {
   const [journalAccountId, setJournalAccountId] = useState('');
   const [journalBankTransactionId, setJournalBankTransactionId] = useState('');
   const [open, setOpen] = useState(false);
+  const [detailId, setDetailId] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState(currentMonth());
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
   const [filterCategory, setFilterCategory] = useState('all');
@@ -357,10 +359,11 @@ export function Cash() {
         const supportedPair = ['manual', 'payroll', 'payroll_advance', 'bank_transaction'].includes(row.transactionKind);
         const journalEligible = canPostJournal && row.journalEntryId === null && supportedPair
           && (bankLinked ? Boolean(row.bankVerifiedAt) : !row.bankVerifiedAt);
-        return <div className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-secondary/35" key={row.id} data-testid={`row-cash-${row.id}`}>
+        return <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4 transition-colors hover:bg-secondary/35" key={row.id} data-testid={`row-cash-${row.id}`}>
           <time dateTime={row.date} title={dateLabel(row.date)} aria-label={dateLabel(row.date)} className={cn('flex size-9 shrink-0 items-center justify-center rounded-xl text-center font-mono text-sm font-semibold tabular-nums', row.type === CashTransactionType.income ? 'bg-primary/10 text-primary' : 'bg-orange-100 text-orange-800')} data-testid={`date-cash-${row.id}`}>{Number(row.date.slice(8, 10))}</time>
           <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold">{row.description}</p><span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-800">{row.category}</span>{row.journalEntryId && <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-800" data-testid={`badge-cash-journal-${row.id}`}>Журнал бичигдсэн #{row.journalEntryId}</span>}{(row.bankVerifiedAt || row.bankTransactionId) && <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">Банкны хуулгаар баталгаажсан</span>}</div><p className="mt-0.5 text-xs text-muted-foreground">{dateLabel(row.date)}{row.type === CashTransactionType.income && row.incomeMonth ? ` · ${mongolianMonthLabel(row.incomeMonth)}-ийн орлого` : ''}{closed ? ' · Өндөрлөсөн' : ''}</p><AccountLabel code={row.accountCode} name={row.accountName} className="mt-1" /></div>
           {(session.data?.role === 'admin' || row.editable || journalEligible || (canPostJournal && bankLinked && supportedPair)) && <div className="flex flex-wrap justify-end gap-1">{journalEligible && <Button size="sm" variant="outline" disabled={closed || postJournal.isPending || restoreBankJournal.isPending || unlinkBankCash.isPending} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : bankLinked ? 'Журнал дахин бичих' : 'Журнал бичих'} onClick={() => startJournal(row)} data-testid={`button-post-cash-journal-${row.id}`}><BookOpen className="size-4" />{bankLinked ? 'Журнал дахин бичих' : 'Журнал бичих'}</Button>}{canPostJournal && bankLinked && supportedPair && <Button size="sm" variant="outline" disabled={closed || unlinkBankCash.isPending || restoreBankJournal.isPending} onClick={() => unlinkCash(row)} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Буруу холбосон банк–кассын холбоос салгах'} data-testid={`button-unlink-bank-cash-${row.id}`}>Холбоос салгах</Button>}{session.data?.role === 'admin' && <Button size="icon" variant="ghost" disabled={closed} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : 'Засах'} onClick={() => startEdit(row)} data-testid={`button-edit-cash-${row.id}`}><Pencil className="size-4" /></Button>}{row.editable && <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={closed || deletion.isPending} title={closed ? 'Өндөрлөсөн өдрийн гүйлгээ' : deletion.isAdmin ? 'Гүйлгээ устгах' : 'Устгах хүсэлт илгээх'} aria-label={`${row.description} гүйлгээг устгах`} onClick={() => deleteRow(row)} data-testid={`button-delete-cash-${row.id}`}><Trash2 className="size-4" />Устгах</Button>}</div>}
+          <Button size="sm" variant="outline" onClick={() => setDetailId(row.id)} aria-label={`${row.description} гүйлгээг харах`} data-testid={`button-view-cash-${row.id}`}>Харах</Button>
           <p className={cn('font-mono text-sm font-bold', row.type === CashTransactionType.income ? 'text-primary' : 'text-orange-800')}>{row.type === CashTransactionType.income ? '+' : '−'}{money(row.amount)}</p>
         </div>;
       })}</div>}
@@ -370,6 +373,7 @@ export function Cash() {
         <div className="bg-secondary/40 px-5 py-4"><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Цэвэр дүн</p><p className={cn('mt-1 font-mono text-base font-bold', filteredIncome - filteredExpense >= 0 ? 'text-primary' : 'text-orange-800')} data-testid="value-filtered-cash-net">{money(filteredIncome - filteredExpense)}</p></div>
       </div>}
     </section>
+    {detailId !== null && <CashTransactionDetailDialog id={detailId} onClose={() => setDetailId(null)} />}
     {open && <Modal title={editing ? 'Кассын гүйлгээ засах' : 'Кассын гүйлгээ'} detail="Гүйлгээний төрөл, дүн болон огноог оруулна." onClose={() => setOpen(false)}>
       <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-5" data-testid="form-cash">
         {editing && <div className="rounded-xl border border-border bg-secondary/35 px-4 py-3"><AccountLabel code={editing.accountCode} name={editing.accountName} /></div>}

@@ -1166,6 +1166,50 @@ export interface CashTransaction {
   transactionKind: CashTransactionTransactionKind;
 }
 
+export type BankTransactionType = typeof BankTransactionType[keyof typeof BankTransactionType];
+
+
+export const BankTransactionType = {
+  income: 'income',
+  expense: 'expense',
+} as const;
+
+export interface BankTransaction {
+  id: number;
+  transactionAt: string;
+  type: BankTransactionType;
+  amount: number;
+  /** @nullable */
+  accountId: number | null;
+  /** @nullable */
+  accountCode: string | null;
+  /** @nullable */
+  accountName: string | null;
+  account: string;
+  counterparty: string;
+  description: string;
+  /** @nullable */
+  executedAt: string | null;
+  /** @nullable */
+  balance: number | null;
+  /** @nullable */
+  transferredAt: string | null;
+  /** @nullable */
+  cashTransactionId: number | null;
+  /** @nullable */
+  bankAccountId: number | null;
+  /** @nullable */
+  bankName: string | null;
+  /** @nullable */
+  bankAccountNumber: string | null;
+  createdAt: string;
+}
+
+export interface CashTransactionDetail {
+  cashTransaction: CashTransaction;
+  bankTransaction: BankTransaction | null;
+}
+
 export interface BankAccount {
   id: number;
   bankName: string;
@@ -1354,45 +1398,6 @@ export interface CashSummary {
   expense: number;
   todayIncome: number;
   todayExpense: number;
-}
-
-export type BankTransactionType = typeof BankTransactionType[keyof typeof BankTransactionType];
-
-
-export const BankTransactionType = {
-  income: 'income',
-  expense: 'expense',
-} as const;
-
-export interface BankTransaction {
-  id: number;
-  transactionAt: string;
-  type: BankTransactionType;
-  amount: number;
-  /** @nullable */
-  accountId: number | null;
-  /** @nullable */
-  accountCode: string | null;
-  /** @nullable */
-  accountName: string | null;
-  account: string;
-  counterparty: string;
-  description: string;
-  /** @nullable */
-  executedAt: string | null;
-  /** @nullable */
-  balance: number | null;
-  /** @nullable */
-  transferredAt: string | null;
-  /** @nullable */
-  cashTransactionId: number | null;
-  /** @nullable */
-  bankAccountId: number | null;
-  /** @nullable */
-  bankName: string | null;
-  /** @nullable */
-  bankAccountNumber: string | null;
-  createdAt: string;
 }
 
 export interface BankTransactionAccountInput {
