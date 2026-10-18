@@ -90,7 +90,7 @@ function BankDebtSettleForm({ row, onClose, onSaved }: { row: BankArApRow; onClo
   const pay = useListJournalPayables(rp, { query: { queryKey: getListJournalPayablesQueryKey(rp), enabled: !income, refetchOnMount: 'always', staleTime: 0 } });
   const done = useAfterPosted(row, onClose, onSaved);
   const [search, setSearch] = useState('');
-  const [targetId, setTargetId] = useState('');
+  const [lines, setLines] = useState([{ targetId: '', amount: String(row.amount) }]);
   const [touched, setTouched] = useState(false);
   const debtQuery = income ? recv : pay;
   const account = accounts.data?.find((a) => a.code === code && a.isActive);
@@ -100,26 +100,32 @@ function BankDebtSettleForm({ row, onClose, onSaved }: { row: BankArApRow; onClo
     : (pay.data ?? []).map((r) => ({ id: r.id, partyType: r.partyType, partyLabel: r.partyLabel, date: r.date, description: r.description, balance: r.remainingBalance })),
   [income, recv.data, pay.data]);
   const q = search.trim().toLocaleLowerCase('mn-MN');
-  const options = debts.filter((d) => !q || String(d.id) === targetId || `${d.partyLabel} ${d.description} ${d.date ?? ''}`.toLocaleLowerCase('mn-MN').includes(q));
-  const selected = debts.find((d) => String(d.id) === targetId);
+  const options = debts.filter((d) => !q || lines.some(line => String(d.id) === line.targetId) || `${d.partyLabel} ${d.description} ${d.date ?? ''}`.toLocaleLowerCase('mn-MN').includes(q));
   const typeLabel = (t: string) => (t === 'employee' ? 'Ажилтан' : 'Нийлүүлэгч');
   const early = (d: Debt) => Boolean(d.date && bankDate && bankDate < d.date);
-  const over = (d: Debt) => cents(row.amount) > cents(d.balance);
   const loading = accounts.isLoading || debtQuery.isLoading || debtQuery.isFetching;
   const loadFailed = accounts.isError || debtQuery.isError;
-  const targetGone = Boolean(targetId) && !selected && !loading;
-  const problem = !selected ? (targetGone ? 'Сонгосон өр олдсонгүй эсвэл хаагдсан байна. Жагсаалтаас дахин сонгоно уу.' : 'Хасах өрөө сонгоно уу.')
-    : early(selected) ? 'Банкны огноо сонгосон өрийн огнооноос өмнө байна.'
-    : over(selected) ? `Банкны дүн (${exactMoney(row.amount)}) өрийн үлдэгдэл (${exactMoney(selected.balance)})-ээс их байна. Нэг гүйлгээг зөвхөн нэг өрөнд бүтнээр хэрэглэнэ.` : '';
-  const after = selected ? (cents(selected.balance) - cents(row.amount)) / 100 : null;
+  const lineProblem = (line: typeof lines[number]) => {
+    const selected = debts.find(d => String(d.id) === line.targetId);
+    const amount = Number(line.amount);
+    return !selected ? (line.targetId ? 'Сонгосон өр олдсонгүй эсвэл хаагдсан байна. Жагсаалтаас дахин сонгоно уу.' : 'Хасах өрөө сонгоно уу.')
+      : early(selected) ? 'Банкны огноо сонгосон өрийн огнооноос өмнө байна.'
+      : lines.filter(l => l.targetId === line.targetId).length > 1 ? 'Нэг өрийг давхар сонгож болохгүй.'
+      : !/^\d+(\.\d{1,2})?$/.test(line.amount) || !Number.isSafeInteger(cents(amount)) || amount <= 0 ? 'Эерэг дүнг бутархайн хоёр хүртэл оронтой оруулна уу.'
+      : cents(amount) > cents(selected.balance) ? 'Хуваарилалтын дүн өрийн үлдэгдлээс их байна.' : '';
+  };
+  const total = lines.reduce((sum, line) => sum + (Number.isFinite(Number(line.amount)) ? cents(Number(line.amount)) : 0), 0);
+  const difference = cents(row.amount) - total;
+  const problem = lines.map(lineProblem).find(Boolean) || (difference !== 0 ? 'Хуваарилалтын нийлбэр банкны дүнтэй яг тэнцүү байх ёстой.' : '');
+  const updateLine = (index: number, change: Partial<typeof lines[number]>) => setLines(cur => cur.map((line, i) => i === index ? { ...line, ...change } : line));
   const missingAccount = !loading && !loadFailed && !account;
   const pending = post.isPending;
 
   const submit = () => {
     setTouched(true);
-    if (pending || problem || !account || !allowed || !selected) return;
-    const allocation = income ? { kind: 'settle' as const, receivableId: selected.id } : { kind: 'settle' as const, payableId: selected.id };
-    post.mutate({ id: row.id, data: { accountId: account.id, allocation } }, { onSuccess: done, onError: () => { void debtQuery.refetch(); } });
+    if (pending || loading || loadFailed || problem || !account || !allowed) return;
+    const settlements = lines.map(line => ({ amount: Number(line.amount), ...(income ? { receivableId: Number(line.targetId) } : { payableId: Number(line.targetId) }) }));
+    post.mutate({ id: row.id, data: { accountId: account.id, settlements } }, { onSuccess: done, onError: () => { void debtQuery.refetch(); } });
   };
   const retry = () => { void accounts.refetch(); void debtQuery.refetch(); };
 
@@ -129,7 +135,7 @@ function BankDebtSettleForm({ row, onClose, onSaved }: { row: BankArApRow; onClo
       onClose={() => { if (!pending) onClose(); }}>
       <form className="space-y-4" noValidate onSubmit={(e) => { e.preventDefault(); submit(); }} data-testid="form-bank-settlement">
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900" data-testid="text-bank-settlement-notice">
-          Журнал: {income ? 'Дебет 1010 Банк, Кредит 1200 Авлага' : 'Дебет 2000 Өглөг, Кредит 1010 Банк'}. Банкны бүх дүн сонгосон нэг өрөнд хэрэглэгдэнэ.
+          Журнал: {income ? 'Дебет 1010 Банк, Кредит 1200 Авлага' : 'Дебет 2000 Өглөг, Кредит 1010 Банк'}. Нэг эсвэл олон өр сонгож банкны бүх дүнг хуваарилна.
         </div>
         <FixedBankFacts row={row} />
         {loading ? <LoadingBlock className="h-32" /> : loadFailed ? (
@@ -149,28 +155,45 @@ function BankDebtSettleForm({ row, onClose, onSaved }: { row: BankArApRow; onClo
           <div className="space-y-1.5 text-xs font-semibold">
             <label htmlFor="bank-settlement-search">{income ? 'Хасах авлага' : 'Хасах өглөг'}</label>
             <Input id="bank-settlement-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Нэр, утга, огноогоор хайх" disabled={pending} data-testid="input-bank-settlement-search" />
-            <select aria-label="Өр сонгох" value={selected ? targetId : ''} onChange={(e) => setTargetId(e.target.value)} disabled={pending} className={cls} data-testid="select-bank-settlement-target">
+            {lines.map((line, index) => {
+              const selected = debts.find(d => String(d.id) === line.targetId);
+              const after = selected ? (cents(selected.balance) - cents(Number(line.amount))) / 100 : null;
+              const id = (base: string) => index === 0 ? base : `${base}-${index}`;
+              return <div key={index} className="space-y-2 rounded-lg border border-border p-3" data-testid={`bank-settlement-line-${index}`}>
+            <select aria-label={`Өр сонгох ${index + 1}`} value={selected ? line.targetId : ''} onChange={(e) => updateLine(index, { targetId: e.target.value })} disabled={pending} className={cls} data-testid={id("select-bank-settlement-target")}>
               <option value="">Өр сонгоно уу</option>
               {options.map((d) => (
-                <option key={d.id} value={d.id} disabled={early(d)}>
-                  {d.partyLabel} ({typeLabel(d.partyType)}) | {d.date ? dateLabel(d.date) : 'огноогүй'} | {d.description || 'утгагүй'} | үлдэгдэл {exactMoney(d.balance)}{early(d) ? ' | банкны огноо өрөөс өмнө' : over(d) ? ' | банкны дүн үлдэгдлээс их' : ''}
+                <option key={d.id} value={d.id} disabled={early(d) || lines.some((l, i) => i !== index && l.targetId === String(d.id))}>
+                  {d.partyLabel} ({typeLabel(d.partyType)}) | {d.date ? dateLabel(d.date) : 'огноогүй'} | {d.description || 'утгагүй'} | үлдэгдэл {exactMoney(d.balance)}{early(d) ? ' | банкны огноо өрөөс өмнө' : ''}
                 </option>
               ))}
             </select>
-            {options.length === 0 && <span className="block font-normal text-muted-foreground" data-testid="text-bank-settlement-no-match">Хайлтад тохирох өр олдсонгүй.</span>}
+            <label className="block">Хуваарилах дүн
+              <Input aria-label={`Хуваарилах дүн ${index + 1}`} inputMode="decimal" value={line.amount} onChange={e => updateLine(index, { amount: e.target.value })} disabled={pending} data-testid={id("input-bank-settlement-amount")} />
+            </label>
             {selected && (
-              <div className="rounded-lg border border-border bg-secondary/35 px-3 py-2 font-normal" data-testid="text-bank-settlement-balance">
+              <div className="rounded-lg border border-border bg-secondary/35 px-3 py-2 font-normal" data-testid={id("text-bank-settlement-balance")}>
                 <p>Одоогийн үлдэгдэл: <span className="font-mono font-semibold">{exactMoney(selected.balance)}</span></p>
                 <p>Төлөлтийн дараах үлдэгдэл: <span className="font-mono font-semibold">{after !== null && after >= 0 ? exactMoney(after) : '-'}</span>{after === 0 ? ' (бүрэн хасагдана)' : ''}</p>
               </div>
             )}
-            {(touched || (selected && problem)) && problem && <span className="block text-xs text-destructive" role="alert" data-testid="text-bank-settlement-error">{problem}</span>}
+            {(touched || selected) && lineProblem(line) && <span className="block text-xs text-destructive" role="alert" data-testid={id("text-bank-settlement-error")}>{lineProblem(line)}</span>}
+            {lines.length > 1 && <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => setLines(cur => cur.filter((_, i) => i !== index))} data-testid={id("button-remove-bank-settlement")}>Мөр хасах</Button>}
+              </div>;
+            })}
+            {options.length === 0 && <span className="block font-normal text-muted-foreground" data-testid="text-bank-settlement-no-match">Хайлтад тохирох өр олдсонгүй.</span>}
+            <Button type="button" variant="outline" size="sm" disabled={pending || lines.length >= 100} onClick={() => setLines(cur => [...cur, { targetId: '', amount: difference > 0 ? String(difference / 100) : '' }])} data-testid="button-add-bank-settlement">Өр нэмэх</Button>
+            <div className="rounded-lg bg-secondary/35 p-3 font-normal" data-testid="text-bank-settlement-total">
+              <p>Хуваарилсан: {exactMoney(total / 100)}</p>
+              <p>Хуваарилаагүй: {exactMoney(difference / 100)}</p>
+              {difference !== 0 && <p className="text-destructive" role="alert">Хуваарилалтын нийлбэр банкны дүнтэй яг тэнцүү байх ёстой.</p>}
+            </div>
           </div>
         )}
         {post.isError && <p className="text-xs font-semibold text-destructive" role="alert" data-testid="text-bank-settlement-server-error">{message(post.error)}</p>}
         <div className="flex justify-end gap-2 border-t border-border pt-5">
           <Button type="button" variant="outline" onClick={onClose} disabled={pending} data-testid="button-cancel-bank-settlement">Болих</Button>
-          <Button type="submit" disabled={pending || loading || loadFailed || !account || !allowed || !selected || Boolean(problem)} data-testid="button-submit-bank-settlement">
+          <Button type="submit" disabled={pending || loading || loadFailed || !account || !allowed || Boolean(problem)} data-testid="button-submit-bank-settlement">
             {pending ? 'Бүртгэж байна...' : post.isError ? 'Дахин оролдох' : income ? 'Авлагаас хасах' : 'Өглөгөөс хасах'}
           </Button>
         </div>
