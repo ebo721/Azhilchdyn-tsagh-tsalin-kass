@@ -1819,6 +1819,59 @@ export const CreateCashTransactionResponse = zod.object({
 
 
 /**
+ * @summary Read a cash transaction and only its directly linked bank transaction
+ */
+export const GetCashTransactionDetailParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const getCashTransactionDetailResponseCashTransactionIncomeMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+
+
+export const GetCashTransactionDetailResponse = zod.object({
+  "cashTransaction": zod.object({
+  "id": zod.number().int(),
+  "type": zod.enum(['income', 'expense']),
+  "category": zod.string(),
+  "subcategory": zod.string().nullable(),
+  "accountId": zod.number().int().nullable(),
+  "accountCode": zod.string().nullable(),
+  "accountName": zod.string().nullable(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "date": zod.string(),
+  "incomeMonth": zod.string().regex(getCashTransactionDetailResponseCashTransactionIncomeMonthRegExp).nullable(),
+  "bankTransactionId": zod.number().int().nullable(),
+  "bankVerifiedAt": zod.coerce.date().nullable(),
+  "journalEntryId": zod.number().int().nullable(),
+  "createdAt": zod.string(),
+  "editable": zod.boolean(),
+  "transactionKind": zod.enum(['manual', 'payroll', 'payroll_advance', 'inventory_purchase', 'inventory_purchase_group', 'fixed_asset_purchase', 'operating_expense', 'bank_transaction'])
+}),
+  "bankTransaction": zod.union([zod.object({
+  "id": zod.number().int(),
+  "transactionAt": zod.coerce.date(),
+  "type": zod.enum(['income', 'expense']),
+  "amount": zod.number(),
+  "accountId": zod.number().int().nullable(),
+  "accountCode": zod.string().nullable(),
+  "accountName": zod.string().nullable(),
+  "account": zod.string(),
+  "counterparty": zod.string(),
+  "description": zod.string(),
+  "executedAt": zod.coerce.date().nullable(),
+  "balance": zod.number().nullable(),
+  "transferredAt": zod.coerce.date().nullable(),
+  "cashTransactionId": zod.number().int().nullable(),
+  "bankAccountId": zod.number().int().nullable(),
+  "bankName": zod.string().nullable(),
+  "bankAccountNumber": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+}),zod.null()])
+})
+
+
+/**
  * @summary Update an open manual cash transaction
  */
 export const UpdateCashTransactionParams = zod.object({

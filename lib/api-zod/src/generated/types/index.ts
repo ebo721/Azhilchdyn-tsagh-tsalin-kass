@@ -64,6 +64,7 @@ export * from './cashJournalPosting';
 export * from './cashJournalPostingInput';
 export * from './cashSummary';
 export * from './cashTransaction';
+export * from './cashTransactionDetail';
 export * from './cashTransactionInput';
 export * from './cashTransactionInputType';
 export * from './cashTransactionSuggestion';

@@ -25,6 +25,8 @@ import {
   ListShiftsResponse,
   RevertPayrollAdvanceApprovalQueryParams,
   ListCashTransactionsResponse,
+  GetCashTransactionDetailParams,
+  GetCashTransactionDetailResponse,
   ListCashClosuresResponse,
   CloseCashDayResponse,
   UpdateCashTransactionBody,
@@ -165,6 +167,7 @@ import {
 } from "../lib/cash-account.js";
 import * as shared from "../lib/route-shared.js";
 import { bankSuggestionScore } from "../lib/bank-suggestion-score.js";
+import { bankTransactionResponse } from "../lib/bank-transaction-response.js";
 import { lockCashDate } from "../lib/cash-date-lock.js";
 import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-shared.js";
 
@@ -276,26 +279,31 @@ router.get("/cash/summary", async (_req, res, next) => {
   }
 });
 
-router.get("/cash/transactions", async (_req, res, next) => {
-  try {
+async function loadCashTransactions(id?: number) {
     const rows = await db.select({
       transaction: cashTransactionsTable,
       accountCode: chartOfAccountsTable.code,
       accountName: chartOfAccountsTable.name,
     }).from(cashTransactionsTable)
       .leftJoin(chartOfAccountsTable, eq(cashTransactionsTable.accountId, chartOfAccountsTable.id))
-      .where(isNull(cashTransactionsTable.unclearAt))
+      .where(and(isNull(cashTransactionsTable.unclearAt), id === undefined ? undefined : eq(cashTransactionsTable.id, id)))
       .orderBy(desc(cashTransactionsTable.date), desc(cashTransactionsTable.id));
+    if (!rows.length) return [];
+    const purchaseIds = rows.filter(({ transaction }) => transaction.sourceType === "inventory_purchase")
+      .map(({ transaction }) => Number(transaction.sourceKey?.replace("purchase:", "")))
+      .filter((value) => Number.isSafeInteger(value) && value > 0);
     const [expenseRows, inventoryPurchases] = await Promise.all([
       db.select({
         cashTransactionId: operatingExpensesTable.cashTransactionId,
         category: chartOfAccountsTable.name,
-      }).from(operatingExpensesTable).innerJoin(chartOfAccountsTable, eq(chartOfAccountsTable.id, operatingExpensesTable.accountId)).where(isNotNull(operatingExpensesTable.cashTransactionId)),
-      db.select({ id: inventoryPurchasesTable.id, materialType: inventoryPurchasesTable.materialType }).from(inventoryPurchasesTable),
+      }).from(operatingExpensesTable).innerJoin(chartOfAccountsTable, eq(chartOfAccountsTable.id, operatingExpensesTable.accountId)).where(id === undefined ? isNotNull(operatingExpensesTable.cashTransactionId) : eq(operatingExpensesTable.cashTransactionId, id)),
+      purchaseIds.length
+        ? db.select({ id: inventoryPurchasesTable.id, materialType: inventoryPurchasesTable.materialType }).from(inventoryPurchasesTable).where(inArray(inventoryPurchasesTable.id, purchaseIds))
+        : Promise.resolve([]),
     ]);
     const subcategoryByCashId = new Map(expenseRows.map((expense) => [expense.cashTransactionId, expense.category]));
     const inventoryCategoryBySourceKey = new Map(inventoryPurchases.map((purchase) => [`purchase:${purchase.id}`, inventoryMaterialLabel(purchase.materialType)]));
-    res.json(ListCashTransactionsResponse.parse(rows.map((row) => {
+    return ListCashTransactionsResponse.parse(rows.map((row) => {
       const transaction = row.transaction;
       const category = transaction.type === "expense"
         ? transaction.sourceType === "payroll" || transaction.sourceType === "payroll_advance"
@@ -329,7 +337,42 @@ router.get("/cash/transactions", async (_req, res, next) => {
       editable: transaction.sourceType === null,
       transactionKind: transaction.sourceType ?? "manual",
       };
-    })));
+    }));
+}
+
+router.get("/cash/transactions", async (_req, res, next) => {
+  try {
+    res.json(await loadCashTransactions());
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/cash/transactions/:id", async (req, res, next) => {
+  try {
+    const { id } = GetCashTransactionDetailParams.parse(req.params);
+    const [cashTransaction] = await loadCashTransactions(id);
+    if (!cashTransaction) {
+      res.status(404).json({ error: "Кассын гүйлгээ олдсонгүй" });
+      return;
+    }
+    // Cash readers may inspect this pair, not browse unrelated bank transactions.
+    let bankTransaction = null;
+    if (cashTransaction.bankTransactionId !== null) {
+      const [linked] = await db.select({
+        transaction: bankTransactionsTable,
+        accountCode: chartOfAccountsTable.code,
+        accountName: chartOfAccountsTable.name,
+      }).from(bankTransactionsTable)
+        .leftJoin(chartOfAccountsTable, eq(bankTransactionsTable.accountId, chartOfAccountsTable.id))
+        .where(and(eq(bankTransactionsTable.id, cashTransaction.bankTransactionId), isNull(bankTransactionsTable.unclearAt)));
+      if (!linked) {
+        res.status(404).json({ error: "Холбогдсон банкны гүйлгээ олдсонгүй" });
+        return;
+      }
+      bankTransaction = bankTransactionResponse(linked.transaction, linked.accountCode, linked.accountName);
+    }
+    res.json(GetCashTransactionDetailResponse.parse({ cashTransaction, bankTransaction }));
   } catch (error) {
     next(error);
   }
