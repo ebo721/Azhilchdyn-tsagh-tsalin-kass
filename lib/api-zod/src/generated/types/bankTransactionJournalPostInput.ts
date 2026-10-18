@@ -5,10 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PayableSettleAllocation } from './payableSettleAllocation';
 import type { ReceivableCreateAllocation } from './receivableCreateAllocation';
+import type { ReceivableSettleAllocation } from './receivableSettleAllocation';
 
 export interface BankTransactionJournalPostInput {
   /** @minimum 1 */
   accountId: number;
-  allocation?: ReceivableCreateAllocation;
+  allocation?: ReceivableCreateAllocation | ReceivableSettleAllocation | PayableSettleAllocation;
 }

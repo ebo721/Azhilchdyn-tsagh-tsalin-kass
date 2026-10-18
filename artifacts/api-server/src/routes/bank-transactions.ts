@@ -50,7 +50,7 @@ import {
   UpdateBankTransactionAccountResponse,
 } from "@workspace/api-zod";
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
-import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable, employeesTable, inventorySuppliersTable, journalEntriesTable, journalLinesTable, operatingExpensesTable } from "@workspace/db";
+import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable, employeesTable, inventorySuppliersTable, journalEntriesTable, journalLinesTable, operatingExpensesTable, payablesTable, receivablesTable } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.js";
 import { cashAccountForCategory } from "../lib/cash-account.js";
@@ -527,11 +527,19 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
       res.status(403).json({ error: "Зөвхөн админ, нягтлан банкны журнал бүртгэнэ" });
       return;
     }
-    if (allocation) {
+    if (allocation?.kind === "create") {
       const partyId = allocation.partyType === "employee" ? allocation.employeeId : allocation.supplierId;
       const otherId = allocation.partyType === "employee" ? allocation.supplierId : allocation.employeeId;
       if (!partyId || !Number.isInteger(partyId) || partyId > 2147483647 || otherId !== undefined) {
         res.status(400).json({ error: "Нэг ажилтан эсвэл харилцагч зөв сонгоно уу" });
+        return;
+      }
+    } else if (allocation?.kind === "settle") {
+      const raw = req.body.allocation;
+      const targetId = "receivableId" in allocation ? allocation.receivableId : allocation.payableId;
+      if (targetId > 2147483647 || (raw.receivableId !== undefined && raw.payableId !== undefined)
+        || raw.partyType !== undefined || raw.employeeId !== undefined || raw.supplierId !== undefined) {
+        res.status(400).json({ error: "Төлөлтөд нэг авлага эсвэл нэг өглөг зөв сонгоно уу" });
         return;
       }
     }
@@ -551,9 +559,15 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
               eq(journalEntriesTable.sourceType, "bank"),
               eq(journalEntriesTable.sourceId, bank.id),
             ));
-          const prior = existing?.allocation as { kind?: string; partyType?: string; employeeId?: number; supplierId?: number } | null;
-          if (existing?.status !== "posted" || prior?.kind !== "create" || prior.partyType !== allocation.partyType
-            || prior.employeeId !== allocation.employeeId || prior.supplierId !== allocation.supplierId) {
+          const prior = existing?.allocation as {
+            kind?: string; partyType?: string; employeeId?: number; supplierId?: number; receivableId?: number; payableId?: number;
+          } | null;
+          const matches = prior?.kind === allocation.kind && (allocation.kind === "create"
+            ? prior.partyType === allocation.partyType && prior.employeeId === allocation.employeeId && prior.supplierId === allocation.supplierId
+            : "receivableId" in allocation
+              ? prior.receivableId === allocation.receivableId && prior.payableId === undefined
+              : prior.payableId === allocation.payableId && prior.receivableId === undefined);
+          if (existing?.status !== "posted" || !matches) {
             return "balance-conflict" as const;
           }
         }
@@ -567,10 +581,17 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
         eq(chartOfAccountsTable.isActive, true),
       ));
       if (allocation) {
-        const requiredCode = bank.type === "expense" ? "1200" : bank.type === "income" ? "2000" : null;
+        const requiredCode = allocation.kind === "create"
+          ? bank.type === "expense" ? "1200" : bank.type === "income" ? "2000" : null
+          : bank.type === "income" && "receivableId" in allocation ? "1200"
+            : bank.type === "expense" && "payableId" in allocation ? "2000" : null;
         if (!requiredCode || account?.code !== requiredCode) {
-          throw new JournalValidationError("Банкны зарлагаар 1200 авлага, орлогоор 2000 өглөг шинээр үүсгэнэ");
+          throw new JournalValidationError(allocation.kind === "create"
+            ? "Банкны зарлагаар 1200 авлага, орлогоор 2000 өглөг шинээр үүсгэнэ"
+            : "Банкны орлогоор 1200 авлагын төлөлт, зарлагаар 2000 өглөгийн төлбөр бүртгэнэ");
         }
+      }
+      if (allocation?.kind === "create") {
         // Share the employee deletion lock, including polymorphic payable origins.
         const [party] = allocation.partyType === "employee"
           ? await tx.select({ id: employeesTable.id }).from(employeesTable)
@@ -578,6 +599,18 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
           : await tx.select({ id: inventorySuppliersTable.id }).from(inventorySuppliersTable)
             .where(eq(inventorySuppliersTable.id, allocation.supplierId!)).for("share");
         if (!party) throw new JournalValidationError("Идэвхтэй ажилтан эсвэл бүртгэлтэй харилцагч сонгоно уу");
+      } else if (allocation?.kind === "settle") {
+        const [origin] = "receivableId" in allocation
+          ? await tx.select({ date: journalEntriesTable.date }).from(receivablesTable)
+            .innerJoin(journalEntriesTable, eq(journalEntriesTable.id, receivablesTable.originJournalEntryId))
+            .where(eq(receivablesTable.id, allocation.receivableId))
+          : await tx.select({ date: journalEntriesTable.date }).from(payablesTable)
+            .innerJoin(journalEntriesTable, eq(journalEntriesTable.id, payablesTable.journalEntryId))
+            .where(eq(payablesTable.id, allocation.payableId));
+        if (!origin) throw Object.assign(new Error("Сонгосон авлага/өглөг олдсонгүй"), { status: 404 });
+        if (bank.transactionAt.toISOString().slice(0, 10) < origin.date) {
+          throw new JournalValidationError("Банкны төлөлтийн огноо авлага/өглөг үүссэн огнооноос өмнө байж болохгүй");
+        }
       }
       if (bank.type === "expense") {
         const [assignedAccount] = bank.accountId === null || bank.accountId === accountId
@@ -589,7 +622,7 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
         if (account?.code === "1800" || assignedAccount?.code === "1800") return "fixed-asset-document-required" as const;
       }
       const allowed = bank.type === "income"
-        ? account?.type === "revenue" || (account?.code === "2000" && allocation !== undefined)
+        ? account?.type === "revenue" || (allocation !== undefined && ["1200", "2000"].includes(account?.code ?? ""))
         : account !== undefined && ["expense", "asset", "liability"].includes(account.type);
       if (!allowed) return "invalid_account" as const;
       const bankAccount = await accountByCode(tx, "1010", "asset");
@@ -620,7 +653,7 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
       return;
     }
     if (result === "balance-conflict") {
-      res.status(409).json({ error: "Гүйлгээ өөр журнал эсвэл өөр талын авлага/өглөгт бүртгэгдсэн байна" });
+      res.status(409).json({ error: "Гүйлгээ өөр журнал, авлага/өглөг эсвэл төлөлтөд бүртгэгдсэн байна" });
       return;
     }
     if (result === "invalid_account") {
@@ -637,6 +670,12 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
     }
     res.json(PostBankTransactionJournalResponse.parse(result));
   } catch (error) {
+    if (error instanceof Error && "status" in error && (error.status === 404 || error.status === 409)) {
+      res.status(error.status).json({ error: error.status === 404
+        ? "Сонгосон авлага/өглөг олдсонгүй"
+        : "Авлага/өглөгийн үлдэгдэл хүрэлцэхгүй эсвэл аль хэдийн хаагдсан байна. Үлдэгдлийг шинэчилж дахин сонгоно уу." });
+      return;
+    }
     if (error instanceof JournalValidationError) {
       res.status(400).json({ error: error.message });
       return;

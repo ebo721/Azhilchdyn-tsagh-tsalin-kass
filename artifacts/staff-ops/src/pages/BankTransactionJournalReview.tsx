@@ -47,6 +47,7 @@ export function BankTransactionJournalReview() {
 
   const [selectedAccounts, setSelectedAccounts] = useState<Record<number, number>>({});
   const [debtRow, setDebtRow] = useState<BankTransactionJournalReviewItem | null>(null);
+  const [debtMode, setDebtMode] = useState<'create' | 'settle'>('create');
   const [linkingRowId, setLinkingRowId] = useState<number | null>(null);
   const [linkingExpenseAccountId, setLinkingExpenseAccountId] = useState<number | undefined>();
   const [linkingPurchaseMaterialType, setLinkingPurchaseMaterialType] = useState<'food' | 'supply' | undefined>();
@@ -316,7 +317,8 @@ export function BankTransactionJournalReview() {
                             Бараа материал, хангамжийн зарлагад худалдан авалтын баримт заавал холбох эсвэл шинээр үүсгэнэ. Ингэснээр касс, худалдан авалт, журнал хамт бүртгэгдэнэ. Бусад ангиллыг зөвхөн журналд шивэхэд эдгээр жагсаалтад мөр нэмэгдэхгүй.
                           </p>
                         )}
-                        <BankArApOpenButton row={row} onOpen={() => setDebtRow(row)} disabled={isPending} />
+                        <BankArApOpenButton row={row} onOpen={() => { setDebtMode('create'); setDebtRow(row); }} disabled={isPending} />
+                        <BankArApOpenButton mode="settle" row={row} onOpen={() => { setDebtMode('settle'); setDebtRow(row); }} disabled={isPending} />
                         {isIncome === false && (
                           !isFixedAssetAccount(selectedAccounts[row.id] || row.suggestedAccountId) && (
                             <Button
@@ -364,7 +366,7 @@ export function BankTransactionJournalReview() {
           </div>
         </div>
       )}
-      {debtRow && <BankArApForm row={debtRow} onClose={() => setDebtRow(null)} />}
+      {debtRow && <BankArApForm mode={debtMode} row={debtRow} onClose={() => setDebtRow(null)} />}
     </div>
   );
 }

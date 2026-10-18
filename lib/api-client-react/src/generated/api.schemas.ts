@@ -1610,7 +1610,7 @@ export interface BankFixedAssetLinkResult {
 export interface BankTransactionJournalPostInput {
   /** @minimum 1 */
   accountId: number;
-  allocation?: ReceivableCreateAllocation;
+  allocation?: ReceivableCreateAllocation | ReceivableSettleAllocation | PayableSettleAllocation;
 }
 
 export interface BankTransactionJournalPostResult {
