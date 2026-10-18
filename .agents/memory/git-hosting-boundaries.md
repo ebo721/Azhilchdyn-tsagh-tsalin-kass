@@ -72,3 +72,9 @@ Restored workspaces can retain stale Git bookkeeping locks after their original 
 **Why:** A normal fetch triggered maintenance against old lock files, even though no matching Git process was running. Removing every lock would risk concurrent work or unrelated refs.
 
 **How to apply:** Check running Git processes and lock timestamps. Preserve and move only the proven-stale lock needed for the current operation; keep refs, history and backup branches intact.
+
+When the workspace contains approved local task merges that have not reached remote main, isolate an unrelated review PR in a temporary worktree based on verified remote main. Keep the workspace's integrated work intact.
+
+**Why:** Publishing the integrated branch would silently bundle earlier work into the new request; switching the running workspace to main would instead remove existing features from its preview.
+
+**How to apply:** Commit only the new request, cherry-pick that commit into the separate review worktree, and verify the PR's exact file scope and expected main parent. State which integration tree was tested; never imply a local task merge is already in production.
