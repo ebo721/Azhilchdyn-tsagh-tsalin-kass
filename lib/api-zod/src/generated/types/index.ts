@@ -33,6 +33,7 @@ export * from './bankAccountInput';
 export * from './bankCashJournalInput';
 export * from './bankCashJournalResult';
 export * from './bankCashUnlinkResult';
+export * from './bankDebtSettlement';
 export * from './bankExpenseLinkInput';
 export * from './bankExpenseLinkResult';
 export * from './bankFixedAssetLinkInput';

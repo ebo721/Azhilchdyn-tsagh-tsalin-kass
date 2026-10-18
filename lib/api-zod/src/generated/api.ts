@@ -2045,6 +2045,14 @@ export const PostBankTransactionJournalParams = zod.object({
 })
 
 
+export const postBankTransactionJournalBodySettlementsItemReceivableIdMax = 2147483647;
+
+export const postBankTransactionJournalBodySettlementsItemPayableIdMax = 2147483647;
+
+export const postBankTransactionJournalBodySettlementsItemAmountExclusiveMin = 0;
+
+export const postBankTransactionJournalBodySettlementsMax = 100;
+
 
 
 
@@ -2053,6 +2061,11 @@ export const PostBankTransactionJournalParams = zod.object({
 
 export const PostBankTransactionJournalBody = zod.object({
   "accountId": zod.number().int().min(1),
+  "settlements": zod.array(zod.object({
+  "receivableId": zod.number().int().min(1).max(postBankTransactionJournalBodySettlementsItemReceivableIdMax).optional(),
+  "payableId": zod.number().int().min(1).max(postBankTransactionJournalBodySettlementsItemPayableIdMax).optional(),
+  "amount": zod.number().gt(postBankTransactionJournalBodySettlementsItemAmountExclusiveMin)
+})).min(1).max(postBankTransactionJournalBodySettlementsMax).optional().describe('Explicit repayment amounts; mutually exclusive with allocation. Total must equal the stored bank amount.'),
   "allocation": zod.union([zod.object({
   "kind": zod.enum(['create']),
   "partyType": zod.enum(['employee', 'supplier']),

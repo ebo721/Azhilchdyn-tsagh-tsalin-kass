@@ -1607,9 +1607,30 @@ export interface BankFixedAssetLinkResult {
   journalEntryId: number;
 }
 
+export interface BankDebtSettlement {
+  /**
+     * @minimum 1
+     * @maximum 2147483647
+     */
+  receivableId?: number;
+  /**
+     * @minimum 1
+     * @maximum 2147483647
+     */
+  payableId?: number;
+  /** @exclusiveMinimum 0 */
+  amount: number;
+}
+
 export interface BankTransactionJournalPostInput {
   /** @minimum 1 */
   accountId: number;
+  /**
+     * Explicit repayment amounts; mutually exclusive with allocation. Total must equal the stored bank amount.
+     * @minItems 1
+     * @maxItems 100
+     */
+  settlements?: BankDebtSettlement[];
   allocation?: ReceivableCreateAllocation | ReceivableSettleAllocation | PayableSettleAllocation;
 }
 

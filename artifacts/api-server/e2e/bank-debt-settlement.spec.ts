@@ -33,6 +33,10 @@ test.beforeAll(async () => {
     ["retry", false, 100.25, "2099-04-01"],
     ["little", false, 5.25, "2099-04-01"],
     ["future", false, 100.25, "2099-04-20"],
+    ["splitr1", false, 100.25, "2099-04-01"],
+    ["splitr2", false, 100.25, "2099-04-01"],
+    ["splitp1", true, 100.25, "2099-04-01"],
+    ["splitp2", true, 100.25, "2099-04-01"],
   ] as const) {
     const allocation = payable ? { kind: "create" as const, partyType: "supplier" as const, supplierId }
       : { kind: "create" as const, partyType: "employee" as const, employeeId };
@@ -50,6 +54,7 @@ test.beforeAll(async () => {
   for (const [type, amount] of [
     ["income", 40.25], ["expense", 100.25], ["income", 30.25],
     ["income", 10], ["income", 10], ["income", 20],
+    ["income", 140.5], ["expense", 140.5],
   ] as const) {
     const [bank] = await db.insert(bankTransactionsTable).values({
       type, amount, transactionAt: new Date("2099-04-13T08:23:00Z"),
@@ -184,4 +189,71 @@ test("viewer has no creation or settlement actions on either bank screen", async
     await expect(page.locator('[data-testid^="settle-bank-debt-"]')).toHaveCount(0);
     await expect(page.locator('[data-testid^="button-create-bank-debt-"]')).toHaveCount(0);
   }
+});
+
+test("bank list splits income across two debts, validates totals and duplicates, and persists after reload", async ({ page }) => {
+  await page.goto("/bank-transactions");
+  await page.locator('input[type="month"]').fill("2099-04");
+  await page.getByTestId(`settle-bank-debt-${banks[6]}`).click();
+  await page.getByTestId("select-bank-settlement-target").selectOption(String(targets.splitr1));
+  await page.getByTestId("input-bank-settlement-amount").fill("100.25");
+  await expect(page.getByTestId("button-submit-bank-settlement")).toBeDisabled();
+  await expect(page.getByTestId("text-bank-settlement-total")).toContainText("40.25");
+  await page.getByTestId("button-add-bank-settlement").click();
+  await expect(page.getByTestId("input-bank-settlement-amount-1")).toHaveValue("40.25");
+  await expect(page.getByTestId("select-bank-settlement-target-1").locator(`option[value="${targets.splitr1}"]`)).toBeDisabled();
+  await page.getByTestId("select-bank-settlement-target-1").selectOption(String(targets.splitr2));
+  await expect(page.getByTestId("text-bank-settlement-balance")).toContainText("бүрэн хасагдана");
+  await expect(page.getByTestId("text-bank-settlement-balance-1")).toContainText("60 ₮");
+  await page.getByTestId("input-bank-settlement-amount-1").fill("40.26");
+  await expect(page.getByTestId("button-submit-bank-settlement")).toBeDisabled();
+  await page.getByTestId("button-remove-bank-settlement-1").click();
+  await expect(page.getByTestId("select-bank-settlement-target-1")).toHaveCount(0);
+  await page.getByTestId("button-add-bank-settlement").click();
+  await page.getByTestId("select-bank-settlement-target-1").selectOption(String(targets.splitr2));
+  const response = page.waitForResponse(r => r.url().endsWith(`/bank-transactions/${banks[6]}/post-journal`) && r.request().method() === "POST");
+  await page.getByTestId("button-submit-bank-settlement").click();
+  const posted = await response;
+  expect(posted.status()).toBe(200);
+  expect(posted.request().postDataJSON().settlements).toEqual([
+    { amount: 100.25, receivableId: targets.splitr1 }, { amount: 40.25, receivableId: targets.splitr2 },
+  ]);
+  await expect(page.getByTestId("form-bank-settlement")).toHaveCount(0);
+  const debts = await db.select().from(receivablesTable).where(inArray(receivablesTable.id, [targets.splitr1, targets.splitr2]));
+  expect(Number(debts.find(d => d.id === targets.splitr1)!.openAmount)).toBe(0);
+  expect(Number(debts.find(d => d.id === targets.splitr2)!.openAmount)).toBe(60);
+  await page.reload();
+  await page.locator('input[type="month"]').fill("2099-04");
+  await expect(page.getByTestId(`settle-bank-debt-${banks[6]}`)).toHaveCount(0);
+});
+
+test("phone journal review keeps both payable allocations on failure, then retries once", async ({ page }) => {
+  await page.setViewportSize({ width: 402, height: 874 });
+  await page.goto("/bank-transactions/journal-review");
+  await page.getByTestId(`settle-bank-debt-${banks[7]}`).click();
+  await page.getByTestId("select-bank-settlement-target").selectOption(String(targets.splitp1));
+  await page.getByTestId("input-bank-settlement-amount").fill("100.25");
+  await page.getByTestId("button-add-bank-settlement").click();
+  await page.getByTestId("select-bank-settlement-target-1").selectOption(String(targets.splitp2));
+  const submit = page.getByTestId("button-submit-bank-settlement");
+  await submit.scrollIntoViewIfNeeded();
+  const box = await submit.boundingBox();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(402);
+  const path = `**/api/bank-transactions/${banks[7]}/post-journal`;
+  await page.route(path, route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Split fixture failure" }) }));
+  await submit.click();
+  await expect(page.getByTestId("text-bank-settlement-server-error")).toContainText("Split fixture failure");
+  await expect(page.getByTestId("select-bank-settlement-target")).toHaveValue(String(targets.splitp1));
+  await expect(page.getByTestId("select-bank-settlement-target-1")).toHaveValue(String(targets.splitp2));
+  await expect(page.getByTestId("input-bank-settlement-amount")).toHaveValue("100.25");
+  await expect(page.getByTestId("input-bank-settlement-amount-1")).toHaveValue("40.25");
+  await page.unroute(path);
+  await submit.click();
+  await expect(page.getByTestId("form-bank-settlement")).toHaveCount(0);
+  const debts = await db.select().from(payablesTable).where(inArray(payablesTable.id, [targets.splitp1, targets.splitp2]));
+  expect(Number(debts.find(d => d.id === targets.splitp1)!.remainingBalance)).toBe(0);
+  expect(Number(debts.find(d => d.id === targets.splitp2)!.remainingBalance)).toBe(60);
+  await page.reload();
+  await expect(page.getByTestId(`settle-bank-debt-${banks[7]}`)).toHaveCount(0);
 });
