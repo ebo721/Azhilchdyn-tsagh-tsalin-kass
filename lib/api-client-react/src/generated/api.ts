@@ -123,6 +123,7 @@ import type {
   JournalPayable,
   JournalReceivable,
   JournalSupplier,
+  JournalSupplierInput,
   JournalTrialBalance,
   JournalVoidResult,
   ListAttendanceParams,
@@ -12332,6 +12333,77 @@ export function useListJournalPayables<TData = Awaited<ReturnType<typeof listJou
 
 
 
+export const getCreateJournalSupplierUrl = () => {
+
+
+
+
+  return `/api/journal/suppliers`
+}
+
+/**
+ * @summary Register a counterparty or non-employee individual for journal allocations
+ */
+export const createJournalSupplier = async (journalSupplierInput: JournalSupplierInput, options?: Parameters<typeof customFetch>[1]): Promise<JournalSupplier> => {
+
+  return customFetch<JournalSupplier>(getCreateJournalSupplierUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(journalSupplierInput)
+  }
+);}
+
+
+
+
+
+export const getCreateJournalSupplierMutationOptions = <TError = ErrorType<BadRequestResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createJournalSupplier>>, TError,{data: BodyType<JournalSupplierInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createJournalSupplier>>, TError,{data: BodyType<JournalSupplierInput>}, TContext> => {
+
+const mutationKey = ['createJournalSupplier'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createJournalSupplier>>, {data: BodyType<JournalSupplierInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createJournalSupplier(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateJournalSupplierMutationResult = NonNullable<Awaited<ReturnType<typeof createJournalSupplier>>>
+    export type CreateJournalSupplierMutationBody = BodyType<JournalSupplierInput>
+    export type CreateJournalSupplierMutationError = ErrorType<BadRequestResponse>
+
+    /**
+ * @summary Register a counterparty or non-employee individual for journal allocations
+ */
+export const useCreateJournalSupplier = <TError = ErrorType<BadRequestResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createJournalSupplier>>, TError,{data: BodyType<JournalSupplierInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createJournalSupplier>>,
+        TError,
+        {data: BodyType<JournalSupplierInput>},
+        TContext
+      > => {
+      return useMutation(getCreateJournalSupplierMutationOptions(options));
+    }
+
 export const getListJournalSuppliersUrl = () => {
 
 
@@ -12341,7 +12413,7 @@ export const getListJournalSuppliersUrl = () => {
 }
 
 /**
- * @summary List existing suppliers for journal allocations
+ * @summary List existing counterparties including non-employee individuals for journal allocations
  */
 export const listJournalSuppliers = async ( options?: Parameters<typeof customFetch>[1]): Promise<JournalSupplier[]> => {
 
@@ -12388,7 +12460,7 @@ export type ListJournalSuppliersQueryError = ErrorType<BadRequestResponse>
 
 
 /**
- * @summary List existing suppliers for journal allocations
+ * @summary List existing counterparties including non-employee individuals for journal allocations
  */
 
 export function useListJournalSuppliers<TData = Awaited<ReturnType<typeof listJournalSuppliers>>, TError = ErrorType<BadRequestResponse>>(

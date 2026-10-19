@@ -10,7 +10,7 @@ export function bankDocumentLookupMenu(path: string, method: string): StaffMenuP
   return undefined;
 }
 
-/** Read-only dependencies keep a chosen page usable; they never grant mutations. */
+/** Dependencies keep a chosen page usable; explicit writes still require role authorization. */
 function requiredMenus(path: string, method: string): StaffMenuPath[] {
   const p = path.toLowerCase().replace(/\/+$/, "") || "/";
   const starts = (prefix: string) => p === prefix || p.startsWith(`${prefix}/`);
@@ -37,7 +37,7 @@ function requiredMenus(path: string, method: string): StaffMenuPath[] {
   if (starts("/operating-expenses")) return ["/operating-expenses"];
   if (starts("/journal/receivables") || starts("/journal/payables")) return read
     ? ["/journal", "/ar-ap", "/payroll", "/bank-transactions"] : ["/journal", "/ar-ap"];
-  if (read && p === "/journal/suppliers") return ["/journal", "/bank-transactions"];
+  if ((read || method === "POST") && p === "/journal/suppliers") return ["/journal", "/bank-transactions"];
   if (starts("/journal")) return ["/journal"];
   if (starts("/meal-schedule")) return ["/meal-schedule"];
   if (starts("/meal-counts")) return ["/meal-counts"];

@@ -230,6 +230,14 @@ export interface JournalSupplier {
   name: string;
 }
 
+export interface JournalSupplierInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  name: string;
+}
+
 export type JournalLedgerNormalBalance = typeof JournalLedgerNormalBalance[keyof typeof JournalLedgerNormalBalance];
 
 

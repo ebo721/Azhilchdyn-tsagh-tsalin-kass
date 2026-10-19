@@ -2778,10 +2778,35 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
   /journal/suppliers:
+    post:
+      operationId: createJournalSupplier
+      tags: [journal]
+      summary: Register a counterparty or non-employee individual for journal allocations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JournalSupplierInput"
+      responses:
+        "200":
+          description: Existing matching counterparty
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalSupplier" }
+        "201":
+          description: Counterparty registered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JournalSupplier" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/BadRequest"
     get:
       operationId: listJournalSuppliers
       tags: [journal]
-      summary: List existing suppliers for journal allocations
+      summary: List existing counterparties including non-employee individuals for journal allocations
       responses:
         "200":
           description: Existing suppliers
@@ -3104,6 +3129,12 @@ components:
       properties:
         id: { type: integer }
         name: { type: string }
+    JournalSupplierInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
     JournalLedger:
       type: object
       required: [accountId, code, name, normalBalance, entries]

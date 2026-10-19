@@ -18,6 +18,7 @@ describe("bank-sourced new receivables and payables", () => {
   let server: Server, root: string, cookie: string, viewerCookie: string, adminCookie: string;
   let employeeId: number, otherEmployeeId: number, supplierId: number, actorId: number;
   const users: number[] = [], banks: number[] = [];
+  const createdParties: number[] = [];
   const accounts = new Map<string, number>();
   const call = (path: string, method = "GET", body?: unknown, auth = cookie) =>
     fetch(root + path, { method, headers: { cookie: auth, "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -97,8 +98,51 @@ describe("bank-sourced new receivables and payables", () => {
     }
     if (employeeId) await db.delete(employeesTable).where(inArray(employeesTable.id, [employeeId, otherEmployeeId]));
     if (supplierId) await db.delete(inventorySuppliersTable).where(eq(inventorySuppliersTable.id, supplierId));
+    if (createdParties.length) await db.delete(inventorySuppliersTable).where(inArray(inventorySuppliersTable.id, createdParties));
     if (users.length) await db.delete(usersTable).where(inArray(usersTable.id, users));
     if (server) await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  });
+
+  it("bank-only accountant registers a non-employee party and uses it for both new debt directions", async () => {
+    const name = `${prefix} хувь хүн`;
+    const response = await call("/journal/suppliers", "POST", { name: `  ${prefix}   хувь хүн  ` });
+    assert.equal(response.status, 201, await response.clone().text());
+    const party = await response.json() as { id: number; name: string };
+    createdParties.push(party.id);
+    assert.equal(party.name, name);
+    assert.equal((await db.select().from(employeesTable).where(eq(employeesTable.name, name))).length, 0);
+    for (const type of ["expense", "income"] as const) {
+      const bank = await newBank(type);
+      const posted = await call(`/bank-transactions/${bank.id}/post-journal`, "POST", {
+        accountId: accounts.get(type === "expense" ? "1200" : "2000"),
+        allocation: { kind: "create", partyType: "supplier", supplierId: party.id },
+      });
+      assert.equal(posted.status, 200, await posted.clone().text());
+      const debts = await (await call(type === "expense" ? "/journal/receivables" : "/journal/payables")).json() as Array<{ partyId: number; partyLabel: string }>;
+      assert.ok(debts.some(debt => debt.partyId === party.id && debt.partyLabel === name));
+    }
+  });
+
+  it("normalized duplicate names and concurrent retries reuse one party", async () => {
+    const name = `${prefix} давхардал`;
+    const responses = await Promise.all([
+      call("/journal/suppliers", "POST", { name }),
+      call("/journal/suppliers", "POST", { name: `  ${prefix.toUpperCase()}   давхардал  ` }),
+    ]);
+    assert.deepEqual(responses.map(r => r.status).sort(), [200, 201]);
+    const parties = await Promise.all(responses.map(r => r.json())) as Array<{ id: number }>;
+    createdParties.push(parties[0].id);
+    assert.equal(parties[0].id, parties[1].id);
+    assert.equal((await db.select().from(inventorySuppliersTable).where(eq(inventorySuppliersTable.normalizedName, name))).length, 1);
+  });
+
+  it("party registration validates names and does not let viewers create records", async () => {
+    for (const body of [{ name: "" }, { name: " \t\n " }, { name: "a".repeat(201) }, {}, { name: 123 }]) {
+      assert.equal((await call("/journal/suppliers", "POST", body)).status, 400);
+    }
+    assert.equal((await call("/journal/suppliers", "POST", { name: `${prefix} forbidden` }, viewerCookie)).status, 403);
+    assert.equal((await db.select().from(inventorySuppliersTable).where(eq(inventorySuppliersTable.normalizedName, `${prefix} forbidden`))).length, 0);
+    assert.equal((await call("/journal/entries", "POST", { description: "not allowed through bank-only menu" })).status, 403);
   });
 
   it("creates both kinds for employees and suppliers using only the stored bank date/amount", async () => {

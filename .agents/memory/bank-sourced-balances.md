@@ -20,3 +20,9 @@ description: User-required dates and financial meaning of creating new receivabl
 **Why:** One real bank transfer may repay several existing debts, rather than create a new expense or debt.
 
 **How to apply:** The full stored bank amount must be allocated exactly once across distinct debts in the correct direction. Keep the allocation atomic, including cancellation; never turn an unallocated remainder into a new cash, expense, or payroll record.
+
+“Банкны гүйлгээнээс Авлага, өглөг үүсгэхэд шинээр харилцагч эсвэл ажилтан биш хувь хүн үүсгэх.”
+
+**Why:** The user requires non-employee individuals as debt counterparties, without registering them as employees.
+
+**How to apply:** Allow counterparty registration within either bank-sourced new-debt form. Keep counterparty registration separate from financial posting: registering a name alone must not create debt or payroll records.

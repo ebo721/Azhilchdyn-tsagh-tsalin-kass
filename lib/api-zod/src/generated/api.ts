@@ -5011,7 +5011,24 @@ export const ListJournalPayablesResponse = zod.array(ListJournalPayablesResponse
 
 
 /**
- * @summary List existing suppliers for journal allocations
+ * @summary Register a counterparty or non-employee individual for journal allocations
+ */
+export const createJournalSupplierBodyNameMax = 200;
+
+
+
+export const CreateJournalSupplierBody = zod.object({
+  "name": zod.string().min(1).max(createJournalSupplierBodyNameMax)
+})
+
+export const CreateJournalSupplierResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string()
+})
+
+
+/**
+ * @summary List existing counterparties including non-employee individuals for journal allocations
  */
 export const ListJournalSuppliersResponseItem = zod.object({
   "id": zod.number().int(),

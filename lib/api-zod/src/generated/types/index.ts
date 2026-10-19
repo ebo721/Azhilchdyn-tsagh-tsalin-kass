@@ -184,6 +184,7 @@ export * from './journalReceivableStatus';
 export * from './journalSourceTypeParameter';
 export * from './journalStatusParameter';
 export * from './journalSupplier';
+export * from './journalSupplierInput';
 export * from './journalTrialBalance';
 export * from './journalTrialBalanceAccount';
 export * from './journalTrialBalanceAccountNormalBalance';
