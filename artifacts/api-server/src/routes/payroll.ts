@@ -422,7 +422,13 @@ router.put("/payroll-adjustments", async (req, res, next) => {
         { key: secondSourceKey, amount: input.secondPaidAmount, date: input.secondPaymentDate },
       ];
       for (const payment of paymentInputs) {
-        if (payment.amount > 0 && payment.date) {
+        const existingCash = cashBySourceKey.get(payment.key);
+        const paymentChanged = !existingCash
+          || Number(existingCash.amount) !== payment.amount
+          || String(existingCash.date) !== payment.date;
+        // An unchanged, already-recorded payment is not a new bank duplicate.
+        // Another employee can legitimately have the same payment date and amount.
+        if (paymentChanged && payment.amount > 0 && payment.date) {
           const [bankCash] = await tx.select({ id: cashTransactionsTable.id })
             .from(cashTransactionsTable)
             .where(and(
@@ -438,7 +444,6 @@ router.put("/payroll-adjustments", async (req, res, next) => {
             throw Object.assign(new Error("Ижил огноо, дүнтэй банкны цалингийн гүйлгээ байна. Банкны мөрийг устгаад цалинг хадгалсны дараа кассын мөртэй холбоно уу"), { status: 409 });
           }
         }
-        const existingCash = cashBySourceKey.get(payment.key);
         if (existingCash
           && (existingCash.bankTransactionId !== null || existingCash.bankVerifiedAt !== null)
           && (Number(existingCash.amount) !== payment.amount || String(existingCash.date) !== payment.date)) {
