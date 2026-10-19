@@ -6,6 +6,12 @@ import { inventoryClosingBalancesTable } from "@workspace/db";
 import { inventoryCustodianEmployeesTable, usersTable } from "@workspace/db";
 import { InventoryCustodianError, inventoryCustodian } from "../lib/inventory-custodian.js";
 import { ListInventoryCustodiansResponse } from "@workspace/api-zod";
+import {
+  ListPendingInventoryPurchasesResponse, RegisterPendingInventoryPurchaseParams,
+  RegisterPendingInventoryPurchaseBody, RegisterPendingInventoryPurchaseResponse,
+} from "@workspace/api-zod";
+import { listPendingInventoryPurchases } from "../lib/pending-inventory-purchases.js";
+import { linkBankPurchase } from "../lib/bank-document-linking.js";
 import { inventoryOpeningBalancesTable, inventoryOpeningConsumptionsTable } from "@workspace/db";
 import { createServer } from "node:http";
 import {
@@ -177,6 +183,37 @@ router.get("/inventory/custodians", async (_req, res, next) => {
       .where(eq(usersTable.role, "warehouse")).orderBy(employeesTable.name, employeesTable.id);
     res.json(ListInventoryCustodiansResponse.parse(employees));
   } catch (error) { next(error); }
+});
+
+router.get("/inventory/pending-purchases", async (_req, res, next) => {
+  try {
+    res.json(ListPendingInventoryPurchasesResponse.parse(await listPendingInventoryPurchases()));
+  } catch (error) { next(error); }
+});
+
+router.post("/inventory/pending-purchases/:id/register", async (req, res, next) => {
+  try {
+    const session = await getStaffSession(req);
+    if (!session || !["admin", "warehouse"].includes(session.role)) {
+      return res.status(403).json({ error: "Худалдан авалт бүртгэх эрхгүй" });
+    }
+    const { id } = RegisterPendingInventoryPurchaseParams.parse(req.params);
+    const input = RegisterPendingInventoryPurchaseBody.parse(req.body);
+    if (!isValidCalendarDate(input.date)) return res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
+    const result = await linkBankPurchase(id, input, true);
+    if (typeof result === "string") {
+      return res.status(result === "missing_bank" ? 404 : 409).json({ error:
+        result === "bank_mismatch" ? "Барааны нийлбэр банкны дүнтэй яг тэнцэж, огноо таарах ёстой."
+          : result === "closed" ? "Өндөрлөсөн өдөр худалдан авалт бүртгэх боломжгүй."
+          : result === "purchase_conflict" ? "Бараа материалын төрөл банкны данстай тохирохгүй байна."
+          : "Бүртгэлгүй худалдан авалт өөрчлөгдсөн эсвэл мэдээлэл зөрсөн байна. Дахин ачаална уу.",
+      });
+    }
+    return res.json(RegisterPendingInventoryPurchaseResponse.parse(result));
+  } catch (error) {
+    if (error instanceof InventoryCustodianError) return res.status(400).json({ error: error.message });
+    return next(error);
+  }
 });
 
 router.get("/inventory/purchases", async (_req, res, next) => {

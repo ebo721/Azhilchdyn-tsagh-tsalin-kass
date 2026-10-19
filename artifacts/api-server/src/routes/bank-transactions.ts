@@ -60,6 +60,7 @@ import { bankRepayments, matchesBankRepayments, validateBankSettlements } from "
 import { loadBankRecognitionContext, recognizeBankTransaction } from "../lib/bank-recognition.js";
 import { inventoryPurchaseAccountCodes } from "../lib/route-shared.js";
 import { bankSuggestionScore } from "../lib/bank-suggestion-score.js";
+import { postPendingInventoryPurchase } from "../lib/pending-inventory-purchases.js";
 import { checkBankLinkEligibility } from "../lib/bank-link-eligibility.js";
 import { accountByCode, postBankCashJournal, unlinkBankCash, restoreBankCashJournal } from "../lib/bank-cash-lifecycle.js";
 import {
@@ -539,6 +540,7 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
       if (!bank) return "missing" as const;
       const repayments = bankRepayments(settlements, allocation, Number(bank.amount), bank.type);
       if (bank.journalEntryId !== null) {
+        if (bank.cashTransactionId !== null && bank.accountId !== accountId) return "balance-conflict" as const;
         if (allocation || settlements) {
           const existingLines = await tx.select({ allocation: journalLinesTable.allocation, status: journalEntriesTable.status, debit: journalLinesTable.debit, credit: journalLinesTable.credit })
             .from(journalLinesTable)
@@ -606,7 +608,10 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
           ? [] : await tx.select({ code: chartOfAccountsTable.code })
             .from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, bank.accountId));
         if (isInventoryPurchaseAccount(account?.code) || isInventoryPurchaseAccount(assignedAccount?.code)) {
-          return "purchase-document-required" as const;
+          if (!account || !isInventoryPurchaseAccount(account.code) || allocation || settlements) {
+            return "purchase-document-required" as const;
+          }
+          return postPendingInventoryPurchase(tx, bank, account);
         }
         if (account?.code === "1800" || assignedAccount?.code === "1800") return "fixed-asset-document-required" as const;
       }

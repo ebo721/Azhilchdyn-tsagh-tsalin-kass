@@ -7,6 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { BankPendingPurchaseButton } from '@/components/BankPendingPurchaseButton';
 import { cn } from '@/lib/utils';
 import { Link } from 'wouter';
 import {
@@ -608,11 +609,15 @@ export function BankTransactions() {
         </section>}
         {!requiresBankDocumentFlow && <div className="flex items-center gap-3" aria-label="эсвэл"><div className="h-px flex-1 bg-border" /><span className="text-xs font-semibold text-muted-foreground">эсвэл</span><div className="h-px flex-1 bg-border" /></div>}
         <section aria-labelledby="create-cash-title">
-          <h3 id="create-cash-title" className="text-sm font-bold">{requiresPurchaseDocument ? 'Худалдан авалтын баримт шаардлагатай' : requiresFixedAssetDocument ? 'Эд хөрөнгийн баримт шаардлагатай' : 'Касс шинээр үүсгээд журнал бичих'}</h3>
+          <h3 id="create-cash-title" className="text-sm font-bold">{requiresPurchaseDocument ? 'Худалдан авалтын бүртгэл' : requiresFixedAssetDocument ? 'Эд хөрөнгийн баримт шаардлагатай' : 'Касс шинээр үүсгээд журнал бичих'}</h3>
+          {requiresPurchaseDocument && selectedBank.accountId && <div className="mt-3 space-y-2">
+            <p className="text-xs text-muted-foreground">Задаргаа тодорхойгүй бол бүртгэлгүй худалдан авалт үүсгэнэ. Барааны үлдэгдэл нэмэгдэхгүй.</p>
+            <BankPendingPurchaseButton id={selectedBank.id} accountId={selectedBank.accountId} onSaved={closeCashTransfer} />
+          </div>}
           {requiresBankDocumentFlow ? <div className="mt-3 space-y-3 text-sm">
             <p>{requiresFixedAssetDocument
               ? '1800 дансны банкны зарлагыг шууд касс, журналд шивэхгүй. Журналд шивэх хэсэгт эд хөрөнгө үүсгэх эсвэл ижил огноо, дүнтэй бүртгэлтэй хөрөнгийг холбоход банк, касс, журнал хамт бүртгэгдэнэ.'
-              : 'Бараа материал, хангамжийн банкны зарлагыг шууд касс, журналд шивэхгүй. Өмнөх худалдан авалттай холбох эсвэл шинэ худалдан авалт үүсгэвэл касс, журнал хамт бүртгэгдэнэ.'}</p>
+              : 'Задаргаа бэлэн бол өмнөх худалдан авалттай холбох эсвэл шинээр худалдан авалт бүртгэж болно. Нэг банкны гүйлгээ нэг удаа касс, журналд бичигдэнэ.'}</p>
             <Link href="/bank-transactions/journal-review" onClick={closeCashTransfer} className="inline-flex rounded-md bg-primary px-3 py-2 font-semibold text-primary-foreground">{requiresFixedAssetDocument ? 'Эд хөрөнгө холбох' : 'Худалдан авалт холбох'}</Link>
           </div> : <>
             <p className="mt-3 text-sm text-muted-foreground">Касс болон журналын дансыг дээр оноосон GL данснаас авна.</p>

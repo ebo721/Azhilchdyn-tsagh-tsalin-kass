@@ -25,6 +25,7 @@
 - [Stacked PR merge visibility](stacked-pr-merge-visibility.md) — A merged label on a feature-targeted PR does not put its changes on main; compare main’s tree to the final branch.
 - [Office network attendance edge](office-network-attendance-edge.md) — Trust only the direct Vercel edge for office IP checks; frontend proxy rewrites cannot establish employee origin.
 - [Bank-funded purchase groups](bank-funded-purchase-groups.md) — Full purchase totals must exactly match the bank; purchase dates may precede the payment date.
+- [Pending inventory purchases](pending-inventory-purchase-scope.md) — Unknown item details may await registration after financial posting; completion must reuse accounting and exactly match the bank.
 - [PostgreSQL schema fingerprint portability](postgres-schema-fingerprint-portability.md) — PG versions may expose NOT NULL as extra constraints; fingerprint nullability once, through column metadata.
 - [Employee recipient accounts](employee-recipient-accounts.md) — Historical bank reconciliation is not permission to silently replace a saved salary-payment account.
 - [Integration fixture reconciliation](integration-fixture-reconciliation.md) — Parallel list requests can create expense mirrors for another suite's fixtures; clean owned dependencies first.

@@ -151,6 +151,7 @@ export async function inventoryPurchaseResponse(id: number) {
     )).limit(1);
   return {
     id: purchase.id,
+    documentNumber: purchase.documentNumber,
     materialType: purchase.materialType,
     accountId: purchase.accountId,
     accountCode: row.accountCode,

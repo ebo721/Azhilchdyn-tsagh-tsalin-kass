@@ -255,6 +255,8 @@ export * from './payrollLineEmployeeType';
 export * from './payrollSchedule';
 export * from './payrollScheduleInput';
 export * from './payrollSummary';
+export * from './pendingInventoryPurchase';
+export * from './pendingInventoryPurchaseMaterialType';
 export * from './readerMealCount';
 export * from './readerMealCountsExport';
 export * from './rebuildPayrollBalances200';

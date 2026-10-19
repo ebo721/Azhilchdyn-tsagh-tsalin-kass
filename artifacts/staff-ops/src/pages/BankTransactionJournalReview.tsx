@@ -9,6 +9,7 @@ import { money } from '@/lib/app-shared';
 import { bankDateTimeLabel } from './Cash';
 import { BankArApForm, BankArApOpenButton } from '@/components/BankArApForm';
 import { BankDocumentLinkPanel } from '@/components/BankDocumentLinkPanel';
+import { BankPendingPurchaseButton } from '@/components/BankPendingPurchaseButton';
 import {
   useListBankTransactionJournalReview,
   usePostBankTransactionJournal,
@@ -22,6 +23,7 @@ import {
   getListBankTransactionsQueryKey,
   getListCashTransactionsQueryKey,
   getListInventoryPurchasesQueryKey,
+  getListPendingInventoryPurchasesQueryKey,
   getListJournalEntriesQueryKey,
   getListOperatingExpensesQueryKey,
   BankTransactionJournalReviewItemType,
@@ -85,6 +87,7 @@ export function BankTransactionJournalReview() {
       getListBankTransactionsQueryKey(),
       getListCashTransactionsQueryKey(),
       getListInventoryPurchasesQueryKey(),
+      getListPendingInventoryPurchasesQueryKey(),
       getListJournalEntriesQueryKey(),
       getListOperatingExpensesQueryKey(),
     ].forEach((queryKey) => qc.invalidateQueries({ queryKey }));
@@ -318,6 +321,7 @@ export function BankTransactionJournalReview() {
                           </p>
                         )}
                         <BankArApOpenButton row={row} onOpen={() => { setDebtMode('create'); setDebtRow(row); }} disabled={isPending} />
+                        {!isIncome && purchaseMaterialType(selectedAccounts[row.id] || row.suggestedAccountId) && <BankPendingPurchaseButton id={row.id} accountId={(selectedAccounts[row.id] || row.suggestedAccountId)!} disabled={isPending} />}
                         <BankArApOpenButton mode="settle" row={row} onOpen={() => { setDebtMode('settle'); setDebtRow(row); }} disabled={isPending} />
                         {isIncome === false && (
                           !isFixedAssetAccount(selectedAccounts[row.id] || row.suggestedAccountId) && (

@@ -54,6 +54,9 @@ async function lockedPair(tx: Tx, id: number) {
   if (cash.sourceType !== null && !["bank_transaction", "payroll", "payroll_advance"].includes(cash.sourceType)) {
     throw conflict("Энэ төлбөр баримттай холбоотой тул эх үүсвэр цэснээс цуцална уу.");
   }
+  if (cash.sourceKey?.startsWith("pending-purchase:")) {
+    throw conflict("Бүртгэлгүй худалдан авалтын барааны задаргааг эхлээд худалдан авалтын цэснээс бүртгэнэ үү.");
+  }
   if (bank.journalEntryId !== cash.journalEntryId) throw conflict("Банк, кассын журналын холбоос зөрсөн байна.");
   const expenses = await tx.select().from(operatingExpensesTable)
     .where(or(eq(operatingExpensesTable.bankTransactionId, id), eq(operatingExpensesTable.cashTransactionId, cash.id)));

@@ -1989,6 +1989,25 @@ export interface InventoryPurchase {
   items: InventoryPurchaseItem[];
 }
 
+export type PendingInventoryPurchaseMaterialType = typeof PendingInventoryPurchaseMaterialType[keyof typeof PendingInventoryPurchaseMaterialType];
+
+
+export const PendingInventoryPurchaseMaterialType = {
+  food: 'food',
+  supply: 'supply',
+} as const;
+
+export interface PendingInventoryPurchase {
+  id: number;
+  date: string;
+  amount: number;
+  description: string;
+  bankAccount: string;
+  accountCode: string;
+  accountName: string;
+  materialType: PendingInventoryPurchaseMaterialType;
+}
+
 export interface InventoryPurchasePaymentInput {
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
   date: string;

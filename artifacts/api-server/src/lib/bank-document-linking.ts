@@ -10,10 +10,13 @@ import { checkBankLinkEligibility } from "./bank-link-eligibility.js";
 import { lockCashDate } from "./cash-date-lock.js";
 import { inventoryMaterialLabel, inventoryPurchaseAccount, money } from "./route-shared.js";
 import { postJournalEntry, voidJournalEntry } from "./journal-posting.js";
+import { pendingPurchaseKey } from "./pending-inventory-purchases.js";
+import { inventoryCustodian } from "./inventory-custodian.js";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type PurchaseInput = { inventoryPurchaseId: number } | {
   materialType: "food" | "supply"; supplierName: string; hasReceipt: boolean; date: string;
+  responsibleUserId?: number | null; responsibleEmployeeId?: number | null;
   items: Array<{ inventoryItemId?: number; name: string; category: string; unit: string; quantity: number; unitPrice: number }>;
 };
 type ExpenseInput = { operatingExpenseId: number } | { description: string; accountId: number; date: string; amount: number };
@@ -268,7 +271,7 @@ export async function cancelBankPurchaseGroup(id: number, cancelledBy: number | 
   });
 }
 
-export async function linkBankPurchase(id: number, input: PurchaseInput): Promise<LinkResult | string> {
+export async function linkBankPurchase(id: number, input: PurchaseInput, completePending = false): Promise<LinkResult | string> {
   return db.transaction(async (tx) => {
     let purchase: any = null;
     if ("inventoryPurchaseId" in input) {
@@ -279,9 +282,33 @@ export async function linkBankPurchase(id: number, input: PurchaseInput): Promis
     }
     const [bank] = await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id)).for("update");
     if (!bank) return "missing_bank";
-    const eligibility = await checkBankLinkEligibility(tx, bank, "purchase");
-    if (eligibility.issue) return eligibility.issue;
-    if (eligibility.closed) return "closed";
+    const [pendingCash] = completePending && bank.cashTransactionId
+      ? await tx.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, bank.cashTransactionId)).for("update") : [];
+    if (completePending) {
+      // A lost success response can be retried without creating stock a second time.
+      if (pendingCash?.sourceType === "inventory_purchase" && pendingCash.sourceKey?.startsWith("purchase:")
+        && pendingCash.bankTransactionId === id && pendingCash.journalEntryId) {
+        return { bankTransactionId: id, inventoryPurchaseId: Number(pendingCash.sourceKey.slice(9)), cashTransactionId: pendingCash.id, journalEntryId: pendingCash.journalEntryId };
+      }
+      if ("inventoryPurchaseId" in input || !pendingCash || bank.type !== "expense"
+        || bank.unclearAt || !bank.transferredAt || !pendingCash.bankVerifiedAt
+        || pendingCash.bankTransactionId !== id || pendingCash.sourceType !== "bank_transaction"
+        || pendingCash.sourceKey !== pendingPurchaseKey(id)
+        || !bank.journalEntryId || bank.journalEntryId !== pendingCash.journalEntryId
+        || pendingCash.accountId !== bank.accountId || cents(Number(pendingCash.amount)) !== cents(Number(bank.amount))
+        || pendingCash.date !== bank.transactionAt.toISOString().slice(0, 10)) return "bank_resolved";
+      const account = await inventoryPurchaseAccount(tx, input.materialType);
+      if (account.id !== bank.accountId) return "purchase_conflict";
+      const [journal] = await tx.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, bank.journalEntryId)).for("update");
+      if (!journal || journal.status !== "posted" || journal.sourceType !== "bank_transaction" || journal.sourceId !== id) return "bank_resolved";
+      await lockCashDate(tx, pendingCash.date);
+      const [closure] = await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(eq(cashClosuresTable.date, pendingCash.date));
+      if (closure) return "closed";
+    } else {
+      const eligibility = await checkBankLinkEligibility(tx, bank, "purchase");
+      if (eligibility.issue) return eligibility.issue;
+      if (eligibility.closed) return "closed";
+    }
     const date = bank.transactionAt.toISOString().slice(0, 10);
     if ("inventoryPurchaseId" in input) {
       if (purchase.paymentDate !== null || purchase.date > date || money(Number(purchase.totalAmount)) !== money(Number(bank.amount))) return "purchase_conflict";
@@ -306,7 +333,8 @@ export async function linkBankPurchase(id: number, input: PurchaseInput): Promis
       let [vendor] = await tx.select().from(inventorySuppliersTable).where(eq(inventorySuppliersTable.normalizedName, normalized));
       if (!vendor) [vendor] = await tx.insert(inventorySuppliersTable).values({ name: supplier, normalizedName: normalized }).onConflictDoNothing().returning();
       if (!vendor) [vendor] = await tx.select().from(inventorySuppliersTable).where(eq(inventorySuppliersTable.normalizedName, normalized));
-      [purchase] = await tx.insert(inventoryPurchasesTable).values({ materialType: input.materialType, accountId: account.id, documentName: vendor.name, hasReceipt: input.hasReceipt, date, totalAmount: money(total) }).returning();
+      const responsible = await inventoryCustodian(tx, input.responsibleUserId, undefined, input.responsibleEmployeeId);
+      [purchase] = await tx.insert(inventoryPurchasesTable).values({ ...responsible, materialType: input.materialType, accountId: account.id, documentName: vendor.name, hasReceipt: input.hasReceipt, date, totalAmount: money(total) }).returning();
       const lines: any[] = [];
       for (const resolved of resolvedCatalogItems) {
         const { item, normalizedName } = resolved;
@@ -318,6 +346,19 @@ export async function linkBankPurchase(id: number, input: PurchaseInput): Promis
       await tx.insert(inventoryPurchaseItemsTable).values(lines);
     }
     const amount = money(Number(bank.amount));
+    if (completePending && pendingCash) {
+      // Change provenance only; preserve the already posted cash amount and journal lines.
+      await tx.update(cashTransactionsTable).set({
+        sourceType: "inventory_purchase", sourceKey: `purchase:${purchase.id}`, description: purchase.documentName,
+      }).where(eq(cashTransactionsTable.id, pendingCash.id));
+      await tx.update(journalEntriesTable).set({ sourceType: "inventory_purchase", sourceId: purchase.id })
+        .where(eq(journalEntriesTable.id, pendingCash.journalEntryId!));
+      // Match the existing single-purchase lifecycle: the cash row owns its journal.
+      await tx.update(bankTransactionsTable).set({ journalEntryId: null }).where(eq(bankTransactionsTable.id, id));
+      await tx.update(inventoryPurchasesTable).set({ paymentDate: date, paymentAmount: amount })
+        .where(eq(inventoryPurchasesTable.id, purchase.id));
+      return { bankTransactionId: id, inventoryPurchaseId: purchase.id, cashTransactionId: pendingCash.id, journalEntryId: pendingCash.journalEntryId! };
+    }
     const canonicalPurchaseAccount = await inventoryPurchaseAccount(tx, purchase.materialType);
     if (purchase.accountId !== canonicalPurchaseAccount.id) return "purchase_conflict";
     const category = inventoryMaterialLabel(purchase.materialType);
