@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingBlock, Modal } from '@/components/ui-primitives';
 import { dateLabel } from '@/lib/app-shared';
+import { BankCounterpartyPicker } from './BankCounterpartyPicker';
 
 export type BankArApRow = {
   id: number; type: 'income' | 'expense'; amount: number; description: string;
@@ -220,6 +221,7 @@ function BankArApCreateForm({ row, onClose, onSaved }: { row: BankArApRow; onClo
   const [search, setSearch] = useState('');
   const [employeeId, setEmployeeId] = useState('');
   const [supplierId, setSupplierId] = useState('');
+  const [creatingParty, setCreatingParty] = useState(false);
   const [touched, setTouched] = useState(false);
 
   const account = accounts.data?.find((a) => a.code === code && a.isActive);
@@ -232,8 +234,8 @@ function BankArApCreateForm({ row, onClose, onSaved }: { row: BankArApRow; onClo
   const loading = accounts.isLoading || (partyType === 'employee' ? employees.isLoading : suppliers.isLoading);
   const loadFailed = accounts.isError || (partyType === 'employee' ? employees.isError : suppliers.isError);
   const missingAccount = !loading && !loadFailed && !account;
-  const partyError = partyType === 'employee' ? (!employeeId ? 'Ажилтан сонгоно уу.' : '') : (!supplierId ? 'Нийлүүлэгч сонгоно уу.' : '');
-  const pending = post.isPending;
+  const partyError = partyType === 'employee' ? (!employeeId ? 'Ажилтан сонгоно уу.' : '') : (!supplierId ? 'Харилцагч / хувь хүн сонгоно уу.' : '');
+  const pending = post.isPending || creatingParty;
 
   const submit = () => {
     setTouched(true);
@@ -259,7 +261,7 @@ function BankArApCreateForm({ row, onClose, onSaved }: { row: BankArApRow; onClo
         <FixedBankFacts row={row} />
         {loading ? <LoadingBlock className="h-32" /> : loadFailed ? (
           <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert" data-testid="status-bank-ar-ap-load-error">
-            <span>Данс, ажилтан эсвэл нийлүүлэгчийн жагсаалтыг ачаалж чадсангүй.</span>
+            <span>Данс, ажилтан эсвэл харилцагчийн жагсаалтыг ачаалж чадсангүй.</span>
             <button type="button" className="font-bold underline" onClick={retry} data-testid="button-retry-bank-ar-ap">Дахин оролдох</button>
           </div>
         ) : missingAccount ? (
@@ -272,7 +274,7 @@ function BankArApCreateForm({ row, onClose, onSaved }: { row: BankArApRow; onClo
               {(['employee', 'supplier'] as const).map((t) => (
                 <button key={t} type="button" role="radio" aria-checked={partyType === t} disabled={pending} onClick={() => setPartyType(t)}
                   className={`h-10 rounded-lg border text-sm font-semibold ${partyType === t ? 'border-primary bg-primary/10 text-primary' : 'border-input bg-background'}`}
-                  data-testid={`button-bank-ar-ap-party-${t}`}>{t === 'employee' ? 'Ажилтан' : 'Нийлүүлэгч'}</button>
+                  data-testid={`button-bank-ar-ap-party-${t}`}>{t === 'employee' ? 'Ажилтан' : 'Харилцагч / хувь хүн'}</button>
               ))}
             </div>
             {partyType === 'employee' ? (
@@ -286,13 +288,7 @@ function BankArApCreateForm({ row, onClose, onSaved }: { row: BankArApRow; onClo
                 {empOptions.length === 0 && <span className="block font-normal text-muted-foreground" data-testid="text-bank-ar-ap-employee-empty">Идэвхтэй ажилтан олдсонгүй.</span>}
               </div>
             ) : (
-              <label className="block space-y-1.5 text-xs font-semibold">Нийлүүлэгч
-                <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} disabled={pending} className={cls} data-testid="select-bank-ar-ap-supplier">
-                  <option value="">Нийлүүлэгч сонгоно уу</option>
-                  {supOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-                {supOptions.length === 0 && <span className="block font-normal text-muted-foreground" data-testid="text-bank-ar-ap-supplier-empty">Нийлүүлэгч олдсонгүй.</span>}
-              </label>
+              <BankCounterpartyPicker options={supOptions} value={supplierId} onChange={setSupplierId} disabled={pending} onBusyChange={setCreatingParty} />
             )}
             {touched && partyError && <span className="block text-xs text-destructive" data-testid="text-bank-ar-ap-party-error">{partyError}</span>}
           </>

@@ -5,7 +5,7 @@ import {
   UpdateJournalEntryResponse, VoidJournalEntryParams, VoidJournalEntryResponse, DeleteJournalEntryParams,
   GetJournalAccountLedgerParams, GetJournalAccountLedgerResponse, GetJournalTrialBalanceResponse,
   ListJournalReceivablesQueryParams, ListJournalReceivablesResponse, ListJournalPayablesQueryParams,
-  ListJournalPayablesResponse, ListJournalSuppliersResponse,
+  ListJournalPayablesResponse, ListJournalSuppliersResponse, CreateJournalSupplierBody, CreateJournalSupplierResponse,
   CreateEmployeeReceivableBody, CreateEmployeeReceivableResponse,
   CreateEmployeePayableResponse,
 } from "@workspace/api-zod";
@@ -221,6 +221,29 @@ router.get("/journal/payables", async (req, res, next) => {
       createdAt: row.createdAt,
       date: row.date,
     }))));
+  } catch (error) { return next(error); }
+});
+
+router.post("/journal/suppliers", async (req, res, next) => {
+  try {
+    const session = await getStaffSession(req);
+    if (!session || (session.role !== "admin" && session.role !== "accountant")) {
+      return res.status(403).json({ error: "Зөвхөн админ, нягтлан харилцагч бүртгэнэ" });
+    }
+    const parsed = CreateJournalSupplierBody.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Харилцагч / хувь хүний нэрийг 1–200 тэмдэгтээр оруулна уу" });
+    const name = parsed.data.name.normalize("NFKC").trim().replace(/\s+/g, " ");
+    if (!name || name.length > 200) return res.status(400).json({ error: "Харилцагч / хувь хүний нэрийг 1–200 тэмдэгтээр оруулна уу" });
+    const normalizedName = name.toLocaleLowerCase("mn-MN");
+    // Use the existing non-employee counterparty registry and its unique key.
+    // Retrying or concurrently submitting the same name must not create duplicates.
+    const [created] = await db.insert(inventorySuppliersTable).values({ name, normalizedName })
+      .onConflictDoNothing({ target: inventorySuppliersTable.normalizedName }).returning();
+    const existing = created ? undefined : (await db.select().from(inventorySuppliersTable)
+      .where(eq(inventorySuppliersTable.normalizedName, normalizedName)))[0];
+    const party = created ?? existing;
+    if (!party) throw new Error("Registered counterparty could not be loaded");
+    return res.status(created ? 201 : 200).json(CreateJournalSupplierResponse.parse({ id: party.id, name: party.name }));
   } catch (error) { return next(error); }
 });
 
