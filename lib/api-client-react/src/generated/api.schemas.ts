@@ -986,6 +986,10 @@ export interface PayrollSchedule {
 export interface PayrollSummary {
   attendancePulledAt?: string;
   attendanceNeedsRefresh?: boolean;
+  /** @nullable */
+  closedAt?: string | null;
+  /** @nullable */
+  closedBy?: number | null;
   month: string;
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   periodStart: string;

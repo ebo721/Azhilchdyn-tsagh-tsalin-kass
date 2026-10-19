@@ -3,6 +3,7 @@ import { PayrollSnapshotMissingError } from "./payroll-attendance-snapshot.js";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import {
   payrollAttendanceSnapshotsTable,
+  payrollMonthClosuresTable,
   attendanceTable,
   db,
   employeesTable,
@@ -273,6 +274,8 @@ export async function getPayrollAdvanceSummary(
   connection: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db,
   { savedOnly = false, ignoreApproval = false } = {},
 ) {
+  const [closure] = await connection.select().from(payrollMonthClosuresTable).where(eq(payrollMonthClosuresTable.month, month));
+  if (closure) return GetPayrollAdvanceResponse.parse(closure.advance);
   const [approval] = await connection.select().from(payrollAdvanceApprovalsTable)
     .where(eq(payrollAdvanceApprovalsTable.month, month));
   if (savedOnly && (!approval || ignoreApproval)) {

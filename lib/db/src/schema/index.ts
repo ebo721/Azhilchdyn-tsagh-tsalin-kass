@@ -77,6 +77,8 @@ export const usersTable = pgTable("users", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
+export { payrollMonthClosuresTable } from "./payroll-month-closures";
+
 export const inventoryCustodianEmployeesTable = pgTable("inventory_custodian_employees", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
