@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/reac
 import { useFieldArray, useForm } from 'react-hook-form';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
+import { PendingInventoryPurchases } from '@/components/PendingInventoryPurchases';
+import { useRegisterPendingInventoryPurchase, getListPendingInventoryPurchasesQueryKey, type PendingInventoryPurchase } from '@workspace/api-client-react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
@@ -239,6 +241,9 @@ export function Inventory() {
   const updateIssue = useUpdateInventoryIssue();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [pendingPurchase, setPendingPurchase] = useState<PendingInventoryPurchase | null>(null);
+  const [registrationFilter, setRegistrationFilter] = useState('all');
+  const registerPending = useRegisterPendingInventoryPurchase();
   const [editing, setEditing] = useState<InventoryPurchase | null>(null);
   const [selectedPurchase, setSelectedPurchase] = useState<InventoryPurchase | null>(null);
   const [paymentPurchase, setPaymentPurchase] = useState<InventoryPurchase | null>(null);
@@ -288,7 +293,7 @@ export function Inventory() {
     },
   });
   const watchedItems = form.watch('items');
-  const grandTotal = watchedItems.reduce((total, item) => total + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), 0);
+  const grandTotal = watchedItems.reduce((total, item) => total + Math.round((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0) * 100), 0) / 100;
   const filteredPurchases = purchasesQuery.data?.filter((purchase) =>
     purchase.materialType === materialTypeTab && purchase.date.startsWith(purchaseMonth)
   ) ?? [];
@@ -316,11 +321,21 @@ export function Inventory() {
   }, [purchasePage, purchasePageCount]);
   useEffect(() => setPurchasePage(1), [materialTypeTab, purchaseMonth]);
   const openForm = () => {
+    setPendingPurchase(null);
+    registerPending.reset();
     setEditing(null);
     form.reset({ materialType: materialTypeTab, supplierName: '', hasReceipt: false, date: today(), responsibleEmployeeId: '', items: [{ name: '', category: '', unit: 'ширхэг', quantity: '1', unitPrice: '' }] });
     setOpen(true);
   };
+  const openPendingPurchase = (row: PendingInventoryPurchase) => {
+    openForm();
+    setPendingPurchase(row);
+    form.setValue('materialType', row.materialType);
+    form.setValue('date', row.date);
+  };
   const editPurchase = (purchase: InventoryPurchase) => {
+    setPendingPurchase(null);
+    registerPending.reset();
     setEditing(purchase);
     form.reset({
       materialType: purchase.materialType,
@@ -341,6 +356,7 @@ export function Inventory() {
   };
   const submit = (values: InventoryForm) => {
     if (!editing && !values.responsibleEmployeeId) return;
+    if (pendingPurchase && Math.round(grandTotal * 100) !== Math.round(pendingPurchase.amount * 100)) return;
     const data = {
       responsibleEmployeeId: values.responsibleEmployeeId ? Number(values.responsibleEmployeeId) : undefined,
       materialType: values.materialType,
@@ -365,9 +381,14 @@ export function Inventory() {
         catalog.refetch();
         setOpen(false);
         setEditing(null);
+        setPendingPurchase(null);
+        qc.invalidateQueries({ queryKey: getListPendingInventoryPurchasesQueryKey() });
+        qc.invalidateQueries({ queryKey: getListBankTransactionsQueryKey() });
+        qc.invalidateQueries({ predicate: q => typeof q.queryKey[0] === 'string' && q.queryKey[0].startsWith('/api/journal') });
       },
     };
-    if (editing) update.mutate({ id: editing.id, data }, options);
+    if (pendingPurchase) registerPending.mutate({ id: pendingPurchase.id, data }, options);
+    else if (editing) update.mutate({ id: editing.id, data }, options);
     else create.mutate({ data }, options);
   };
   const editCategory = (item: InventoryItem) => {
@@ -552,7 +573,16 @@ export function Inventory() {
     </section>}
     {inventoryTab === 'stock' && <InventoryOpeningBalances catalog={catalog.data ?? []} materialType={materialTypeTab} openSignal={openingSignal} />}
     {inventoryTab === 'stock' && <InventoryClosingBalances catalog={catalog.data ?? []} materialType={materialTypeTab} openSignal={closingSignal} editId={closingEdit.id} editSignal={closingEdit.n} canManage={canManageMaterialRequests} />}
-    {inventoryTab === 'purchases' && <section className="overflow-hidden rounded-2xl border border-border bg-card">
+    {inventoryTab === 'purchases' && <div className="mb-4 flex flex-wrap items-center gap-3">
+      <label className="text-xs font-semibold">Бүртгэлийн төлөв
+        <select value={registrationFilter} onChange={e => setRegistrationFilter(e.target.value)} className="ml-2 h-10 rounded-lg border border-input bg-background px-3 text-sm" data-testid="filter-purchase-registration">
+          <option value="all">Бүгд</option><option value="registered">Бүртгэлтэй</option><option value="unregistered">Бүртгэлгүй</option>
+        </select>
+      </label>
+      {registrationFilter === 'unregistered' && <Input type="month" aria-label="Худалдан авалтын сар" value={purchaseMonth} onChange={e => setPurchaseMonth(e.target.value)} className="w-44" />}
+    </div>}
+    {inventoryTab === 'purchases' && registrationFilter !== 'registered' && <PendingInventoryPurchases month={purchaseMonth} materialType={materialTypeTab} canRegister={canManageMaterialRequests} onRegister={openPendingPurchase} />}
+    {inventoryTab === 'purchases' && registrationFilter !== 'unregistered' && <section aria-label="Бүртгэлтэй худалдан авалт" className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="flex flex-wrap gap-2 border-b border-border bg-secondary/25 px-5 py-3" data-testid="inventory-purchase-linked-accounts">{filteredPurchaseAccounts.length ? filteredPurchaseAccounts.map((account) => <div key={account.code} className="rounded-lg border border-border bg-card px-3 py-2"><AccountLabel code={account.code} name={account.name} /></div>) : <AccountLabel code={null} name={null} />}</div>
       <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-base font-bold">Худалдан авалтын жагсаалт</h2><p className="mt-1 text-xs text-muted-foreground">Сонгосон сарын нийт: <strong className="font-mono text-primary">{money(filteredPurchaseTotal)}</strong></p></div><div className="flex flex-wrap items-center gap-2"><div className="flex items-center overflow-hidden rounded-xl border border-border bg-card"><button type="button" onClick={() => setPurchaseMonth((value) => shiftMonth(value, -1))} className="grid size-10 place-items-center border-r border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Өмнөх сар" data-testid="button-inventory-purchase-previous-month"><ChevronRight className="size-4 rotate-180" /></button><div className="flex items-center gap-2 px-3"><CalendarDays className="size-4 text-primary" /><label className="relative flex h-10 min-w-28 cursor-pointer items-center text-sm font-medium"><span>{mongolianMonthLabel(purchaseMonth)}</span><input type="month" value={purchaseMonth} onChange={(event) => setPurchaseMonth(event.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="Бараа материалын худалдан авалтын сар сонгох" data-testid="input-inventory-purchase-month" /></label></div><button type="button" onClick={() => setPurchaseMonth((value) => shiftMonth(value, 1))} className="grid size-10 place-items-center border-l border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Дараагийн сар" data-testid="button-inventory-purchase-next-month"><ChevronRight className="size-4" /></button></div><span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{query.data?.length ?? 0} бүртгэл</span></div></div>
       {query.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-14" /><LoadingBlock className="h-14" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : !query.data?.length ? <EmptyState title="Худалдан авалт олдсонгүй" detail="Сонгосон сар болон бараа материалын төрөлд тохирох худалдан авалт алга." icon={PackageOpen} /> : <>
@@ -560,7 +590,7 @@ export function Inventory() {
         <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[980px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Харилцагч · Баримтын дугаар</th><th className="px-5 py-3">Огноо</th><th className="px-5 py-3">Хариуцагч</th><th className="px-5 py-3">Баримт</th><th className="px-5 py-3 text-right">Үнийн дүн</th><th className="px-5 py-3">Төлбөр</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{query.data.map((purchase) => <tr key={purchase.id} data-testid={`inventory-purchase-${purchase.id}`}><td className="px-5 py-4"><p className="text-sm font-semibold">{purchase.supplierName}</p><p className="mt-1 whitespace-nowrap font-mono text-xs" data-testid={`text-inventory-purchase-document-${purchase.id}`}>{purchase.documentNumber}</p><p className="mt-1 text-xs text-muted-foreground">{purchase.items.length} төрлийн бараа</p></td><td className="px-5 py-4 text-sm">{dateLabel(purchase.date)}</td><td className="px-5 py-4 text-sm" data-testid={`text-purchase-custodian-${purchase.id}`}>{purchase.responsibleName ?? '—'}</td><td className="px-5 py-4"><span className={cn('rounded-full border px-2.5 py-1 text-[10px] font-bold', purchase.hasReceipt ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-100 text-slate-700')}>{purchase.hasReceipt ? 'Баримттай' : 'Баримтгүй'}</span></td><td className="px-5 py-4 text-right font-mono text-sm font-bold text-primary">{money(purchase.totalAmount)}</td><td className="px-5 py-4"><label className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={purchase.paid} onChange={(event) => togglePurchasePayment(purchase, event.target.checked)} disabled={confirmPurchasePayment.isPending || cancelPurchasePayment.isPending} data-testid={`checkbox-inventory-payment-${purchase.id}`} /><span>{purchase.paid ? 'Төлсөн' : 'Төлөөгүй'}</span></label>{purchase.paid && <p className="mt-1 text-[10px] text-muted-foreground">{dateLabel(purchase.paymentDate!)} · {money(purchase.paymentAmount ?? 0)}</p>}</td><td className="px-5 py-4"><div className="flex justify-end gap-1"><Button variant="outline" size="sm" onClick={() => setSelectedPurchase(purchase)} data-testid={`button-view-inventory-${purchase.id}`}>Дэлгэрэнгүй<ChevronRight className="size-4" /></Button>{purchase.editable && <><Button size="icon" variant="ghost" onClick={() => editPurchase(purchase)} data-testid={`button-edit-inventory-${purchase.id}`}><Pencil className="size-4" /></Button><Button size="icon" variant="ghost" title="Үйл ажиллагааны зардал руу шилжүүлэх" onClick={() => openReclassify(purchase)} data-testid={`button-reclassify-inventory-${purchase.id}`}><ArrowRightLeft className="size-4" /></Button><Button size="icon" variant="ghost" disabled={remove.isPending} onClick={() => deletePurchase(purchase)} data-testid={`button-delete-inventory-${purchase.id}`}><Trash2 className="size-4" /></Button></>}</div></td></tr>)}</tbody><tfoot className="border-t-2 border-border bg-secondary/35"><tr><td className="px-5 py-3 text-sm font-bold" colSpan={3}>Сонгосон сарын нийт</td><td className="px-5 py-3 text-right font-mono text-sm font-bold text-primary" data-testid="value-inventory-purchase-total">{money(filteredPurchaseTotal)}</td><td colSpan={2} /></tr></tfoot></table></div>
       </>}
     </section>}
-    {inventoryTab === 'purchases' && !query.isLoading && !query.isError && (query.data?.length ?? 0) > 0 && <div className="mt-3 flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    {inventoryTab === 'purchases' && registrationFilter !== 'unregistered' && !query.isLoading && !query.isError && (query.data?.length ?? 0) > 0 && <div className="mt-3 flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <p className="text-xs text-muted-foreground">{query.data?.length ?? 0} баримтаас {(purchasePage - 1) * inventoryPurchasesPerPage + 1}–{Math.min(purchasePage * inventoryPurchasesPerPage, query.data?.length ?? 0)}-г харуулж байна</p>
       <div className="flex items-center justify-between gap-2 sm:justify-end">
         <Button type="button" variant="outline" size="sm" disabled={purchasePage === 1} onClick={() => setPurchasePage((page) => Math.max(1, page - 1))} data-testid="button-inventory-purchases-previous">Өмнөх</Button>
@@ -697,7 +727,13 @@ export function Inventory() {
         <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setIssueOpen(false)}>Болих</Button><Button type="submit" disabled={createIssue.isPending || updateIssue.isPending || (!editingIssue && !issueForm.watch('responsibleEmployeeId'))} data-testid="button-save-inventory-issue">{createIssue.isPending || updateIssue.isPending ? 'Хадгалж байна...' : editingIssue ? 'Засварыг хадгалах' : 'Зарлага хадгалах'}</Button></div>
       </form></Form>
     </Modal>}
-    {open && <Modal wide fullScreen title={editing ? 'Худалдан авалт засах' : 'Бараа материалын худалдан авалт'} detail="Сангаас хайж сонгох эсвэл шинэ бараа бүртгэнэ." onClose={() => setOpen(false)}>
+    {open && <Modal wide fullScreen title={pendingPurchase ? 'Бүртгэлгүй худалдан авалтыг бүртгэх' : editing ? 'Худалдан авалт засах' : 'Бараа материалын худалдан авалт'} detail="Сангаас хайж сонгох эсвэл шинэ бараа бүртгэнэ." onClose={() => { if (!registerPending.isPending) setOpen(false); }}>
+      {pendingPurchase && <div className="mb-3 space-y-1 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950" data-testid="pending-purchase-facts">
+        <p>{dateLabel(pendingPurchase.date)} · {pendingPurchase.accountCode} {pendingPurchase.accountName}</p>
+        <p>{pendingPurchase.description}</p>
+        <p>Банкны дүн: {new Intl.NumberFormat('mn-MN', { maximumFractionDigits: 2 }).format(pendingPurchase.amount)} ₮. Нийлбэр яг таарах ёстой. Касс, журнал дахин бичигдэхгүй.</p>
+        {Math.round(grandTotal * 100) !== Math.round(pendingPurchase.amount * 100) && <p role="alert" data-testid="pending-purchase-mismatch">Дүнгийн зөрүү: {new Intl.NumberFormat('mn-MN', { maximumFractionDigits: 2 }).format(pendingPurchase.amount - grandTotal)} ₮</p>}
+      </div>}
       {editing && <div className="mb-3 rounded-xl border border-border bg-secondary/35 px-4 py-3"><AccountLabel code={editing.accountCode} name={editing.accountName} /></div>}
       <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-3">
         <label className="block space-y-2 text-xs font-semibold">Бараа материалын төрөл<select className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('materialType', { required: true })} data-testid="select-inventory-material-type">{inventoryMaterialTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label>
@@ -726,7 +762,8 @@ export function Inventory() {
         })}</div>
         <Button type="button" variant="outline" className="w-full" onClick={() => rows.append({ name: '', category: '', unit: 'ширхэг', quantity: '1', unitPrice: '' })} data-testid="button-add-inventory-row"><Plus className="size-4" />Бараа нэмэх</Button>
         <div className="flex items-center justify-between rounded-xl bg-primary/10 px-4 py-3"><span className="text-sm font-bold">Нийт дүн</span><strong className="font-mono text-lg text-primary">{money(grandTotal)}</strong></div>
-        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Болих</Button><Button type="submit" disabled={create.isPending || update.isPending || (!editing && !form.watch('responsibleEmployeeId'))} data-testid="button-save-inventory-purchase">{create.isPending || update.isPending ? 'Хадгалж байна...' : editing ? 'Засварыг хадгалах' : 'Бүртгэх'}</Button></div>
+        {registerPending.isError && <p role="alert" className="text-xs text-destructive" data-testid="pending-purchase-error">{(registerPending.error as { data?: { error?: string } })?.data?.error ?? 'Бүртгэж чадсангүй. Оруулсан мэдээлэл хэвээр байна, дахин оролдоно уу.'}</p>}
+        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" disabled={registerPending.isPending} onClick={() => setOpen(false)}>Болих</Button><Button type="submit" disabled={create.isPending || update.isPending || registerPending.isPending || (!editing && !form.watch('responsibleEmployeeId')) || Boolean(pendingPurchase && Math.round(grandTotal * 100) !== Math.round(pendingPurchase.amount * 100))} data-testid="button-save-inventory-purchase">{create.isPending || update.isPending || registerPending.isPending ? 'Хадгалж байна...' : editing ? 'Засварыг хадгалах' : 'Бүртгэх'}</Button></div>
       </form></Form>
     </Modal>}
   </div>;

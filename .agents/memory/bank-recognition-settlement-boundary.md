@@ -15,8 +15,8 @@ When an accountant selects an operating-expense GL account for a bank expense in
 
 **How to apply:** Reuse the source-backed expense-link flow for confirmed expense documents, preserving one linked settlement and one posted journal. For historical journal-only entries, inspect the business source and reverse/relink intentionally; do not backfill all entries by GL account alone.
 
-For a bank expense still classified to inventory or supplies (1500/1510), require an existing or newly created inventory purchase even if the caller tries another document-link endpoint. A genuinely different business source must be deliberately reclassified first.
+For a bank expense still classified to inventory or supplies (1500/1510), keep it on the purchase path even if the caller tries another document-link endpoint. It may now be posted as an explicitly unregistered purchase awaiting item details; see [Pending inventory purchases](pending-inventory-purchase-scope.md). A genuinely different business source must still be deliberately reclassified first.
 
 **Why:** Expense and fixed-asset link routes can settle the same bank row without a purchase record; guarding only direct journal/cash routes would leave the document requirement bypassable.
 
-**How to apply:** Enforce this at every bank-settlement entry point before writing cash, journals, or source documents. Keep the UI on the purchase path for those classifications.
+**How to apply:** Keep expense/fixed-asset link guards intact. A pending inventory purchase is not a permission to settle another source document or create guessed stock lines.

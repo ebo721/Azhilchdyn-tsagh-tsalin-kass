@@ -1967,6 +1967,38 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/MealScheduleEntry"
+  /inventory/pending-purchases:
+    get:
+      operationId: listPendingInventoryPurchases
+      tags: [Inventory]
+      responses:
+        "200":
+          description: Bank-funded purchases awaiting item details
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PendingInventoryPurchase"
+  /inventory/pending-purchases/{id}/register:
+    post:
+      operationId: registerPendingInventoryPurchase
+      tags: [Inventory]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryPurchaseInput"
+      responses:
+        "200":
+          description: Completed without another cash or journal posting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankPurchaseLinkResult"
   /inventory/purchases:
     get:
       operationId: listInventoryPurchases
@@ -4250,6 +4282,18 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/InventoryPurchaseItem"
+    PendingInventoryPurchase:
+      type: object
+      required: [id, date, amount, description, bankAccount, accountCode, accountName, materialType]
+      properties:
+        id: { type: integer }
+        date: { type: string }
+        amount: { type: number }
+        description: { type: string }
+        bankAccount: { type: string }
+        accountCode: { type: string }
+        accountName: { type: string }
+        materialType: { type: string, enum: [food, supply] }
     InventoryPurchaseItemInput:
       type: object
       required: [name, category, unit, quantity, unitPrice]

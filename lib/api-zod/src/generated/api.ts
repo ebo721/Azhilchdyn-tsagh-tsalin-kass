@@ -3410,6 +3410,70 @@ export const MoveMealScheduleEntryResponseItem = zod.object({
 export const MoveMealScheduleEntryResponse = zod.array(MoveMealScheduleEntryResponseItem)
 
 
+export const ListPendingInventoryPurchasesResponseItem = zod.object({
+  "id": zod.number().int(),
+  "date": zod.string(),
+  "amount": zod.number(),
+  "description": zod.string(),
+  "bankAccount": zod.string(),
+  "accountCode": zod.string(),
+  "accountName": zod.string(),
+  "materialType": zod.enum(['food', 'supply'])
+})
+export const ListPendingInventoryPurchasesResponse = zod.array(ListPendingInventoryPurchasesResponseItem)
+
+
+
+
+
+export const RegisterPendingInventoryPurchaseParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+
+
+
+export const registerPendingInventoryPurchaseBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+
+
+export const registerPendingInventoryPurchaseBodyItemsItemQuantityExclusiveMin = 0;
+
+export const registerPendingInventoryPurchaseBodyItemsItemUnitPriceMin = 0;
+
+
+
+
+export const RegisterPendingInventoryPurchaseBody = zod.object({
+  "materialType": zod.enum(['food', 'supply']),
+  "supplierName": zod.string().min(1),
+  "responsibleUserId": zod.number().int().min(1).nullish(),
+  "responsibleEmployeeId": zod.number().int().min(1).nullish(),
+  "hasReceipt": zod.boolean(),
+  "date": zod.string().regex(registerPendingInventoryPurchaseBodyDateRegExp),
+  "items": zod.array(zod.object({
+  "inventoryItemId": zod.number().int().optional(),
+  "name": zod.string().min(1),
+  "category": zod.string().min(1),
+  "unit": zod.enum(['ширхэг', 'кг', 'грамм', 'литр', 'мл', 'метр', 'багц', 'хайрцаг']),
+  "quantity": zod.number().gt(registerPendingInventoryPurchaseBodyItemsItemQuantityExclusiveMin),
+  "unitPrice": zod.number().min(registerPendingInventoryPurchaseBodyItemsItemUnitPriceMin)
+})).min(1)
+})
+
+
+
+
+
+
+
+export const RegisterPendingInventoryPurchaseResponse = zod.object({
+  "bankTransactionId": zod.number().int().min(1),
+  "inventoryPurchaseId": zod.number().int().min(1),
+  "cashTransactionId": zod.number().int().min(1),
+  "journalEntryId": zod.number().int().min(1)
+})
+
+
 /**
  * @summary List inventory purchases
  */
