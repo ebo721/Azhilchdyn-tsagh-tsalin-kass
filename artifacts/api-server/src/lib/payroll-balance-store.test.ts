@@ -28,8 +28,10 @@ it("real SQL: monthly attendance only, explicit financial initialization, source
       "payroll_advance_approvals", "payroll_schedule_settings"]) {
       await query(`CREATE TABLE ${schema}.${table} (LIKE public.${table} INCLUDING ALL)`);
     }
-    const migration = readFileSync(new URL("../../../../lib/db/migrations/20261008_payroll_month_balances.sql", import.meta.url), "utf8");
-    await query(migration.replaceAll("public.", `${schema}.`));
+    for (const name of ["20261008_payroll_month_balances.sql", "20261010_payroll_attendance_snapshots.sql", "20261019_payroll_month_closures.sql"]) {
+      const migration = readFileSync(new URL(`../../../../lib/db/migrations/${name}`, import.meta.url), "utf8");
+      await query(migration.replaceAll("public.", `${schema}.`));
+    }
     await query(`SET search_path TO ${schema}`);
     const attendanceQueries: Array<{ text: string; values: unknown[] }> = [];
     const auditedQuery = ((config: { text: string } | string, values?: unknown[]) => {

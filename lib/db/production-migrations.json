@@ -104,7 +104,11 @@
     {
       "filename": "20261014_user_menu_access.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20261019_payroll_month_closures.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "553bce17c0e54cd5ecc90a76e0a0a33f851fd863b1bf906eee667d69fc0bafee"
+  "schemaFingerprint": "1a3d74064134fa8ef927e8405ca5e4e16d67d442b90e5d27cd98c860a7eb2cb9"
 }

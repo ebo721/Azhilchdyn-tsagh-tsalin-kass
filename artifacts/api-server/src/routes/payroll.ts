@@ -166,6 +166,8 @@ import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-
 import { RebuildPayrollBalancesQueryParams, RebuildPayrollBalancesResponse } from "@workspace/api-zod";
 import { rebuildPayrollBalances } from "../lib/payroll-balance-store.js";
 import { readSavedPayroll, pullPayrollAttendance } from "../lib/payroll-attendance-snapshot.js";
+import { closePayrollMonth, reopenPayrollMonth } from "../lib/payroll-month-close.js";
+import { ClosePayrollMonthParams, ReopenPayrollMonthParams } from "@workspace/api-zod";
 import { PullPayrollAttendanceBody, PullPayrollAttendanceResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -307,6 +309,28 @@ router.get("/payroll", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+router.post("/payroll/:month/close", async (req, res, next): Promise<void> => {
+  try {
+    const session = await getStaffSession(req);
+    if (!session || !["admin", "accountant"].includes(session.role)) {
+      res.status(403).json({ error: "Сар хаах эрхгүй." }); return;
+    }
+    const { month } = ClosePayrollMonthParams.parse(req.params);
+    res.json(await closePayrollMonth(month, session.id));
+  } catch (error) { next(error); }
+});
+
+router.post("/payroll/:month/reopen", async (req, res, next): Promise<void> => {
+  try {
+    const session = await getStaffSession(req);
+    if (!session || session.role !== "admin") {
+      res.status(403).json({ error: "Зөвхөн админ хаасан сарыг дахин нээнэ." }); return;
+    }
+    const { month } = ReopenPayrollMonthParams.parse(req.params);
+    res.json(await reopenPayrollMonth(month));
+  } catch (error) { next(error); }
 });
 
 router.post("/payroll/pull-attendance", async (req, res, next): Promise<void> => {

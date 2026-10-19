@@ -20,7 +20,7 @@ it("real SQL and HTTP: payroll reads saved earnings; only explicit pull reads at
       "payroll_advance_approvals", "payroll_schedule_settings"]) {
       await query(`CREATE TABLE ${schema}.${table} (LIKE public.${table} INCLUDING ALL)`);
     }
-    for (const migration of ["20261008_payroll_month_balances.sql", "20261010_payroll_attendance_snapshots.sql"]) {
+    for (const migration of ["20261008_payroll_month_balances.sql", "20261010_payroll_attendance_snapshots.sql", "20261019_payroll_month_closures.sql"]) {
       await query(readFileSync(new URL(`../../../../lib/db/migrations/${migration}`, import.meta.url), "utf8").replaceAll("public.", `${schema}.`));
     }
     await query(`SET search_path TO ${schema}`);

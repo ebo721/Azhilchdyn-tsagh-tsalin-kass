@@ -1,9 +1,10 @@
 import { and, asc, eq, sql } from "drizzle-orm";
-import { db, employeesTable, payrollAttendanceSnapshotsTable, payrollAdjustmentsTable, payrollAdvanceApprovalsTable, payrollMonthBalancesTable } from "@workspace/db";
+import { db, employeesTable, payrollAttendanceSnapshotsTable, payrollAdjustmentsTable, payrollAdvanceApprovalsTable, payrollMonthBalancesTable, payrollMonthClosuresTable } from "@workspace/db";
 import { GetPayrollResponse, GetPayrollAdvanceResponse } from "@workspace/api-zod";
 import { PayrollBalancesNotReadyError, readMonthlyPayroll } from "./payroll-balance-store.js";
 import { applyPayrollFinancials, getPayrollAdvanceSummary, payrollSummaryTotals } from "./payroll-calc-helpers.js";
 import { previousMonth, money } from "./date-utils.js";
+import type { Tx } from "./route-shared.js";
 
 export class PayrollSnapshotMissingError extends Error {
   constructor(month: string) {
@@ -16,6 +17,11 @@ export async function pullPayrollAttendance(month: string) {
   return db.transaction(async (tx) => {
     // Same order as payroll source writes: source lock, then financial balance lock.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('payroll-month-balances'))`);
+    if ((await tx.select({ month: payrollMonthClosuresTable.month }).from(payrollMonthClosuresTable)
+      .where(eq(payrollMonthClosuresTable.month, month))).length) {
+      throw Object.assign(new Error("Цалингийн сар хаалттай. Админ эхлээд дахин нээнэ үү."), { code: "PCL01" });
+    }
     const payroll = await readMonthlyPayroll(month, tx);
     const advance = await getPayrollAdvanceSummary(month, tx, { ignoreApproval: true });
     const pulledAt = new Date();
@@ -30,8 +36,12 @@ export async function pullPayrollAttendance(month: string) {
 }
 
 /** Display cached earnings plus live financial movements; never reads attendance or writes. */
-export async function readSavedPayroll(month: string) {
-  return db.transaction(async (tx) => {
+export async function readSavedPayroll(month: string, connection?: Tx) {
+  const read = async (tx: Tx) => {
+    const [closed] = await tx.select().from(payrollMonthClosuresTable).where(eq(payrollMonthClosuresTable.month, month));
+    if (closed) return GetPayrollResponse.parse({
+      ...closed.payroll, closedAt: closed.closedAt.toISOString(), closedBy: closed.closedBy, attendanceNeedsRefresh: false,
+    });
     const [snapshot] = await tx.select().from(payrollAttendanceSnapshotsTable).where(eq(payrollAttendanceSnapshotsTable.month, month));
     if (!snapshot) throw new PayrollSnapshotMissingError(month);
     const saved = GetPayrollResponse.parse(snapshot.payroll);
@@ -40,7 +50,8 @@ export async function readSavedPayroll(month: string) {
       tx.select().from(payrollAdvanceApprovalsTable).where(eq(payrollAdvanceApprovalsTable.month, month)),
       tx.select().from(payrollMonthBalancesTable).where(eq(payrollMonthBalancesTable.month, previousMonth(month))),
       tx.select({ month: payrollMonthBalancesTable.month }).from(payrollMonthBalancesTable)
-        .where(and(eq(payrollMonthBalancesTable.dirty, true), sql`${payrollMonthBalancesTable.month} <= ${month}`))
+        .where(and(eq(payrollMonthBalancesTable.dirty, true), sql`${payrollMonthBalancesTable.month} <= ${month}`,
+          sql`${payrollMonthBalancesTable.month} > COALESCE((SELECT max(month) FROM payroll_month_closures WHERE month < ${month}), '')`))
         .orderBy(asc(payrollMonthBalancesTable.month)).limit(1),
       tx.select({ id: employeesTable.id, name: employeesTable.name, role: employeesTable.role, bankAccountNumber: employeesTable.bankAccountNumber }).from(employeesTable),
     ]);
@@ -65,6 +76,8 @@ export async function readSavedPayroll(month: string) {
     return GetPayrollResponse.parse({
       ...saved, ...payrollSummaryTotals(lines), lines,
       attendancePulledAt: snapshot.pulledAt.toISOString(), attendanceNeedsRefresh: dirty.length > 0,
+      closedAt: null, closedBy: null,
     });
-  }, { isolationLevel: "repeatable read", accessMode: "read only" });
+  };
+  return connection ? read(connection) : db.transaction(read, { isolationLevel: "repeatable read", accessMode: "read only" });
 }

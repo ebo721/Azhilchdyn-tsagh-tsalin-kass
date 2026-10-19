@@ -1096,6 +1096,8 @@ export const getPayrollResponseScheduleFinalPayDayMax = 31;
 export const GetPayrollResponse = zod.object({
   "attendancePulledAt": zod.string().optional(),
   "attendanceNeedsRefresh": zod.boolean().optional(),
+  "closedAt": zod.string().nullish(),
+  "closedBy": zod.number().int().nullish(),
   "month": zod.string(),
   "periodStart": zod.string().regex(getPayrollResponsePeriodStartRegExp),
   "advancePeriodEnd": zod.string().regex(getPayrollResponseAdvancePeriodEndRegExp),
@@ -1110,6 +1112,178 @@ export const GetPayrollResponse = zod.object({
   "periodEndDay": zod.number().int().min(1).max(getPayrollResponseSchedulePeriodEndDayMax),
   "advancePayDay": zod.number().int().min(1).max(getPayrollResponseScheduleAdvancePayDayMax),
   "finalPayDay": zod.number().int().min(1).max(getPayrollResponseScheduleFinalPayDayMax)
+}),
+  "totalGross": zod.number(),
+  "totalSocialInsurance": zod.number(),
+  "totalIncomeTax": zod.number(),
+  "totalDeductions": zod.number(),
+  "totalNet": zod.number(),
+  "lines": zod.array(zod.object({
+  "employeeId": zod.number().int(),
+  "employeeName": zod.string(),
+  "bankAccountNumber": zod.string().optional(),
+  "role": zod.string(),
+  "employeeType": zod.enum(['shift', 'office']),
+  "daysWorked": zod.number(),
+  "hours": zod.number(),
+  "gross": zod.number(),
+  "socialInsuranceSalary": zod.number(),
+  "socialInsurance": zod.number(),
+  "taxableIncome": zod.number(),
+  "calculatedIncomeTax": zod.number(),
+  "taxRelief": zod.number(),
+  "incomeTax": zod.number(),
+  "advanceAmount": zod.number(),
+  "manualDeduction": zod.number(),
+  "receivableId": zod.number().int().nullable(),
+  "deductions": zod.number(),
+  "carryoverAmount": zod.number(),
+  "payable": zod.number(),
+  "paidAmount": zod.number(),
+  "paymentDate": zod.string().nullable(),
+  "secondPaidAmount": zod.number(),
+  "secondPaymentDate": zod.string().nullable(),
+  "remainingAmount": zod.number(),
+  "overpaidAmount": zod.number(),
+  "balanceAmount": zod.number(),
+  "net": zod.number()
+}))
+})
+
+
+/**
+ * @summary Freeze saved payroll and its closing financial balance
+ */
+export const closePayrollMonthPathMonthRegExp = new RegExp('^[1-9][0-9]{3}-(0[1-9]|1[0-2])$');
+
+
+export const ClosePayrollMonthParams = zod.object({
+  "month": zod.coerce.string().regex(closePayrollMonthPathMonthRegExp)
+})
+
+export const closePayrollMonthResponsePeriodStartRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const closePayrollMonthResponseAdvancePeriodEndRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const closePayrollMonthResponsePeriodEndRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const closePayrollMonthResponseAdvancePaymentDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const closePayrollMonthResponseFinalPaymentDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const closePayrollMonthResponseScheduleEffectiveFromMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+export const closePayrollMonthResponseSchedulePeriodStartDayMax = 31;
+
+export const closePayrollMonthResponseScheduleAdvanceCutoffDayMax = 31;
+
+export const closePayrollMonthResponseSchedulePeriodEndDayMax = 31;
+
+export const closePayrollMonthResponseScheduleAdvancePayDayMax = 31;
+
+export const closePayrollMonthResponseScheduleFinalPayDayMax = 31;
+
+
+
+export const ClosePayrollMonthResponse = zod.object({
+  "attendancePulledAt": zod.string().optional(),
+  "attendanceNeedsRefresh": zod.boolean().optional(),
+  "closedAt": zod.string().nullish(),
+  "closedBy": zod.number().int().nullish(),
+  "month": zod.string(),
+  "periodStart": zod.string().regex(closePayrollMonthResponsePeriodStartRegExp),
+  "advancePeriodEnd": zod.string().regex(closePayrollMonthResponseAdvancePeriodEndRegExp),
+  "periodEnd": zod.string().regex(closePayrollMonthResponsePeriodEndRegExp),
+  "advancePaymentDate": zod.string().regex(closePayrollMonthResponseAdvancePaymentDateRegExp),
+  "finalPaymentDate": zod.string().regex(closePayrollMonthResponseFinalPaymentDateRegExp),
+  "schedule": zod.object({
+  "id": zod.number().int(),
+  "effectiveFromMonth": zod.string().regex(closePayrollMonthResponseScheduleEffectiveFromMonthRegExp),
+  "periodStartDay": zod.number().int().min(1).max(closePayrollMonthResponseSchedulePeriodStartDayMax),
+  "advanceCutoffDay": zod.number().int().min(1).max(closePayrollMonthResponseScheduleAdvanceCutoffDayMax),
+  "periodEndDay": zod.number().int().min(1).max(closePayrollMonthResponseSchedulePeriodEndDayMax),
+  "advancePayDay": zod.number().int().min(1).max(closePayrollMonthResponseScheduleAdvancePayDayMax),
+  "finalPayDay": zod.number().int().min(1).max(closePayrollMonthResponseScheduleFinalPayDayMax)
+}),
+  "totalGross": zod.number(),
+  "totalSocialInsurance": zod.number(),
+  "totalIncomeTax": zod.number(),
+  "totalDeductions": zod.number(),
+  "totalNet": zod.number(),
+  "lines": zod.array(zod.object({
+  "employeeId": zod.number().int(),
+  "employeeName": zod.string(),
+  "bankAccountNumber": zod.string().optional(),
+  "role": zod.string(),
+  "employeeType": zod.enum(['shift', 'office']),
+  "daysWorked": zod.number(),
+  "hours": zod.number(),
+  "gross": zod.number(),
+  "socialInsuranceSalary": zod.number(),
+  "socialInsurance": zod.number(),
+  "taxableIncome": zod.number(),
+  "calculatedIncomeTax": zod.number(),
+  "taxRelief": zod.number(),
+  "incomeTax": zod.number(),
+  "advanceAmount": zod.number(),
+  "manualDeduction": zod.number(),
+  "receivableId": zod.number().int().nullable(),
+  "deductions": zod.number(),
+  "carryoverAmount": zod.number(),
+  "payable": zod.number(),
+  "paidAmount": zod.number(),
+  "paymentDate": zod.string().nullable(),
+  "secondPaidAmount": zod.number(),
+  "secondPaymentDate": zod.string().nullable(),
+  "remainingAmount": zod.number(),
+  "overpaidAmount": zod.number(),
+  "balanceAmount": zod.number(),
+  "net": zod.number()
+}))
+})
+
+
+/**
+ * @summary Administrator reopens the latest closed payroll month
+ */
+export const reopenPayrollMonthPathMonthRegExp = new RegExp('^[1-9][0-9]{3}-(0[1-9]|1[0-2])$');
+
+
+export const ReopenPayrollMonthParams = zod.object({
+  "month": zod.coerce.string().regex(reopenPayrollMonthPathMonthRegExp)
+})
+
+export const reopenPayrollMonthResponsePeriodStartRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const reopenPayrollMonthResponseAdvancePeriodEndRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const reopenPayrollMonthResponsePeriodEndRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const reopenPayrollMonthResponseAdvancePaymentDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const reopenPayrollMonthResponseFinalPaymentDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const reopenPayrollMonthResponseScheduleEffectiveFromMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+export const reopenPayrollMonthResponseSchedulePeriodStartDayMax = 31;
+
+export const reopenPayrollMonthResponseScheduleAdvanceCutoffDayMax = 31;
+
+export const reopenPayrollMonthResponseSchedulePeriodEndDayMax = 31;
+
+export const reopenPayrollMonthResponseScheduleAdvancePayDayMax = 31;
+
+export const reopenPayrollMonthResponseScheduleFinalPayDayMax = 31;
+
+
+
+export const ReopenPayrollMonthResponse = zod.object({
+  "attendancePulledAt": zod.string().optional(),
+  "attendanceNeedsRefresh": zod.boolean().optional(),
+  "closedAt": zod.string().nullish(),
+  "closedBy": zod.number().int().nullish(),
+  "month": zod.string(),
+  "periodStart": zod.string().regex(reopenPayrollMonthResponsePeriodStartRegExp),
+  "advancePeriodEnd": zod.string().regex(reopenPayrollMonthResponseAdvancePeriodEndRegExp),
+  "periodEnd": zod.string().regex(reopenPayrollMonthResponsePeriodEndRegExp),
+  "advancePaymentDate": zod.string().regex(reopenPayrollMonthResponseAdvancePaymentDateRegExp),
+  "finalPaymentDate": zod.string().regex(reopenPayrollMonthResponseFinalPaymentDateRegExp),
+  "schedule": zod.object({
+  "id": zod.number().int(),
+  "effectiveFromMonth": zod.string().regex(reopenPayrollMonthResponseScheduleEffectiveFromMonthRegExp),
+  "periodStartDay": zod.number().int().min(1).max(reopenPayrollMonthResponseSchedulePeriodStartDayMax),
+  "advanceCutoffDay": zod.number().int().min(1).max(reopenPayrollMonthResponseScheduleAdvanceCutoffDayMax),
+  "periodEndDay": zod.number().int().min(1).max(reopenPayrollMonthResponseSchedulePeriodEndDayMax),
+  "advancePayDay": zod.number().int().min(1).max(reopenPayrollMonthResponseScheduleAdvancePayDayMax),
+  "finalPayDay": zod.number().int().min(1).max(reopenPayrollMonthResponseScheduleFinalPayDayMax)
 }),
   "totalGross": zod.number(),
   "totalSocialInsurance": zod.number(),
@@ -1197,6 +1371,8 @@ export const PullPayrollAttendanceResponse = zod.object({
   "payroll": zod.object({
   "attendancePulledAt": zod.string().optional(),
   "attendanceNeedsRefresh": zod.boolean().optional(),
+  "closedAt": zod.string().nullish(),
+  "closedBy": zod.number().int().nullish(),
   "month": zod.string(),
   "periodStart": zod.string().regex(pullPayrollAttendanceResponsePayrollPeriodStartRegExp),
   "advancePeriodEnd": zod.string().regex(pullPayrollAttendanceResponsePayrollAdvancePeriodEndRegExp),

@@ -3524,6 +3524,148 @@ export function useGetPayroll<TData = Awaited<ReturnType<typeof getPayroll>>, TE
 
 
 
+export const getClosePayrollMonthUrl = (month: string,) => {
+
+
+
+
+  return `/api/payroll/${month}/close`
+}
+
+/**
+ * @summary Freeze saved payroll and its closing financial balance
+ */
+export const closePayrollMonth = async (month: string, options?: Parameters<typeof customFetch>[1]): Promise<PayrollSummary> => {
+
+  return customFetch<PayrollSummary>(getClosePayrollMonthUrl(month),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getClosePayrollMonthMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof closePayrollMonth>>, TError,{month: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof closePayrollMonth>>, TError,{month: string}, TContext> => {
+
+const mutationKey = ['closePayrollMonth'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof closePayrollMonth>>, {month: string}> = (props) => {
+          const {month} = props ?? {};
+
+          return  closePayrollMonth(month,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClosePayrollMonthMutationResult = NonNullable<Awaited<ReturnType<typeof closePayrollMonth>>>
+
+    export type ClosePayrollMonthMutationError = ErrorType<void>
+
+    /**
+ * @summary Freeze saved payroll and its closing financial balance
+ */
+export const useClosePayrollMonth = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof closePayrollMonth>>, TError,{month: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof closePayrollMonth>>,
+        TError,
+        {month: string},
+        TContext
+      > => {
+      return useMutation(getClosePayrollMonthMutationOptions(options));
+    }
+
+export const getReopenPayrollMonthUrl = (month: string,) => {
+
+
+
+
+  return `/api/payroll/${month}/reopen`
+}
+
+/**
+ * @summary Administrator reopens the latest closed payroll month
+ */
+export const reopenPayrollMonth = async (month: string, options?: Parameters<typeof customFetch>[1]): Promise<PayrollSummary> => {
+
+  return customFetch<PayrollSummary>(getReopenPayrollMonthUrl(month),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getReopenPayrollMonthMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reopenPayrollMonth>>, TError,{month: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reopenPayrollMonth>>, TError,{month: string}, TContext> => {
+
+const mutationKey = ['reopenPayrollMonth'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reopenPayrollMonth>>, {month: string}> = (props) => {
+          const {month} = props ?? {};
+
+          return  reopenPayrollMonth(month,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReopenPayrollMonthMutationResult = NonNullable<Awaited<ReturnType<typeof reopenPayrollMonth>>>
+
+    export type ReopenPayrollMonthMutationError = ErrorType<void>
+
+    /**
+ * @summary Administrator reopens the latest closed payroll month
+ */
+export const useReopenPayrollMonth = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reopenPayrollMonth>>, TError,{month: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reopenPayrollMonth>>,
+        TError,
+        {month: string},
+        TContext
+      > => {
+      return useMutation(getReopenPayrollMonthMutationOptions(options));
+    }
+
 export const getPullPayrollAttendanceUrl = () => {
 
 
