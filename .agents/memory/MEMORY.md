@@ -2,6 +2,7 @@
 - [Orval DELETE parameter collisions](orval-delete-parameter-collisions.md) — Mixed path and query parameters on DELETE can generate duplicate Zod exports; prefer path-only parameters.
 - [Effective-dated payroll](effective-dated-payroll.md) — Prorate monthly salary by Mon–Fri workdays; employment end dates are inclusive and paid months stay immutable.
 - [Monthly payroll balances](monthly-payroll-balances.md) — Read current-period attendance only; use saved prior financial debt, with explicit initialization/repair rather than historical GET recomputation.
+- [Payroll payables scope](payroll-payables-scope.md) — Show live saved payroll debt in payables; no automatic liability journals or generic payable settlements.
 - [Saved payroll refresh policy](saved-payroll-refresh-policy.md) — Opening, login and refresh show saved earnings; attendance is pulled explicitly, and recorded payments remain intact.
 - [Workspace-scoped packages](workspace-scoped-packages.md) — Avoid root installs when the package installer cannot target a pnpm workspace package.
 - [Drizzle unique conflicts](drizzle-unique-conflicts.md) — PostgreSQL unique violations may be wrapped; inspect both error.code and error.cause.code for 23505.

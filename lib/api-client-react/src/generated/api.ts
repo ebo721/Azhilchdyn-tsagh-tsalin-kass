@@ -96,6 +96,7 @@ import type {
   GetPayroll409,
   GetPayrollAdvanceParams,
   GetPayrollParams,
+  GetPayrollPayables409,
   HealthStatus,
   HourBalanceLine,
   ImportKapitronBankTransactionsParams,
@@ -169,6 +170,7 @@ import type {
   PayrollAdvanceSummary,
   PayrollAttendancePullInput,
   PayrollAttendancePullResult,
+  PayrollPayables,
   PayrollSchedule,
   PayrollScheduleInput,
   PayrollSummary,
@@ -12509,6 +12511,83 @@ export function useListJournalReceivables<TData = Awaited<ReturnType<typeof list
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListJournalReceivablesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetPayrollPayablesUrl = () => {
+
+
+
+
+  return `/api/journal/payables/payroll-balances`
+}
+
+/**
+ * @summary Read current unpaid saved payroll balances without creating journals
+ */
+export const getPayrollPayables = async ( options?: Parameters<typeof customFetch>[1]): Promise<PayrollPayables> => {
+
+  return customFetch<PayrollPayables>(getGetPayrollPayablesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPayrollPayablesQueryKey = () => {
+    return [
+    `/api/journal/payables/payroll-balances`
+    ] as const;
+    }
+
+
+export const getGetPayrollPayablesQueryOptions = <TData = Awaited<ReturnType<typeof getPayrollPayables>>, TError = ErrorType<GetPayrollPayables409>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPayrollPayables>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPayrollPayablesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPayrollPayables>>> = ({ signal }) => getPayrollPayables({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPayrollPayables>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPayrollPayablesQueryResult = NonNullable<Awaited<ReturnType<typeof getPayrollPayables>>>
+export type GetPayrollPayablesQueryError = ErrorType<GetPayrollPayables409>
+
+
+/**
+ * @summary Read current unpaid saved payroll balances without creating journals
+ */
+
+export function useGetPayrollPayables<TData = Awaited<ReturnType<typeof getPayrollPayables>>, TError = ErrorType<GetPayrollPayables409>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPayrollPayables>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPayrollPayablesQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

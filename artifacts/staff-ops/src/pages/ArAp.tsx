@@ -2,12 +2,13 @@ import { useMemo, useState } from 'react';
 import { useLocation } from 'wouter';
 import { Plus, Search } from 'lucide-react';
 import {
-  getListJournalPayablesQueryKey, getListJournalReceivablesQueryKey,
-  useGetAuthSession, useListJournalPayables, useListJournalReceivables,
+  getGetPayrollPayablesQueryKey, getListJournalPayablesQueryKey, getListJournalReceivablesQueryKey,
+  useGetAuthSession, useGetPayrollPayables, useListJournalPayables, useListJournalReceivables,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { EmptyState, ErrorBlock, LoadingBlock, PageHeading } from '@/components/ui-primitives';
 import { formatDate } from '@/pages/Journal/utils';
+import { PayrollPayables } from '@/components/PayrollPayables';
 import { EmployeeArApForm, type SavedArAp } from '@/pages/EmployeeArApForm';
 
 type Tab = 'receivables' | 'payables';
@@ -29,14 +30,25 @@ export function ArAp({ canCreate }: { canCreate: boolean }) {
     query: { queryKey: getListJournalPayablesQueryKey({ status: 'all' }), enabled: tab === 'payables', refetchOnMount: 'always' },
   });
 
+  const payroll = useGetPayrollPayables({
+    query: { queryKey: getGetPayrollPayablesQueryKey(), enabled: tab === 'payables', refetchOnMount: 'always', refetchInterval: tab === 'payables' ? 30_000 : false },
+  });
+  const role = session.data?.authenticated ? String(session.data.role) : '';
+  const canOpenPayroll = ['admin', 'accountant', 'viewer'].includes(role) && (menuPaths == null || menuPaths.includes('/payroll'));
+
   const rows = useMemo(() => tab === 'receivables'
     ? (receivables.data ?? []).map((row) => ({ ...row, balance: row.openAmount }))
     : (payables.data ?? []).map((row) => ({ ...row, balance: row.remainingBalance })),
   [tab, receivables.data, payables.data]);
-  const parties = useMemo(() => [...new Map(rows.map((row) => [
-    `${row.partyType}:${row.partyId}`,
-    { key: `${row.partyType}:${row.partyId}`, label: `${row.partyLabel} (${row.partyType === 'employee' ? 'Ажилтан' : 'Харилцагч'})` },
-  ])).values()].sort((a, b) => a.label.localeCompare(b.label, 'mn')), [rows]);
+  const payrollLines = payroll.data?.lines;
+  const parties = useMemo(() => {
+    const entries = rows.map((row) => [
+      `${row.partyType}:${row.partyId}`,
+      { key: `${row.partyType}:${row.partyId}`, label: `${row.partyLabel} (${row.partyType === 'employee' ? 'Ажилтан' : 'Харилцагч'})` },
+    ] as const);
+    if (tab === 'payables') for (const l of payrollLines ?? []) entries.push([`employee:${l.employeeId}`, { key: `employee:${l.employeeId}`, label: `${l.employeeName} (Ажилтан)` }]);
+    return [...new Map(entries).values()].sort((a, b) => a.label.localeCompare(b.label, 'mn'));
+  }, [rows, tab, payrollLines]);
   const filteredRows = rows.filter((row) => !party || `${row.partyType}:${row.partyId}` === party);
   const current = tab === 'receivables' ? receivables : payables;
 
@@ -146,6 +158,19 @@ export function ArAp({ canCreate }: { canCreate: boolean }) {
           </div>
         )}
       </div>
+
+      {tab === 'payables' && (
+        <PayrollPayables
+          data={payroll.data}
+          isLoading={payroll.isLoading}
+          isError={payroll.isError}
+          isFetching={payroll.isFetching}
+          error={payroll.error}
+          partyFilter={party}
+          canOpenPayroll={canOpenPayroll}
+          onRefresh={() => { void payroll.refetch(); }}
+        />
+      )}
     </div>
   );
 }

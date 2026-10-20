@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { getGetPayrollPayablesQueryKey } from '@workspace/api-client-react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
@@ -210,7 +211,10 @@ export function Payroll() {
   useEffect(() => () => balancesAbort.current?.abort(), []);
   const [downloadingInsurance, setDownloadingInsurance] = useState(false);
   const [insuranceError, setInsuranceError] = useState<string | null>(null);
-  const [month, setMonth] = useState(currentMonth());
+  const [month, setMonth] = useState(() => {
+    const requested = new URLSearchParams(window.location.search).get('month') ?? '';
+    return /^\d{4}-(0[1-9]|1[0-2])$/.test(requested) ? requested : currentMonth();
+  });
   const selectedMonth = useRef(month);
   selectedMonth.current = month;
   const pullAttendance = usePullPayrollAttendance();
@@ -229,6 +233,9 @@ export function Payroll() {
   const session = useGetAuthSession();
   const qc = useQueryClient();
   const approveAdvance = useApprovePayrollAdvance();
+  useEffect(() => {
+    void qc.invalidateQueries({ queryKey: getGetPayrollPayablesQueryKey(), refetchType: 'none' });
+  }, [qc, query.data, advanceQuery.data]);
   const deletion = useQueueDeletion();
   const revertAdvanceApproval = deletion;
   const updateAdvancePayment = useUpdatePayrollAdvancePayment();
