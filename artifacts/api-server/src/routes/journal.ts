@@ -7,7 +7,7 @@ import {
   ListJournalReceivablesQueryParams, ListJournalReceivablesResponse, ListJournalPayablesQueryParams,
   ListJournalPayablesResponse, ListJournalSuppliersResponse, CreateJournalSupplierBody, CreateJournalSupplierResponse,
   CreateEmployeeReceivableBody, CreateEmployeeReceivableResponse,
-  CreateEmployeePayableResponse,
+  CreateEmployeePayableResponse, GetPayrollPayablesResponse,
 } from "@workspace/api-zod";
 import { and, asc, desc, eq, gte, lte, inArray, sql } from "drizzle-orm";
 import { db, bankTransactionsTable, cashTransactionsTable, chartOfAccountsTable, journalEntriesTable, journalLinesTable, receivablesTable, receivableAllocationsTable, payablesTable, payableAllocationsTable, employeesTable, inventorySuppliersTable, type JournalEntry, type JournalLine } from "@workspace/db";
@@ -16,8 +16,19 @@ import {
   JournalValidationError, postJournalEntry, voidJournalEntry,
 } from "../lib/journal-posting.js";
 import type { Tx } from "../lib/route-shared.js";
+import { readPayrollPayables } from "../lib/payroll-payables.js";
+import { PayrollBalancesNotReadyError } from "../lib/payroll-balance-store.js";
 
 const router: IRouter = Router();
+
+router.get("/journal/payables/payroll-balances", async (_req, res, next) => {
+  try {
+    res.json(GetPayrollPayablesResponse.parse(await readPayrollPayables()));
+  } catch (error) {
+    if (error instanceof PayrollBalancesNotReadyError) { res.status(409).json({ error: error.message }); return; }
+    next(error);
+  }
+});
 
 // Both employee balance forms use the same journal posting/allocation lifecycle.
 function registerEmployeeBalance(kind: "receivable" | "payable") {

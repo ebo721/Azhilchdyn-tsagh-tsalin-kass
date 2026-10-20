@@ -5096,6 +5096,34 @@ export const ListJournalReceivablesResponse = zod.array(ListJournalReceivablesRe
 
 
 /**
+ * @summary Read current unpaid saved payroll balances without creating journals
+ */
+export const getPayrollPayablesResponseTotalOutstandingMin = 0;
+
+export const getPayrollPayablesResponseEmployeeCountMin = 0;
+
+export const getPayrollPayablesResponseLinesItemRemainingBalanceMin = 0;
+
+
+
+export const GetPayrollPayablesResponse = zod.object({
+  "asOfMonth": zod.string(),
+  "hasSavedCalculation": zod.boolean(),
+  "totalOutstanding": zod.number().min(getPayrollPayablesResponseTotalOutstandingMin),
+  "employeeCount": zod.number().int().min(getPayrollPayablesResponseEmployeeCountMin),
+  "lines": zod.array(zod.object({
+  "employeeId": zod.number().int(),
+  "employeeName": zod.string(),
+  "month": zod.string(),
+  "date": zod.string(),
+  "remainingBalance": zod.number().min(getPayrollPayablesResponseLinesItemRemainingBalanceMin),
+  "attendanceNeedsRefresh": zod.boolean(),
+  "closed": zod.boolean()
+}))
+})
+
+
+/**
  * @summary Register an employee payable with a balanced journal
  */
 export const createEmployeePayableBodyEmployeeIdMax = 2147483647;

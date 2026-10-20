@@ -2806,6 +2806,26 @@ paths:
                 items: { $ref: "#/components/schemas/JournalReceivable" }
         "400":
           $ref: "#/components/responses/BadRequest"
+  /journal/payables/payroll-balances:
+    get:
+      operationId: getPayrollPayables
+      tags: [Journal]
+      summary: Read current unpaid saved payroll balances without creating journals
+      responses:
+        "200":
+          description: One latest saved balance per employee, excluding future months and overpayments
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayrollPayables" }
+        "409":
+          description: Historical payroll balances need explicit repair
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error: { type: string }
   /journal/payables:
     post:
       operationId: createEmployeePayable
@@ -3636,6 +3656,28 @@ components:
         paymentDate: { type: ["string", "null"] }
         secondPaidAmount: { type: number, minimum: 0 }
         secondPaymentDate: { type: ["string", "null"] }
+    PayrollPayable:
+      type: object
+      required: [employeeId, employeeName, month, date, remainingBalance, attendanceNeedsRefresh, closed]
+      properties:
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        month: { type: string }
+        date: { type: string }
+        remainingBalance: { type: number, minimum: 0 }
+        attendanceNeedsRefresh: { type: boolean }
+        closed: { type: boolean }
+    PayrollPayables:
+      type: object
+      required: [asOfMonth, hasSavedCalculation, totalOutstanding, employeeCount, lines]
+      properties:
+        asOfMonth: { type: string }
+        hasSavedCalculation: { type: boolean }
+        totalOutstanding: { type: number, minimum: 0 }
+        employeeCount: { type: integer, minimum: 0 }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/PayrollPayable" }
     PayrollSummary:
       type: object
       required: [month, periodStart, advancePeriodEnd, periodEnd, advancePaymentDate, finalPaymentDate, schedule, totalGross, totalSocialInsurance, totalIncomeTax, totalDeductions, totalNet, lines]

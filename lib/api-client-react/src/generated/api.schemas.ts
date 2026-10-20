@@ -960,6 +960,27 @@ export interface PayrollAdjustmentInput {
   secondPaymentDate?: string | null;
 }
 
+export interface PayrollPayable {
+  employeeId: number;
+  employeeName: string;
+  month: string;
+  date: string;
+  /** @minimum 0 */
+  remainingBalance: number;
+  attendanceNeedsRefresh: boolean;
+  closed: boolean;
+}
+
+export interface PayrollPayables {
+  asOfMonth: string;
+  hasSavedCalculation: boolean;
+  /** @minimum 0 */
+  totalOutstanding: number;
+  /** @minimum 0 */
+  employeeCount: number;
+  lines: PayrollPayable[];
+}
+
 export interface PayrollSchedule {
   id: number;
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])$ */
@@ -2878,6 +2899,10 @@ export const ListJournalReceivablesStatus = {
   settled: 'settled',
   all: 'all',
 } as const;
+
+export type GetPayrollPayables409 = {
+  error: string;
+};
 
 export type ListJournalPayablesParams = {
 status?: ListJournalPayablesStatus;
