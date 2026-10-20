@@ -457,7 +457,9 @@ describe("cash journal posting", () => {
     const suggestions = await response.json() as { id: number; amount: number; score: number }[];
     assert.deepEqual(suggestions.map((suggestion) => suggestion.id), [banks[0].id]);
     assert.equal(suggestions[0].amount, 321.5);
-    assert.equal(suggestions[0].score, 100);
+    // Shared token scoring includes the bank counterparty ("Employees"):
+    // two matching description tokens out of three, plus exact date and amount.
+    assert.equal(suggestions[0].score, 83.33);
   });
 
   it("rejects source-managed cash rows from the manual journal action", async () => {

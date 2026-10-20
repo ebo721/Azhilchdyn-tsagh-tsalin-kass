@@ -8,6 +8,8 @@
 
 export interface BankTransactionImportResult {
   /** @minimum 0 */
+  transferSuggestionCount?: number;
+  /** @minimum 0 */
   imported: number;
   /** @minimum 0 */
   skippedDuplicate: number;

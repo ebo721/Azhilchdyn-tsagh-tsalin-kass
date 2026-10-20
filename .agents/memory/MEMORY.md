@@ -27,6 +27,7 @@
 - [Bank-funded purchase groups](bank-funded-purchase-groups.md) — Full purchase totals must exactly match the bank; purchase dates may precede the payment date.
 - [Pending inventory purchases](pending-inventory-purchase-scope.md) — Unknown item details may await registration after financial posting; completion must reuse accounting and exactly match the bank.
 - [PostgreSQL schema fingerprint portability](postgres-schema-fingerprint-portability.md) — PG versions may expose NOT NULL as extra constraints; fingerprint nullability once, through column metadata.
+- [Migration test isolation](migration-test-isolation.md) — Rollback DDL belongs in an isolated schema; public DDL can deadlock with live accounting even inside a rolled-back transaction.
 - [Employee recipient accounts](employee-recipient-accounts.md) — Historical bank reconciliation is not permission to silently replace a saved salary-payment account.
 - [Integration fixture reconciliation](integration-fixture-reconciliation.md) — Parallel list requests can create expense mirrors for another suite's fixtures; clean owned dependencies first.
 - [Historical opening stock](inventory-opening-stock-scope.md) — Opening stock is not a new purchase or payment; financial opening journals need an explicit counteraccount.
@@ -37,4 +38,5 @@
 - [Inventory closing scope](inventory-closing-scope.md) — Only shortages become pending issues; no stock change before confirmation; distinguish last-price estimates from FIFO cost.
 - [User menu scope](user-menu-scope.md) — Per-user menus stay within existing role ceilings; menu selection must not grant new mutation rights or lock out administrators.
 - [Bank-sourced balances](bank-sourced-balances.md) — Direct bank receivables/payables use the stored transaction date and amount; new debt is distinct from repayment.
+- [Internal bank transfers](bank-internal-transfer-scope.md) — “Кассын данс” is a real bank account, not 1000 cash; first-stage pairing creates no journal or fee expense.
 - [Browser test pool lifetime](browser-test-pool-lifetime.md) — Run DB-backed browser specs separately until shared-pool teardown is worker-scoped.

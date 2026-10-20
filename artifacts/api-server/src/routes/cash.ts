@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { createServer } from "node:http";
+import { notInternalTransfer } from "../lib/bank-internal-transfer.js";
 import {
   CreateAttendanceBody,
   CreateShiftBody,
@@ -674,6 +675,7 @@ router.get("/cash/transactions/:id/bank-suggestions", async (req, res, next) => 
     const from = calendarDateOffset(date, -7);
     const to = calendarDateOffset(date, 8);
     const candidates = await db.select().from(bankTransactionsTable).where(and(
+      notInternalTransfer,
       eq(bankTransactionsTable.type, cash.type),
       isNull(bankTransactionsTable.cashTransactionId),
       isNull(bankTransactionsTable.transferredAt),

@@ -1,5 +1,12 @@
 import { Router, raw, type IRouter, type Response, type NextFunction } from "express";
 import { bankTransactionResponse as response } from "../lib/bank-transaction-response.js";
+import {
+  assertNotInternalTransfer, notInternalTransfer, transferFor, transferSuggestions, countTransferSuggestions, pairTransfer, unpairTransfer,
+} from "../lib/bank-internal-transfer.js";
+import {
+  ListBankTransferSuggestionsParams, ListBankTransferSuggestionsResponse,
+  PairBankTransferParams, PairBankTransferBody, PairBankTransferResponse, UnpairBankTransferParams,
+} from "@workspace/api-zod";
 import { createHash } from "node:crypto";
 import { inflateRawSync } from "node:zlib";
 import {
@@ -51,7 +58,7 @@ import {
   UpdateBankTransactionAccountResponse,
 } from "@workspace/api-zod";
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
-import { bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable, employeesTable, inventorySuppliersTable, journalEntriesTable, journalLinesTable, operatingExpensesTable, payablesTable, receivablesTable } from "@workspace/db";
+import { bankInternalTransfersTable, bankAccountsTable, bankTransactionsTable, cashClosuresTable, cashTransactionsTable, chartOfAccountsTable, db, deletionRequestsTable, employeesTable, inventorySuppliersTable, journalEntriesTable, journalLinesTable, operatingExpensesTable, payablesTable, receivablesTable } from "@workspace/db";
 import { getStaffSession } from "../lib/hr-session.js";
 import { syncOperatingExpenseForBankCash } from "../lib/operating-expense-sync.js";
 import { cashAccountForCategory } from "../lib/cash-account.js";
@@ -286,12 +293,14 @@ export async function readKapitronXlsx(buffer: Buffer) {
 }
 
 async function responseWithAccount(row: typeof bankTransactionsTable.$inferSelect) {
-  if (row.accountId === null) return response(row);
+  const pair = await transferFor(db, row.id);
+  const peerId = pair ? (pair.outBankTransactionId === row.id ? pair.inBankTransactionId : pair.outBankTransactionId) : null;
+  if (row.accountId === null) return response(row, null, null, peerId);
   const [account] = await db.select({
     code: chartOfAccountsTable.code,
     name: chartOfAccountsTable.name,
   }).from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, row.accountId));
-  return response(row, account?.code ?? null, account?.name ?? null);
+  return response(row, account?.code ?? null, account?.name ?? null, peerId);
 }
 
 export const isExcludedBankFee = (amount: number, description: string) => {
@@ -325,6 +334,36 @@ router.post("/bank-accounts", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+router.get("/bank-transactions/:id/transfer-suggestions", async (req, res, next) => {
+  try {
+    const session = await getStaffSession(req);
+    if (!session || !["admin", "accountant"].includes(session.role)) return void res.status(403).json({ error: "Зөвхөн админ, нягтлан хослуулах санал харна" });
+    const { id } = ListBankTransferSuggestionsParams.parse(req.params);
+    const suggestions = await transferSuggestions(id);
+    if (suggestions === null) return void res.status(404).json({ error: "Банкны гүйлгээ олдсонгүй" });
+    res.json(ListBankTransferSuggestionsResponse.parse(suggestions));
+  } catch (error) { next(error); }
+});
+router.post("/bank-transactions/:id/pair-transfer", async (req, res, next) => {
+  try {
+    const { id } = PairBankTransferParams.parse(req.params);
+    const { peerId } = PairBankTransferBody.parse(req.body);
+    const session = await getStaffSession(req);
+    if (!session || !["admin", "accountant"].includes(session.role)) return void res.status(403).json({ error: "Хослуулах эрхгүй" });
+    const pair = await pairTransfer(id, peerId, session.id);
+    if (!pair) return void res.status(404).json({ error: "Банкны гүйлгээ олдсонгүй" });
+    res.json(PairBankTransferResponse.parse(pair));
+  } catch (error) { next(error); }
+});
+router.delete("/bank-transactions/:id/pair-transfer", async (req, res, next) => {
+  try {
+    const { id } = UnpairBankTransferParams.parse(req.params);
+    const session = await getStaffSession(req);
+    if (!session || !["admin", "accountant"].includes(session.role)) return void res.status(403).json({ error: "Хос салгах эрхгүй" });
+    await unpairTransfer(id);
+    res.status(204).send();
+  } catch (error) { next(error); }
+});
 router.get("/bank-transactions", async (_req, res, next) => {
   try {
     const rows = await db.select({
@@ -340,8 +379,13 @@ router.get("/bank-transactions", async (_req, res, next) => {
         isNull(bankTransactionsTable.journalEntryId),
       ))
       .orderBy(desc(bankTransactionsTable.transactionAt), desc(bankTransactionsTable.id));
+    const pairs = await db.select().from(bankInternalTransfersTable);
+    const peers = new Map(pairs.flatMap(pair => [
+      [pair.outBankTransactionId, pair.inBankTransactionId] as const,
+      [pair.inBankTransactionId, pair.outBankTransactionId] as const,
+    ]));
     res.json(ListBankTransactionsResponse.parse(rows.map((row) =>
-      response(row.transaction, row.accountCode, row.accountName))));
+      response(row.transaction, row.accountCode, row.accountName, peers.get(row.transaction.id) ?? null))));
   } catch (error) { next(error); }
 });
 
@@ -354,6 +398,7 @@ router.get("/bank-transactions/journal-review", async (_req, res, next) => {
       }).from(bankTransactionsTable)
       .leftJoin(chartOfAccountsTable, eq(bankTransactionsTable.accountId, chartOfAccountsTable.id))
       .where(and(
+        notInternalTransfer,
         isNull(bankTransactionsTable.cashTransactionId),
         isNull(bankTransactionsTable.transferredAt),
         isNull(bankTransactionsTable.unclearAt),
@@ -538,6 +583,7 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
         .where(eq(bankTransactionsTable.id, id))
         .for("update");
       if (!bank) return "missing" as const;
+      await assertNotInternalTransfer(tx, bank.id);
       const repayments = bankRepayments(settlements, allocation, Number(bank.amount), bank.type);
       if (bank.journalEntryId !== null) {
         if (bank.cashTransactionId !== null && bank.accountId !== accountId) return "balance-conflict" as const;
@@ -767,6 +813,7 @@ router.post("/bank-transactions/:id/reject-suggestion", async (req, res, next) =
         .where(eq(bankTransactionsTable.id, id))
         .for("update");
       if (!bank) return "missing" as const;
+      await assertNotInternalTransfer(tx, bank.id);
       if (bank.cashTransactionId !== null || bank.transferredAt !== null || bank.unclearAt !== null || bank.journalEntryId !== null) {
         return "resolved" as const;
       }
@@ -800,6 +847,7 @@ router.patch("/bank-transactions/:id/account", async (req, res, next) => {
         .where(eq(bankTransactionsTable.id, id))
         .for("update");
       if (!bank) return "missing" as const;
+      await assertNotInternalTransfer(tx, bank.id);
       if (bank.cashTransactionId !== null || bank.transferredAt !== null || bank.unclearAt !== null || bank.journalEntryId !== null) {
         return "resolved" as const;
       }
@@ -911,7 +959,9 @@ router.post("/bank-transactions/import", raw({ type: "application/octet-stream",
         })
         : [];
     });
+    const transferSuggestionCount = await countTransferSuggestions(inserted.map(row => row.id));
     res.status(201).json(ImportKapitronBankTransactionsResponse.parse({
+      transferSuggestionCount,
       imported: inserted.length,
       skippedDuplicate: values.length - inserted.length,
       skippedZero,
@@ -930,6 +980,7 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
     const result = await db.transaction(async (tx) => {
       const [bank] = await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id)).for("update");
       if (!bank) return null;
+      await assertNotInternalTransfer(tx, bank.id);
       if (bank.cashTransactionId !== null || bank.transferredAt !== null) {
         if (bank.cashTransactionId !== null && bank.journalEntryId !== null) {
           const [linkedCash] = await tx.select({
@@ -1066,6 +1117,10 @@ router.get("/bank-transactions/:id/cash-suggestions", async (req, res, next) => 
       res.status(404).json({ error: "Банкны гүйлгээ олдсонгүй" });
       return;
     }
+    if (await transferFor(db, bank.id)) {
+      res.json(ListBankTransactionCashSuggestionsResponse.parse([]));
+      return;
+    }
     const bankDate = bank.transactionAt.toISOString().slice(0, 10);
     const candidates = await db.select().from(cashTransactionsTable).where(and(
       eq(cashTransactionsTable.type, bank.type),
@@ -1097,6 +1152,7 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
         .where(eq(bankTransactionsTable.id, id))
         .for("update");
       if (!bank) return "missing-bank" as const;
+      await assertNotInternalTransfer(tx, bank.id);
       const [cash] = await tx.select().from(cashTransactionsTable)
         .where(eq(cashTransactionsTable.id, cashTransactionId))
         .for("update");
@@ -1203,6 +1259,8 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
 router.delete("/bank-transactions/:id", async (req, res, next) => {
   try {
     const { id } = DeleteBankTransactionParams.parse(req.params);
+    // Return the pair conflict before the accountant deletion-approval gate too.
+    await assertNotInternalTransfer(db, id);
     const session = await getStaffSession(req);
     if (session?.role !== "admin") {
       const requestId = Number(req.header("x-deletion-request-id"));
@@ -1217,6 +1275,7 @@ router.delete("/bank-transactions/:id", async (req, res, next) => {
         .where(eq(bankTransactionsTable.id, id))
         .for("update");
       if (!existing) return "missing" as const;
+      await assertNotInternalTransfer(tx, existing.id);
       if (existing.transferredAt || existing.cashTransactionId || existing.journalEntryId) {
         return "resolved" as const;
       }
@@ -1243,7 +1302,7 @@ router.get("/unclear-transactions", async (req, res, next) => {
       return;
     }
     const [banks, cash] = await Promise.all([
-      db.select().from(bankTransactionsTable).where(isNotNull(bankTransactionsTable.unclearAt)).orderBy(desc(bankTransactionsTable.unclearAt)),
+      db.select().from(bankTransactionsTable).where(and(notInternalTransfer, isNotNull(bankTransactionsTable.unclearAt))).orderBy(desc(bankTransactionsTable.unclearAt)),
       db.select().from(cashTransactionsTable).where(isNotNull(cashTransactionsTable.unclearAt)).orderBy(desc(cashTransactionsTable.unclearAt)),
     ]);
     const rows = [
@@ -1271,7 +1330,13 @@ router.post("/unclear-transactions/:source/:id", async (req, res, next) => {
     }
     const { source, id } = MarkTransactionUnclearParams.parse(req.params);
     const table = source === "bank" ? bankTransactionsTable : cashTransactionsTable;
-    const [updated] = await db.update(table).set({ unclearAt: new Date() }).where(eq(table.id, id)).returning({ id: table.id });
+    const updated = await db.transaction(async tx => {
+      const [row] = await tx.select().from(table).where(eq(table.id, id)).for("update");
+      if (!row) return null;
+      if (source === "bank") await assertNotInternalTransfer(tx, id);
+      const [changed] = await tx.update(table).set({ unclearAt: new Date() }).where(eq(table.id, id)).returning({ id: table.id });
+      return changed;
+    });
     if (!updated) {
       res.status(404).json({ error: "Гүйлгээ олдсонгүй" });
       return;

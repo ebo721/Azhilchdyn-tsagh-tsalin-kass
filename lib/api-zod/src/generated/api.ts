@@ -8,6 +8,63 @@
 import * as zod from 'zod';
 
 
+export const listBankTransferSuggestionsPathIdMax = 2147483647;
+
+
+
+export const ListBankTransferSuggestionsParams = zod.object({
+  "id": zod.coerce.number().int().min(1).max(listBankTransferSuggestionsPathIdMax)
+})
+
+export const ListBankTransferSuggestionsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "transactionAt": zod.coerce.date(),
+  "amount": zod.number(),
+  "description": zod.string(),
+  "bankAccountId": zod.number().int(),
+  "bankName": zod.string(),
+  "bankAccountNumber": zod.string(),
+  "score": zod.number().int(),
+  "feeAmount": zod.number()
+})
+export const ListBankTransferSuggestionsResponse = zod.array(ListBankTransferSuggestionsResponseItem)
+
+
+export const pairBankTransferPathIdMax = 2147483647;
+
+
+
+export const PairBankTransferParams = zod.object({
+  "id": zod.coerce.number().int().min(1).max(pairBankTransferPathIdMax)
+})
+
+export const pairBankTransferBodyPeerIdMax = 2147483647;
+
+
+
+export const PairBankTransferBody = zod.object({
+  "peerId": zod.number().int().min(1).max(pairBankTransferBodyPeerIdMax)
+})
+
+export const PairBankTransferResponse = zod.object({
+  "id": zod.number().int(),
+  "outBankTransactionId": zod.number().int(),
+  "inBankTransactionId": zod.number().int(),
+  "feeAmount": zod.number()
+})
+
+
+export const unpairBankTransferPathIdMax = 2147483647;
+
+
+
+export const UnpairBankTransferParams = zod.object({
+  "id": zod.coerce.number().int().min(1).max(unpairBankTransferPathIdMax)
+})
+
+export const UnpairBankTransferResponse = zod.void()
+
+
 export const ListInventoryCustodiansResponseItem = zod.object({
   "id": zod.number().int(),
   "name": zod.string()
@@ -2002,7 +2059,8 @@ export const GetCashTransactionDetailParams = zod.object({
 })
 
 export const getCashTransactionDetailResponseCashTransactionIncomeMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
-
+export const getCashTransactionDetailResponseBankTransactionOneInternalTransferDefault = false;
+export const getCashTransactionDetailResponseBankTransactionOneTransferPeerIdDefault = null;
 
 export const GetCashTransactionDetailResponse = zod.object({
   "cashTransaction": zod.object({
@@ -2042,7 +2100,9 @@ export const GetCashTransactionDetailResponse = zod.object({
   "bankAccountId": zod.number().int().nullable(),
   "bankName": zod.string().nullable(),
   "bankAccountNumber": zod.string().nullable(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "internalTransfer": zod.boolean().default(getCashTransactionDetailResponseBankTransactionOneInternalTransferDefault),
+  "transferPeerId": zod.number().int().nullish().default(getCashTransactionDetailResponseBankTransactionOneTransferPeerIdDefault)
 }),zod.null()])
 })
 
@@ -2218,6 +2278,9 @@ export const CloseCashDayResponse = zod.object({
 /**
  * @summary List imported bank transactions
  */
+export const listBankTransactionsResponseInternalTransferDefault = false;
+export const listBankTransactionsResponseTransferPeerIdDefault = null;
+
 export const ListBankTransactionsResponseItem = zod.object({
   "id": zod.number().int(),
   "transactionAt": zod.coerce.date(),
@@ -2236,7 +2299,9 @@ export const ListBankTransactionsResponseItem = zod.object({
   "bankAccountId": zod.number().int().nullable(),
   "bankName": zod.string().nullable(),
   "bankAccountNumber": zod.string().nullable(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "internalTransfer": zod.boolean().default(listBankTransactionsResponseInternalTransferDefault),
+  "transferPeerId": zod.number().int().nullish().default(listBankTransactionsResponseTransferPeerIdDefault)
 })
 export const ListBankTransactionsResponse = zod.array(ListBankTransactionsResponseItem)
 
@@ -2590,6 +2655,9 @@ export const UpdateBankTransactionAccountBody = zod.object({
   "accountId": zod.number().int().min(1).nullable()
 })
 
+export const updateBankTransactionAccountResponseInternalTransferDefault = false;
+export const updateBankTransactionAccountResponseTransferPeerIdDefault = null;
+
 export const UpdateBankTransactionAccountResponse = zod.object({
   "id": zod.number().int(),
   "transactionAt": zod.coerce.date(),
@@ -2608,7 +2676,9 @@ export const UpdateBankTransactionAccountResponse = zod.object({
   "bankAccountId": zod.number().int().nullable(),
   "bankName": zod.string().nullable(),
   "bankAccountNumber": zod.string().nullable(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "internalTransfer": zod.boolean().default(updateBankTransactionAccountResponseInternalTransferDefault),
+  "transferPeerId": zod.number().int().nullish().default(updateBankTransactionAccountResponseTransferPeerIdDefault)
 })
 
 
@@ -2656,6 +2726,9 @@ export const ImportKapitronBankTransactionsQueryParams = zod.object({
   "bankAccountId": zod.coerce.number().int().min(1)
 })
 
+export const importKapitronBankTransactionsResponseTransferSuggestionCountDefault = 0;
+export const importKapitronBankTransactionsResponseTransferSuggestionCountMin = 0;
+
 export const importKapitronBankTransactionsResponseImportedMin = 0;
 
 export const importKapitronBankTransactionsResponseSkippedDuplicateMin = 0;
@@ -2672,6 +2745,7 @@ export const importKapitronBankTransactionsResponseUnrecognizedMin = 0;
 
 
 export const ImportKapitronBankTransactionsResponse = zod.object({
+  "transferSuggestionCount": zod.number().int().min(importKapitronBankTransactionsResponseTransferSuggestionCountMin).default(importKapitronBankTransactionsResponseTransferSuggestionCountDefault),
   "imported": zod.number().int().min(importKapitronBankTransactionsResponseImportedMin),
   "skippedDuplicate": zod.number().int().min(importKapitronBankTransactionsResponseSkippedDuplicateMin),
   "skippedZero": zod.number().int().min(importKapitronBankTransactionsResponseSkippedZeroMin),
@@ -2696,6 +2770,9 @@ export const TransferBankTransactionToCashBody = zod.object({
   "incomeMonth": zod.string().regex(transferBankTransactionToCashBodyIncomeMonthRegExp).nullable()
 })
 
+export const transferBankTransactionToCashResponseInternalTransferDefault = false;
+export const transferBankTransactionToCashResponseTransferPeerIdDefault = null;
+
 export const TransferBankTransactionToCashResponse = zod.object({
   "id": zod.number().int(),
   "transactionAt": zod.coerce.date(),
@@ -2714,7 +2791,9 @@ export const TransferBankTransactionToCashResponse = zod.object({
   "bankAccountId": zod.number().int().nullable(),
   "bankName": zod.string().nullable(),
   "bankAccountNumber": zod.string().nullable(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "internalTransfer": zod.boolean().default(transferBankTransactionToCashResponseInternalTransferDefault),
+  "transferPeerId": zod.number().int().nullish().default(transferBankTransactionToCashResponseTransferPeerIdDefault)
 })
 
 
@@ -2758,6 +2837,9 @@ export const LinkBankTransactionToCashBody = zod.object({
   "cashTransactionId": zod.number().int().min(1)
 })
 
+export const linkBankTransactionToCashResponseInternalTransferDefault = false;
+export const linkBankTransactionToCashResponseTransferPeerIdDefault = null;
+
 export const LinkBankTransactionToCashResponse = zod.object({
   "id": zod.number().int(),
   "transactionAt": zod.coerce.date(),
@@ -2776,7 +2858,9 @@ export const LinkBankTransactionToCashResponse = zod.object({
   "bankAccountId": zod.number().int().nullable(),
   "bankName": zod.string().nullable(),
   "bankAccountNumber": zod.string().nullable(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "internalTransfer": zod.boolean().default(linkBankTransactionToCashResponseInternalTransferDefault),
+  "transferPeerId": zod.number().int().nullish().default(linkBankTransactionToCashResponseTransferPeerIdDefault)
 })
 
 

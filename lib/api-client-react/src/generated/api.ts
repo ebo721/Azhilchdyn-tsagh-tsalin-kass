@@ -57,6 +57,9 @@ import type {
   BankTransactionJournalPostInput,
   BankTransactionJournalPostResult,
   BankTransactionJournalReviewItem,
+  BankTransferInput,
+  BankTransferResult,
+  BankTransferSuggestion,
   CashBankSuggestion,
   CashClosure,
   CashClosureInput,
@@ -213,6 +216,208 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getListBankTransferSuggestionsUrl = (id: number,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}/transfer-suggestions`
+}
+
+export const listBankTransferSuggestions = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<BankTransferSuggestion[]> => {
+
+  return customFetch<BankTransferSuggestion[]>(getListBankTransferSuggestionsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListBankTransferSuggestionsQueryKey = (id: number,) => {
+    return [
+    `/api/bank-transactions/${id}/transfer-suggestions`
+    ] as const;
+    }
+
+
+export const getListBankTransferSuggestionsQueryOptions = <TData = Awaited<ReturnType<typeof listBankTransferSuggestions>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankTransferSuggestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListBankTransferSuggestionsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBankTransferSuggestions>>> = ({ signal }) => listBankTransferSuggestions(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBankTransferSuggestions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListBankTransferSuggestionsQueryResult = NonNullable<Awaited<ReturnType<typeof listBankTransferSuggestions>>>
+export type ListBankTransferSuggestionsQueryError = ErrorType<unknown>
+
+
+
+export function useListBankTransferSuggestions<TData = Awaited<ReturnType<typeof listBankTransferSuggestions>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankTransferSuggestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListBankTransferSuggestionsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getPairBankTransferUrl = (id: number,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}/pair-transfer`
+}
+
+export const pairBankTransfer = async (id: number,
+    bankTransferInput: BankTransferInput, options?: Parameters<typeof customFetch>[1]): Promise<BankTransferResult> => {
+
+  return customFetch<BankTransferResult>(getPairBankTransferUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bankTransferInput)
+  }
+);}
+
+
+
+
+
+export const getPairBankTransferMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pairBankTransfer>>, TError,{id: number;data: BodyType<BankTransferInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof pairBankTransfer>>, TError,{id: number;data: BodyType<BankTransferInput>}, TContext> => {
+
+const mutationKey = ['pairBankTransfer'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof pairBankTransfer>>, {id: number;data: BodyType<BankTransferInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  pairBankTransfer(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PairBankTransferMutationResult = NonNullable<Awaited<ReturnType<typeof pairBankTransfer>>>
+    export type PairBankTransferMutationBody = BodyType<BankTransferInput>
+    export type PairBankTransferMutationError = ErrorType<unknown>
+
+    export const usePairBankTransfer = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pairBankTransfer>>, TError,{id: number;data: BodyType<BankTransferInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof pairBankTransfer>>,
+        TError,
+        {id: number;data: BodyType<BankTransferInput>},
+        TContext
+      > => {
+      return useMutation(getPairBankTransferMutationOptions(options));
+    }
+
+export const getUnpairBankTransferUrl = (id: number,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}/pair-transfer`
+}
+
+export const unpairBankTransfer = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getUnpairBankTransferUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getUnpairBankTransferMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unpairBankTransfer>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unpairBankTransfer>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['unpairBankTransfer'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unpairBankTransfer>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  unpairBankTransfer(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnpairBankTransferMutationResult = NonNullable<Awaited<ReturnType<typeof unpairBankTransfer>>>
+
+    export type UnpairBankTransferMutationError = ErrorType<unknown>
+
+    export const useUnpairBankTransfer = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unpairBankTransfer>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unpairBankTransfer>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getUnpairBankTransferMutationOptions(options));
+    }
 
 export const getListInventoryCustodiansUrl = () => {
 

@@ -9,7 +9,7 @@ import { cashAccountForCategory } from "./cash-account.js";
 import { checkBankLinkEligibility } from "./bank-link-eligibility.js";
 import { lockCashDate } from "./cash-date-lock.js";
 import { inventoryMaterialLabel, inventoryPurchaseAccount, money } from "./route-shared.js";
-import { postJournalEntry, voidJournalEntry } from "./journal-posting.js";
+import { postJournalEntry, reassignJournalSource, voidJournalEntry } from "./journal-posting.js";
 import { pendingPurchaseKey } from "./pending-inventory-purchases.js";
 import { inventoryCustodian } from "./inventory-custodian.js";
 
@@ -351,8 +351,7 @@ export async function linkBankPurchase(id: number, input: PurchaseInput, complet
       await tx.update(cashTransactionsTable).set({
         sourceType: "inventory_purchase", sourceKey: `purchase:${purchase.id}`, description: purchase.documentName,
       }).where(eq(cashTransactionsTable.id, pendingCash.id));
-      await tx.update(journalEntriesTable).set({ sourceType: "inventory_purchase", sourceId: purchase.id })
-        .where(eq(journalEntriesTable.id, pendingCash.journalEntryId!));
+      await reassignJournalSource(tx, { journalEntryId: pendingCash.journalEntryId!, sourceType: "inventory_purchase", sourceId: purchase.id });
       // Match the existing single-purchase lifecycle: the cash row owns its journal.
       await tx.update(bankTransactionsTable).set({ journalEntryId: null }).where(eq(bankTransactionsTable.id, id));
       await tx.update(inventoryPurchasesTable).set({ paymentDate: date, paymentAmount: amount })

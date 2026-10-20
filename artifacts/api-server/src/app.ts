@@ -9,6 +9,7 @@ import { PayrollConfigurationError } from "./lib/shift-insurance.js";
 import { PayrollBalancesNotReadyError } from "./lib/payroll-balance-store.js";
 import { PayrollSnapshotMissingError } from "./lib/payroll-attendance-snapshot.js";
 import { PayrollClosureConflict } from "./lib/payroll-month-close.js";
+import { InternalTransferError } from "./lib/bank-internal-transfer.js";
 
 type PinoHttpFactory = (options?: Record<string, unknown>) => HttpLogger;
 
@@ -48,6 +49,10 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api", router);
 
 const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
+  if (error instanceof InternalTransferError) {
+    res.status(409).json({ error: error.message });
+    return;
+  }
   const pgError = error?.cause ?? error;
   if (error instanceof PayrollClosureConflict || pgError?.code === "PCL01") {
     res.status(409).json({ error: error instanceof PayrollClosureConflict ? error.message : pgError.message });
