@@ -182,14 +182,10 @@ import {
 } from '@workspace/api-client-react';
 
 import { EmptyState, ErrorBlock, LoadingBlock, Modal, PageHeading, StatCard } from '@/components/ui-primitives';
-import { currentMonth, dateLabel, money, shiftMonth, today } from '@/lib/app-shared';
+import { currentMonth, dateLabel, money, mongolianMonthLabel, shiftMonth, today } from '@/lib/app-shared';
 import { BankArApForm, BankArApOpenButton } from '@/components/BankArApForm';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
 import { CashTransactionDetailDialog } from '@/components/CashTransactionDetailDialog';
-const mongolianMonthLabel = (value: string) => {
-  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value);
-  return match ? `${match[1]} он ${Number(match[2])} сар` : value;
-};
 type CashForm = { type: 'income' | 'expense'; category: string; description: string; amount: string; date: string; incomeMonth: string };
 const CASH_EXPENSE_CATEGORIES = ['Цалин', 'Хүнсний бараа материал', 'Хангамжийн материал', 'Эд хөрөнгө', 'Үйл ажиллагааны зардал'] as const;
 

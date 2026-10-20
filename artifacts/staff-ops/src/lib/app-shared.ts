@@ -13,6 +13,10 @@ export const dateLabel = (value: string) => {
 
 export const today = () => new Date().toISOString().slice(0, 10);
 export const currentMonth = () => new Date().toISOString().slice(0, 7);
+export const mongolianMonthLabel = (value: string) => {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value);
+  return match ? `${match[1]} он ${Number(match[2])} сар` : value;
+};
 export const shiftMonth = (month: string, amount: number) => {
   const [year, monthNumber] = month.split('-').map(Number);
   const date = new Date(year, monthNumber - 1 + amount, 1);

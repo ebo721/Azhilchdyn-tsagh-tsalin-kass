@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { cn } from '@/lib/utils';
 import { EmptyState, ErrorBlock, LoadingBlock, Modal, PageHeading } from '@/components/ui-primitives';
-import { Pencil, Plus, Receipt, Trash2 } from 'lucide-react';
+import { CalendarDays, ChevronRight, Pencil, Plus, Receipt, Trash2 } from 'lucide-react';
 import {
   getGetCashSummaryQueryKey, getListBankTransactionsQueryKey, getListCashTransactionsQueryKey,
   getListChartOfAccountsQueryKey, getListOperatingExpensePaymentBankSuggestionsQueryKey, getListOperatingExpensesQueryKey,
@@ -13,7 +13,7 @@ import {
   useListChartOfAccounts, useListOperatingExpensePaymentBankSuggestions, useListOperatingExpenses, useUpdateOperatingExpense,
   type OperatingExpense,
 } from '@workspace/api-client-react';
-import { money, today } from '@/lib/app-shared';
+import { currentMonth, money, mongolianMonthLabel, shiftMonth, today } from '@/lib/app-shared';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
 import { ExpenseAccountingBadge, ExpenseAccountingSummary, type AccountingFilter } from '@/components/ExpenseAccountingStatus';
 
@@ -126,9 +126,13 @@ export function OperatingExpenses() {
   const [editing, setEditing] = useState<OperatingExpense | 'new' | null>(null);
   const [paying, setPaying] = useState<OperatingExpense | null>(null);
   const [filterAccountId, setFilterAccountId] = useState('all');
+  const [filterMonth, setFilterMonth] = useState(currentMonth());
   const [filterAccounting, setFilterAccounting] = useState<AccountingFilter>('all');
   const accountById = useMemo(() => new Map((accounts.data ?? []).map((account) => [account.id, account])), [accounts.data]);
-  const accountExpenses = (query.data ?? []).filter((expense) => filterAccountId === 'all' || String(expense.accountId) === filterAccountId);
+  const accountExpenses = (query.data ?? [])
+    .filter(expense => expense.date.startsWith(`${filterMonth}-`)
+      && (filterAccountId === 'all' || String(expense.accountId) === filterAccountId))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
   const filteredExpenses = accountExpenses.filter(expense => filterAccounting === 'all' || expense.accountingStatus === filterAccounting);
 
   const remove = (expense: OperatingExpense) => {
@@ -147,10 +151,18 @@ export function OperatingExpenses() {
   return (
     <div className="page-enter space-y-6">
       <PageHeading title="Үйл ажиллагааны зардал" detail="Байгууллагын тогтмол болон бусад үйл ажиллагааны зардлын бүртгэл." action={!isViewer && <Button onClick={() => setEditing('new')} disabled={!accounts.data?.some((account) => account.type === 'expense')} data-testid="button-add-expense"><Plus className="mr-2 size-4" />Зардал нэмэх</Button>} />
-      {!query.isLoading && !query.isError && query.data?.length ? <>
-        <div className="flex justify-end"><label className="w-full space-y-1 text-xs font-semibold sm:w-auto">Зардлын данс<select value={filterAccountId} onChange={(event) => setFilterAccountId(event.target.value)} className="block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary sm:min-w-64" data-testid="select-operating-expense-category"><option value="all">Бүх данс</option>{(accounts.data ?? []).filter((account) => account.type === 'expense').map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></label></div>
-        <ExpenseAccountingSummary expenses={accountExpenses} selected={filterAccounting} onChange={setFilterAccounting} />
-      </> : null}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1">
+          <span className="block text-xs font-semibold">Сар</span>
+          <div className="flex w-fit items-center overflow-hidden rounded-lg border border-input bg-background">
+            <button type="button" onClick={() => setFilterMonth(value => shiftMonth(value, -1))} className="grid size-10 place-items-center border-r border-border text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label="Өмнөх сар" data-testid="button-expense-previous-month"><ChevronRight className="size-4 rotate-180" /></button>
+            <div className="flex items-center gap-2 px-3"><CalendarDays className="size-4 text-primary" /><label className="relative flex h-10 min-w-28 cursor-pointer items-center text-sm font-medium"><span>{mongolianMonthLabel(filterMonth)}</span><input type="month" value={filterMonth} onChange={event => { if (/^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value)) setFilterMonth(event.target.value); }} className="absolute inset-0 cursor-pointer opacity-0" aria-label="Үйл ажиллагааны зардлын сар сонгох" data-testid="input-expense-filter-month" /></label></div>
+            <button type="button" onClick={() => setFilterMonth(value => shiftMonth(value, 1))} className="grid size-10 place-items-center border-l border-border text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label="Дараагийн сар" data-testid="button-expense-next-month"><ChevronRight className="size-4" /></button>
+          </div>
+        </div>
+        {!query.isLoading && !query.isError && query.data?.length ? <label className="w-full space-y-1 text-xs font-semibold sm:w-auto">Зардлын данс<select value={filterAccountId} onChange={(event) => setFilterAccountId(event.target.value)} className="block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary sm:min-w-64" data-testid="select-operating-expense-category"><option value="all">Бүх данс</option>{(accounts.data ?? []).filter((account) => account.type === 'expense').map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></label> : null}
+      </div>
+      {!query.isLoading && !query.isError && query.data?.length ? <ExpenseAccountingSummary expenses={accountExpenses} selected={filterAccounting} onChange={setFilterAccounting} /> : null}
       {query.isLoading ? <div className="space-y-4"><LoadingBlock className="h-16" /><LoadingBlock className="h-16" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : query.data?.length ? (
         <div className="overflow-x-auto rounded-2xl border border-border bg-card">
           <table className="w-full text-left text-sm" data-testid="table-expenses">
@@ -187,7 +199,7 @@ export function OperatingExpenses() {
                   </td>}
                 </tr>
               ))}
-              {!filteredExpenses.length && <tr><td colSpan={isViewer ? 6 : 7} className="px-5 py-10 text-center text-sm text-muted-foreground">Сонгосон данс болон бичилтийн төлөвт тохирох зардал алга.</td></tr>}
+              {!filteredExpenses.length && <tr><td colSpan={isViewer ? 6 : 7} className="px-5 py-10 text-center text-sm text-muted-foreground">Сонгосон сар, данс болон бичилтийн төлөвт тохирох зардал алга.</td></tr>}
             </tbody>
           </table>
         </div>
