@@ -5,7 +5,9 @@ export const bankTransactionResponse = (
   row: typeof bankTransactionsTable.$inferSelect,
   accountCode: string | null = null,
   accountName: string | null = null,
+  transferPeerId: number | null = null,
 ) => ({
+  internalTransfer: transferPeerId !== null, transferPeerId,
   id: row.id, transactionAt: row.transactionAt.toISOString(), type: row.type as "income" | "expense",
   amount: Number(row.amount), accountId: row.accountId, accountCode, accountName,
   account: row.account, counterparty: row.counterparty, description: row.description,

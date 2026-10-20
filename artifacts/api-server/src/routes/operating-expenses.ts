@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { createServer } from "node:http";
+import { assertNotInternalTransfer, notInternalTransfer } from "../lib/bank-internal-transfer.js";
 import {
   CreateAttendanceBody,
   CreateShiftBody,
@@ -259,6 +260,7 @@ router.get("/operating-expenses/:id/payment-bank-suggestions", async (req, res, 
     const start = new Date(`${expense.date}T00:00:00.000Z`); start.setUTCDate(start.getUTCDate() - 7);
     const end = new Date(`${expense.date}T23:59:59.999Z`); end.setUTCDate(end.getUTCDate() + 7);
     const banks = await db.select().from(bankTransactionsTable).where(and(
+      notInternalTransfer,
       eq(bankTransactionsTable.type, "expense"), isNull(bankTransactionsTable.cashTransactionId),
       isNull(bankTransactionsTable.transferredAt), isNull(bankTransactionsTable.unclearAt),
       gte(bankTransactionsTable.transactionAt, start), lte(bankTransactionsTable.transactionAt, end),
@@ -289,6 +291,7 @@ router.put("/operating-expenses/:id/payment", async (req, res, next) => {
       if (input.bankTransactionId) {
         const [bank] = await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, input.bankTransactionId)).for("update");
         if (!bank) return "bank_missing" as const;
+        await assertNotInternalTransfer(tx, bank.id);
         const bankDate = calendarDateText(bank.transactionAt);
         if (bank.type !== "expense" || bankDate !== input.date || Number(bank.amount) !== Number(input.amount) || bank.cashTransactionId || bank.transferredAt || bank.unclearAt) return "bank_conflict" as const;
       }

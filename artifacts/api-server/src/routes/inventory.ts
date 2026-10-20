@@ -6,6 +6,7 @@ import { inventoryClosingBalancesTable } from "@workspace/db";
 import { inventoryCustodianEmployeesTable, usersTable } from "@workspace/db";
 import { InventoryCustodianError, inventoryCustodian } from "../lib/inventory-custodian.js";
 import { ListInventoryCustodiansResponse } from "@workspace/api-zod";
+import { assertNotInternalTransfer, notInternalTransfer } from "../lib/bank-internal-transfer.js";
 import {
   ListPendingInventoryPurchasesResponse, RegisterPendingInventoryPurchaseParams,
   RegisterPendingInventoryPurchaseBody, RegisterPendingInventoryPurchaseResponse,
@@ -996,6 +997,7 @@ router.get("/inventory/purchases/:id/payment-bank-suggestions", async (req, res,
       return;
     }
     const candidates = await db.select().from(bankTransactionsTable).where(and(
+      notInternalTransfer,
       eq(bankTransactionsTable.type, "expense"),
       isNull(bankTransactionsTable.cashTransactionId),
       isNull(bankTransactionsTable.transferredAt),
@@ -1057,9 +1059,10 @@ router.put("/inventory/purchases/:id/payment", async (req, res, next) => {
       ));
       const [bank] = input.bankTransactionId == null
         ? []
-        : await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, input.bankTransactionId));
+        : await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, input.bankTransactionId)).for("update");
       if (input.bankTransactionId != null) {
         if (!bank) return "bank_missing" as const;
+        await assertNotInternalTransfer(tx, bank.id);
         const bankDate = bank.transactionAt.toISOString().slice(0, 10);
         if (money(input.amount) !== money(Number(currentPurchase.totalAmount))) return "bank_mismatch" as const;
         if (bank.type !== "expense" || bank.unclearAt !== null || bankDate !== input.date || money(Number(bank.amount)) !== money(input.amount)) {

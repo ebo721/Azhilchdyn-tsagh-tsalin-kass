@@ -9,6 +9,7 @@ import { money } from '@/lib/app-shared';
 import { bankDateTimeLabel } from './Cash';
 import { BankArApForm, BankArApOpenButton } from '@/components/BankArApForm';
 import { BankDocumentLinkPanel } from '@/components/BankDocumentLinkPanel';
+import { InternalTransferDialog, InternalTransferOpenButton } from '@/components/InternalTransfer';
 import { BankPendingPurchaseButton } from '@/components/BankPendingPurchaseButton';
 import {
   useListBankTransactionJournalReview,
@@ -48,6 +49,7 @@ export function BankTransactionJournalReview() {
   const linkPurchase = useLinkBankTransactionPurchase();
 
   const [selectedAccounts, setSelectedAccounts] = useState<Record<number, number>>({});
+  const [transferRow, setTransferRow] = useState<BankTransactionJournalReviewItem | null>(null);
   const [debtRow, setDebtRow] = useState<BankTransactionJournalReviewItem | null>(null);
   const [debtMode, setDebtMode] = useState<'create' | 'settle'>('create');
   const [linkingRowId, setLinkingRowId] = useState<number | null>(null);
@@ -213,7 +215,7 @@ export function BankTransactionJournalReview() {
       ) : (
         <div className="mt-6 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
           <div className="divide-y divide-border">
-            {list.data.map(row => {
+            {list.data.filter((r) => !(r as { internalTransfer?: boolean }).internalTransfer).map(row => {
               const isIncome = row.type === BankTransactionJournalReviewItemType.income;
               const hasSuggestion = row.suggestedAccountId !== null;
               
@@ -320,6 +322,7 @@ export function BankTransactionJournalReview() {
                             Бараа материал, хангамжийн зарлагад худалдан авалтын баримт заавал холбох эсвэл шинээр үүсгэнэ. Ингэснээр касс, худалдан авалт, журнал хамт бүртгэгдэнэ. Бусад ангиллыг зөвхөн журналд шивэхэд эдгээр жагсаалтад мөр нэмэгдэхгүй.
                           </p>
                         )}
+                        <InternalTransferOpenButton row={row} onOpen={() => setTransferRow(row)} disabled={isPending} />
                         <BankArApOpenButton row={row} onOpen={() => { setDebtMode('create'); setDebtRow(row); }} disabled={isPending} />
                         {!isIncome && purchaseMaterialType(selectedAccounts[row.id] || row.suggestedAccountId) && <BankPendingPurchaseButton id={row.id} accountId={(selectedAccounts[row.id] || row.suggestedAccountId)!} disabled={isPending} />}
                         <BankArApOpenButton mode="settle" row={row} onOpen={() => { setDebtMode('settle'); setDebtRow(row); }} disabled={isPending} />
@@ -370,6 +373,7 @@ export function BankTransactionJournalReview() {
           </div>
         </div>
       )}
+      {transferRow && <InternalTransferDialog row={transferRow} onClose={() => setTransferRow(null)} />}
       {debtRow && <BankArApForm mode={debtMode} row={debtRow} onClose={() => setDebtRow(null)} />}
     </div>
   );

@@ -5,6 +5,7 @@ import {
   boolean,
   check,
   date,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -397,6 +398,20 @@ export const bankTransactionsTable = pgTable("bank_transactions", {
   uniqueIndex("bank_transactions_fingerprint_idx").on(table.fingerprint),
   uniqueIndex("bank_transactions_cash_transaction_idx").on(table.cashTransactionId),
   index("bank_transactions_account_id_idx").on(table.accountId),
+]);
+
+export const bankInternalTransfersTable = pgTable("bank_internal_transfers", {
+  id: serial("id").primaryKey(),
+  outBankTransactionId: integer("out_bank_transaction_id").notNull().unique("bank_internal_transfers_out_bank_transaction_id_key"),
+  inBankTransactionId: integer("in_bank_transaction_id").notNull().unique("bank_internal_transfers_in_bank_transaction_id_key"),
+  feeAmount: numeric("fee_amount", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
+  createdBy: integer("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  foreignKey({ name: "bank_internal_transfers_out_bank_transaction_id_fkey", columns: [table.outBankTransactionId], foreignColumns: [bankTransactionsTable.id] }).onDelete("restrict"),
+  foreignKey({ name: "bank_internal_transfers_in_bank_transaction_id_fkey", columns: [table.inBankTransactionId], foreignColumns: [bankTransactionsTable.id] }).onDelete("restrict"),
+  check("bank_internal_transfers_fee_check", sql`${table.feeAmount} >= 0`),
+  check("bank_internal_transfers_distinct_check", sql`${table.outBankTransactionId} <> ${table.inBankTransactionId}`),
 ]);
 
 export const inventoryPurchasesTable = pgTable("inventory_purchases", {

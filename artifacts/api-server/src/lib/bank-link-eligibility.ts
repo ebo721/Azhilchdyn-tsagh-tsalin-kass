@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { bankTransactionsTable, cashClosuresTable, chartOfAccountsTable } from "@workspace/db";
 import { inventoryPurchaseAccountCodes, type Tx } from "./route-shared.js";
+import { assertNotInternalTransfer } from "./bank-internal-transfer.js";
 
 type BankRow = typeof bankTransactionsTable.$inferSelect;
 type LinkTarget = "cash" | "purchase" | "expense" | "fixed_asset";
@@ -16,6 +17,7 @@ export async function checkBankLinkEligibility(
   target: LinkTarget,
   cashDate?: string,
 ): Promise<{ issue: LinkIssue | null; closed: boolean }> {
+  await assertNotInternalTransfer(tx, bank.id);
   if ((target !== "cash" && bank.type !== "expense")
     || bank.cashTransactionId !== null
     || bank.transferredAt !== null

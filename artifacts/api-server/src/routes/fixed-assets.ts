@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { notInternalTransfer } from "../lib/bank-internal-transfer.js";
 import {
   CreateFixedAssetBody,
   CreateFixedAssetResponse,
@@ -113,6 +114,7 @@ router.get("/fixed-assets/bank-suggestions", async (req, res, next) => {
       .leftJoin(chartOfAccountsTable, eq(bankTransactionsTable.accountId, chartOfAccountsTable.id))
       .where(and(
         eq(bankTransactionsTable.type, "expense"),
+        notInternalTransfer,
         eq(bankTransactionsTable.amount, money(amount)),
         isNull(bankTransactionsTable.cashTransactionId),
         isNull(bankTransactionsTable.transferredAt),

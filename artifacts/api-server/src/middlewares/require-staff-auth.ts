@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, deletionRequestsTable } from "@workspace/db";
 import { getStaffSession, type StaffRole } from "../lib/hr-session.js";
 import { bankDocumentLookupMenu, canUseMenuApi } from "../lib/staff-menu-access.js";
+import { internalTransferMessage, transferFor } from "../lib/bank-internal-transfer.js";
 const requireStaffAuth: RequestHandler = async (req, res, next) => {
   const session = await getStaffSession(req);
   if (!session) {
@@ -69,11 +70,22 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
     next();
     return;
   }
+  const bankDelete = /^\/bank-transactions\/([1-9]\d*)\/?$/.exec(req.path);
+  if (req.method === "DELETE" && bankDelete && ["admin", "accountant"].includes(session.role)
+    && await transferFor(db, Number(bankDelete[1]))) {
+    res.status(409).json({ error: internalTransferMessage });
+    return;
+  }
   if (req.method === "DELETE" && session.role === "admin") {
     next();
     return;
   }
   if (req.method === "DELETE" && session.role === "accountant" && /^\/journal\/entries\/\d+$/.test(req.path)) {
+    next();
+    return;
+  }
+  // This deletes only transfer metadata, never a bank row or accounting document.
+  if (req.method === "DELETE" && session.role === "accountant" && /^\/bank-transactions\/[1-9]\d*\/pair-transfer\/?$/.test(req.path)) {
     next();
     return;
   }

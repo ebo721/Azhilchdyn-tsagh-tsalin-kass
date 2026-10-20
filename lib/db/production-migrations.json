@@ -108,7 +108,11 @@
     {
       "filename": "20261019_payroll_month_closures.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20261020_bank_internal_transfers.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "1a3d74064134fa8ef927e8405ca5e4e16d67d442b90e5d27cd98c860a7eb2cb9"
+  "schemaFingerprint": "effade5a834ca4ba081c9c1fce21edde8f573f36979b60bd2425fe77465cde51"
 }

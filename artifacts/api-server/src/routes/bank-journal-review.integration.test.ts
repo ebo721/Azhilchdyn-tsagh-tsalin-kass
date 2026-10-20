@@ -209,7 +209,7 @@ describe("bank journal review routes", () => {
     assert.equal(unknown?.suggestedAccountName, null);
   });
 
-  it("requires a purchase document before posting inventory or supply bank payments", async () => {
+  it("keeps non-purchase settlement routes blocked for inventory or supply bank payments", async () => {
     for (const code of ["1500", "1510"]) {
       const [account] = await db.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, code));
       assert.ok(account);
@@ -233,7 +233,7 @@ describe("bank journal review routes", () => {
       cashIds.push(cash.id);
 
       for (const [path, body] of [
-        ["post-journal", { accountId: account.id }],
+        // Explicit pending-purchase journal posting is covered in its own lifecycle suite.
         ["transfer-to-cash", { incomeMonth: null }],
         ["link-cash", { cashTransactionId: cash.id }],
         ["link-expense", { description: "Буруу төрлийн зардал", accountId: expenseAccountId, date: "2099-03-11", amount: 25_000 }],

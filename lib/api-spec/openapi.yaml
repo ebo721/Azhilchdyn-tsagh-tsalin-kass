@@ -33,6 +33,42 @@ tags:
   - name: journal
     description: General journal and accounting reports
 paths:
+  /bank-transactions/{id}/transfer-suggestions:
+    get:
+      operationId: listBankTransferSuggestions
+      tags: [cash]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1, maximum: 2147483647 } }
+      responses:
+        "200":
+          description: Eligible internal transfer peers
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/BankTransferSuggestion" } }
+  /bank-transactions/{id}/pair-transfer:
+    post:
+      operationId: pairBankTransfer
+      tags: [cash]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1, maximum: 2147483647 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BankTransferInput" }
+      responses:
+        "200":
+          description: Paired, or already paired with this peer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BankTransferResult" }
+    delete:
+      operationId: unpairBankTransfer
+      tags: [cash]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1, maximum: 2147483647 } }
+      responses:
+        "204": { description: Pair removed }
   /inventory/custodians:
     get:
       operationId: listInventoryCustodians
@@ -3865,6 +3901,32 @@ components:
         expense: { type: number }
         todayIncome: { type: number }
         todayExpense: { type: number }
+    BankTransferInput:
+      type: object
+      required: [peerId]
+      properties:
+        peerId: { type: integer, minimum: 1, maximum: 2147483647 }
+    BankTransferResult:
+      type: object
+      required: [id, outBankTransactionId, inBankTransactionId, feeAmount]
+      properties:
+        id: { type: integer }
+        outBankTransactionId: { type: integer }
+        inBankTransactionId: { type: integer }
+        feeAmount: { type: number }
+    BankTransferSuggestion:
+      type: object
+      required: [id, transactionAt, amount, description, bankAccountId, bankName, bankAccountNumber, score, feeAmount]
+      properties:
+        id: { type: integer }
+        transactionAt: { type: string, format: date-time }
+        amount: { type: number }
+        description: { type: string }
+        bankAccountId: { type: integer }
+        bankName: { type: string }
+        bankAccountNumber: { type: string }
+        score: { type: integer }
+        feeAmount: { type: number }
     BankTransaction:
       type: object
       required: [id, transactionAt, type, amount, accountId, accountCode, accountName, account, counterparty, description, executedAt, balance, transferredAt, cashTransactionId, bankAccountId, bankName, bankAccountNumber, createdAt]
@@ -3887,6 +3949,8 @@ components:
         bankName: { type: ["string", "null"] }
         bankAccountNumber: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
+        internalTransfer: { type: boolean, default: false }
+        transferPeerId: { type: ["integer", "null"], default: null }
     BankTransactionAccountInput:
       type: object
       required: [accountId]
@@ -4048,6 +4112,7 @@ components:
       type: object
       required: [imported, skippedDuplicate, skippedZero, totalRead, recognized, unrecognized, transactionIds]
       properties:
+        transferSuggestionCount: { type: integer, minimum: 0, default: 0 }
         imported: { type: integer, minimum: 0 }
         skippedDuplicate: { type: integer, minimum: 0 }
         skippedZero: { type: integer, minimum: 0 }

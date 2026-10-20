@@ -1215,6 +1215,9 @@ export interface BankTransaction {
   /** @nullable */
   bankAccountNumber: string | null;
   createdAt: string;
+  internalTransfer?: boolean;
+  /** @nullable */
+  transferPeerId?: number | null;
 }
 
 export interface CashTransactionDetail {
@@ -1410,6 +1413,33 @@ export interface CashSummary {
   expense: number;
   todayIncome: number;
   todayExpense: number;
+}
+
+export interface BankTransferInput {
+  /**
+     * @minimum 1
+     * @maximum 2147483647
+     */
+  peerId: number;
+}
+
+export interface BankTransferResult {
+  id: number;
+  outBankTransactionId: number;
+  inBankTransactionId: number;
+  feeAmount: number;
+}
+
+export interface BankTransferSuggestion {
+  id: number;
+  transactionAt: string;
+  amount: number;
+  description: string;
+  bankAccountId: number;
+  bankName: string;
+  bankAccountNumber: string;
+  score: number;
+  feeAmount: number;
 }
 
 export interface BankTransactionAccountInput {
@@ -1666,6 +1696,8 @@ export interface BankTransactionJournalDeleteResult {
 }
 
 export interface BankTransactionImportResult {
+  /** @minimum 0 */
+  transferSuggestionCount?: number;
   /** @minimum 0 */
   imported: number;
   /** @minimum 0 */

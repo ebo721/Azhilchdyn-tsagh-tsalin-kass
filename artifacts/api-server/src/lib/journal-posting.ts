@@ -4,6 +4,13 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export class JournalValidationError extends Error {}
+/** Relabel a completed source document without changing status, amounts or lines. */
+export async function reassignJournalSource(tx: Tx, input: {
+  journalEntryId: number; sourceType: string; sourceId: number;
+}) {
+  await tx.update(journalEntriesTable).set({ sourceType: input.sourceType, sourceId: input.sourceId })
+    .where(eq(journalEntriesTable.id, input.journalEntryId));
+}
 type ReceivableSettlementTestHook = (receivableId: number) => Promise<void>;
 let receivableSettlementTestHook: ReceivableSettlementTestHook | undefined;
 export function setReceivableSettlementTestHook(hook: ReceivableSettlementTestHook | undefined) {

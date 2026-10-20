@@ -36,4 +36,7 @@ export interface BankTransaction {
   /** @nullable */
   bankAccountNumber: string | null;
   createdAt: Date;
+  internalTransfer?: boolean;
+  /** @nullable */
+  transferPeerId?: number | null;
 }

@@ -7,6 +7,7 @@ import {
 } from "@workspace/db";
 import { and, desc, eq, isNotNull, isNull, or } from "drizzle-orm";
 import { bankKeywordRecognitionRules } from "./bank-recognition-rules.js";
+import { notInternalTransfer } from "./bank-internal-transfer.js";
 import { bankSuggestionScore } from "./bank-suggestion-score.js";
 import { ensureDefaultChartOfAccounts } from "./route-shared.js";
 
@@ -212,6 +213,7 @@ export async function loadBankRecognitionContext(): Promise<BankRecognitionConte
       .innerJoin(chartOfAccountsTable, eq(bankTransactionsTable.accountId, chartOfAccountsTable.id))
       .where(and(
         isNotNull(bankTransactionsTable.accountId),
+        notInternalTransfer,
         eq(chartOfAccountsTable.isActive, true),
         or(
           isNotNull(bankTransactionsTable.journalEntryId),
