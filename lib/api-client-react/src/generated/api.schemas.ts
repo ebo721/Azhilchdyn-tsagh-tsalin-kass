@@ -2382,6 +2382,19 @@ export interface InventoryIssueInput {
   responsibleEmployeeId?: number | null;
 }
 
+/**
+ * Actual cash and posted-journal completeness, independent of payment status.
+ */
+export type OperatingExpenseAccountingStatus = typeof OperatingExpenseAccountingStatus[keyof typeof OperatingExpenseAccountingStatus];
+
+
+export const OperatingExpenseAccountingStatus = {
+  missing_both: 'missing_both',
+  missing_journal: 'missing_journal',
+  missing_cash: 'missing_cash',
+  complete: 'complete',
+} as const;
+
 export interface OperatingExpense {
   id: number;
   description: string;
@@ -2399,6 +2412,8 @@ export interface OperatingExpense {
   bankTransactionId: number | null;
   /** @nullable */
   cashTransactionId: number | null;
+  /** Actual cash and posted-journal completeness, independent of payment status. */
+  accountingStatus: OperatingExpenseAccountingStatus;
   createdAt: string;
 }
 

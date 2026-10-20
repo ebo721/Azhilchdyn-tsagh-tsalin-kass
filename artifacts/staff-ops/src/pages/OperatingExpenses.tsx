@@ -15,6 +15,7 @@ import {
 } from '@workspace/api-client-react';
 import { money, today } from '@/lib/app-shared';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
+import { ExpenseAccountingBadge, ExpenseAccountingSummary, type AccountingFilter } from '@/components/ExpenseAccountingStatus';
 
 function OperatingExpenseModal({ expense, onClose }: { expense?: OperatingExpense; onClose: () => void }) {
   const isEdit = !!expense;
@@ -115,7 +116,7 @@ function OperatingExpensePaymentModal({ expense, onClose }: { expense: Operating
 }
 
 export function OperatingExpenses() {
-  const query = useListOperatingExpenses();
+  const query = useListOperatingExpenses({ query: { queryKey: getListOperatingExpensesQueryKey(), refetchOnMount: 'always', refetchInterval: 60_000 } });
   const accounts = useListChartOfAccounts();
   const session = useGetAuthSession();
   const isViewer = session.data?.authenticated && session.data.role === 'viewer';
@@ -125,8 +126,10 @@ export function OperatingExpenses() {
   const [editing, setEditing] = useState<OperatingExpense | 'new' | null>(null);
   const [paying, setPaying] = useState<OperatingExpense | null>(null);
   const [filterAccountId, setFilterAccountId] = useState('all');
+  const [filterAccounting, setFilterAccounting] = useState<AccountingFilter>('all');
   const accountById = useMemo(() => new Map((accounts.data ?? []).map((account) => [account.id, account])), [accounts.data]);
-  const filteredExpenses = (query.data ?? []).filter((expense) => filterAccountId === 'all' || String(expense.accountId) === filterAccountId);
+  const accountExpenses = (query.data ?? []).filter((expense) => filterAccountId === 'all' || String(expense.accountId) === filterAccountId);
+  const filteredExpenses = accountExpenses.filter(expense => filterAccounting === 'all' || expense.accountingStatus === filterAccounting);
 
   const remove = (expense: OperatingExpense) => {
     if (window.confirm(`"${expense.description}" зардлыг устгах уу?`)) deletion.request(`/operating-expenses/${expense.id}`, `Зардал: ${expense.description}`);
@@ -144,12 +147,15 @@ export function OperatingExpenses() {
   return (
     <div className="page-enter space-y-6">
       <PageHeading title="Үйл ажиллагааны зардал" detail="Байгууллагын тогтмол болон бусад үйл ажиллагааны зардлын бүртгэл." action={!isViewer && <Button onClick={() => setEditing('new')} disabled={!accounts.data?.some((account) => account.type === 'expense')} data-testid="button-add-expense"><Plus className="mr-2 size-4" />Зардал нэмэх</Button>} />
-      {!query.isLoading && !query.isError && query.data?.length ? <div className="flex justify-end"><label className="space-y-1 text-xs font-semibold">Зардлын данс<select value={filterAccountId} onChange={(event) => setFilterAccountId(event.target.value)} className="block h-10 min-w-64 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="select-operating-expense-category"><option value="all">Бүх данс</option>{(accounts.data ?? []).filter((account) => account.type === 'expense').map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></label></div> : null}
+      {!query.isLoading && !query.isError && query.data?.length ? <>
+        <div className="flex justify-end"><label className="w-full space-y-1 text-xs font-semibold sm:w-auto">Зардлын данс<select value={filterAccountId} onChange={(event) => setFilterAccountId(event.target.value)} className="block h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary sm:min-w-64" data-testid="select-operating-expense-category"><option value="all">Бүх данс</option>{(accounts.data ?? []).filter((account) => account.type === 'expense').map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></label></div>
+        <ExpenseAccountingSummary expenses={accountExpenses} selected={filterAccounting} onChange={setFilterAccounting} />
+      </> : null}
       {query.isLoading ? <div className="space-y-4"><LoadingBlock className="h-16" /><LoadingBlock className="h-16" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : query.data?.length ? (
-        <div className="overflow-hidden rounded-2xl border border-border bg-card">
+        <div className="overflow-x-auto rounded-2xl border border-border bg-card">
           <table className="w-full text-left text-sm" data-testid="table-expenses">
             <thead className="border-b border-border bg-secondary/50 text-xs text-muted-foreground">
-              <tr><th className="px-5 py-3 font-semibold">Огноо</th><th className="px-5 py-3 font-semibold">Утга</th><th className="px-5 py-3 font-semibold">Ангилал</th><th className="px-5 py-3 text-right font-semibold">Дүн</th><th className="px-5 py-3 text-center font-semibold">Төлөв</th>{!isViewer && <th className="px-5 py-3 text-right font-semibold">Үйлдэл</th>}</tr>
+              <tr><th className="px-5 py-3 font-semibold">Огноо</th><th className="px-5 py-3 font-semibold">Утга</th><th className="px-5 py-3 font-semibold">Ангилал</th><th className="px-5 py-3 text-right font-semibold">Дүн</th><th className="px-5 py-3 text-center font-semibold">Төлбөр</th><th className="px-5 py-3 text-center font-semibold">Бичилт</th>{!isViewer && <th className="px-5 py-3 text-right font-semibold">Үйлдэл</th>}</tr>
             </thead>
             <tbody className="divide-y divide-border">
               {filteredExpenses.map((ex) => (
@@ -165,6 +171,7 @@ export function OperatingExpenses() {
                       <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-bold text-destructive" data-testid={`status-unpaid-expense-${ex.id}`}>Төлөгдөөгүй</span>
                     )}
                   </td>
+                  <td className="px-5 py-3 text-center"><ExpenseAccountingBadge status={ex.accountingStatus} /></td>
                   {!isViewer && <td className="px-5 py-3 text-right">
                     <div className="flex justify-end gap-2">
                       {!ex.paymentDate ? (
@@ -180,7 +187,7 @@ export function OperatingExpenses() {
                   </td>}
                 </tr>
               ))}
-              {!filteredExpenses.length && <tr><td colSpan={isViewer ? 5 : 6} className="px-5 py-10 text-center text-sm text-muted-foreground">Сонгосон дэд ангилалд зардал алга.</td></tr>}
+              {!filteredExpenses.length && <tr><td colSpan={isViewer ? 6 : 7} className="px-5 py-10 text-center text-sm text-muted-foreground">Сонгосон данс болон бичилтийн төлөвт тохирох зардал алга.</td></tr>}
             </tbody>
           </table>
         </div>

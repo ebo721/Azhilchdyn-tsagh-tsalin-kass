@@ -4626,7 +4626,7 @@ components:
         responsibleEmployeeId: { type: ["integer", "null"], minimum: 1 }
     OperatingExpense:
       type: object
-      required: [id, description, category, accountId, date, amount, paymentDate, paymentAmount, bankTransactionId, cashTransactionId, createdAt]
+      required: [id, description, category, accountId, date, amount, paymentDate, paymentAmount, bankTransactionId, cashTransactionId, accountingStatus, createdAt]
       properties:
         id: { type: integer }
         description: { type: string }
@@ -4638,6 +4638,10 @@ components:
         paymentAmount: { type: ["number", "null"] }
         bankTransactionId: { type: ["integer", "null"] }
         cashTransactionId: { type: ["integer", "null"] }
+        accountingStatus:
+          type: string
+          enum: [missing_both, missing_journal, missing_cash, complete]
+          description: Actual cash and posted-journal completeness, independent of payment status.
         createdAt: { type: string, format: date-time }
     OperatingExpenseInput:
       type: object

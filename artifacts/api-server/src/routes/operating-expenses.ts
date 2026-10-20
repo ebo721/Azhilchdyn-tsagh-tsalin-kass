@@ -159,6 +159,7 @@ import {
 } from "../lib/cash-account.js";
 import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
 import * as shared from "../lib/route-shared.js";
+import { operatingExpenseAccountingStatuses } from "../lib/operating-expense-accounting.js";
 import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-shared.js";
 
 const router: IRouter = Router();
@@ -201,11 +202,12 @@ router.get("/operating-expenses", async (req, res, next) => {
     })) as Array<typeof operatingExpensesTable.$inferSelect>;
     const accounts = await db.select().from(chartOfAccountsTable);
     const names = new Map(accounts.map((account) => [account.id, account.name]));
-    res.json(ListOperatingExpensesResponse.parse(rows.map((row) => {
+    const statuses = await operatingExpenseAccountingStatuses(rows.map(row => row.id));
+    res.json(ListOperatingExpensesResponse.parse(await Promise.all(rows.map((row) => {
       const category = names.get(row.accountId);
       if (!category) throw new Error(`Operating expense account ${row.accountId} is missing`);
-      return operatingExpenseResponse(row, category);
-    })));
+      return operatingExpenseResponse(row, category, statuses.get(row.id));
+    }))));
   } catch (error) { next(error); }
 });
 
@@ -222,7 +224,7 @@ router.post("/operating-expenses", async (req, res, next) => {
       }).returning())[0];
     });
     if (!row) { res.status(400).json({ error: "Зардлын хүчинтэй данс сонгоно уу" }); return; }
-    res.status(201).json(CreateOperatingExpenseResponse.parse(operatingExpenseResponse(row, await operatingExpenseAccountName(row.accountId))));
+    res.status(201).json(CreateOperatingExpenseResponse.parse(await operatingExpenseResponse(row, await operatingExpenseAccountName(row.accountId))));
   } catch (error) { next(error); }
 });
 
@@ -248,7 +250,7 @@ router.put("/operating-expenses/:id", async (req, res, next) => {
     if (result === "paid") { res.status(409).json({ error: "Төлбөр батлагдсан зардлыг засах боломжгүй" }); return; }
     if (result === "closed") { res.status(409).json({ error: "Өндөрлөсөн өдрийн зардлыг засах боломжгүй" }); return; }
     if (result === "invalid_account") { res.status(400).json({ error: "Зардлын хүчинтэй данс сонгоно уу" }); return; }
-    res.json(UpdateOperatingExpenseResponse.parse(operatingExpenseResponse(result, await operatingExpenseAccountName(result.accountId))));
+    res.json(UpdateOperatingExpenseResponse.parse(await operatingExpenseResponse(result, await operatingExpenseAccountName(result.accountId))));
   } catch (error) { next(error); }
 });
 
@@ -327,7 +329,7 @@ router.put("/operating-expenses/:id/payment", async (req, res, next) => {
     if (result === "bank_missing") { res.status(404).json({ error: "Банкны гүйлгээ олдсонгүй" }); return; }
     if (result === "bank_conflict") { res.status(409).json({ error: "Банкны гүйлгээ тохирохгүй эсвэл холбогдсон байна" }); return; }
     const [row] = await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.id, id));
-    res.json(ConfirmOperatingExpensePaymentResponse.parse(operatingExpenseResponse(row, await operatingExpenseAccountName(row.accountId))));
+    res.json(ConfirmOperatingExpensePaymentResponse.parse(await operatingExpenseResponse(row, await operatingExpenseAccountName(row.accountId))));
   } catch (error) {
     const code = (error as { code?: string; cause?: { code?: string } }).code ?? (error as { cause?: { code?: string } }).cause?.code;
     if (error instanceof OperatingExpenseBankPaymentConflictError || code === "23505") {
@@ -361,7 +363,7 @@ router.delete("/operating-expenses/:id/payment", async (req, res, next) => {
     if (result === "missing") { res.status(404).json({ error: "Зардал олдсонгүй" }); return; }
     if (result === "closed") { res.status(409).json({ error: "Өндөрлөсөн өдрийн төлбөрийг цуцлах боломжгүй" }); return; }
     const [row] = await db.select().from(operatingExpensesTable).where(eq(operatingExpensesTable.id, id));
-    res.json(CancelOperatingExpensePaymentResponse.parse(operatingExpenseResponse(row, await operatingExpenseAccountName(row.accountId))));
+    res.json(CancelOperatingExpensePaymentResponse.parse(await operatingExpenseResponse(row, await operatingExpenseAccountName(row.accountId))));
   } catch (error) { next(error); }
 });
 

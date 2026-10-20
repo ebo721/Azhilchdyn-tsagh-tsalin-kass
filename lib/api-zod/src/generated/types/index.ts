@@ -238,6 +238,7 @@ export * from './officeAttendancePunchCancellationInput';
 export * from './officeNetwork';
 export * from './officeNetworkInput';
 export * from './operatingExpense';
+export * from './operatingExpenseAccountingStatus';
 export * from './operatingExpenseBankSuggestion';
 export * from './operatingExpenseInput';
 export * from './operatingExpensePaymentInput';

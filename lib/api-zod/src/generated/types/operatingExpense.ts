@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { OperatingExpenseAccountingStatus } from './operatingExpenseAccountingStatus';
 
 export interface OperatingExpense {
   id: number;
@@ -23,5 +24,7 @@ export interface OperatingExpense {
   bankTransactionId: number | null;
   /** @nullable */
   cashTransactionId: number | null;
+  /** Actual cash and posted-journal completeness, independent of payment status. */
+  accountingStatus: OperatingExpenseAccountingStatus;
   createdAt: Date;
 }

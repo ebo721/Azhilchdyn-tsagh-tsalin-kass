@@ -3899,6 +3899,7 @@ export const ReclassifyInventoryPurchaseAsExpenseResponse = zod.object({
   "paymentAmount": zod.number().nullable(),
   "bankTransactionId": zod.number().int().nullable(),
   "cashTransactionId": zod.number().int().nullable(),
+  "accountingStatus": zod.enum(['missing_both', 'missing_journal', 'missing_cash', 'complete']).describe('Actual cash and posted-journal completeness, independent of payment status.'),
   "createdAt": zod.coerce.date()
 })
 
@@ -3919,6 +3920,7 @@ export const ListOperatingExpensesResponseItem = zod.object({
   "paymentAmount": zod.number().nullable(),
   "bankTransactionId": zod.number().int().nullable(),
   "cashTransactionId": zod.number().int().nullable(),
+  "accountingStatus": zod.enum(['missing_both', 'missing_journal', 'missing_cash', 'complete']).describe('Actual cash and posted-journal completeness, independent of payment status.'),
   "createdAt": zod.coerce.date()
 })
 export const ListOperatingExpensesResponse = zod.array(ListOperatingExpensesResponseItem)
@@ -3954,6 +3956,7 @@ export const CreateOperatingExpenseResponse = zod.object({
   "paymentAmount": zod.number().nullable(),
   "bankTransactionId": zod.number().int().nullable(),
   "cashTransactionId": zod.number().int().nullable(),
+  "accountingStatus": zod.enum(['missing_both', 'missing_journal', 'missing_cash', 'complete']).describe('Actual cash and posted-journal completeness, independent of payment status.'),
   "createdAt": zod.coerce.date()
 })
 
@@ -3992,6 +3995,7 @@ export const UpdateOperatingExpenseResponse = zod.object({
   "paymentAmount": zod.number().nullable(),
   "bankTransactionId": zod.number().int().nullable(),
   "cashTransactionId": zod.number().int().nullable(),
+  "accountingStatus": zod.enum(['missing_both', 'missing_journal', 'missing_cash', 'complete']).describe('Actual cash and posted-journal completeness, independent of payment status.'),
   "createdAt": zod.coerce.date()
 })
 
@@ -4049,6 +4053,7 @@ export const ConfirmOperatingExpensePaymentResponse = zod.object({
   "paymentAmount": zod.number().nullable(),
   "bankTransactionId": zod.number().int().nullable(),
   "cashTransactionId": zod.number().int().nullable(),
+  "accountingStatus": zod.enum(['missing_both', 'missing_journal', 'missing_cash', 'complete']).describe('Actual cash and posted-journal completeness, independent of payment status.'),
   "createdAt": zod.coerce.date()
 })
 
@@ -4073,6 +4078,7 @@ export const CancelOperatingExpensePaymentResponse = zod.object({
   "paymentAmount": zod.number().nullable(),
   "bankTransactionId": zod.number().int().nullable(),
   "cashTransactionId": zod.number().int().nullable(),
+  "accountingStatus": zod.enum(['missing_both', 'missing_journal', 'missing_cash', 'complete']).describe('Actual cash and posted-journal completeness, independent of payment status.'),
   "createdAt": zod.coerce.date()
 })
 
