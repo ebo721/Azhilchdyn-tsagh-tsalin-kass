@@ -151,18 +151,18 @@ it("preserves complete summaries across ten years, schedule versions and salary 
   const { data, schedules } = fixture();
   const before = structuredClone(data);
   const queries = fakeDatabase(t, data, schedules);
-  // Golden complete responses captured from the per-month-query implementation.
+  // Complete-response goldens include paid office weekends even below weekday attendance.
   const expected = {
     "2016-01": "bb6bdf01cd61e31522bb887225160468c48aaf09d1213e01c620e96864663ccf",
-    "2019-06": "3ed01b440d5e3cad41e1bf618eeb58a0fde4c5ed01b6556c60480d593da2189a",
-    "2020-02": "202afa7f520700e32847a98eea752e19a18f855975d364d977c20d1c3b18132c",
-    "2025-12": "dacf56d2e1833bc471476646223709c7cecf567499650f185e51d4b86ab234dd",
+    "2019-06": "e40135da51b450e4b3d99b1ffd25decf970b85e230eaf58b1fe45cb3494454f1",
+    "2020-02": "1e046e3056cbc7e864177e8edccd069bbdbef7dbd48321e0a92260136bac091b",
+    "2025-12": "f33dc437e8006fe7a3b443b58f80dbba8ea4d0c6e7d376f4379891ce65bdf3aa",
   };
   for (const month of Object.keys(expected) as Array<keyof typeof expected>) {
     const summary = calculateThrough(month, data, schedules);
     // Goldens predate recipient-account metadata. Compare every legacy calculation field.
     assert.equal(digest({ ...summary, lines: summary.lines.map(({ bankAccountNumber: _account, ...line }) => line) }),
-      expected[month], `${month}: all calculation fields must match legacy calculation`);
+      expected[month], `${month}: all calculation fields must match the approved payroll rules`);
     if (month === "2025-12") {
       assert.equal(summary.lines.find(line => line.employeeId === 3)?.carryoverAmount, 1190);
       assert.equal(summary.lines.find(line => line.employeeId === 3)?.balanceAmount, 1200);
@@ -174,7 +174,7 @@ it("preserves complete summaries across ten years, schedule versions and salary 
   data.salaryHistory.find(row => row.id === 11)!.baseSalary = 2_100_000;
   const corrected = calculateThrough("2025-12", data, schedules);
   assert.equal(digest({ ...corrected, lines: corrected.lines.map(({ bankAccountNumber: _account, ...line }) => line) }),
-    "8fd60bc83cbabcb192d76cd73556368929ac8fed1f1b8dea7602353a55f41a05");
+    "31314426a2be71c8e55f61730da54f0f937111af41b9b59b20a966e0d0999650");
   assert.equal(corrected.lines[0].paidAmount, 1_920_000);
   assert.equal(corrected.lines[0].secondPaidAmount, 20_000);
 });

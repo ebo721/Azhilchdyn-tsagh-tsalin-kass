@@ -102,11 +102,11 @@ describe("actual shift attendance insurance proration", () => {
     const full = await calculate(employee({ fullSalaryRegardlessAttendance: true }), []);
     assert.equal(full.socialInsuranceSalary, 1_200_000);
     assert.equal(full.gross, 1_500_000);
-    const office = await calculate(employee({ employeeType: "office", salaryType: "monthly", baseSalary: 1_500_000, monthlyExpectedWorkDays: 0 }), [attendance(0)]);
+    const weekday = weekdayDatesBetween(start, end)[0];
+    const office = await calculate(employee({ employeeType: "office", salaryType: "monthly", baseSalary: 1_500_000, monthlyExpectedWorkDays: 0 }), [{ ...attendance(0), date: weekday }]);
     assert.equal(office.socialInsuranceSalary, 1_200_000);
     const noAttendance = await calculate(employee({ employeeType: "office", salaryType: "monthly" }), []);
     assert.equal(noAttendance.socialInsuranceSalary, 0);
-    const weekday = weekdayDatesBetween(start, end)[0];
     const leave = { ...attendance(0), date: weekday, status: "leave" };
     const prorated = await calculate(employee({ employeeType: "office", salaryType: "monthly" }), [leave]);
     assert.equal(prorated.socialInsuranceSalary, Math.round(1_200_000 * (weekdayDatesBetween(start, end).length - 1) / weekdayDatesBetween(start, end).length * 100) / 100);

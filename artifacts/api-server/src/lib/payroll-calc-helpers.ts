@@ -180,10 +180,10 @@ export function calculatePayrollMonth(
       .sort((a, b) => String(a.date).localeCompare(String(b.date)));
     const daysWorked = workedRecords.length;
     const hours = money(workedRecords.reduce((total, record) => total + Number(record.hours), 0));
-    const excessWorkedDayCount = Math.max(0, workedRecords.length - eligibleWeekdays.length);
-    const excessWorkedRecords = workedRecords
-      .filter((record) => !eligibleWeekdays.includes(String(record.date)))
-      .slice(0, excessWorkedDayCount);
+    // Weekend work is paid even when weekday leave keeps total attendance below
+    // the month's weekday count. Use the same dates for earnings and insurance.
+    const weekendWorkedRecords = workedRecords
+      .filter((record) => !weekdays.includes(String(record.date)));
     const officeSalaryDates = eligibleWeekdays.filter((date) => {
       const salary = salaryAt(employee, salaryHistory, date);
       return salary.fullSalaryRegardlessAttendance || paidWeekdays.includes(date);
@@ -191,7 +191,7 @@ export function calculatePayrollMonth(
     const officeGross = officeSalaryDates.reduce((total, date) => {
       const salary = salaryAt(employee, salaryHistory, date);
       return total + (salary.employeeType === "office" ? Number(salary.baseSalary) / weekdays.length : 0);
-    }, 0) + excessWorkedRecords.reduce((total, record) => {
+    }, 0) + weekendWorkedRecords.reduce((total, record) => {
       const salary = salaryAt(employee, salaryHistory, String(record.date));
       return total + (salary.employeeType === "office" && !salary.fullSalaryRegardlessAttendance ? Number(salary.baseSalary) / weekdays.length : 0);
     }, 0);
@@ -218,7 +218,7 @@ export function calculatePayrollMonth(
       return total + (salary.payrollTaxExempt
         || (salary.employeeType === "shift" && !salary.fullSalaryRegardlessAttendance)
         ? 0 : Number(salary.socialInsuranceSalary) / weekdays.length);
-    }, 0) + excessWorkedRecords.reduce((total, record) => {
+    }, 0) + weekendWorkedRecords.reduce((total, record) => {
       const salary = salaryAt(employee, salaryHistory, String(record.date));
       return total + (salary.payrollTaxExempt || salary.fullSalaryRegardlessAttendance || salary.employeeType !== "office"
         ? 0 : Number(salary.socialInsuranceSalary) / weekdays.length);

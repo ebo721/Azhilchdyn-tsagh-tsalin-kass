@@ -5,7 +5,11 @@ description: Durable rules for employment dates, salary history, monthly prorati
 
 Monthly office salary is prorated across the month's Monday–Friday workdays. The joined date is the first eligible day, and the inactive date is the final eligible day. Attendance marked as leave is not a paid workday and must be excluded from office salary and social-insurance salary proration. Salary changes apply beginning on their effective date, splitting old and new rates by eligible workdays. Shift attendance uses the rate effective on each attendance date.
 
-When an office employee's present/late attendance exceeds their required weekdays for the month, add one daily share of salary and social-insurance salary for each excess day, using the rate effective on the extra attendance date.
+Оффисын ажилтан амралтын өдөр ажилласан ирцтэй бол тухайн өдрийг ажилласанд тооцно. Add one daily share of salary and social-insurance salary for each present/late weekend date, using the rate effective on that date, even if weekday leave keeps total attendance below the month's weekday count. Preserve the full-salary exception.
+
+**Why:** The user explicitly required office weekend work to count; limiting weekend pay to attendance above the weekday count omitted worked days when weekday leave existed.
+
+**How to apply:** Use the same eligible worked weekend dates for gross and insurance proration, bounded by employment dates, without automatically refreshing saved or closed payroll.
 
 A newly entered salary must have an effective date later than the latest salary-history row and is appended without removing prior rows. Historical corrections use the dedicated salary-history row editor.
 
