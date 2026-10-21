@@ -41,3 +41,4 @@
 - [Bank-sourced balances](bank-sourced-balances.md) — Direct bank receivables/payables use the stored transaction date and amount; new debt is distinct from repayment.
 - [Internal bank transfers](bank-internal-transfer-scope.md) — “Кассын данс” is a real bank account, not 1000 cash; first-stage pairing creates no journal or fee expense.
 - [Browser test pool lifetime](browser-test-pool-lifetime.md) — Run DB-backed browser specs separately until shared-pool teardown is worker-scoped.
+- [Monthly statistics scope](monthly-statistics-scope.md) — Monthly salary means saved gross before advances/deductions, with office and per-shift totals, not actual payments.

@@ -461,6 +461,23 @@ export interface HealthStatus {
   status: string;
 }
 
+export type DashboardPayrollStatus = typeof DashboardPayrollStatus[keyof typeof DashboardPayrollStatus];
+
+
+export const DashboardPayrollStatus = {
+  missing: 'missing',
+  saved: 'saved',
+  stale: 'stale',
+  closed: 'closed',
+} as const;
+
+export interface DashboardShiftPayroll {
+  /** @nullable */
+  shiftId: number | null;
+  shiftName: string;
+  gross: number;
+}
+
 export interface Activity {
   id: string;
   type: string;
@@ -470,10 +487,20 @@ export interface Activity {
 }
 
 export interface Dashboard {
+  month: string;
   employeeCount: number;
-  previousMonthSalesIncome: number;
-  previousMonthPayrollExpense: number;
-  previousMonthInventoryExpense: number;
+  salesIncome: number;
+  /** @nullable */
+  payrollGross: number | null;
+  /** @nullable */
+  officePayrollGross: number | null;
+  payrollByShift: DashboardShiftPayroll[];
+  payrollStatus: DashboardPayrollStatus;
+  /** @nullable */
+  payrollPulledAt: string | null;
+  inventoryPurchaseTotal: number;
+  supplyPurchaseTotal: number;
+  operatingExpenseTotal: number;
   recentActivity: Activity[];
 }
 
@@ -2734,6 +2761,13 @@ export const JournalStatusParameter = {
 export type MealCountsDateFromParameter = MealCountDate;
 
 export type MealCountsDateToParameter = MealCountDate;
+
+export type GetDashboardParams = {
+/**
+ * @pattern ^[0-9]{4}-(0[1-9]|1[0-2])$
+ */
+month?: string;
+};
 
 export type ListAttendanceParams = {
 date?: string;
