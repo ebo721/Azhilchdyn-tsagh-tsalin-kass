@@ -24,8 +24,17 @@ function calculate(
     id: i + 1, employeeId: 1, date, clockIn: "08:00", clockOut: "16:00",
     status: leave.includes(date) ? "leave" : "present", hours: leave.includes(date) ? 0 : 8, createdAt: epoch,
   }));
+  const current = { ...employee, ...changes };
+  const registeredHistory: History[] = salaryHistory.length ? salaryHistory : [{
+    id: 1, employeeId: current.id, effectiveFrom: current.joinedAt,
+    employeeType: current.employeeType, salaryType: current.salaryType,
+    baseSalary: Number(current.baseSalary), socialInsuranceSalary: Number(current.socialInsuranceSalary),
+    monthlyExpectedWorkDays: current.monthlyExpectedWorkDays, payrollTaxExempt: current.payrollTaxExempt,
+    fullSalaryRegardlessAttendance: current.fullSalaryRegardlessAttendance,
+    payFrequency: current.payFrequency, createdAt: epoch,
+  }];
   return calculatePayrollMonth(month, {
-    allEmployees: [{ ...employee, ...changes }], salaryHistory, records,
+    allEmployees: [current], salaryHistory: registeredHistory, records,
     allAdjustments: [], allAdvanceApprovals: [], ...extra,
   }, schedule).lines[0];
 }

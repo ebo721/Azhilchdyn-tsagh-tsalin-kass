@@ -72,7 +72,8 @@ test("a future exemption must not silently exempt an earlier insured month", () 
 });
 
 test("a midmonth exemption taxes only the covered insured days", () => {
-  const line = calculate([history("2026-08-20", false), history("2026-09-16", true, 2)]).lines[0];
+  const line = calculate([history("2026-08-20", false), history("2026-09-16", true, 2)],
+    { ...employee, payrollTaxExempt: true, socialInsuranceSalary: 0 }).lines[0];
   assert.equal(line.socialInsuranceSalary, 500_000);
   assert.equal(line.socialInsurance, 57_500);
   assert.equal(line.incomeTax, 24_250);
@@ -83,6 +84,34 @@ test("history lookup is employee-scoped and does not mutate history order", () =
   const before = structuredClone(rows);
   assert.equal(salaryAt(employee, rows, "2026-09-01").payrollTaxExempt, true);
   assert.deepEqual(rows, before);
-  assert.equal(salaryAt(employee, [{ ...rows[0], employeeId: 2 }], "2026-09-01").baseSalary,
-    employee.baseSalary);
+  assert.throws(() => salaryAt(employee, [{ ...rows[0], employeeId: 2 }], "2026-09-01"),
+    PayrollConfigurationError);
+});
+
+test("no history never falls back to undated employee-register tax settings", () => {
+  for (const exempt of [true, false]) {
+    const current = { ...employee, payrollTaxExempt: exempt };
+    assert.throws(() => calculate([], current), PayrollConfigurationError);
+    assert.throws(() => calculatePayrollAdvanceLine(current, records, [],
+      "2026-09-01", "2026-09-30", "2026-09-15"), PayrollConfigurationError);
+  }
+});
+
+test("both directions of a register/history exemption mismatch stop salary and advance calculations", () => {
+  for (const exempt of [true, false]) {
+    const current = { ...employee, payrollTaxExempt: exempt };
+    const rows = [history("2026-08-20", !exempt)];
+    assert.throws(() => calculate(rows, current), error =>
+      error instanceof PayrollConfigurationError && error.message.includes("зөрүүтэй"));
+    assert.throws(() => calculatePayrollAdvanceLine(current, records, rows,
+      "2026-09-01", "2026-09-30", "2026-09-15"), PayrollConfigurationError);
+  }
+});
+
+test("a historical exemption remains zero after later registration changes to insured", () => {
+  const rows = [history("2026-08-20", true), history("2026-10-01", false, 2)];
+  const line = calculate(rows).lines[0];
+  assert.equal(line.socialInsurance, 0);
+  assert.equal(line.incomeTax, 0);
+  assert.equal(line.taxRelief, 0);
 });
