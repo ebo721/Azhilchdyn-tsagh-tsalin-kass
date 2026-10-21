@@ -13,7 +13,7 @@ import {
   payrollScheduleSettingsTable,
 } from "@workspace/db";
 import { currentMonth, daysInMonth, money, nextMonth, previousMonth } from "./date-utils.js";
-import { shiftInsuredDailySalary } from "./shift-insurance.js";
+import { PayrollConfigurationError, shiftInsuredDailySalary } from "./shift-insurance.js";
 import { defaultPayrollSchedule, scheduleDate, weekdayDatesBetween, type PayrollCalculationData, type SalaryHistoryRow, type DbClient } from "./route-shared.js";
 import { readMonthlyPayroll } from "./payroll-balance-store.js";
 
@@ -69,9 +69,23 @@ export function shiftDailyRate(salary: Pick<SalaryHistoryRow, "salaryType" | "ba
 }
 
 export function salaryAt(employee: typeof employeesTable.$inferSelect, history: SalaryHistoryRow[], date: string) {
-  return history
-    .filter((row) => row.employeeId === employee.id && row.effectiveFrom <= date)
-    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0] ?? {
+  const employeeHistory = history.filter((row) => row.employeeId === employee.id);
+  const effective = employeeHistory
+    .filter((row) => row.effectiveFrom <= date)
+    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0];
+  if (effective) return effective;
+  // A known history with no coverage is not permission to apply today's
+  // salary/tax settings backwards. Nor can we infer an earlier exemption from
+  // a later row. Require an explicit historical correction before saving pay.
+  if (employeeHistory.length > 0) {
+    const firstDate = employeeHistory.reduce((first, row) =>
+      row.effectiveFrom < first ? row.effectiveFrom : first, employeeHistory[0].effectiveFrom);
+    throw new PayrollConfigurationError(
+      `${employee.name}: ${date}-нд хүчинтэй цалингийн түүх алга. Анхны түүх ${firstDate}-нөөс эхэлж байна. Цалингийн түүхийн эхлэх огноо, НДШ/ХХОАТ-ын чөлөөлөлтийг шалгаж залруулна уу. Одоогийн тохиргоог өмнөх хугацаанд ашиглаж бодохгүй.`,
+    );
+  }
+  // Preserve support for legacy employees with no salary-history rows at all.
+  return {
       employeeId: employee.id,
       effectiveFrom: employee.joinedAt,
       employeeType: employee.employeeType,

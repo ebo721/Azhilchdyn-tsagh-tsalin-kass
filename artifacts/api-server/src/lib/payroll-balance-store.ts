@@ -31,7 +31,10 @@ async function loadMonth(tx: Tx, month: string, common?: Pick<PayrollCalculation
   const period = payrollPeriod(month, schedule);
   const [allEmployees, salaryHistory, records, allAdjustments, allAdvanceApprovals] = await Promise.all([
     common ? Promise.resolve(common.allEmployees) : tx.select().from(employeesTable),
-    common ? Promise.resolve(common.salaryHistory) : tx.select().from(employeeSalaryHistoryTable).where(lte(employeeSalaryHistoryTable.effectiveFrom, period.periodEnd)),
+    // Keep future rows visible so salaryAt can distinguish a missing historical
+    // baseline from a legacy employee with no history. Filtering them out would
+    // allow today's salary/tax settings to leak back into the requested month.
+    common ? Promise.resolve(common.salaryHistory) : tx.select().from(employeeSalaryHistoryTable),
     tx.select().from(attendanceTable).where(sql`${attendanceTable.date} BETWEEN ${period.periodStart}::date AND ${period.periodEnd}::date`),
     tx.select().from(payrollAdjustmentsTable).where(eq(payrollAdjustmentsTable.month, month)),
     tx.select().from(payrollAdvanceApprovalsTable).where(eq(payrollAdvanceApprovalsTable.month, month)),
