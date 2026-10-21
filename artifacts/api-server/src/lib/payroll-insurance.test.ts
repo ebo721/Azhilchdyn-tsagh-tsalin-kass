@@ -28,8 +28,15 @@ function attendance(offset: number, status = "present"): Attendance {
   return { id: offset + 1, employeeId: 999, date: day(offset), clockIn: "08:00", clockOut: "16:00", hours: 8, status, createdAt: new Date(0) };
 }
 async function calculate(e: Employee, records: Attendance[], salaryHistory: History[] = [], extra: Partial<PayrollCalculationData> = {}) {
+  const registeredHistory: History[] = salaryHistory.length ? salaryHistory : [{
+    id: 1, employeeId: e.id, effectiveFrom: e.joinedAt, employeeType: e.employeeType,
+    salaryType: e.salaryType, monthlyExpectedWorkDays: e.monthlyExpectedWorkDays,
+    baseSalary: Number(e.baseSalary), socialInsuranceSalary: Number(e.socialInsuranceSalary),
+    payrollTaxExempt: e.payrollTaxExempt, fullSalaryRegardlessAttendance: e.fullSalaryRegardlessAttendance,
+    payFrequency: e.payFrequency, createdAt: new Date(0),
+  }];
   const summary = await getPayrollSummary(month, {
-    allEmployees: [e], salaryHistory, records, allAdjustments: [], allAdvanceApprovals: [], ...extra,
+    allEmployees: [e], salaryHistory: registeredHistory, records, allAdjustments: [], allAdvanceApprovals: [], ...extra,
   });
   assert.equal(summary.lines.length, 1);
   return summary.lines[0];

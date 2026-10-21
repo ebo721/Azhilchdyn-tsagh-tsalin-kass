@@ -69,34 +69,31 @@ export function shiftDailyRate(salary: Pick<SalaryHistoryRow, "salaryType" | "ba
 }
 
 export function salaryAt(employee: typeof employeesTable.$inferSelect, history: SalaryHistoryRow[], date: string) {
-  const employeeHistory = history.filter((row) => row.employeeId === employee.id);
-  const effective = employeeHistory
-    .filter((row) => row.effectiveFrom <= date)
-    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0];
+  const employeeHistory = history.filter((row) => row.employeeId === employee.id)
+    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
+  const latest = employeeHistory[0];
+  if (!latest) {
+    throw new PayrollConfigurationError(
+      `${employee.name}: ${date}-нд НДШ/ХХОАТ төлөх эсэхийг шалгах цалингийн түүх алга. Ажилтны бүртгэлд хүчинтэй эхлэх огноо, татварын төлөвийг бүртгэнэ үү. Одоогийн тохиргоогоор таамгаар бодохгүй.`,
+    );
+  }
+  // The employee register mirrors the latest saved salary-history row, even
+  // when that row starts in the future. Compare those two, not the historical
+  // row for this calculation date: a later exemption must not rewrite the past.
+  if (latest.payrollTaxExempt !== employee.payrollTaxExempt) {
+    throw new PayrollConfigurationError(
+      `${employee.name}: ажилтны бүртгэл болон ${latest.effectiveFrom}-нөөс хүчинтэй хамгийн сүүлийн цалингийн түүхийн НДШ/ХХОАТ төлөх төлөв зөрүүтэй байна. Бүртгэлийг тулгаж залруулсны дараа цалин бодно уу.`,
+    );
+  }
+  const effective = employeeHistory.find((row) => row.effectiveFrom <= date);
   if (effective) return effective;
   // A known history with no coverage is not permission to apply today's
   // salary/tax settings backwards. Nor can we infer an earlier exemption from
   // a later row. Require an explicit historical correction before saving pay.
-  if (employeeHistory.length > 0) {
-    const firstDate = employeeHistory.reduce((first, row) =>
-      row.effectiveFrom < first ? row.effectiveFrom : first, employeeHistory[0].effectiveFrom);
-    throw new PayrollConfigurationError(
-      `${employee.name}: ${date}-нд хүчинтэй цалингийн түүх алга. Анхны түүх ${firstDate}-нөөс эхэлж байна. Цалингийн түүхийн эхлэх огноо, НДШ/ХХОАТ-ын чөлөөлөлтийг шалгаж залруулна уу. Одоогийн тохиргоог өмнөх хугацаанд ашиглаж бодохгүй.`,
-    );
-  }
-  // Preserve support for legacy employees with no salary-history rows at all.
-  return {
-      employeeId: employee.id,
-      effectiveFrom: employee.joinedAt,
-      employeeType: employee.employeeType,
-      salaryType: employee.salaryType === "hourly" ? "daily" : employee.salaryType,
-      monthlyExpectedWorkDays: employee.monthlyExpectedWorkDays,
-      baseSalary: Number(employee.baseSalary),
-      socialInsuranceSalary: Number(employee.socialInsuranceSalary),
-      payrollTaxExempt: employee.payrollTaxExempt,
-      fullSalaryRegardlessAttendance: employee.fullSalaryRegardlessAttendance,
-      payFrequency: employee.payFrequency,
-    };
+  const firstDate = employeeHistory[employeeHistory.length - 1].effectiveFrom;
+  throw new PayrollConfigurationError(
+    `${employee.name}: ${date}-нд хүчинтэй цалингийн түүх алга. Анхны түүх ${firstDate}-нөөс эхэлж байна. Цалингийн түүхийн эхлэх огноо, НДШ/ХХОАТ-ын чөлөөлөлтийг шалгаж залруулна уу. Одоогийн тохиргоог өмнөх хугацаанд ашиглаж бодохгүй.`,
+  );
 }
 
 export function applyPayrollFinancials(
@@ -176,6 +173,8 @@ export function calculatePayrollMonth(
   );
 
   const lines = employees.map((employee) => {
+    // Validate registration before computing even an empty-attendance month.
+    salaryAt(employee, salaryHistory, employee.joinedAt > period.periodStart ? employee.joinedAt : period.periodStart);
     const employeeRecords = monthRecords.filter((record) => record.employeeId === employee.id);
     const eligibleWeekdays = weekdays.filter((date) =>
       date >= employee.joinedAt && (!employee.inactiveAt || date <= employee.inactiveAt)

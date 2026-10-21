@@ -4,6 +4,8 @@ import { after, it } from "node:test";
 import { pool } from "@workspace/db";
 import { closingBalances, PayrollBalancesNotReadyError, rebuildPayrollBalances } from "./payroll-balance-store.js";
 import { getPayrollAdvanceSummary, getPayrollSummary } from "./payroll-calc-helpers.js";
+import { pullPayrollAttendance } from "./payroll-attendance-snapshot.js";
+import { PayrollConfigurationError } from "./shift-insurance.js";
 
 after(() => pool.end());
 
@@ -44,6 +46,9 @@ it("real SQL: monthly attendance only, explicit financial initialization, source
     await query(`INSERT INTO payroll_schedule_settings (effective_from_month) VALUES ('0001-01')`);
     await query(`INSERT INTO employees (id,name,role,employee_type,salary_type,base_salary,payroll_tax_exempt,joined_at)
       VALUES (1,'Financial test','Test','shift','daily',100,true,'2024-01-01')`);
+    await query(`INSERT INTO employee_salary_history
+      (employee_id,effective_from,employee_type,salary_type,base_salary,payroll_tax_exempt)
+      VALUES (1,'2024-01-01','shift','daily',100,true)`);
     await query(`INSERT INTO attendance (employee_id,date,clock_in,clock_out,hours,status)
       VALUES (1,'2024-01-05','08:00','16:00',8,'present'),
              (1,'2024-02-05','08:00','16:00',8,'present'),
@@ -95,8 +100,8 @@ it("real SQL: monthly attendance only, explicit financial initialization, source
         `UPDATE payroll_adjustments SET paid_amount=600 WHERE month='2024-01'`,
         `INSERT INTO payroll_advance_approvals (month,lines,total_amount,approval_date) VALUES ('2024-01','[]',0,'2024-01-15')`,
         `DELETE FROM payroll_advance_approvals WHERE month='2024-01'`,
-        `INSERT INTO employee_salary_history (employee_id,effective_from,employee_type,base_salary,payroll_tax_exempt) VALUES (1,'2024-01-01','shift',100,true)`,
-        `DELETE FROM employee_salary_history WHERE employee_id=1`,
+        `INSERT INTO employee_salary_history (employee_id,effective_from,employee_type,salary_type,base_salary,payroll_tax_exempt) VALUES (1,'2024-01-15','shift','daily',100,true)`,
+        `DELETE FROM employee_salary_history WHERE employee_id=1 AND effective_from='2024-01-15'`,
         `DELETE FROM attendance WHERE date='2024-01-05'`,
       ]) {
         await query(mutation);
@@ -109,6 +114,29 @@ it("real SQL: monthly attendance only, explicit financial initialization, source
       await query(`UPDATE employees SET phone='fixture' WHERE id=1`);
       const summary = await getPayrollSummary("2024-03");
       assert.equal(summary.lines[0].carryoverAmount, -500);
+    });
+    await t.test("registration mismatches and missing history cannot overwrite saved payroll or financial balances", async () => {
+      // Use the first employment month so a deliberately dirtied source reaches
+      // the registration guard, rather than the separate prior-debt guard.
+      await pullPayrollAttendance("2024-01");
+      const savedBefore = await query(`SELECT payroll,advance,pulled_at FROM payroll_attendance_snapshots WHERE month='2024-01'`);
+      const expectRejectedPull = async () => {
+        const balancesBefore = await query(`SELECT month,lines,dirty,updated_at FROM payroll_month_balances ORDER BY month`);
+        await assert.rejects(pullPayrollAttendance("2024-01"), PayrollConfigurationError);
+        const savedAfter = await query(`SELECT payroll,advance,pulled_at FROM payroll_attendance_snapshots WHERE month='2024-01'`);
+        const balancesAfter = await query(`SELECT month,lines,dirty,updated_at FROM payroll_month_balances ORDER BY month`);
+        assert.deepEqual(savedAfter.rows, savedBefore.rows);
+        assert.deepEqual(balancesAfter.rows, balancesBefore.rows);
+      };
+      await query(`UPDATE employees SET payroll_tax_exempt=false WHERE id=1`);
+      await expectRejectedPull();
+      await query(`UPDATE employees SET payroll_tax_exempt=true WHERE id=1`);
+      await query(`DELETE FROM employee_salary_history WHERE employee_id=1`);
+      await expectRejectedPull();
+      await query(`INSERT INTO employee_salary_history
+        (employee_id,effective_from,employee_type,salary_type,base_salary,payroll_tax_exempt)
+        VALUES (1,'2024-01-01','shift','daily',100,true)`);
+      await rebuildPayrollBalances("2024-03");
     });
     await t.test("employment-date corrections do not leave unrepairable pre-baseline dirty records", async () => {
       await query(`UPDATE employees SET joined_at='2024-02-01' WHERE id=1`);
