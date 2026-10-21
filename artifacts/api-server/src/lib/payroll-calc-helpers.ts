@@ -173,12 +173,21 @@ export function calculatePayrollMonth(
   );
 
   const lines = employees.map((employee) => {
-    // Validate registration before computing even an empty-attendance month.
-    salaryAt(employee, salaryHistory, employee.joinedAt > period.periodStart ? employee.joinedAt : period.periodStart);
     const employeeRecords = monthRecords.filter((record) => record.employeeId === employee.id);
     const eligibleWeekdays = weekdays.filter((date) =>
       date >= employee.joinedAt && (!employee.inactiveAt || date <= employee.inactiveAt)
     );
+    const employeeHistory = salaryHistory.filter(row => row.employeeId === employee.id)
+      .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
+    // Determine dated full-salary entitlement without treating uncovered,
+    // attendance-free days as earning days or backdating a later exception.
+    const fullSalaryDates = eligibleWeekdays.filter(date =>
+      employeeHistory.find(row => row.effectiveFrom <= date)?.fullSalaryRegardlessAttendance === true);
+    if (employeeRecords.length > 0
+      || (employee.fullSalaryRegardlessAttendance && !employeeHistory.some(row =>
+        row.effectiveFrom <= (employee.joinedAt > period.periodStart ? employee.joinedAt : period.periodStart)))) {
+      salaryAt(employee, salaryHistory, employee.joinedAt > period.periodStart ? employee.joinedAt : period.periodStart);
+    }
     const paidWeekdays = employeeRecords.length === 0
       ? []
       : eligibleWeekdays.filter((date) =>
@@ -197,10 +206,8 @@ export function calculatePayrollMonth(
     // the month's weekday count. Use the same dates for earnings and insurance.
     const weekendWorkedRecords = workedRecords
       .filter((record) => !weekdays.includes(String(record.date)));
-    const officeSalaryDates = eligibleWeekdays.filter((date) => {
-      const salary = salaryAt(employee, salaryHistory, date);
-      return salary.fullSalaryRegardlessAttendance || paidWeekdays.includes(date);
-    });
+    const officeSalaryDates = eligibleWeekdays.filter(date =>
+      fullSalaryDates.includes(date) || paidWeekdays.includes(date));
     const officeGross = officeSalaryDates.reduce((total, date) => {
       const salary = salaryAt(employee, salaryHistory, date);
       return total + (salary.employeeType === "office" ? Number(salary.baseSalary) / weekdays.length : 0);
@@ -208,7 +215,7 @@ export function calculatePayrollMonth(
       const salary = salaryAt(employee, salaryHistory, String(record.date));
       return total + (salary.employeeType === "office" && !salary.fullSalaryRegardlessAttendance ? Number(salary.baseSalary) / weekdays.length : 0);
     }, 0);
-    const fullShiftGross = eligibleWeekdays.reduce((total, date) => {
+    const fullShiftGross = fullSalaryDates.reduce((total, date) => {
       const salary = salaryAt(employee, salaryHistory, date);
         return total + (salary.employeeType === "shift" && salary.fullSalaryRegardlessAttendance
           ? (salary.salaryType === "monthly" ? Number(salary.baseSalary) : Number(salary.baseSalary) * salary.monthlyExpectedWorkDays) / weekdays.length
@@ -222,10 +229,7 @@ export function calculatePayrollMonth(
           : 0);
       }, 0);
     const gross = money(officeGross + fullShiftGross + attendedShiftGross);
-    const insuredSalaryDates = eligibleWeekdays.filter((date) => {
-      const salary = salaryAt(employee, salaryHistory, date);
-      return salary.fullSalaryRegardlessAttendance || paidWeekdays.includes(date);
-    });
+    const insuredSalaryDates = officeSalaryDates;
     const socialInsuranceSalary = money(insuredSalaryDates.reduce((total, date) => {
       const salary = salaryAt(employee, salaryHistory, date);
       return total + (salary.payrollTaxExempt
@@ -339,11 +343,19 @@ export async function getPayrollAdvanceSummary(
     )),
     connection.select().from(employeeSalaryHistoryTable),
   ]);
-  const employees = allEmployees.filter((employee) =>
-    employee.joinedAt <= period.advancePeriodEnd
-    && (!employee.inactiveAt || employee.inactiveAt >= period.periodStart)
-    && salaryAt(employee, salaryHistory, period.advancePeriodEnd).payFrequency === "twice",
-  );
+  const employees = allEmployees.filter((employee) => {
+    if (employee.joinedAt > period.advancePeriodEnd
+      || (employee.inactiveAt && employee.inactiveAt < period.periodStart)) return false;
+    // An empty period before the first salary row has no advance to draft.
+    // Do not manufacture salary settings merely to decide payment frequency.
+    const hasHistory = salaryHistory.some(row =>
+      row.employeeId === employee.id && row.effectiveFrom <= period.advancePeriodEnd);
+    const hasAttendance = records.some(row => row.employeeId === employee.id
+      && String(row.date) >= employee.joinedAt
+      && (!employee.inactiveAt || String(row.date) <= employee.inactiveAt));
+    if (!hasHistory && !hasAttendance && !employee.fullSalaryRegardlessAttendance) return false;
+    return salaryAt(employee, salaryHistory, period.advancePeriodEnd).payFrequency === "twice";
+  });
   const firstHalfRecords = records.filter((record) =>
     String(record.date) >= period.periodStart && String(record.date) <= period.advancePeriodEnd
   );
