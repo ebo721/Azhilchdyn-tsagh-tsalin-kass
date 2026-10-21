@@ -283,11 +283,29 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Get dashboard summary
  */
+export const getDashboardQueryMonthRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])$');
+
+
+export const GetDashboardQueryParams = zod.object({
+  "month": zod.coerce.string().regex(getDashboardQueryMonthRegExp).optional()
+})
+
 export const GetDashboardResponse = zod.object({
+  "month": zod.string(),
   "employeeCount": zod.number().int(),
-  "previousMonthSalesIncome": zod.number(),
-  "previousMonthPayrollExpense": zod.number(),
-  "previousMonthInventoryExpense": zod.number(),
+  "salesIncome": zod.number(),
+  "payrollGross": zod.number().nullable(),
+  "officePayrollGross": zod.number().nullable(),
+  "payrollByShift": zod.array(zod.object({
+  "shiftId": zod.number().int().nullable(),
+  "shiftName": zod.string(),
+  "gross": zod.number()
+})),
+  "payrollStatus": zod.enum(['missing', 'saved', 'stale', 'closed']),
+  "payrollPulledAt": zod.string().nullable(),
+  "inventoryPurchaseTotal": zod.number(),
+  "supplyPurchaseTotal": zod.number(),
+  "operatingExpenseTotal": zod.number(),
   "recentActivity": zod.array(zod.object({
   "id": zod.string(),
   "type": zod.string(),

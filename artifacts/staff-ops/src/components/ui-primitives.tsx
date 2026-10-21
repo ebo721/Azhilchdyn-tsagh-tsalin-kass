@@ -29,7 +29,7 @@ export function EmptyState({ title, detail, icon: Icon = Search }: { title: stri
   );
 }
 
-export function StatCard({ label, value, meta, icon: Icon, tone = 'teal' }: { label: string; value: string; meta: string; icon: typeof Activity; tone?: 'teal' | 'gold' | 'blue' | 'orange' }) {
+export function StatCard({ label, value, meta, icon: Icon, tone = 'teal', valueTestId }: { label: string; value: string; meta: string; icon: typeof Activity; tone?: 'teal' | 'gold' | 'blue' | 'orange'; valueTestId?: string }) {
   const colors = { teal: 'bg-primary/10 text-primary', gold: 'bg-accent/25 text-foreground', blue: 'bg-sky-100 text-sky-800', orange: 'bg-orange-100 text-orange-800' };
   return (
     <div className="group rounded-2xl border border-border/80 bg-card p-5 shadow-[0_1px_0_hsl(var(--foreground)/.03)] transition-transform duration-200 hover:-translate-y-0.5" data-testid={`card-stat-${label}`}>
@@ -37,7 +37,7 @@ export function StatCard({ label, value, meta, icon: Icon, tone = 'teal' }: { la
         <span className="text-[11px] font-bold uppercase tracking-[.12em] text-muted-foreground">{label}</span>
         <span className={cn('grid size-9 place-items-center rounded-xl', colors[tone])}><Icon className="size-[18px]" /></span>
       </div>
-      <p className="mt-5 font-mono text-[clamp(1.35rem,2.8vw,2rem)] font-bold tracking-tight text-foreground" data-testid={`value-stat-${label}`}>{value}</p>
+      <p className="mt-5 font-mono text-[clamp(1.35rem,2.8vw,2rem)] font-bold tracking-tight text-foreground" data-testid={valueTestId ?? `value-stat-${label}`}>{value}</p>
       <p className="mt-1 text-xs text-muted-foreground">{meta}</p>
     </div>
   );

@@ -6,11 +6,23 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Activity } from './activity';
+import type { DashboardPayrollStatus } from './dashboardPayrollStatus';
+import type { DashboardShiftPayroll } from './dashboardShiftPayroll';
 
 export interface Dashboard {
+  month: string;
   employeeCount: number;
-  previousMonthSalesIncome: number;
-  previousMonthPayrollExpense: number;
-  previousMonthInventoryExpense: number;
+  salesIncome: number;
+  /** @nullable */
+  payrollGross: number | null;
+  /** @nullable */
+  officePayrollGross: number | null;
+  payrollByShift: DashboardShiftPayroll[];
+  payrollStatus: DashboardPayrollStatus;
+  /** @nullable */
+  payrollPulledAt: string | null;
+  inventoryPurchaseTotal: number;
+  supplyPurchaseTotal: number;
+  operatingExpenseTotal: number;
   recentActivity: Activity[];
 }

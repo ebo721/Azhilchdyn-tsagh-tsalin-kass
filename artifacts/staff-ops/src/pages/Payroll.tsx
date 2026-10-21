@@ -5,11 +5,12 @@ import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { cn } from '@/lib/utils';
-import { CalendarDays, Banknote, Check, ChevronRight, Coins, Download, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { CalendarDays, Banknote, Check, Coins, Download, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { downloadSocialInsuranceReport, usePullPayrollAttendance } from '@workspace/api-client-react';
 import { getGetDashboardQueryKey, getGetPayrollAdvanceQueryKey, getGetPayrollQueryKey, getGetPayrollScheduleQueryKey, getListJournalReceivablesQueryKey, useApprovePayrollAdvance, useClosePayrollMonth, useReopenPayrollMonth, useGetAuthSession, useGetPayroll, useGetPayrollAdvance, useGetPayrollSchedule, useListCashClosures, useListJournalReceivables, useUpdatePayrollAdvancePayment, useUpdatePayrollSchedule, useUpsertPayrollAdjustment, type PayrollLine, type PayrollScheduleInput, type PayrollSummary } from '@workspace/api-client-react';
 import { EmptyState, ErrorBlock, LoadingBlock, Modal } from '@/components/ui-primitives';
-import { dateLabel, currentMonth, money, shiftMonth, today } from '@/lib/app-shared';
+import { MonthNavigator } from '@/components/MonthNavigator';
+import { dateLabel, currentMonth, money, today } from '@/lib/app-shared';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
 import { rebuildPayrollBalances } from '@workspace/api-client-react';
 
@@ -431,7 +432,7 @@ export function Payroll() {
       <Button onClick={() => setShowScheduleSettings(true)} variant="outline" data-testid="button-payroll-schedule-settings"><CalendarDays className="size-4" />Цалингийн хуваарь</Button>
       {['admin', 'accountant', 'hr'].includes(session.data?.role ?? '') && <Button onClick={() => void pullLatestAttendance()} variant="outline" disabled={pullAttendance.isPending || closed} title={closed ? 'Сар хаагдсан' : undefined} data-testid="button-pull-payroll-attendance"><RefreshCw className={cn('size-4', pullAttendance.isPending && 'animate-spin')} />{pullAttendance.isPending ? 'Татаж байна...' : 'Цаг татах'}</Button>}
       <Button onClick={() => setShowAdvance((value) => !value)} variant={showAdvance ? 'default' : 'outline'} data-testid="button-payroll-advance"><Coins className="size-4" />Урьдчилгаа цалин</Button>
-      <div className="flex items-center overflow-hidden rounded-xl border border-border bg-card"><button type="button" onClick={() => setMonth((value) => shiftMonth(value, -1))} className="grid size-10 place-items-center border-r border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Өмнөх сар" data-testid="button-payroll-previous-month"><ChevronRight className="size-4 rotate-180" /></button><div className="flex items-center gap-2 px-3"><CalendarDays className="size-4 text-primary" /><label className="relative flex h-10 min-w-28 cursor-pointer items-center text-sm font-medium"><span>{mongolianMonthLabel(month)}</span><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="Цалингийн сар сонгох" data-testid="input-payroll-month" /></label></div><button type="button" onClick={() => setMonth((value) => shiftMonth(value, 1))} className="grid size-10 place-items-center border-l border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Дараагийн сар" data-testid="button-payroll-next-month"><ChevronRight className="size-4" /></button></div>
+      <MonthNavigator month={month} onChange={setMonth} prefix="payroll" ariaLabel="Цалингийн сар сонгох" />
     </div>
     {query.data && !query.isError && (closed ? <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4" data-testid="status-payroll-closed"><p className="text-sm"><strong>Сар хаагдсан</strong> · {new Date(query.data.closedAt as string).toLocaleString('mn-MN')}. Үлдэгдэл түгжигдсэн, засвар хийх боломжгүй.</p>{role === 'admin' && <Button variant="outline" onClick={reopenMonth} disabled={reopenPayroll.isPending} data-testid="button-reopen-payroll-month">{reopenPayroll.isPending ? 'Нээж байна...' : 'Дахин нээх'}</Button>}</div> : canClose && <div className="mb-5 flex justify-end"><Button onClick={closeMonth} disabled={closePayroll.isPending} data-testid="button-close-payroll-month">{closePayroll.isPending ? 'Хааж байна...' : 'Сар хаах'}</Button></div>)}
     {closureError && <p role="alert" className="mb-5 whitespace-pre-line text-sm text-destructive" data-testid="payroll-closure-error">{closureError}</p>}

@@ -246,6 +246,11 @@ paths:
       operationId: getDashboard
       tags: [dashboard]
       summary: Get dashboard summary
+      parameters:
+        - name: month
+          in: query
+          required: false
+          schema: { type: string, pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$' }
       responses:
         "200":
           description: Dashboard summary
@@ -3356,16 +3361,32 @@ components:
         - status
     Dashboard:
       type: object
-      required: [employeeCount, previousMonthSalesIncome, previousMonthPayrollExpense, previousMonthInventoryExpense, recentActivity]
+      required: [month, employeeCount, salesIncome, payrollGross, officePayrollGross, payrollByShift, payrollStatus, payrollPulledAt, inventoryPurchaseTotal, supplyPurchaseTotal, operatingExpenseTotal, recentActivity]
       properties:
+        month: { type: string }
         employeeCount: { type: integer }
-        previousMonthSalesIncome: { type: number }
-        previousMonthPayrollExpense: { type: number }
-        previousMonthInventoryExpense: { type: number }
+        salesIncome: { type: number }
+        payrollGross: { type: ["number", "null"] }
+        officePayrollGross: { type: ["number", "null"] }
+        payrollByShift:
+          type: array
+          items: { $ref: "#/components/schemas/DashboardShiftPayroll" }
+        payrollStatus: { type: string, enum: [missing, saved, stale, closed] }
+        payrollPulledAt: { type: ["string", "null"] }
+        inventoryPurchaseTotal: { type: number }
+        supplyPurchaseTotal: { type: number }
+        operatingExpenseTotal: { type: number }
         recentActivity:
           type: array
           items:
             $ref: "#/components/schemas/Activity"
+    DashboardShiftPayroll:
+      type: object
+      required: [shiftId, shiftName, gross]
+      properties:
+        shiftId: { type: ["integer", "null"] }
+        shiftName: { type: string }
+        gross: { type: number }
     Activity:
       type: object
       required: [id, type, title, detail, createdAt]
