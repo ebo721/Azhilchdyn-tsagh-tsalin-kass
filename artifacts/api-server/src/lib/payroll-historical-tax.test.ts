@@ -50,6 +50,10 @@ test("advance calculations reject the same historical gap instead of using curre
     "2026-09-01", "2026-09-30", "2026-09-15"), PayrollConfigurationError);
 });
 
+test("future-only history is a coverage gap, not a legacy employee without history", () => {
+  assert.throws(() => calculate([history("2026-10-01", false)]), PayrollConfigurationError);
+});
+
 test("corrected exempt baseline gives zero insurance, income tax and relief despite current insured settings", () => {
   const line = calculate([history("2026-08-20", true), history("2026-10-01", false, 2)]).lines[0];
   assert.equal(line.socialInsuranceSalary, 0);
