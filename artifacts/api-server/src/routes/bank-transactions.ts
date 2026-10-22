@@ -8,6 +8,7 @@ import {
   PairBankTransferParams, PairBankTransferBody, PairBankTransferResponse, UnpairBankTransferParams,
 } from "@workspace/api-zod";
 import { createHash } from "node:crypto";
+import { assertStatementAccountMatches } from "../lib/bank-statement-account.js";
 import { inflateRawSync } from "node:zlib";
 import {
   UnlinkBankTransactionCashParams,
@@ -271,7 +272,7 @@ function cashSuggestionResponse(row: typeof cashTransactionsTable.$inferSelect, 
   };
 }
 
-export async function readKapitronXlsx(buffer: Buffer) {
+export async function readKapitronXlsx(buffer: Buffer, expectedAccountNumber: string) {
   const zip = readZipEntries(buffer);
   const sheet = zip.names.find((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name));
   if (!sheet) throw new Error("Kapitron XLSX бүтэц буруу байна");
@@ -284,6 +285,7 @@ export async function readKapitronXlsx(buffer: Buffer) {
   const parsedRows = rows.map((row) => cellsFromRow(row[1], shared));
   const headerRowIndex = findKapitronHeaderRow(parsedRows);
   if (headerRowIndex < 0) throw new Error("Kapitron баганын толгой буруу байна");
+  assertStatementAccountMatches(parsedRows.slice(0, headerRowIndex), expectedAccountNumber);
   const header = parsedRows[headerRowIndex];
   const indexes = new Map(requiredHeaders.map((name) => [name, [...header].find(([, value]) => value.trim() === name)?.[0]]));
   if ([...indexes.values()].some((index) => index === undefined)) throw new Error("Kapitron баганын толгой буруу байна");
@@ -896,7 +898,13 @@ router.post("/bank-transactions/import", raw({ type: "application/octet-stream",
       res.status(400).json({ error: "Kapitron XLSX файл шаардлагатай" });
       return;
     }
-    const rows = await readKapitronXlsx(req.body);
+    let rows: Awaited<ReturnType<typeof readKapitronXlsx>>;
+    try {
+      rows = await readKapitronXlsx(req.body, selectedAccount.accountNumber);
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Банкны хуулгыг уншиж чадсангүй. Гүйлгээ хадгалаагүй." });
+      return;
+    }
     let skippedZero = 0;
     const values = rows.flatMap((row) => {
       const expense = parseAmount(row["Зарлага"]);
