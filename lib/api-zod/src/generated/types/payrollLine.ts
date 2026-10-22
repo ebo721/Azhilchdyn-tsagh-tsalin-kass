@@ -8,6 +8,10 @@
 import type { PayrollLineEmployeeType } from './payrollLineEmployeeType';
 
 export interface PayrollLine {
+  calculationReady?: boolean;
+  attendanceNeedsRefresh?: boolean;
+  openingBalanceReviewRequired?: boolean;
+  refreshMonths?: string[];
   employeeId: number;
   employeeName: string;
   bankAccountNumber?: string;

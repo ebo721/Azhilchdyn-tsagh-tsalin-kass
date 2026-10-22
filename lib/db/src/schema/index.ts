@@ -79,6 +79,7 @@ export const usersTable = pgTable("users", {
 });
 
 export { payrollMonthClosuresTable } from "./payroll-month-closures";
+export * from "./payroll-opening-balances";
 
 export const inventoryCustodianEmployeesTable = pgTable("inventory_custodian_employees", {
   id: serial("id").primaryKey(),
