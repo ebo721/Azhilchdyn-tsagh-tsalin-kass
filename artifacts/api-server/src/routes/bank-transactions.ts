@@ -1206,12 +1206,17 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
        if (cash.journalEntryId) {
          await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
        }
-       const mapped = cash.accountId
-         ? (await tx.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, cash.accountId)))[0]
+       const mappedAccountId = bank.accountId ?? cash.accountId;
+       const mapped = mappedAccountId
+         ? (await tx.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, mappedAccountId)))[0]
          : null;
+       if (bank.accountId !== null && (!mapped?.isActive
+         || !(cash.type === "income" ? mapped.type === "revenue" : ["expense", "asset"].includes(mapped.type)))) {
+         throw Object.assign(new Error("Банкны гүйлгээний данс идэвхгүй эсвэл төрөл тохирохгүй байна."), { status: 409 });
+       }
        const counter = await counterAccount(tx, cash.type, cash.category, mapped);
        const journalEntryId = await postBankCashJournal(tx, bank, { ...cash, bankTransactionId: id }, counter);
-       await tx.update(cashTransactionsTable).set({ journalEntryId }).where(eq(cashTransactionsTable.id, cashTransactionId));
+       await tx.update(cashTransactionsTable).set({ journalEntryId, accountId: counter.id }).where(eq(cashTransactionsTable.id, cashTransactionId));
        const [postedBank] = await tx.update(bankTransactionsTable)
          .set({ journalEntryId })
          .where(eq(bankTransactionsTable.id, id))

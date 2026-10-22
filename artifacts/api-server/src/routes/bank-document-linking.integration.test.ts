@@ -86,6 +86,35 @@ describe("bank document linking", () => {
     return row.id;
   }
 
+  it("relinks income using the assigned bank GL without changing cash date or income month", async () => {
+    const [revenue] = await db.select().from(chartOfAccountsTable)
+      .where(and(eq(chartOfAccountsTable.code, "4000"), eq(chartOfAccountsTable.isActive, true))).limit(1);
+    assert.ok(revenue);
+    const bankId = await bank("2099-08-05", 63_000, "income-relink-bank-gl");
+    await db.update(bankTransactionsTable).set({ type: "income", accountId: revenue.id })
+      .where(eq(bankTransactionsTable.id, bankId));
+    const [cash] = await db.insert(cashTransactionsTable).values({
+      type: "income", category: "Борлуулалтын орлого", description: "Income relink",
+      amount: 63_000, date: "2099-08-05", incomeMonth: "2099-07",
+    }).returning();
+    cashIds.push(cash.id);
+    const response = await fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-cash`, {
+      method: "POST", headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ cashTransactionId: cash.id }),
+    });
+    assert.equal(response.status, 200, await response.clone().text());
+    const [linked] = await db.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, cash.id));
+    assert.equal(linked.date, "2099-08-05");
+    assert.equal(linked.incomeMonth, "2099-07");
+    assert.equal(linked.bankTransactionId, bankId);
+    assert.ok(linked.bankVerifiedAt);
+    assert.equal(linked.accountId, revenue.id);
+    assert.ok(linked.journalEntryId);
+    journalIds.push(linked.journalEntryId!);
+    const lines = await db.select().from(journalLinesTable).where(eq(journalLinesTable.journalEntryId, linked.journalEntryId!));
+    assert.equal(lines.find(l => Number(l.credit) > 0)?.accountId, revenue.id);
+  });
+
   it("posts a journal when linking a legacy cash row that has no journal", async () => {
     const bankId = await bank("2099-08-05", 63_000, "legacy-cash-without-journal");
     const [cash] = await db.insert(cashTransactionsTable).values({
