@@ -8,3 +8,5 @@ When creating a cash entry and journal from a bank transaction, use the GL accou
 **Why:** The user confirmed that the bank transaction already has an expense account selected, so asking for a subcategory duplicates classification and can lead to a different journal account.
 
 **How to apply:** For future bank-to-cash flows, verify that cash, journal, and any mirrored operating expense agree on the assigned account. Reject a missing or incompatible account rather than silently posting to a generic fallback.
+
+This precedence also applies when linking or re-linking an existing cash row, especially legacy rows with no cash GL account. Re-linking must preserve the original cash transaction date and the separately selected income statistics month.
