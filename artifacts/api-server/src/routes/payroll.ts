@@ -166,6 +166,10 @@ import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-
 import { RebuildPayrollBalancesQueryParams, RebuildPayrollBalancesResponse } from "@workspace/api-zod";
 import { rebuildPayrollBalances } from "../lib/payroll-balance-store.js";
 import { readSavedPayroll, pullPayrollAttendance } from "../lib/payroll-attendance-snapshot.js";
+import { RefreshEmployeePayrollParams, RefreshEmployeePayrollResponse, GetPayrollOpeningBalancesQueryParams,
+  GetPayrollOpeningBalancesResponse, ConfirmPayrollOpeningBalancesBody } from "@workspace/api-zod";
+import { payrollOpeningDraft, confirmPayrollOpening } from "../lib/payroll-opening.js";
+import { refreshEmployeePayroll } from "../lib/payroll-employee-refresh.js";
 import { closePayrollMonth, reopenPayrollMonth } from "../lib/payroll-month-close.js";
 import { ClosePayrollMonthParams, ReopenPayrollMonthParams } from "@workspace/api-zod";
 import { PullPayrollAttendanceBody, PullPayrollAttendanceResponse } from "@workspace/api-zod";
@@ -346,6 +350,39 @@ router.post("/payroll/pull-attendance", async (req, res, next): Promise<void> =>
       return;
     }
     res.json(PullPayrollAttendanceResponse.parse(await pullPayrollAttendance(month)));
+  } catch (error) { next(error); }
+});
+
+router.get("/payroll/opening-balances", async (req, res, next): Promise<void> => {
+  try {
+    const session = await getStaffSession(req);
+    if (!session || !["admin", "accountant"].includes(session.role)) {
+      res.status(403).json({ error: "Эхний үлдэгдэл харах эрхгүй." }); return;
+    }
+    const { month } = GetPayrollOpeningBalancesQueryParams.parse(req.query);
+    res.json(GetPayrollOpeningBalancesResponse.parse(await payrollOpeningDraft(month)));
+  } catch (error) { next(error); }
+});
+
+router.post("/payroll/opening-balances", async (req, res, next): Promise<void> => {
+  try {
+    const session = await getStaffSession(req);
+    if (!session || session.role !== "admin") {
+      res.status(403).json({ error: "Зөвхөн админ эхний үлдэгдэл батална." }); return;
+    }
+    const input = ConfirmPayrollOpeningBalancesBody.parse(req.body);
+    res.json(GetPayrollOpeningBalancesResponse.parse(await confirmPayrollOpening(input, session.id)));
+  } catch (error) { next(error); }
+});
+
+router.post("/payroll/:month/employees/:employeeId/refresh", async (req, res, next): Promise<void> => {
+  try {
+    const session = await getStaffSession(req);
+    if (!session || !["admin", "accountant", "hr"].includes(session.role)) {
+      res.status(403).json({ error: "Цалингийн бодолт шинэчлэх эрхгүй." }); return;
+    }
+    const { month, employeeId } = RefreshEmployeePayrollParams.parse(req.params);
+    res.json(RefreshEmployeePayrollResponse.parse(await refreshEmployeePayroll(month, employeeId)));
   } catch (error) { next(error); }
 });
 

@@ -15,6 +15,8 @@ export const payrollMonthBalancesTable = pgTable("payroll_month_balances", {
   periodEnd: date("period_end", { mode: "string" }).notNull(),
   lines: jsonb("lines").$type<PayrollBalanceEntry[]>().notNull(),
   dirty: boolean("dirty").notNull().default(false),
+  dirtyEmployeeIds: jsonb("dirty_employee_ids").$type<number[]>().notNull().default([]),
+  earningsDirtyEmployeeIds: jsonb("earnings_dirty_employee_ids").$type<number[]>().notNull().default([]),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, table => [
   check("payroll_month_balances_month_check", sql`${table.month} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),

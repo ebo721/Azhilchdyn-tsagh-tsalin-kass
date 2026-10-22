@@ -9,6 +9,7 @@ import { PayrollConfigurationError } from "./lib/shift-insurance.js";
 import { PayrollBalancesNotReadyError } from "./lib/payroll-balance-store.js";
 import { PayrollSnapshotMissingError } from "./lib/payroll-attendance-snapshot.js";
 import { PayrollClosureConflict } from "./lib/payroll-month-close.js";
+import { PayrollOpeningConflict } from "./lib/payroll-opening.js";
 import { InternalTransferError } from "./lib/bank-internal-transfer.js";
 
 type PinoHttpFactory = (options?: Record<string, unknown>) => HttpLogger;
@@ -54,8 +55,8 @@ const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
     return;
   }
   const pgError = error?.cause ?? error;
-  if (error instanceof PayrollClosureConflict || pgError?.code === "PCL01") {
-    res.status(409).json({ error: error instanceof PayrollClosureConflict ? error.message : pgError.message });
+  if (error instanceof PayrollClosureConflict || error instanceof PayrollOpeningConflict || pgError?.code === "PCL01") {
+    res.status(409).json({ error: error instanceof PayrollClosureConflict || error instanceof PayrollOpeningConflict ? error.message : pgError.message });
     return;
   }
   if (error instanceof PayrollBalancesNotReadyError || error instanceof PayrollSnapshotMissingError) {

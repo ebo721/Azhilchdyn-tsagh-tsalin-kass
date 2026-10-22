@@ -6,18 +6,20 @@ import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { cn } from '@/lib/utils';
 import { CalendarDays, Banknote, Check, Coins, Download, Pencil, RefreshCw, Trash2 } from 'lucide-react';
-import { downloadSocialInsuranceReport, usePullPayrollAttendance } from '@workspace/api-client-react';
+import { downloadSocialInsuranceReport, useRefreshEmployeePayroll } from '@workspace/api-client-react';
 import { getGetDashboardQueryKey, getGetPayrollAdvanceQueryKey, getGetPayrollQueryKey, getGetPayrollScheduleQueryKey, getListJournalReceivablesQueryKey, useApprovePayrollAdvance, useClosePayrollMonth, useReopenPayrollMonth, useGetAuthSession, useGetPayroll, useGetPayrollAdvance, useGetPayrollSchedule, useListCashClosures, useListJournalReceivables, useUpdatePayrollAdvancePayment, useUpdatePayrollSchedule, useUpsertPayrollAdjustment, type PayrollLine, type PayrollScheduleInput, type PayrollSummary } from '@workspace/api-client-react';
 import { EmptyState, ErrorBlock, LoadingBlock, Modal } from '@/components/ui-primitives';
 import { MonthNavigator } from '@/components/MonthNavigator';
 import { dateLabel, currentMonth, money, today } from '@/lib/app-shared';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
+import { PayrollOpeningBalances } from '@/components/PayrollOpeningBalances';
 import { rebuildPayrollBalances } from '@workspace/api-client-react';
 
 const mongolianMonthLabel = (value: string) => {
   const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value);
   return match ? `${match[1]} он ${Number(match[2])} сар` : value;
 };
+const cm = (line: PayrollLine, amount: number) => (line.calculationReady === false ? '—' : money(amount));
 const payrollRemaining = (line: PayrollLine) => {
   const amount = Math.max(0, line.gross - line.deductions) - line.paidAmount + line.carryoverAmount;
   return Math.abs(amount) <= 1 ? 0 : amount;
@@ -218,7 +220,11 @@ export function Payroll() {
   });
   const selectedMonth = useRef(month);
   selectedMonth.current = month;
-  const pullAttendance = usePullPayrollAttendance();
+  const refreshEmployee = useRefreshEmployeePayroll();
+  const [refreshingIds, setRefreshingIds] = useState<number[]>([]);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [refreshFailures, setRefreshFailures] = useState<Record<number, string>>({});
+  const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
   const [selectedLine, setSelectedLine] = useState<PayrollLine | null>(null);
   const [showAdvance, setShowAdvance] = useState(false);
@@ -245,6 +251,7 @@ export function Payroll() {
   const [closureError, setClosureError] = useState<string | null>(null);
   const closed = Boolean(query.data?.closedAt);
   const role = session.data?.role;
+  const canEditPayroll = ['admin', 'accountant', 'hr'].includes(role ?? '');
   const canClose = role === 'admin' || role === 'accountant';
   useEffect(() => {
     if (closed) { setSelectedLine(null); setRefreshingAdvanceEmployeeId(null); setAdvanceAmounts({}); setAdvanceDates({}); }
@@ -275,8 +282,10 @@ export function Payroll() {
     setAdvanceAmounts({});
     setAdvanceDates({});
     setAttendanceError(null);
+    setRefreshFailures({});
+    setRefreshNotice(null);
   }, [month]);
-  const payrollTotals = (query.data?.lines ?? []).reduce(
+  const payrollTotals = (query.data?.lines ?? []).filter((line) => line.calculationReady !== false).reduce(
     (totals, line) => ({
       gross: totals.gross + Number(line.gross),
       advanceAmount: totals.advanceAmount + Number(line.advanceAmount),
@@ -286,42 +295,53 @@ export function Payroll() {
     }),
     { gross: 0, advanceAmount: 0, payable: 0, paidAmount: 0, remaining: 0 },
   );
+  const partial = !closed && (query.data?.lines ?? []).some((line) => line.calculationReady === false || line.attendanceNeedsRefresh || line.openingBalanceReviewRequired);
   const displayedAdvanceTotal = (advanceQuery.data?.lines ?? []).reduce((total, line) => {
     const amount = Number(advanceAmounts[line.employeeId] ?? line.advanceAmount);
     return total + (Number.isFinite(amount) ? amount : 0);
   }, 0);
-  const pullLatestAttendance = async (resetDraft = true) => {
-    if (closed) return;
+  const refreshOne = async (employeeId: number, resetDraft = true): Promise<boolean> => {
+    if (closed) return false;
     const requestedMonth = month;
-    setAttendanceError(null);
+    setRefreshingIds((ids) => [...ids, employeeId]);
+    setRefreshFailures((f) => { const next = { ...f }; delete next[employeeId]; return next; });
     try {
-      await Promise.all([
-        qc.cancelQueries({ queryKey: getGetPayrollQueryKey({ month: requestedMonth }) }),
-        qc.cancelQueries({ queryKey: getGetPayrollAdvanceQueryKey({ month: requestedMonth }) }),
-      ]);
-      const result = await pullAttendance.mutateAsync({ data: { month: requestedMonth } });
+      const result = await refreshEmployee.mutateAsync({ month: requestedMonth, employeeId });
       qc.setQueryData(getGetPayrollQueryKey({ month: requestedMonth }), result.payroll);
       qc.setQueryData(getGetPayrollAdvanceQueryKey({ month: requestedMonth }), result.advance);
+      void qc.invalidateQueries({ queryKey: getGetPayrollPayablesQueryKey() });
+      void qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
       if (selectedMonth.current === requestedMonth && resetDraft && !result.advance.approved) {
-        setAdvanceAmounts({});
-        setAdvanceDates({});
+        setAdvanceAmounts((amounts) => { const next = { ...amounts }; delete next[employeeId]; return next; });
       }
+      return true;
     } catch (error) {
-      if (selectedMonth.current === requestedMonth) setAttendanceError(error instanceof Error ? error.message : 'Цаг татах үед алдаа гарлаа.');
+      if (selectedMonth.current === requestedMonth) setRefreshFailures((f) => ({ ...f, [employeeId]: error instanceof Error ? error.message : 'Шинэчилж чадсангүй.' }));
+      return false;
+    } finally {
+      setRefreshingIds((ids) => { const i = ids.indexOf(employeeId); return i < 0 ? ids : [...ids.slice(0, i), ...ids.slice(i + 1)]; });
     }
   };
   const refreshAdvanceEmployee = async (employeeId: number) => {
     setRefreshingAdvanceEmployeeId(employeeId);
-    setAdvanceAmounts((amounts) => {
-      const next = { ...amounts };
-      delete next[employeeId];
-      return next;
-    });
-    try {
-      await pullLatestAttendance(false);
-    } finally {
-      setRefreshingAdvanceEmployeeId(null);
+    try { await refreshOne(employeeId, true); } finally { setRefreshingAdvanceEmployeeId(null); }
+  };
+  const needsRefresh = (line: PayrollLine) => line.calculationReady === false || line.attendanceNeedsRefresh === true;
+  const refreshableLines = (query.data?.lines ?? []).filter((line) => needsRefresh(line) && !line.openingBalanceReviewRequired);
+  const reviewBlockedCount = (query.data?.lines ?? []).filter((line) => line.openingBalanceReviewRequired).length;
+  const refreshAllChanged = async () => {
+    if (closed || bulkRunning || !refreshableLines.length) return;
+    const targetMonth = month;
+    const ids = refreshableLines.map((line) => line.employeeId);
+    setBulkRunning(true);
+    setRefreshNotice(null);
+    let ok = 0;
+    for (const id of ids) {
+      if (selectedMonth.current !== targetMonth) break;
+      if (await refreshOne(id, true)) ok += 1;
     }
+    setBulkRunning(false);
+    if (selectedMonth.current === targetMonth) setRefreshNotice(`${ok}/${ids.length} ажилтан шинэчлэгдлээ.${ok < ids.length ? ' Алдаатай мөрүүдийг доороос харна уу.' : ''}`);
   };
   const approve = () => {
     if (closed) return;
@@ -430,21 +450,25 @@ export function Payroll() {
     <div className="mb-6 flex flex-wrap items-center justify-end gap-2">
       {(session.data?.role === 'admin' || session.data?.role === 'accountant') && <Button onClick={downloadInsurance} variant="outline" disabled={downloadingInsurance || query.isFetching || query.isError || !month} data-testid="button-download-insurance-report"><Download className="size-4" />{downloadingInsurance ? 'Тайлан бэлдэж байна...' : 'НДШ тайлан · Excel'}</Button>}
       <Button onClick={() => setShowScheduleSettings(true)} variant="outline" data-testid="button-payroll-schedule-settings"><CalendarDays className="size-4" />Цалингийн хуваарь</Button>
-      {['admin', 'accountant', 'hr'].includes(session.data?.role ?? '') && <Button onClick={() => void pullLatestAttendance()} variant="outline" disabled={pullAttendance.isPending || closed} title={closed ? 'Сар хаагдсан' : undefined} data-testid="button-pull-payroll-attendance"><RefreshCw className={cn('size-4', pullAttendance.isPending && 'animate-spin')} />{pullAttendance.isPending ? 'Татаж байна...' : 'Цаг татах'}</Button>}
+      {['admin', 'accountant', 'hr'].includes(session.data?.role ?? '') && <Button onClick={() => void refreshAllChanged()} variant="outline" disabled={bulkRunning || closed || refreshableLines.length === 0} title={closed ? 'Сар хаагдсан' : refreshableLines.length === 0 ? 'Шинэчлэх ажилтан алга' : undefined} data-testid="button-refresh-changed-payroll"><RefreshCw className={cn('size-4', bulkRunning && 'animate-spin')} />{bulkRunning ? 'Шинэчилж байна...' : `Өөрчлөгдсөнийг шинэчлэх (${refreshableLines.length})`}</Button>}
       <Button onClick={() => setShowAdvance((value) => !value)} variant={showAdvance ? 'default' : 'outline'} data-testid="button-payroll-advance"><Coins className="size-4" />Урьдчилгаа цалин</Button>
       <MonthNavigator month={month} onChange={setMonth} prefix="payroll" ariaLabel="Цалингийн сар сонгох" />
     </div>
     {query.data && !query.isError && (closed ? <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4" data-testid="status-payroll-closed"><p className="text-sm"><strong>Сар хаагдсан</strong> · {new Date(query.data.closedAt as string).toLocaleString('mn-MN')}. Үлдэгдэл түгжигдсэн, засвар хийх боломжгүй.</p>{role === 'admin' && <Button variant="outline" onClick={reopenMonth} disabled={reopenPayroll.isPending} data-testid="button-reopen-payroll-month">{reopenPayroll.isPending ? 'Нээж байна...' : 'Дахин нээх'}</Button>}</div> : canClose && <div className="mb-5 flex justify-end"><Button onClick={closeMonth} disabled={closePayroll.isPending} data-testid="button-close-payroll-month">{closePayroll.isPending ? 'Хааж байна...' : 'Сар хаах'}</Button></div>)}
     {closureError && <p role="alert" className="mb-5 whitespace-pre-line text-sm text-destructive" data-testid="payroll-closure-error">{closureError}</p>}
 
-    {((query.isError && query.error instanceof Error && query.error.message.includes('өмнөх сарын')) || attendanceError?.includes('өмнөх сарын')) && <div className="mb-5 space-y-3 rounded-xl border border-border bg-card p-4" data-testid="payroll-balances-required">
+    {!query.data?.openingBalanceMonth && ((query.isError && query.error instanceof Error && query.error.message.includes('өмнөх сарын')) || attendanceError?.includes('өмнөх сарын')) && <div className="mb-5 space-y-3 rounded-xl border border-border bg-card p-4" data-testid="payroll-balances-required">
+      <p className="text-xs font-semibold text-muted-foreground">Нарийвчилсан сонголт (эхний үлдэгдэл байхгүй үед)</p>
       <p className="text-sm">Өмнөх сарын хадгалсан авлага/өглөгийг нэг удаа бэлтгэх, эсвэл хуучин сарын засварыг тусгах шаардлагатай. Ердийн цалин бодолт зөвхөн сонгосон цалингийн хугацааны ирцийг уншина.</p>
       {(session.data?.role === 'admin' || session.data?.role === 'accountant') && <Button onClick={prepareBalances} disabled={preparingBalances || closed} data-testid="button-prepare-payroll-balances">{preparingBalances ? 'Шинэчилж байна…' : 'Өмнөх үлдэгдэл шинэчлэх'}</Button>}
       {balanceProgress && <p aria-live="polite" className="text-sm text-muted-foreground" data-testid="payroll-balances-progress">{balanceProgress}</p>}
       {balanceError && <p role="alert" className="whitespace-pre-line text-sm text-destructive" data-testid="payroll-balances-error">{balanceError}</p>}
     </div>}
+    {canEditPayroll && <PayrollOpeningBalances month={month} role={role} closed={closed} openingBalanceMonth={query.data?.openingBalanceMonth} reviewRequiredCount={reviewBlockedCount} legacyAvailable={!query.data?.openingBalanceMonth} />}
+    {refreshNotice && <p role="status" className="mb-4 text-sm font-medium text-primary" data-testid="payroll-refresh-notice">{refreshNotice}</p>}
+    {Object.keys(refreshFailures).length > 0 && <div role="alert" className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" data-testid="payroll-refresh-failures"><p className="font-semibold">Шинэчлэхэд алдаа гарсан ажилтнууд:</p><ul className="mt-1 list-disc pl-5">{Object.entries(refreshFailures).map(([id, message]) => <li key={id}>{query.data?.lines.find((l) => l.employeeId === Number(id))?.employeeName ?? `#${id}`}: {message}</li>)}</ul></div>}
     {attendanceError && <p role="alert" className="mb-5 whitespace-pre-line text-sm text-destructive" data-testid="payroll-attendance-error">{attendanceError}</p>}
-    {query.data?.attendancePulledAt && <p className="mb-4 text-sm text-muted-foreground" data-testid="payroll-attendance-status">Сүүлд цаг татсан: {new Date(query.data.attendancePulledAt).toLocaleString('mn-MN')}. {query.data.attendanceNeedsRefresh ? 'Эх бүртгэл өөрчлөгдсөн. Хадгалсан тооцоог харуулж байна; «Цаг татах» дарж шинэчилнэ үү.' : 'Хадгалсан тооцоог харуулж байна.'}</p>}
+    {query.data?.attendancePulledAt && <p className="mb-4 text-sm text-muted-foreground" data-testid="payroll-attendance-status">Сүүлд цаг татсан: {new Date(query.data.attendancePulledAt).toLocaleString('mn-MN')}. {query.data.attendanceNeedsRefresh ? 'Эх бүртгэл өөрчлөгдсөн. Хадгалсан тооцоог харуулж байна; Өөрчлөгдсөн ажилтныг «Шинэчлэх» үйлдлээр шинэчилнэ үү.' : 'Хадгалсан тооцоог харуулж байна.'}</p>}
     {insuranceError && <div role="alert" className="mb-5 whitespace-pre-line rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" data-testid="error-insurance-report">{insuranceError}</div>}
     {query.isError && query.error instanceof Error && <p role="alert" className="mb-5 whitespace-pre-line text-sm text-destructive">{query.error.message}</p>}
     {!query.isLoading && !query.isError && query.data && (
@@ -474,8 +498,8 @@ export function Payroll() {
     </section>}
     {query.isLoading ? <div className="space-y-3 rounded-2xl border border-border bg-card p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : <>
       <section className="overflow-hidden rounded-2xl border border-border bg-card" data-testid="payroll-table">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4"><h2 className="text-base font-bold">{month.replace('-', ' оны ')} сарын задаргаа</h2><span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{query.data?.lines?.length ?? 0} мөр</span></div>
-        {!query.data?.lines?.length ? <EmptyState title="Энэ сард цалин тооцоолоогүй" detail="Ирцийн бүртгэл нэмэгдсэний дараа энд ажилтны мөрүүд гарна." icon={Banknote} /> : <div className="overflow-x-auto"><table className="w-full min-w-[2240px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Ажилтан</th><th className="px-5 py-3">Ажилласан</th><th className="px-5 py-3 text-right">Үндсэн цалин</th><th className="px-5 py-3 text-right">НДШ</th><th className="px-5 py-3 text-right">ХХОАТ</th><th className="px-5 py-3 text-right">Хөнгөлөлт</th><th className="px-5 py-3 text-right">Урьдчилгаа цалин</th><th className="px-5 py-3 text-right">Бусад суутгал</th><th className="px-5 py-3 text-right">Гарт олгох</th><th className="px-5 py-3 text-right">Олгосон дүн</th><th className="px-5 py-3 text-center">Гүйлгээний огноо</th><th className="px-5 py-3 text-center">Төлөв</th><th className="px-5 py-3 text-right">Цалингийн авлага</th><th className="px-5 py-3 text-right">Цалингийн өглөг</th><th className="px-5 py-3 text-right">Үлдэгдэл</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{query.data.lines.map((line) => { const cashClosed = Boolean((line.paymentDate && closedCashDates.has(line.paymentDate)) || (line.secondPaymentDate && closedCashDates.has(line.secondPaymentDate))); const currentDifference = payrollRemaining(line); return <tr key={line.employeeId} className="hover:bg-secondary/35" data-testid={`row-payroll-${line.employeeId}`}><td className="px-5 py-4"><p className="text-sm font-semibold">{line.employeeName}</p><p className="text-xs text-muted-foreground">{line.role}</p></td><td className="px-5 py-4 font-mono text-xs text-muted-foreground">{line.daysWorked} өдөр</td><td className="px-5 py-4 text-right font-mono text-sm">{money(line.gross)}</td><td className="px-5 py-4 text-right font-mono text-sm text-muted-foreground">{money(line.socialInsurance)}</td><td className="px-5 py-4 text-right font-mono text-sm text-muted-foreground">{money(line.incomeTax)}</td><td className="px-5 py-4 text-right font-mono text-sm text-sky-700">{money(line.taxRelief)}</td><td className="px-5 py-4 text-right font-mono text-sm">{money(line.advanceAmount)}</td><td className="px-5 py-4 text-right font-mono text-sm">{money(line.manualDeduction)}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold text-primary">{money(Math.max(0, line.gross - line.deductions))}</td><td className="px-5 py-4 text-right font-mono text-sm">{money(line.paidAmount)}</td><td className="px-5 py-4 text-center font-mono text-xs text-muted-foreground">{line.paymentDate ?? '—'}</td><td className="px-5 py-4 text-center"><span className={cn('inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold', line.paidAmount > 0 ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground')} data-testid={`status-payroll-paid-${line.employeeId}`}>{line.paidAmount > 0 ? 'Олгосон' : 'Олгоогүй'}</span></td><td className="px-5 py-4 text-right font-mono text-sm font-bold text-sky-700" data-testid={`value-payroll-receivable-${line.employeeId}`}>{money(Math.max(0, -line.carryoverAmount))}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold text-orange-800" data-testid={`value-payroll-payable-${line.employeeId}`}>{money(Math.max(0, line.carryoverAmount))}</td><td className={cn('px-5 py-4 text-right font-mono text-sm font-bold', currentDifference < -1 ? 'text-sky-700' : currentDifference > 1 ? 'text-orange-800' : 'text-muted-foreground')} data-testid={`value-payroll-remaining-${line.employeeId}`}>{remainingLabel(currentDifference)}</td><td className="px-5 py-4 text-right"><Button size="icon" variant="outline" disabled={cashClosed || closed} title={cashClosed ? 'Гүйлгээний өдрийн касс өндөрлөсөн' : undefined} onClick={() => setSelectedLine(line)} aria-label={`${line.employeeName} цалингийн мэдээлэл оруулах`} data-testid={`button-payroll-adjustment-${line.employeeId}`}><Pencil className="size-3.5" /></Button></td></tr>; })}</tbody><tfoot className="border-t-2 border-border bg-secondary/35"><tr><td colSpan={2} className="px-5 py-4 text-right text-sm font-bold">Нийт</td><td className="px-5 py-4 text-right font-mono text-sm font-bold" data-testid="value-payroll-total-gross">{money(payrollTotals.gross)}</td><td colSpan={3} /><td className="px-5 py-4 text-right font-mono text-sm font-bold" data-testid="value-payroll-total-advance">{money(payrollTotals.advanceAmount)}</td><td /><td className="px-5 py-4 text-right font-mono text-sm font-bold text-primary" data-testid="value-payroll-total-payable">{money(payrollTotals.payable)}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold" data-testid="value-payroll-total-paid">{money(payrollTotals.paidAmount)}</td><td colSpan={4} /><td className={cn('px-5 py-4 text-right font-mono text-sm font-bold', payrollTotals.remaining < -1 ? 'text-sky-700' : payrollTotals.remaining > 1 ? 'text-orange-800' : 'text-muted-foreground')} data-testid="value-payroll-total-remaining">{remainingLabel(payrollTotals.remaining)}</td><td /></tr></tfoot></table></div>}
+        <div className="flex items-center justify-between border-b border-border px-5 py-4"><h2 className="text-base font-bold">{month.replace('-', ' оны ')} сарын задаргаа</h2><span className="flex items-center gap-2">{partial && <span className="rounded-full bg-primary/10 px-3 py-1 text-[10px] font-bold text-primary" data-testid="badge-payroll-partial">Дутуу / төсөөлөл — эцсийн дүн биш</span>}<span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{query.data?.lines?.length ?? 0} мөр</span></span></div>
+        {!query.data?.lines?.length ? <EmptyState title="Энэ сард цалин тооцоолоогүй" detail="Ирцийн бүртгэл нэмэгдсэний дараа энд ажилтны мөрүүд гарна." icon={Banknote} /> : <div className="overflow-x-auto"><table className="w-full min-w-[2240px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Ажилтан</th><th className="px-5 py-3">Ажилласан</th><th className="px-5 py-3 text-right">Үндсэн цалин</th><th className="px-5 py-3 text-right">НДШ</th><th className="px-5 py-3 text-right">ХХОАТ</th><th className="px-5 py-3 text-right">Хөнгөлөлт</th><th className="px-5 py-3 text-right">Урьдчилгаа цалин</th><th className="px-5 py-3 text-right">Бусад суутгал</th><th className="px-5 py-3 text-right">Гарт олгох</th><th className="px-5 py-3 text-right">Олгосон дүн</th><th className="px-5 py-3 text-center">Гүйлгээний огноо</th><th className="px-5 py-3 text-center">Төлөв</th><th className="px-5 py-3 text-right">Цалингийн авлага</th><th className="px-5 py-3 text-right">Цалингийн өглөг</th><th className="px-5 py-3 text-right">Үлдэгдэл</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{query.data.lines.map((line) => { const cashClosed = Boolean((line.paymentDate && closedCashDates.has(line.paymentDate)) || (line.secondPaymentDate && closedCashDates.has(line.secondPaymentDate))); const currentDifference = payrollRemaining(line); return <tr key={line.employeeId} className="hover:bg-secondary/35" data-testid={`row-payroll-${line.employeeId}`}><td className="px-5 py-4"><p className="text-sm font-semibold">{line.employeeName}</p><p className="text-xs text-muted-foreground">{line.role}</p>{line.calculationReady === false && <p className="mt-1 text-[11px] font-semibold text-muted-foreground" data-testid={`status-payroll-uncomputed-${line.employeeId}`}>Тооцоолоогүй</p>}{line.openingBalanceReviewRequired ? <p className="mt-1 max-w-[16rem] text-[11px] font-semibold text-primary" data-testid={`status-payroll-baseline-review-${line.employeeId}`}>Эхний үлдэгдэл хянагдаагүй тул татах боломжгүй. Админ баталгаажуулна.</p> : needsRefresh(line) && <div className="mt-1 flex flex-wrap items-center gap-2">{line.attendanceNeedsRefresh && <span className="text-[11px] font-semibold text-orange-800">Ирц өөрчлөгдсөн{line.refreshMonths?.length ? `: ${line.refreshMonths.join(', ')}` : ''}</span>}{line.calculationReady === false && line.refreshMonths?.length ? <span className="text-[11px] text-muted-foreground">Сар: {line.refreshMonths.join(', ')}</span> : null}{canEditPayroll && <Button size="sm" variant="outline" className="h-7 px-2 text-[11px]" disabled={closed || bulkRunning || refreshingIds.includes(line.employeeId)} onClick={() => void refreshOne(line.employeeId)} aria-label={`${line.employeeName} шинэчлэх`} data-testid={`button-refresh-payroll-employee-${line.employeeId}`}><RefreshCw className={cn('size-3', refreshingIds.includes(line.employeeId) && 'animate-spin')} />{refreshingIds.includes(line.employeeId) ? 'Шинэчилж байна...' : 'Шинэчлэх'}</Button>}</div>}</td><td className="px-5 py-4 font-mono text-xs text-muted-foreground">{line.daysWorked} өдөр</td><td className="px-5 py-4 text-right font-mono text-sm">{cm(line, line.gross)}</td><td className="px-5 py-4 text-right font-mono text-sm text-muted-foreground">{cm(line, line.socialInsurance)}</td><td className="px-5 py-4 text-right font-mono text-sm text-muted-foreground">{cm(line, line.incomeTax)}</td><td className="px-5 py-4 text-right font-mono text-sm text-sky-700">{cm(line, line.taxRelief)}</td><td className="px-5 py-4 text-right font-mono text-sm">{cm(line, line.advanceAmount)}</td><td className="px-5 py-4 text-right font-mono text-sm">{cm(line, line.manualDeduction)}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold text-primary">{cm(line, Math.max(0, line.gross - line.deductions))}</td><td className="px-5 py-4 text-right font-mono text-sm">{cm(line, line.paidAmount)}</td><td className="px-5 py-4 text-center font-mono text-xs text-muted-foreground">{line.paymentDate ?? '—'}</td><td className="px-5 py-4 text-center"><span className={cn('inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold', line.paidAmount > 0 ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground')} data-testid={`status-payroll-paid-${line.employeeId}`}>{line.paidAmount > 0 ? 'Олгосон' : 'Олгоогүй'}</span></td><td className="px-5 py-4 text-right font-mono text-sm font-bold text-sky-700" data-testid={`value-payroll-receivable-${line.employeeId}`}>{cm(line, Math.max(0, -line.carryoverAmount))}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold text-orange-800" data-testid={`value-payroll-payable-${line.employeeId}`}>{cm(line, Math.max(0, line.carryoverAmount))}</td><td className={cn('px-5 py-4 text-right font-mono text-sm font-bold', currentDifference < -1 ? 'text-sky-700' : currentDifference > 1 ? 'text-orange-800' : 'text-muted-foreground')} data-testid={`value-payroll-remaining-${line.employeeId}`}>{line.calculationReady === false ? '—' : remainingLabel(currentDifference)}</td><td className="px-5 py-4 text-right"><Button size="icon" variant="outline" disabled={cashClosed || closed} title={cashClosed ? 'Гүйлгээний өдрийн касс өндөрлөсөн' : undefined} onClick={() => setSelectedLine(line)} aria-label={`${line.employeeName} цалингийн мэдээлэл оруулах`} data-testid={`button-payroll-adjustment-${line.employeeId}`}><Pencil className="size-3.5" /></Button></td></tr>; })}</tbody><tfoot className="border-t-2 border-border bg-secondary/35"><tr><td colSpan={2} className="px-5 py-4 text-right text-sm font-bold">Нийт</td><td className="px-5 py-4 text-right font-mono text-sm font-bold" data-testid="value-payroll-total-gross">{money(payrollTotals.gross)}</td><td colSpan={3} /><td className="px-5 py-4 text-right font-mono text-sm font-bold" data-testid="value-payroll-total-advance">{money(payrollTotals.advanceAmount)}</td><td /><td className="px-5 py-4 text-right font-mono text-sm font-bold text-primary" data-testid="value-payroll-total-payable">{money(payrollTotals.payable)}</td><td className="px-5 py-4 text-right font-mono text-sm font-bold" data-testid="value-payroll-total-paid">{money(payrollTotals.paidAmount)}</td><td colSpan={4} /><td className={cn('px-5 py-4 text-right font-mono text-sm font-bold', payrollTotals.remaining < -1 ? 'text-sky-700' : payrollTotals.remaining > 1 ? 'text-orange-800' : 'text-muted-foreground')} data-testid="value-payroll-total-remaining">{remainingLabel(payrollTotals.remaining)}</td><td /></tr></tfoot></table></div>}
       </section>
     </>}
     {selectedLine && !closed && <PayrollAdjustmentModal line={selectedLine} month={month} onClose={() => setSelectedLine(null)} />}

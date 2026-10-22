@@ -921,6 +921,10 @@ export const PayrollLineEmployeeType = {
 } as const;
 
 export interface PayrollLine {
+  calculationReady?: boolean;
+  attendanceNeedsRefresh?: boolean;
+  openingBalanceReviewRequired?: boolean;
+  refreshMonths?: string[];
   employeeId: number;
   employeeName: string;
   bankAccountNumber?: string;
@@ -1040,6 +1044,8 @@ export interface PayrollSchedule {
 }
 
 export interface PayrollSummary {
+  /** @nullable */
+  openingBalanceMonth?: string | null;
   attendancePulledAt?: string;
   attendanceNeedsRefresh?: boolean;
   /** @nullable */
@@ -1064,6 +1070,54 @@ export interface PayrollSummary {
   totalDeductions: number;
   totalNet: number;
   lines: PayrollLine[];
+}
+
+export interface PayrollOpeningLine {
+  employeeId: number;
+  employeeName: string;
+  /** @nullable */
+  balanceAmount: number | null;
+}
+
+export interface PayrollOpeningBalances {
+  month: string;
+  /** @nullable */
+  confirmedMonth: string | null;
+  /** @nullable */
+  confirmedAt: string | null;
+  /** @nullable */
+  confirmedBy: number | null;
+  revision: number;
+  sourceRevision: number;
+  note: string;
+  reviewEmployeeIds: number[];
+  lines: PayrollOpeningLine[];
+}
+
+export interface PayrollOpeningAmount {
+  /** @minimum 1 */
+  employeeId: number;
+  /**
+     * @minimum -1000000000000
+     * @maximum 1000000000000
+     */
+  balanceAmount: number;
+}
+
+export interface PayrollOpeningConfirmation {
+  /** @pattern ^[1-9][0-9]{3}-(0[1-9]|1[0-2])$ */
+  month: string;
+  /** @minimum 0 */
+  revision: number;
+  /** @minimum 0 */
+  sourceRevision: number;
+  /**
+     * @minLength 3
+     * @maxLength 2000
+     */
+  note: string;
+  verified: true;
+  lines: PayrollOpeningAmount[];
 }
 
 export interface PayrollAttendancePullInput {
@@ -2798,6 +2852,13 @@ month?: string;
 
 export type GetPayroll409 = {
   error: string;
+};
+
+export type GetPayrollOpeningBalancesParams = {
+/**
+ * @pattern ^[1-9][0-9]{3}-(0[1-9]|1[0-2])$
+ */
+month: string;
 };
 
 export type RebuildPayrollBalancesParams = {

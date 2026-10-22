@@ -5,6 +5,7 @@ import { PayrollBalancesNotReadyError, readMonthlyPayroll } from "./payroll-bala
 import { applyPayrollFinancials, getPayrollAdvanceSummary, payrollSummaryTotals } from "./payroll-calc-helpers.js";
 import { previousMonth, money } from "./date-utils.js";
 import type { Tx } from "./route-shared.js";
+import { readSelectivePayroll } from "./payroll-selective-read.js";
 
 export class PayrollSnapshotMissingError extends Error {
   constructor(month: string) {
@@ -42,6 +43,8 @@ export async function readSavedPayroll(month: string, connection?: Tx) {
     if (closed) return GetPayrollResponse.parse({
       ...closed.payroll, closedAt: closed.closedAt.toISOString(), closedBy: closed.closedBy, attendanceNeedsRefresh: false,
     });
+    const selective = await readSelectivePayroll(month, tx);
+    if (selective) return selective;
     const [snapshot] = await tx.select().from(payrollAttendanceSnapshotsTable).where(eq(payrollAttendanceSnapshotsTable.month, month));
     if (!snapshot) throw new PayrollSnapshotMissingError(month);
     const saved = GetPayrollResponse.parse(snapshot.payroll);
