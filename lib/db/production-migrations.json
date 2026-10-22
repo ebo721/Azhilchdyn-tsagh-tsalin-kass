@@ -112,6 +112,10 @@
     {
       "filename": "20261020_bank_internal_transfers.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20261022_payroll_opening_selective.sql",
+      "releaseMode": "expand"
     }
   ],
   "schemaFingerprint": "effade5a834ca4ba081c9c1fce21edde8f573f36979b60bd2425fe77465cde51"

@@ -835,6 +835,54 @@ paths:
           description: Read-only role cannot recalculate payroll
         "409":
           description: Previous financial balances require explicit initialization or repair
+  /payroll/{month}/employees/{employeeId}/refresh:
+    post:
+      operationId: refreshEmployeePayroll
+      tags: [payroll]
+      summary: Refresh only one employee and their affected financial carryovers
+      parameters:
+        - { in: path, name: month, required: true, schema: { type: string, pattern: '^[1-9][0-9]{3}-(0[1-9]|1[0-2])$' } }
+        - { in: path, name: employeeId, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: Saved employee calculation and current month summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayrollAttendancePullResult" }
+        "403": { description: Payroll editing role required }
+        "409": { description: Opening balance needs confirmation or month is closed }
+        "422": { description: Employee salary history requires correction }
+  /payroll/opening-balances:
+    get:
+      operationId: getPayrollOpeningBalances
+      tags: [payroll]
+      summary: Preview signed employee closing balances without reading historical attendance
+      parameters:
+        - { in: query, name: month, required: true, schema: { type: string, pattern: '^[1-9][0-9]{3}-(0[1-9]|1[0-2])$' } }
+      responses:
+        "200":
+          description: Opening balance draft and confirmation metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayrollOpeningBalances" }
+        "403": { description: Administrator or accountant required }
+    post:
+      operationId: confirmPayrollOpeningBalances
+      tags: [payroll]
+      summary: Administrator explicitly confirms reviewed employee closing balances
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PayrollOpeningConfirmation" }
+      responses:
+        "200":
+          description: Confirmed opening balances
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayrollOpeningBalances" }
+        "403": { description: Administrator required }
+        "409": { description: Sources changed since preview or later month is closed }
   /payroll/balances/recalculate:
     post:
       operationId: rebuildPayrollBalances
@@ -3624,6 +3672,10 @@ components:
       type: object
       required: [employeeId, employeeName, role, employeeType, daysWorked, hours, gross, socialInsuranceSalary, socialInsurance, taxableIncome, calculatedIncomeTax, taxRelief, incomeTax, advanceAmount, manualDeduction, receivableId, deductions, carryoverAmount, payable, paidAmount, paymentDate, secondPaidAmount, secondPaymentDate, remainingAmount, overpaidAmount, balanceAmount, net]
       properties:
+        calculationReady: { type: boolean }
+        attendanceNeedsRefresh: { type: boolean }
+        openingBalanceReviewRequired: { type: boolean }
+        refreshMonths: { type: array, items: { type: string } }
         employeeId: { type: integer }
         employeeName: { type: string }
         bankAccountNumber: { type: string }
@@ -3703,6 +3755,7 @@ components:
       type: object
       required: [month, periodStart, advancePeriodEnd, periodEnd, advancePaymentDate, finalPaymentDate, schedule, totalGross, totalSocialInsurance, totalIncomeTax, totalDeductions, totalNet, lines]
       properties:
+        openingBalanceMonth: { type: ["string", "null"] }
         attendancePulledAt: { type: string }
         attendanceNeedsRefresh: { type: boolean }
         closedAt: { type: ["string", "null"] }
@@ -3723,6 +3776,42 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PayrollLine"
+    PayrollOpeningLine:
+      type: object
+      required: [employeeId, employeeName, balanceAmount]
+      properties:
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        balanceAmount: { type: ["number", "null"] }
+    PayrollOpeningBalances:
+      type: object
+      required: [month, confirmedMonth, confirmedAt, confirmedBy, revision, sourceRevision, note, reviewEmployeeIds, lines]
+      properties:
+        month: { type: string }
+        confirmedMonth: { type: ["string", "null"] }
+        confirmedAt: { type: ["string", "null"] }
+        confirmedBy: { type: ["integer", "null"] }
+        revision: { type: integer }
+        sourceRevision: { type: integer }
+        note: { type: string }
+        reviewEmployeeIds: { type: array, items: { type: integer } }
+        lines: { type: array, items: { $ref: "#/components/schemas/PayrollOpeningLine" } }
+    PayrollOpeningAmount:
+      type: object
+      required: [employeeId, balanceAmount]
+      properties:
+        employeeId: { type: integer, minimum: 1 }
+        balanceAmount: { type: number, minimum: -1000000000000, maximum: 1000000000000 }
+    PayrollOpeningConfirmation:
+      type: object
+      required: [month, revision, sourceRevision, note, verified, lines]
+      properties:
+        month: { type: string, pattern: '^[1-9][0-9]{3}-(0[1-9]|1[0-2])$' }
+        revision: { type: integer, minimum: 0 }
+        sourceRevision: { type: integer, minimum: 0 }
+        note: { type: string, minLength: 3, maxLength: 2000 }
+        verified: { type: boolean, enum: [true] }
+        lines: { type: array, items: { $ref: "#/components/schemas/PayrollOpeningAmount" } }
     PayrollAttendancePullInput:
       type: object
       required: [month]

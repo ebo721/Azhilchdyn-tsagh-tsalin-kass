@@ -111,6 +111,17 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
   }
   const matchesPrefix = (prefix: string) => req.path === prefix || req.path.startsWith(`${prefix}/`);
   const viewerReadPrefixes = ["/employees", "/attendance", "/hour-balance", "/payroll", "/payroll-advance", "/cash", "/bank-accounts", "/bank-transactions", "/inventory", "/meals", "/meal-schedule", "/meal-counts", "/fixed-assets", "/operating-expenses", "/journal"];
+  // HR's existing payroll action is limited to reading saved pay and pulling
+  // attendance. Do not grant opening-balance approval, financial writes or
+  // the rest of the payroll namespace through a prefix exception.
+  if (role === "hr" && (
+    (req.method === "GET" && ["/payroll", "/payroll-advance"].includes(req.path))
+    || (req.method === "POST" && (req.path === "/payroll/pull-attendance"
+      || /^\/payroll\/[1-9]\d{3}-(?:0[1-9]|1[0-2])\/employees\/[1-9]\d*\/refresh$/.test(req.path)))
+  )) {
+    next();
+    return;
+  }
   if (role === "viewer" && req.method === "GET" && viewerReadPrefixes.some(matchesPrefix)) {
     next();
     return;

@@ -21,7 +21,7 @@ it("closed payroll is immutable, permissioned and a saved carryover boundary", a
       "payroll_adjustments", "payroll_advance_approvals", "payroll_schedule_settings"]) {
       await query(`CREATE TABLE ${schema}.${table} (LIKE public.${table} INCLUDING ALL)`);
     }
-    for (const migration of ["20261008_payroll_month_balances.sql", "20261010_payroll_attendance_snapshots.sql", "20261019_payroll_month_closures.sql"]) {
+    for (const migration of ["20261008_payroll_month_balances.sql", "20261010_payroll_attendance_snapshots.sql", "20261019_payroll_month_closures.sql", "20261022_payroll_opening_selective.sql"]) {
       await query(readFileSync(new URL(`../../../../lib/db/migrations/${migration}`, import.meta.url), "utf8").replaceAll("public.", `${schema}.`));
     }
     await query(`SET search_path TO ${schema}`);
@@ -34,6 +34,8 @@ it("closed payroll is immutable, permissioned and a saved carryover boundary", a
     await query("INSERT INTO users (id,username,normalized_username,role,password_hash) VALUES (1,'close-fixture','close-fixture','admin','fixture')");
     await query(`INSERT INTO employees (id,name,role,employee_type,salary_type,base_salary,payroll_tax_exempt,joined_at,pay_frequency)
       VALUES (1,'Original employee','Fixture','shift','daily',100,true,'2024-01-01','twice')`);
+    await query(`INSERT INTO employee_salary_history (employee_id,effective_from,employee_type,salary_type,base_salary,payroll_tax_exempt,pay_frequency)
+      VALUES (1,'2024-01-01','shift','daily',100,true,'twice')`);
     await query("INSERT INTO payroll_schedule_settings(effective_from_month) VALUES ('0001-01')");
     await query("INSERT INTO attendance(employee_id,date,clock_in,clock_out,hours,status) VALUES (1,'2024-01-05','08:00','16:00',8,'present')");
     await query("INSERT INTO payroll_adjustments(employee_id,month,paid_amount) VALUES (1,'2024-01',50)");

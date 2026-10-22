@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { employeesTable, employeeSalaryHistoryTable } from "@workspace/db";
 import { calculatePayrollAdvanceLine, calculatePayrollMonth, salaryAt } from "./payroll-calc-helpers.js";
-import { defaultPayrollSchedule, weekdayDatesBetween } from "./route-shared.js";
+import { defaultPayrollSchedule, weekdayDatesBetween, type PayrollCalculationData } from "./route-shared.js";
 import { PayrollConfigurationError } from "./shift-insurance.js";
 
 type Employee = typeof employeesTable.$inferSelect;
@@ -28,10 +28,10 @@ const records = weekdayDatesBetween("2026-09-01", "2026-09-30").map((date, i) =>
   id: i + 1, employeeId: 1, date, clockIn: "08:00", clockOut: "16:00",
   status: "present", hours: 8, createdAt: epoch,
 }));
-function calculate(rows: History[], current: Employee = employee) {
-  return calculatePayrollMonth("2026-09", {
+function calculate(rows: History[], current: Employee = employee, extra: Partial<PayrollCalculationData> = {}, month = "2026-09") {
+  return calculatePayrollMonth(month, {
     allEmployees: [current], salaryHistory: rows, records,
-    allAdjustments: [], allAdvanceApprovals: [],
+    allAdjustments: [], allAdvanceApprovals: [], ...extra,
   }, { id: 1, effectiveFromMonth: "0001-01", ...defaultPayrollSchedule, updatedAt: epoch });
 }
 
@@ -114,4 +114,49 @@ test("a historical exemption remains zero after later registration changes to in
   assert.equal(line.socialInsurance, 0);
   assert.equal(line.incomeTax, 0);
   assert.equal(line.taxRelief, 0);
+});
+
+test("an attendance-free July before September salary history earns zero without guessing tax settings", () => {
+  const current = { ...employee, joinedAt: "2026-07-01" };
+  const line = calculate([history("2026-09-08", false)], current, {
+    records: [], openingBalances: [{ employeeId: 1, balanceAmount: 123_456 }],
+  }, "2026-07").lines[0];
+  assert.equal(line.gross, 0);
+  assert.equal(line.daysWorked, 0);
+  assert.equal(line.socialInsuranceSalary, 0);
+  assert.equal(line.socialInsurance, 0);
+  assert.equal(line.incomeTax, 0);
+  assert.equal(line.taxRelief, 0);
+  assert.equal(line.carryoverAmount, 123_456);
+  assert.equal(line.balanceAmount, 123_456);
+});
+
+test("no history and no attendance does not block a zero-earning month", () => {
+  const line = calculate([], employee, { records: [] }).lines[0];
+  assert.equal(line.gross, 0);
+  assert.equal(line.socialInsurance, 0);
+  assert.equal(line.incomeTax, 0);
+});
+
+test("worked August dates before September history still require explicit salary coverage", () => {
+  const current = { ...employee, joinedAt: "2026-07-01" };
+  const augustRecords = records.slice(0, 15).map(record => ({
+    ...record, date: record.date.replace("2026-09", "2026-08"),
+  }));
+  assert.throws(() => calculate([history("2026-09-08", false)], current,
+    { records: augustRecords }, "2026-08"), PayrollConfigurationError);
+});
+
+test("a historical full-salary override still pays an attendance-free month", () => {
+  const current = { ...employee, joinedAt: "2026-07-01" };
+  const rows = [{ ...history("2026-07-01", false), fullSalaryRegardlessAttendance: true },
+    history("2026-09-08", false, 2)];
+  const line = calculate(rows, current, { records: [] }, "2026-07").lines[0];
+  assert.equal(line.gross, 2_200_000);
+  assert.equal(line.socialInsuranceSalary, 1_000_000);
+});
+
+test("an undocumented full-salary override cannot silently become a zero-earning month", () => {
+  assert.throws(() => calculate([], { ...employee, fullSalaryRegardlessAttendance: true },
+    { records: [] }), PayrollConfigurationError);
 });

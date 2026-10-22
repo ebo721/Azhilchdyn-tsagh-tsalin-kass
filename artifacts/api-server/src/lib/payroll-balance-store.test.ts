@@ -30,7 +30,7 @@ it("real SQL: monthly attendance only, explicit financial initialization, source
       "payroll_advance_approvals", "payroll_schedule_settings"]) {
       await query(`CREATE TABLE ${schema}.${table} (LIKE public.${table} INCLUDING ALL)`);
     }
-    for (const name of ["20261008_payroll_month_balances.sql", "20261010_payroll_attendance_snapshots.sql", "20261019_payroll_month_closures.sql"]) {
+    for (const name of ["20261008_payroll_month_balances.sql", "20261010_payroll_attendance_snapshots.sql", "20261019_payroll_month_closures.sql", "20261022_payroll_opening_selective.sql"]) {
       const migration = readFileSync(new URL(`../../../../lib/db/migrations/${name}`, import.meta.url), "utf8");
       await query(migration.replaceAll("public.", `${schema}.`));
     }
@@ -118,6 +118,8 @@ it("real SQL: monthly attendance only, explicit financial initialization, source
     await t.test("registration mismatches and missing history cannot overwrite saved payroll or financial balances", async () => {
       // Use the first employment month so a deliberately dirtied source reaches
       // the registration guard, rather than the separate prior-debt guard.
+      await query(`INSERT INTO attendance (employee_id,date,clock_in,clock_out,hours,status)
+        VALUES (1,'2024-01-06','08:00','16:00',8,'present')`);
       await pullPayrollAttendance("2024-01");
       const savedBefore = await query(`SELECT payroll,advance,pulled_at FROM payroll_attendance_snapshots WHERE month='2024-01'`);
       const expectRejectedPull = async () => {
@@ -136,6 +138,7 @@ it("real SQL: monthly attendance only, explicit financial initialization, source
       await query(`INSERT INTO employee_salary_history
         (employee_id,effective_from,employee_type,salary_type,base_salary,payroll_tax_exempt)
         VALUES (1,'2024-01-01','shift','daily',100,true)`);
+      await query(`DELETE FROM attendance WHERE employee_id=1 AND date='2024-01-06'`);
       await rebuildPayrollBalances("2024-03");
     });
     await t.test("employment-date corrections do not leave unrepairable pre-baseline dirty records", async () => {
@@ -174,6 +177,28 @@ it("real SQL: monthly attendance only, explicit financial initialization, source
       await getPayrollSummary("2025-03");
       assert.equal(attendanceQueries.length, 1);
       assert.deepEqual(attendanceQueries[0].values, ["2025-02-21", "2025-03-20"]);
+    });
+    await t.test("first pull saves an empty historical month before salary history, while worked uncovered dates still fail", async () => {
+      await query(`INSERT INTO employees
+        (id,name,role,employee_type,salary_type,base_salary,payroll_tax_exempt,joined_at)
+        VALUES (2,'Empty historical month','Test','shift','daily',100,true,'2023-07-01')`);
+      await query(`INSERT INTO employee_salary_history
+        (employee_id,effective_from,employee_type,salary_type,base_salary,payroll_tax_exempt)
+        VALUES (2,'2023-09-08','shift','daily',100,true)`);
+      const pulled = await pullPayrollAttendance("2023-07");
+      assert.equal(pulled.payroll.totalGross, 0);
+      assert.equal(pulled.payroll.totalSocialInsurance, 0);
+      assert.equal(pulled.payroll.totalIncomeTax, 0);
+      assert.deepEqual(pulled.advance.lines, []);
+      const saved = await query(`SELECT payroll,advance FROM payroll_attendance_snapshots WHERE month='2023-07'`);
+      assert.equal(saved.rows.length, 1);
+      assert.equal(saved.rows[0].payroll.totalGross, 0);
+      assert.deepEqual(saved.rows[0].advance.lines, []);
+      await query(`INSERT INTO attendance (employee_id,date,clock_in,clock_out,hours,status)
+        VALUES (2,'2023-08-05','08:00','16:00',8,'present')`);
+      await assert.rejects(pullPayrollAttendance("2023-08"), PayrollConfigurationError);
+      const blocked = await query(`SELECT month FROM payroll_attendance_snapshots WHERE month='2023-08'`);
+      assert.equal(blocked.rows.length, 0);
     });
   } finally {
     t.mock.restoreAll();
