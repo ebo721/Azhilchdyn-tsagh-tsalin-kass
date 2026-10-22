@@ -58,7 +58,8 @@ export async function refreshEmployeePayroll(month: string, employeeId: number) 
       const lines = [...(saved?.lines ?? []).filter(l => l.employeeId !== employeeId),
         ...payroll.lines.map(l => ({ ...l, calculationReady: true, attendanceNeedsRefresh: false, refreshMonths: [] }))];
       const oldAdvance = old ? GetPayrollAdvanceResponse.parse(old.advance) : undefined;
-      const advanceLines = [...(oldAdvance?.lines ?? []).filter(l => l.employeeId !== employeeId), ...advance.lines];
+      const advanceLines = [...(oldAdvance?.lines ?? []).filter(l => l.employeeId !== employeeId),
+        ...advance.lines.filter(l => l.employeeId === employeeId)];
       const mergedPayroll = { ...payroll, lines, ...payrollSummaryTotals(lines) };
       const mergedAdvance = { ...advance, lines: advanceLines, totalAmount: advanceLines.reduce((n, l) => n + l.advanceAmount, 0) };
       const pulledAt = financialOnly && old ? old.pulledAt : new Date();

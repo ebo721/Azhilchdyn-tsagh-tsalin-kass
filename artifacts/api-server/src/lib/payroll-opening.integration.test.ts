@@ -103,13 +103,17 @@ it("real SQL: reviewed opening debt and employee-scoped refresh preserve other p
       assert.equal(status.lines[0].attendanceNeedsRefresh, true);
       assert.equal(status.lines[1].attendanceNeedsRefresh, false);
       assert.ok(!statements.some(s => /from "attendance"/i.test(s)));
-      status = (await refreshEmployeePayroll("2024-09", 1)).payroll;
+      const refreshed = await refreshEmployeePayroll("2024-09", 1);
+      status = refreshed.payroll;
+      assert.deepEqual(refreshed.advance.lines.map(l => l.employeeId).sort(), [1, 2]);
       assert.equal(status.lines[0].gross, 200);
       assert.equal(status.lines[1].gross, 200);
       await query(`INSERT INTO payroll_adjustments (employee_id,month,paid_amount)
         VALUES (1,'2024-09',50)`);
       statements.length = 0;
-      status = (await refreshEmployeePayroll("2024-09", 1)).payroll;
+      const financial = await refreshEmployeePayroll("2024-09", 1);
+      status = financial.payroll;
+      assert.deepEqual(financial.advance.lines.map(l => l.employeeId).sort(), [1, 2]);
       assert.equal(status.lines[0].paidAmount, 50);
       assert.equal(status.lines[0].balanceAmount, 1_150);
       assert.equal(status.lines[1].paidAmount, 0);

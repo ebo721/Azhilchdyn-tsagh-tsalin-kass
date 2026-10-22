@@ -21,7 +21,8 @@ export async function readSelectivePayroll(month: string, tx: Tx) {
     tx.select({ month: payrollMonthBalancesTable.month, dirtyIds: payrollMonthBalancesTable.dirtyEmployeeIds,
       lines: payrollMonthBalancesTable.lines,
       employeeIds: sql<number[]>`ARRAY(SELECT (line->>'employeeId')::integer FROM jsonb_array_elements(${payrollMonthBalancesTable.lines}) AS line)` })
-      .from(payrollMonthBalancesTable).where(and(gt(payrollMonthBalancesTable.month, baseline.month), lte(payrollMonthBalancesTable.month, month))),
+       .from(payrollMonthBalancesTable).where(and(gt(payrollMonthBalancesTable.month, baseline.month), lte(payrollMonthBalancesTable.month, month)))
+       .orderBy(asc(payrollMonthBalancesTable.month)),
     tx.select().from(payrollMonthBalancesTable).where(eq(payrollMonthBalancesTable.month, previousMonth(month))),
     tx.select({ month: payrollMonthClosuresTable.month }).from(payrollMonthClosuresTable).where(lte(payrollMonthClosuresTable.month, month)),
   ]);
