@@ -9,6 +9,8 @@ import type { PayrollLine } from './payrollLine';
 import type { PayrollSchedule } from './payrollSchedule';
 
 export interface PayrollSummary {
+  /** @nullable */
+  openingBalanceMonth?: string | null;
   attendancePulledAt?: string;
   attendanceNeedsRefresh?: boolean;
   /** @nullable */

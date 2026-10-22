@@ -96,6 +96,7 @@ import type {
   GetInventoryClosingQuoteParams,
   GetPayroll409,
   GetPayrollAdvanceParams,
+  GetPayrollOpeningBalancesParams,
   GetPayrollParams,
   GetPayrollPayables409,
   HealthStatus,
@@ -171,6 +172,8 @@ import type {
   PayrollAdvanceSummary,
   PayrollAttendancePullInput,
   PayrollAttendancePullResult,
+  PayrollOpeningBalances,
+  PayrollOpeningConfirmation,
   PayrollPayables,
   PayrollSchedule,
   PayrollScheduleInput,
@@ -3952,6 +3955,234 @@ export const usePullPayrollAttendance = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getPullPayrollAttendanceMutationOptions(options));
+    }
+
+export const getRefreshEmployeePayrollUrl = (month: string,
+    employeeId: number,) => {
+
+
+
+
+  return `/api/payroll/${month}/employees/${employeeId}/refresh`
+}
+
+/**
+ * @summary Refresh only one employee and their affected financial carryovers
+ */
+export const refreshEmployeePayroll = async (month: string,
+    employeeId: number, options?: Parameters<typeof customFetch>[1]): Promise<PayrollAttendancePullResult> => {
+
+  return customFetch<PayrollAttendancePullResult>(getRefreshEmployeePayrollUrl(month,employeeId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRefreshEmployeePayrollMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refreshEmployeePayroll>>, TError,{month: string;employeeId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof refreshEmployeePayroll>>, TError,{month: string;employeeId: number}, TContext> => {
+
+const mutationKey = ['refreshEmployeePayroll'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof refreshEmployeePayroll>>, {month: string;employeeId: number}> = (props) => {
+          const {month,employeeId} = props ?? {};
+
+          return  refreshEmployeePayroll(month,employeeId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RefreshEmployeePayrollMutationResult = NonNullable<Awaited<ReturnType<typeof refreshEmployeePayroll>>>
+
+    export type RefreshEmployeePayrollMutationError = ErrorType<void>
+
+    /**
+ * @summary Refresh only one employee and their affected financial carryovers
+ */
+export const useRefreshEmployeePayroll = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refreshEmployeePayroll>>, TError,{month: string;employeeId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof refreshEmployeePayroll>>,
+        TError,
+        {month: string;employeeId: number},
+        TContext
+      > => {
+      return useMutation(getRefreshEmployeePayrollMutationOptions(options));
+    }
+
+export const getGetPayrollOpeningBalancesUrl = (params: GetPayrollOpeningBalancesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/payroll/opening-balances?${stringifiedParams}` : `/api/payroll/opening-balances`
+}
+
+/**
+ * @summary Preview signed employee closing balances without reading historical attendance
+ */
+export const getPayrollOpeningBalances = async (params: GetPayrollOpeningBalancesParams, options?: Parameters<typeof customFetch>[1]): Promise<PayrollOpeningBalances> => {
+
+  return customFetch<PayrollOpeningBalances>(getGetPayrollOpeningBalancesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPayrollOpeningBalancesQueryKey = (params?: GetPayrollOpeningBalancesParams,) => {
+    return [
+    `/api/payroll/opening-balances`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetPayrollOpeningBalancesQueryOptions = <TData = Awaited<ReturnType<typeof getPayrollOpeningBalances>>, TError = ErrorType<void>>(params: GetPayrollOpeningBalancesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPayrollOpeningBalances>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPayrollOpeningBalancesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPayrollOpeningBalances>>> = ({ signal }) => getPayrollOpeningBalances(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPayrollOpeningBalances>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPayrollOpeningBalancesQueryResult = NonNullable<Awaited<ReturnType<typeof getPayrollOpeningBalances>>>
+export type GetPayrollOpeningBalancesQueryError = ErrorType<void>
+
+
+/**
+ * @summary Preview signed employee closing balances without reading historical attendance
+ */
+
+export function useGetPayrollOpeningBalances<TData = Awaited<ReturnType<typeof getPayrollOpeningBalances>>, TError = ErrorType<void>>(
+ params: GetPayrollOpeningBalancesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPayrollOpeningBalances>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPayrollOpeningBalancesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getConfirmPayrollOpeningBalancesUrl = () => {
+
+
+
+
+  return `/api/payroll/opening-balances`
+}
+
+/**
+ * @summary Administrator explicitly confirms reviewed employee closing balances
+ */
+export const confirmPayrollOpeningBalances = async (payrollOpeningConfirmation: PayrollOpeningConfirmation, options?: Parameters<typeof customFetch>[1]): Promise<PayrollOpeningBalances> => {
+
+  return customFetch<PayrollOpeningBalances>(getConfirmPayrollOpeningBalancesUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(payrollOpeningConfirmation)
+  }
+);}
+
+
+
+
+
+export const getConfirmPayrollOpeningBalancesMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmPayrollOpeningBalances>>, TError,{data: BodyType<PayrollOpeningConfirmation>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmPayrollOpeningBalances>>, TError,{data: BodyType<PayrollOpeningConfirmation>}, TContext> => {
+
+const mutationKey = ['confirmPayrollOpeningBalances'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmPayrollOpeningBalances>>, {data: BodyType<PayrollOpeningConfirmation>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  confirmPayrollOpeningBalances(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmPayrollOpeningBalancesMutationResult = NonNullable<Awaited<ReturnType<typeof confirmPayrollOpeningBalances>>>
+    export type ConfirmPayrollOpeningBalancesMutationBody = BodyType<PayrollOpeningConfirmation>
+    export type ConfirmPayrollOpeningBalancesMutationError = ErrorType<void>
+
+    /**
+ * @summary Administrator explicitly confirms reviewed employee closing balances
+ */
+export const useConfirmPayrollOpeningBalances = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmPayrollOpeningBalances>>, TError,{data: BodyType<PayrollOpeningConfirmation>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmPayrollOpeningBalances>>,
+        TError,
+        {data: BodyType<PayrollOpeningConfirmation>},
+        TContext
+      > => {
+      return useMutation(getConfirmPayrollOpeningBalancesMutationOptions(options));
     }
 
 export const getRebuildPayrollBalancesUrl = (params: RebuildPayrollBalancesParams,) => {

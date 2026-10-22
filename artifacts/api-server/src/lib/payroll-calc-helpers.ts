@@ -289,7 +289,7 @@ export function calculatePayrollMonth(
 export async function getPayrollAdvanceSummary(
   month: string,
   connection: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db,
-  { savedOnly = false, ignoreApproval = false } = {},
+  { savedOnly = false, ignoreApproval = false, employeeId = undefined as number | undefined } = {},
 ) {
   const [closure] = await connection.select().from(payrollMonthClosuresTable).where(eq(payrollMonthClosuresTable.month, month));
   if (closure) return GetPayrollAdvanceResponse.parse(closure.advance);
@@ -298,7 +298,16 @@ export async function getPayrollAdvanceSummary(
   if (savedOnly && (!approval || ignoreApproval)) {
     const [snapshot] = await connection.select().from(payrollAttendanceSnapshotsTable)
       .where(eq(payrollAttendanceSnapshotsTable.month, month));
-    if (!snapshot) throw new PayrollSnapshotMissingError(month);
+    if (!snapshot) {
+      const { latestPayrollOpening } = await import("./payroll-opening.js");
+      const baseline = await latestPayrollOpening(connection);
+      if (!baseline || month <= baseline.month) throw new PayrollSnapshotMissingError(month);
+      const schedule = await getPayrollSchedule(month, connection);
+      return {
+        month, ...payrollPeriod(month, schedule), schedule, approved: false, approvalDate: null,
+        totalAmount: 0, lines: [],
+      };
+    }
     return GetPayrollAdvanceResponse.parse({ ...snapshot.advance, attendancePulledAt: snapshot.pulledAt.toISOString() });
   }
   const rawSchedule = await getPayrollSchedule(month, connection);
@@ -336,12 +345,13 @@ export async function getPayrollAdvanceSummary(
     };
   }
   const [allEmployees, records, salaryHistory] = await Promise.all([
-    connection.select().from(employeesTable),
+    connection.select().from(employeesTable).where(employeeId ? eq(employeesTable.id, employeeId) : undefined),
     connection.select().from(attendanceTable).where(and(
       gte(attendanceTable.date, period.periodStart),
       lte(attendanceTable.date, period.advancePeriodEnd),
+      employeeId ? eq(attendanceTable.employeeId, employeeId) : undefined,
     )),
-    connection.select().from(employeeSalaryHistoryTable),
+    connection.select().from(employeeSalaryHistoryTable).where(employeeId ? eq(employeeSalaryHistoryTable.employeeId, employeeId) : undefined),
   ]);
   const employees = allEmployees.filter((employee) => {
     if (employee.joinedAt > period.advancePeriodEnd
