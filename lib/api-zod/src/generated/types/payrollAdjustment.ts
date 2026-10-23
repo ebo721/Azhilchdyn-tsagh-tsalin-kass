@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PayrollAdditionalPayment } from './payrollAdditionalPayment';
 
 export interface PayrollAdjustment {
   employeeId: number;
@@ -19,4 +20,5 @@ export interface PayrollAdjustment {
   secondPaidAmount: number;
   /** @nullable */
   secondPaymentDate?: string | null;
+  additionalPayments?: PayrollAdditionalPayment[];
 }

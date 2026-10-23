@@ -123,7 +123,7 @@ describe("actual shift attendance insurance proration", () => {
       allAdjustments: [{
         id: 1, employeeId: 999, month, manualDeduction: 0, paidAmount: 50_000, paymentDate: day(0),
         secondPaidAmount: 10_000, secondPaymentDate: day(1), receivableId: null, journalEntryId: null,
-        advanceAmount: 0, taxRelief: 0, updatedAt: new Date(0),
+        advanceAmount: 0, taxRelief: 0, additionalPayments: [], updatedAt: new Date(0),
       }],
     });
     assert.equal(line.paidAmount, 60_000);

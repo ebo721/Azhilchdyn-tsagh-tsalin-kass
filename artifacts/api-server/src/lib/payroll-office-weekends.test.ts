@@ -108,7 +108,7 @@ test("weekend recalculation preserves first/second payments, financial carryover
     allAdjustments: [{
       id: 1, employeeId: 1, month, manualDeduction: 10_000, paidAmount: 300_000, secondPaidAmount: 20_000,
       paymentDate: "2026-09-15", secondPaymentDate: "2026-09-30", receivableId: null, journalEntryId: null,
-      advanceAmount: 0, taxRelief: 0, updatedAt: epoch,
+      advanceAmount: 0, taxRelief: 0, additionalPayments: [], updatedAt: epoch,
     }],
   };
   const original = structuredClone(extra);

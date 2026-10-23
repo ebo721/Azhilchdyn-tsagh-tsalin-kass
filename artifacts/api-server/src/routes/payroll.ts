@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { payrollPayments, payrollPaymentSourceKey } from "../lib/payroll-payments.js";
 import { DownloadSocialInsuranceReportQueryParams } from "@workspace/api-zod";
 import { buildInsuranceWorkbook, InsuranceReportValidationError } from "../lib/social-insurance-report.js";
 import { createServer } from "node:http";
@@ -253,7 +254,7 @@ router.put("/payroll-schedule", async (req, res, next) => {
         tx.select({ month: payrollAdjustmentsTable.month })
           .from(payrollAdjustmentsTable).where(and(
           gte(payrollAdjustmentsTable.month, effectiveFromMonth),
-          sql`(${payrollAdjustmentsTable.paidAmount} > 0 OR ${payrollAdjustmentsTable.secondPaidAmount} > 0)`,
+          sql`(${payrollAdjustmentsTable.paidAmount} > 0 OR ${payrollAdjustmentsTable.secondPaidAmount} > 0 OR jsonb_array_length(${payrollAdjustmentsTable.additionalPayments}) > 0)`,
         )),
       ]);
       const protectedMonth = [...approvedMonths, ...paidMonths].find((row) =>
@@ -410,36 +411,35 @@ router.put("/payroll-adjustments", async (req, res, next) => {
       res.status(400).json({ error: "Хоёр дахь цалин олгосон огноог зөв оруулна уу" });
       return;
     }
+    const extraPayments = input.additionalPayments;
+    if (extraPayments && (
+      new Set(extraPayments.map(payment => payment.sequence)).size !== extraPayments.length
+      || extraPayments.some(payment => !isValidCalendarDate(payment.date)
+        || Math.abs(Math.round(payment.amount * 100) - payment.amount * 100) > 0.0001)
+    )) {
+      res.status(400).json({ error: "Нэмэлт олголтын дугаар давхардахгүй, огноо зөв, дүн хоёр орны нарийвчлалтай байна" });
+      return;
+    }
     const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, input.employeeId));
     if (!employee) {
       res.status(404).json({ error: "Ажилтан олдсонгүй" });
       return;
     }
-    const [existingAdjustment] = await db
-      .select()
-      .from(payrollAdjustmentsTable)
-      .where(and(
-        eq(payrollAdjustmentsTable.employeeId, input.employeeId),
-        eq(payrollAdjustmentsTable.month, input.month),
-      ));
-    const protectedDates = new Set([
-      Number(existingAdjustment?.paidAmount ?? 0) > 0 ? existingAdjustment?.paymentDate : null,
-      Number(existingAdjustment?.secondPaidAmount ?? 0) > 0 ? existingAdjustment?.secondPaymentDate : null,
-      input.paidAmount > 0 ? input.paymentDate : null,
-      input.secondPaidAmount > 0 ? input.secondPaymentDate : null,
-    ].filter((date): date is string => typeof date === "string"));
-    for (const date of protectedDates) {
-      if (await isCashDateClosed(date)) {
-        res.status(409).json({ error: `${date} өдрийн касс өндөрлөсөн тул цалингийн гүйлгээг засах боломжгүй` });
-        return;
-      }
-    }
     const sourceType = "payroll";
-    const sourceKey = `${input.month}:${input.employeeId}`;
-    const secondSourceKey = `${sourceKey}:2`;
     const selectedReceivableId = input.receivableId ?? null;
     const adjustment = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
+      const [existingAdjustment] = await tx.select().from(payrollAdjustmentsTable).where(and(
+        eq(payrollAdjustmentsTable.employeeId, input.employeeId),
+        eq(payrollAdjustmentsTable.month, input.month),
+      )).for("update");
+      // Old callers omitting the new field must not erase saved payments.
+      const additionalPayments = extraPayments ?? existingAdjustment?.additionalPayments ?? [];
+      const oldPayments = payrollPayments(existingAdjustment);
+      const nextPayments = payrollPayments({ ...input, additionalPayments });
+      const protectedDates = new Set([...oldPayments, ...nextPayments]
+        .filter(payment => payment.amount > 0 && payment.date)
+        .map(payment => payment.date!));
       for (const date of [...protectedDates].sort()) {
         await lockCashDate(tx, date);
         const [closure] = await tx.select({ id: cashClosuresTable.id })
@@ -449,15 +449,16 @@ router.put("/payroll-adjustments", async (req, res, next) => {
           throw Object.assign(new Error(`${date} өдрийн касс өндөрлөсөн тул цалингийн гүйлгээг засах боломжгүй`), { status: 409 });
         }
       }
+      const paymentInputs = [...new Set([...oldPayments, ...nextPayments].map(payment => payment.sequence))]
+        .map(sequence => ({
+          ...(nextPayments.find(payment => payment.sequence === sequence) ?? { sequence, amount: 0, date: null }),
+          key: payrollPaymentSourceKey(input.month, input.employeeId, sequence),
+        }));
       const existingCashRows = await tx.select().from(cashTransactionsTable).where(and(
         eq(cashTransactionsTable.sourceType, sourceType),
-        inArray(cashTransactionsTable.sourceKey, [sourceKey, secondSourceKey]),
+        inArray(cashTransactionsTable.sourceKey, paymentInputs.map(payment => payment.key)),
       )).for("update");
       const cashBySourceKey = new Map(existingCashRows.map((cash) => [cash.sourceKey, cash]));
-      const paymentInputs = [
-        { key: sourceKey, amount: input.paidAmount, date: input.paymentDate },
-        { key: secondSourceKey, amount: input.secondPaidAmount, date: input.secondPaymentDate },
-      ];
       for (const payment of paymentInputs) {
         const existingCash = cashBySourceKey.get(payment.key);
         const paymentChanged = !existingCash
@@ -487,18 +488,10 @@ router.put("/payroll-adjustments", async (req, res, next) => {
           throw Object.assign(new Error("Банкны хуулгаар баталгаажсан цалингийн гүйлгээний дүн, огноог өөрчлөх боломжгүй"), { status: 409 });
         }
       }
-      const settlementDate = input.paidAmount > 0
-        ? input.paymentDate
-        : input.secondPaidAmount > 0
-          ? input.secondPaymentDate
-          : null;
+      const settlementDate = nextPayments.find(payment => payment.amount > 0)?.date ?? null;
       const postingChanged = existingAdjustment?.receivableId !== selectedReceivableId
         || Number(existingAdjustment?.manualDeduction ?? 0) !== input.manualDeduction
-        || (Number(existingAdjustment?.paidAmount ?? 0) > 0
-          ? existingAdjustment?.paymentDate
-          : Number(existingAdjustment?.secondPaidAmount ?? 0) > 0
-            ? existingAdjustment?.secondPaymentDate
-            : null) !== settlementDate;
+        || (oldPayments.find(payment => payment.amount > 0)?.date ?? null) !== settlementDate;
       let journalEntryId = existingAdjustment?.journalEntryId ?? null;
 
       if (journalEntryId && postingChanged) {
@@ -552,7 +545,7 @@ router.put("/payroll-adjustments", async (req, res, next) => {
 
       const [savedAdjustment] = await tx
         .insert(payrollAdjustmentsTable)
-        .values({ ...input, receivableId: selectedReceivableId, journalEntryId })
+        .values({ ...input, additionalPayments, receivableId: selectedReceivableId, journalEntryId })
         .onConflictDoUpdate({
           target: [payrollAdjustmentsTable.employeeId, payrollAdjustmentsTable.month],
           set: {
@@ -562,6 +555,7 @@ router.put("/payroll-adjustments", async (req, res, next) => {
             paymentDate: input.paidAmount > 0 ? input.paymentDate : null,
             secondPaidAmount: input.secondPaidAmount,
             secondPaymentDate: input.secondPaidAmount > 0 ? input.secondPaymentDate : null,
+            additionalPayments,
             journalEntryId,
             updatedAt: new Date(),
           },
@@ -569,20 +563,10 @@ router.put("/payroll-adjustments", async (req, res, next) => {
         .returning();
 
       const account = await cashAccountForCategory(tx, "Цалин");
-      const cashPayments = [
-        {
-          key: sourceKey,
-          amount: input.paidAmount,
-          date: input.paymentDate,
-          description: `${employee.name} · ${input.month} сарын цалин`,
-        },
-        {
-          key: secondSourceKey,
-          amount: input.secondPaidAmount,
-          date: input.secondPaymentDate,
-          description: `${employee.name} · ${input.month} сарын цалин · 2-р олголт`,
-        },
-      ];
+      const cashPayments = paymentInputs.map(payment => ({
+        ...payment,
+        description: `${employee.name} · ${input.month} сарын цалин${payment.sequence === 1 ? "" : ` · ${payment.sequence}-р олголт`}`,
+      }));
       for (const payment of cashPayments) {
         const existingCash = cashBySourceKey.get(payment.key);
         if (payment.amount > 0 && payment.date) {
@@ -644,6 +628,7 @@ router.put("/payroll-adjustments", async (req, res, next) => {
       paymentDate: adjustment.paymentDate,
       secondPaidAmount: Number(adjustment.secondPaidAmount),
       secondPaymentDate: adjustment.secondPaymentDate,
+      additionalPayments: adjustment.additionalPayments,
     });
   } catch (error) {
     if (error && typeof error === "object" && "status" in error) {
@@ -660,7 +645,7 @@ router.delete("/payroll-adjustments/:month/:employeeId/transactions/:sequence", 
       ...req.params,
       sequence: Number(req.params.sequence),
     });
-    const sourceKey = sequence === 1 ? `${month}:${employeeId}` : `${month}:${employeeId}:2`;
+    const sourceKey = payrollPaymentSourceKey(month, employeeId, sequence);
     const result = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
       const [adjustment] = await tx
@@ -672,8 +657,10 @@ router.delete("/payroll-adjustments/:month/:employeeId/transactions/:sequence", 
         ))
         .for("update");
       if (!adjustment) return "missing_adjustment" as const;
-      const paymentDate = sequence === 1 ? adjustment.paymentDate : adjustment.secondPaymentDate;
-      const paidAmount = Number(sequence === 1 ? adjustment.paidAmount : adjustment.secondPaidAmount);
+      const payments = payrollPayments(adjustment);
+      const selectedPayment = payments.find(payment => payment.sequence === sequence);
+      const paymentDate = selectedPayment?.date;
+      const paidAmount = selectedPayment?.amount ?? 0;
       if (paidAmount <= 0) return "missing_transaction" as const;
       if (paymentDate) {
         await lockCashDate(tx, paymentDate);
@@ -692,27 +679,22 @@ router.delete("/payroll-adjustments/:month/:employeeId/transactions/:sequence", 
       if (cash?.journalEntryId) {
         await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
       }
+      const remainingPaidAmount = payments.filter(payment => payment.sequence !== sequence)
+        .reduce((total, payment) => total + payment.amount, 0);
       if (adjustment.journalEntryId) {
-        const remainingPaidAmount = Number(sequence === 1 ? adjustment.secondPaidAmount : adjustment.paidAmount);
         if (remainingPaidAmount <= 0) {
           await voidJournalEntry(tx, { journalEntryId: adjustment.journalEntryId, voidedBy: null });
         }
       }
       await tx
         .update(payrollAdjustmentsTable)
-        .set(sequence === 1
-          ? {
-              paidAmount: 0,
-              paymentDate: null,
-              journalEntryId: Number(adjustment.secondPaidAmount) > 0 ? adjustment.journalEntryId : null,
-              updatedAt: new Date(),
-            }
-          : {
-              secondPaidAmount: 0,
-              secondPaymentDate: null,
-              journalEntryId: Number(adjustment.paidAmount) > 0 ? adjustment.journalEntryId : null,
-              updatedAt: new Date(),
-            })
+        .set({
+          ...(sequence === 1 ? { paidAmount: 0, paymentDate: null }
+            : sequence === 2 ? { secondPaidAmount: 0, secondPaymentDate: null }
+              : { additionalPayments: adjustment.additionalPayments.filter(payment => payment.sequence !== sequence) }),
+          journalEntryId: remainingPaidAmount > 0 ? adjustment.journalEntryId : null,
+          updatedAt: new Date(),
+        })
         .where(eq(payrollAdjustmentsTable.id, adjustment.id));
       await tx.delete(cashTransactionsTable).where(and(
         eq(cashTransactionsTable.sourceType, "payroll"),

@@ -85,6 +85,7 @@ it("closed payroll is immutable, permissioned and a saved carryover boundary", a
         "DELETE FROM attendance WHERE employee_id=1 AND date='2024-01-05'",
         "INSERT INTO attendance(employee_id,date,hours,status) VALUES (1,'2024-01-06',8,'present')",
         "UPDATE payroll_adjustments SET paid_amount=90 WHERE employee_id=1 AND month='2024-01'",
+        `UPDATE payroll_adjustments SET additional_payments='[{"sequence":3,"amount":20,"date":"2024-01-20"}]' WHERE employee_id=1 AND month='2024-01'`,
         "INSERT INTO payroll_advance_approvals(month,approval_date,lines) VALUES ('2024-01','2024-01-15','[]')",
         "UPDATE payroll_schedule_settings SET period_end_day=20 WHERE effective_from_month='0001-01'",
         "UPDATE payroll_month_balances SET lines='[]' WHERE month='2024-01'",

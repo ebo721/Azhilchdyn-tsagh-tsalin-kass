@@ -912,6 +912,21 @@ export interface HourBalanceLine {
   leaveDays: number;
 }
 
+export interface PayrollAdditionalPayment {
+  /**
+     * @minimum 3
+     * @maximum 10000
+     */
+  sequence: number;
+  /**
+     * @minimum 0.01
+     * @maximum 9999999999.99
+     */
+  amount: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  date: string;
+}
+
 export type PayrollLineEmployeeType = typeof PayrollLineEmployeeType[keyof typeof PayrollLineEmployeeType];
 
 
@@ -952,6 +967,7 @@ export interface PayrollLine {
   secondPaidAmount: number;
   /** @nullable */
   secondPaymentDate: string | null;
+  additionalPayments?: PayrollAdditionalPayment[];
   remainingAmount: number;
   overpaidAmount: number;
   balanceAmount: number;
@@ -971,6 +987,7 @@ export interface PayrollAdjustment {
   secondPaidAmount: number;
   /** @nullable */
   secondPaymentDate?: string | null;
+  additionalPayments?: PayrollAdditionalPayment[];
 }
 
 export interface PayrollAdjustmentInput {
@@ -989,6 +1006,8 @@ export interface PayrollAdjustmentInput {
   secondPaidAmount: number;
   /** @nullable */
   secondPaymentDate?: string | null;
+  /** @maxItems 1000 */
+  additionalPayments?: PayrollAdditionalPayment[];
 }
 
 export interface PayrollPayable {
