@@ -1,4 +1,5 @@
 import { GetPayrollAdvanceResponse } from "@workspace/api-zod";
+import { advanceFinancials, advancePaidAmount } from "./payroll-advance-installments.js";
 import { PayrollSnapshotMissingError } from "./payroll-attendance-snapshot.js";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import {
@@ -171,8 +172,7 @@ export function calculatePayrollMonth(
     : [];
   const paidAdvanceMap = new Map(
     approvedAdvanceLines
-      .filter((line) => line.paid === true)
-      .map((line) => [line.employeeId, Number(line.advanceAmount)]),
+      .map((line) => [line.employeeId, advancePaidAmount(line)]),
   );
 
   const lines = employees.map((employee) => {
@@ -327,7 +327,7 @@ export async function getPayrollAdvanceSummary(
   if (approval && !ignoreApproval) {
     const lines = Array.isArray(approval.lines)
       ? (approval.lines as Array<Record<string, unknown>>).map((line) => ({
-          ...line,
+          ...advanceFinancials(line),
           paid: line.paid === true,
           paymentDate: typeof line.paymentDate === "string" ? line.paymentDate : null,
         }))

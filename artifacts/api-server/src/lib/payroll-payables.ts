@@ -3,6 +3,7 @@ import {
   payrollMonthBalancesTable, payrollAdjustmentsTable, payrollAdvanceApprovalsTable,
 } from "@workspace/db";
 import { GetPayrollResponse, GetPayrollAdvanceResponse } from "@workspace/api-zod";
+import { advancePaidAmount } from "./payroll-advance-installments.js";
 import { lte } from "drizzle-orm";
 import { applyPayrollFinancials } from "./payroll-calc-helpers.js";
 import { currentMonth, money, previousMonth } from "./date-utils.js";
@@ -68,7 +69,7 @@ export async function readPayrollPayables(connection?: Tx, asOfMonth = currentMo
     const advances = new Map<string, number>();
     for (const approval of approvals) {
       for (const line of GetPayrollAdvanceResponse.shape.lines.parse(approval.lines)) {
-        if (line.paid === true) advances.set(`${approval.month}:${line.employeeId}`, money(line.advanceAmount));
+        advances.set(`${approval.month}:${line.employeeId}`, advancePaidAmount(line));
       }
     }
     const sources = new Map<string, SavedDebtMonth>(balances.map(row => [row.month, {

@@ -14,3 +14,9 @@ description: Business expectations for salary paid in smaller amounts across thr
 **Why:** The user clarified this as the desired flow, rather than manually creating installments before bank reconciliation.
 
 **How to apply:** Select the employee and saved payroll month from the bank transaction. Read amount and date from the bank, reuse an existing recorded payment when applicable, and keep debt within payroll's live saved-balance projection rather than creating a second generic payable.
+
+Урьдчилгааны батлагдсан дүн нь бодитоор олгосон дүн биш. Хэсэгчлэн олгосон урьдчилгааны зөвхөн бодит төлөлтүүдийн нийлбэрийг сүүл цалингаас суутгана.
+
+**Why:** The user requested extending direct bank installments to approved advances while preserving prior single-payment links.
+
+**How to apply:** Keep approved advance totals and actual disbursements distinct in every salary read, balance rebuild, and payable projection. Removing a bank link alone retains the recorded payment; cancelling an installment is a separate protected action.

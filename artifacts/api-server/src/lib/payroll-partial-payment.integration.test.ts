@@ -12,6 +12,7 @@ after(() => pool.end());
 
 it("partial second payment preserves a bank-verified first payment despite another employee's matching bank cash", async (t) => {
   const schema = `payroll_partial_test_${Date.now()}`;
+  const originalConnect = pool.connect.bind(pool);
   const client = await pool.connect();
   const query = client.query.bind(client);
   const server = app.listen(0);
@@ -20,7 +21,7 @@ it("partial second payment preserves a bank-verified first payment despite anoth
     for (const table of ["users", "employees", "payroll_adjustments", "cash_closures", "cash_transactions", "chart_of_accounts",
       "bank_accounts", "bank_transactions", "bank_internal_transfers", "journal_entries", "journal_lines", "operating_expenses",
       "receivables", "receivable_allocations", "payables", "payable_allocations", "payroll_attendance_snapshots",
-      "payroll_opening_balances", "payroll_month_closures", "payroll_month_balances", "payroll_advance_approvals"]) {
+      "payroll_opening_balances", "payroll_month_closures", "payroll_month_balances", "payroll_advance_approvals", "payroll_schedule_settings"]) {
       await query(`CREATE TABLE ${schema}.${table} (LIKE public.${table} INCLUDING ALL)`);
     }
     await query(`SET search_path TO ${schema}`);
@@ -262,6 +263,137 @@ it("partial second payment preserves a bank-verified first payment despite anoth
       assert.equal(result.remainingBalance, 0);
       assert.equal((await query("SELECT count(*)::int AS n FROM cash_transactions WHERE source_key LIKE '2026-10:2%'")).rows[0].n, 3);
       assert.equal((await bankPayment(900104, 2, "2026-09")).status, 409);
+    });
+    await t.test("bank advances retain each installment and deduct only actual payments from final payroll", async () => {
+      const month = "2026-11";
+      const advancePayroll = { ...computed, month, periodStart: `${month}-01`, periodEnd: `${month}-30`,
+        advancePeriodEnd: `${month}-15`, advancePaymentDate: `${month}-15`, finalPaymentDate: `${month}-30` };
+      await query("INSERT INTO payroll_attendance_snapshots(month,payroll,advance) VALUES ($1,$2,'{}')", [month, JSON.stringify(advancePayroll)]);
+      const line = { employeeId: 2, employeeName: "Advance fixture", employeeType: "shift", baseSalary: 100,
+        daysWorked: 10, dailySalary: 100, totalSalary: 1000, advanceAmount: 1000, paid: false, paymentDate: null };
+      await query("INSERT INTO payroll_advance_approvals(month,approval_date,total_amount,lines) VALUES ($1,$2,1150,$3)",
+        [month, `${month}-15`, JSON.stringify([line, { ...line, employeeId: 1, advanceAmount: 150, paid: true, paymentDate: `${month}-12` }])]);
+      for (const [id, amount] of [[900201, 300], [900202, 200], [900203, 500], [900204, 501], [900205, 150], [900206, 300]]) {
+        await query(`INSERT INTO bank_transactions(id,bank_account_id,type,amount,transaction_at,description,counterparty,fingerprint)
+          VALUES ($1,900001,'expense',$2,$3,'Advance installment fixture','Advance fixture',$4)`,
+          [id, amount, `${month}-15`, `advance-fixture-${id}`]);
+      }
+      const link = (id: number, employeeId = 2) => fetch(`${base}/bank-transactions/${id}/link-payroll`, {
+        method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ month, employeeId, paymentKind: "advance" }),
+      });
+      const remove = (sequence: number) => fetch(`${base}/payroll-advance/${month}/2/transactions/${sequence}`, {
+        method: "DELETE", headers: { Cookie: cookie },
+      });
+      const targets = await fetch(`${base}/bank-transactions/900201/advance-targets/${month}`, { headers: { Cookie: cookie } });
+      assert.equal(targets.status, 200, await targets.clone().text());
+      assert.equal((await targets.json())[0].remainingBalance, 1000);
+      for (const [id, paid, remaining] of [[900201, 300, 700], [900202, 500, 500], [900203, 1000, 0]]) {
+        const response = await link(id);
+        assert.equal(response.status, 200, await response.clone().text());
+        const result = await response.json();
+        assert.equal(result.paidAmount, paid);
+        assert.equal(result.remainingBalance, remaining);
+        const summary = await fetch(`${base}/payroll?month=${month}`, { headers: { Cookie: cookie } });
+        assert.equal(summary.status, 200, await summary.clone().text());
+        const employee = (await summary.json()).lines.find((row: {employeeId: number}) => row.employeeId === 2);
+        assert.equal(employee.advanceAmount, paid);
+        assert.equal(employee.payable, 1000 - paid);
+        if (id === 900202) {
+          assert.equal((await link(900204)).status, 409, "Overpayment is rejected");
+          assert.equal((await remove(1)).status, 409, "Linked installment cannot be deleted");
+          assert.equal((await fetch(`${base}/payroll-advance/approval?month=${month}`, { method: "DELETE", headers: { Cookie: cookie } })).status, 409);
+        }
+      }
+      assert.equal((await link(900201)).status, 200, "Idempotent retry");
+      assert.equal((await link(900201, 1)).status, 409, "Cannot claim another employee's payment");
+      const cashRows = (await query("SELECT * FROM cash_transactions WHERE source_type='payroll_advance' AND source_key LIKE '2026-11:2%' ORDER BY source_key")).rows;
+      assert.deepEqual(cashRows.map(row => row.source_key), ["2026-11:2", "2026-11:2:2", "2026-11:2:3"]);
+      assert.ok(cashRows.every(row => row.bank_transaction_id && row.journal_entry_id));
+      const legacyEdit = await fetch(`${base}/payroll-advance/payment`, { method: "PUT",
+        headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ month, employeeId: 2, advanceAmount: 1000, paid: false }) });
+      assert.equal(legacyEdit.status, 409, "Old clients cannot erase installments");
+      assert.equal((await query("SELECT count(*)::int n FROM payables")).rows[0].n, 0);
+
+      // Unlink is not cancellation: the original payment survives, and can be reused.
+      const unlink = await fetch(`${base}/bank-transactions/900201/unlink-cash`, { method: "POST", headers: { Cookie: cookie } });
+      assert.equal(unlink.status, 200, await unlink.clone().text());
+      const reuse = await link(900206);
+      assert.equal(reuse.status, 200, await reuse.clone().text());
+      assert.equal((await reuse.json()).reusedPayment, true);
+      assert.equal((await query("SELECT id FROM cash_transactions WHERE source_key='2026-11:2' AND source_type='payroll_advance'")).rows[0].id, cashRows[0].id);
+
+      // A legacy full payment retains the unsuffixed key and journal when claimed.
+      await query(`INSERT INTO cash_transactions(type,category,amount,date,description,source_type,source_key)
+        VALUES ('expense','Урьдчилгаа цалин',150,'2026-11-12','Legacy advance','payroll_advance','2026-11:1')`);
+      const legacy = await link(900205, 1);
+      assert.equal(legacy.status, 200, await legacy.clone().text());
+      assert.equal((await legacy.json()).reusedPayment, true);
+      const oldLines = (await query("SELECT lines FROM payroll_advance_approvals WHERE month=$1", [month])).rows[0].lines;
+      assert.equal(oldLines.find((row: {employeeId: number}) => row.employeeId === 1).payments, undefined);
+
+      await fetch(`${base}/bank-transactions/900202/unlink-cash`, { method: "POST", headers: { Cookie: cookie } });
+      await query("INSERT INTO cash_closures(date) VALUES ('2026-11-15')");
+      assert.equal((await remove(2)).status, 409, "Closed date cannot be cancelled");
+      assert.equal((await link(900202)).status, 409, "Closed date cannot be linked");
+      await query("DELETE FROM cash_closures WHERE date='2026-11-15'");
+      assert.equal((await remove(2)).status, 200);
+      const remainingLines = (await query("SELECT lines FROM payroll_advance_approvals WHERE month=$1", [month])).rows[0].lines;
+      const updated = remainingLines.find((row: {employeeId: number}) => row.employeeId === 2);
+      assert.deepEqual(updated.payments.map((p: {sequence: number}) => p.sequence), [1, 3]);
+      assert.equal(updated.paid, false);
+      const readd = await link(900202);
+      assert.equal(readd.status, 200, await readd.clone().text());
+      assert.equal((await query("SELECT count(*)::int n FROM cash_transactions WHERE source_type='payroll_advance' AND source_key='2026-11:2:4'")).rows[0].n, 1);
+      await query("INSERT INTO payroll_month_closures(month,payroll,advance,closed_by) VALUES ($1,$2,$3,1)", [month, JSON.stringify(advancePayroll), JSON.stringify({})]);
+      assert.equal((await remove(4)).status, 409, "Closed month cannot be cancelled");
+      assert.equal((await link(900204)).status, 409, "Closed month cannot receive payment");
+      assert.equal((await fetch(`${base}/bank-transactions/900202/unlink-cash`, { method: "POST", headers: { Cookie: cookie } })).status, 409, "Closed month cannot unlink or void the advance journal");
+      await query("DELETE FROM payroll_month_closures WHERE month=$1", [month]);
+    });
+    await t.test("concurrent advance transfers serialize and failed journal posting rolls back the entire settlement", async () => {
+      const month = "2026-12";
+      const line = { employeeId: 2, employeeName: "Concurrent advance", employeeType: "shift", baseSalary: 100,
+        daysWorked: 10, dailySalary: 100, totalSalary: 1000, advanceAmount: 1000, paid: false };
+      await query("INSERT INTO payroll_advance_approvals(month,approval_date,total_amount,lines) VALUES ($1,$2,1000,$3)",
+        [month, `${month}-15`, JSON.stringify([line])]);
+      for (const [id, amount] of [[900301, 400], [900302, 400], [900303, 300], [900304, 200]]) {
+        await query(`INSERT INTO bank_transactions(id,bank_account_id,type,amount,transaction_at,description,counterparty,fingerprint)
+          VALUES ($1,900001,'expense',$2,$3,'Concurrent advance','Advance fixture',$4)`,
+          [id, amount, `${month}-15`, `advance-concurrent-${id}`]);
+      }
+      const link = (id: number) => fetch(`${base}/bank-transactions/${id}/link-payroll`, {
+        method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ month, employeeId: 2, paymentKind: "advance" }),
+      });
+      // Real separate connections are required to exercise advisory/row locking.
+      t.mock.method(pool, "connect", (async () => {
+        const connection = await originalConnect();
+        await connection.query(`SET search_path TO ${schema}`);
+        return connection;
+      }) as typeof pool.connect);
+      try {
+        const responses = await Promise.all([link(900301), link(900301), link(900302), link(900303)]);
+        const statuses = responses.map(response => response.status);
+        assert.equal(statuses.filter(status => status === 200).length, 3, statuses.join(","));
+        assert.equal(statuses.filter(status => status === 409).length, 1, statuses.join(","));
+        const saved = (await query("SELECT lines FROM payroll_advance_approvals WHERE month=$1", [month])).rows[0].lines[0];
+        assert.equal(saved.payments.length, 2);
+        assert.ok(saved.payments.reduce((sum: number, p: {amount: number}) => sum + p.amount, 0) <= 1000);
+        assert.equal((await query("SELECT count(*)::int n FROM cash_transactions WHERE source_type='payroll_advance' AND source_key LIKE '2026-12:2%'")).rows[0].n, 2);
+        // Exact rollback assertion: no new installment, cash, bank link, or journal.
+        const journalCount = (await query("SELECT count(*)::int n FROM journal_entries")).rows[0].n;
+        await query("UPDATE chart_of_accounts SET is_active=false WHERE code='1010'");
+        const response = await link(900304);
+        assert.equal(response.status, 409, await response.clone().text());
+        assert.deepEqual((await query("SELECT lines FROM payroll_advance_approvals WHERE month=$1", [month])).rows[0].lines[0], saved);
+        assert.equal((await query("SELECT cash_transaction_id FROM bank_transactions WHERE id=900304")).rows[0].cash_transaction_id, null);
+        assert.equal((await query("SELECT count(*)::int n FROM journal_entries")).rows[0].n, journalCount);
+      } finally {
+        await query("UPDATE chart_of_accounts SET is_active=true WHERE code='1010'");
+        t.mock.method(pool, "connect", (() => Promise.resolve({ query, release() {} } as unknown as typeof client)) as typeof pool.connect);
+      }
     });
     await t.test("migration preserves legacy payments and rollback refuses to discard saved extras", async () => {
       const migration = new URL("../../../../lib/db/migrations/20261023_payroll_additional_payments.sql", import.meta.url);

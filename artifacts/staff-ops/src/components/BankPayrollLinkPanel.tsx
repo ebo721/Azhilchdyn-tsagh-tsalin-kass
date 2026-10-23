@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useLinkBankPayroll, useListBankPayrollTargets, getListBankPayrollTargetsQueryKey, type BankTransaction, type BankPayrollTarget } from '@workspace/api-client-react';
+import { useLinkBankPayroll, useListBankPayrollTargets, getListBankPayrollTargetsQueryKey, useListBankAdvanceTargets, getListBankAdvanceTargetsQueryKey, type BankTransaction, type BankPayrollTarget } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { money } from '@/lib/app-shared';
@@ -11,6 +11,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 export function BankPayrollLinkPanel({ bank, onLinked }: { bank: BankTransaction; onLinked: (remainingBalance: number) => void }) {
   const qc = useQueryClient();
   const [month, setMonth] = useState(bank.transactionAt.slice(0, 7));
+  const [paymentKind, setPaymentKind] = useState<'salary' | 'advance'>('salary');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [confirmed, setConfirmed] = useState(false);
@@ -20,7 +21,9 @@ export function BankPayrollLinkPanel({ bank, onLinked }: { bank: BankTransaction
   useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
   const link = useLinkBankPayroll();
   const valid = /^\d{4}-(0[1-9]|1[0-2])$/.test(month);
-  const targets = useListBankPayrollTargets(bank.id, month, { query: { queryKey: getListBankPayrollTargetsQueryKey(bank.id, month), enabled: valid } });
+  const salaryTargets = useListBankPayrollTargets(bank.id, month, { query: { queryKey: getListBankPayrollTargetsQueryKey(bank.id, month), enabled: valid && paymentKind === 'salary' } });
+  const advanceTargets = useListBankAdvanceTargets(bank.id, month, { query: { queryKey: getListBankAdvanceTargetsQueryKey(bank.id, month), enabled: valid && paymentKind === 'advance' } });
+  const targets = paymentKind === 'advance' ? advanceTargets : salaryTargets;
   const list = useMemo(() => {
     const q = search.trim().toLowerCase();
     return (targets.data ?? []).filter((t) => t.month === month && (!q || t.employeeName.toLowerCase().includes(q)));
@@ -40,7 +43,7 @@ export function BankPayrollLinkPanel({ bank, onLinked }: { bank: BankTransaction
   const save = () => {
     if (!target || !canSave) return;
     setError('');
-    link.mutate({ id: bank.id, data: { employeeId: target.employeeId, month } }, {
+    link.mutate({ id: bank.id, data: { employeeId: target.employeeId, month, ...(paymentKind === 'advance' ? { paymentKind } : {}) } }, {
       onSuccess: async (r) => {
         setSuccess(`${r.reusedPayment ? 'Бүртгэлтэй төлбөртэй холбогдлоо.' : `${money(bank.amount)} цалинд нэмэгдлээ.`} Үлдэгдэл: ${money(r.remainingBalance)}${r.remainingBalance <= 0 ? ' (хаагдлаа)' : ''}`);
         await refresh();
@@ -52,7 +55,8 @@ export function BankPayrollLinkPanel({ bank, onLinked }: { bank: BankTransaction
 
   return <section onKeyDown={(e) => { if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") e.preventDefault(); }} className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/40 p-4" aria-labelledby="bank-payroll-title" data-testid="section-bank-payroll-link">
     <div><h3 id="bank-payroll-title" className="text-sm font-bold">Хадгалсан цалинтай шууд холбох</h3>
-      <p className="mt-1 text-xs text-muted-foreground">Сүүл цалин. Банкны дүн цалингийн төлбөрт нэмэгдэж, үлдсэн хэсэг цалингийн өр хэвээр үлдэнэ. Дараагийн банкны гүйлгээгээр үлдэгдлийг төлнө.</p></div>
+      <p className="mt-1 text-xs text-muted-foreground">{paymentKind === 'advance' ? 'Батлагдсан урьдчилгааг хэсэгчлэн олгоно. Сүүл цалингаас зөвхөн бодитоор олгосон нийлбэрийг суутгана.' : 'Банкны дүн цалингийн төлбөрт нэмэгдэж, үлдсэн хэсэг цалингийн өр хэвээр үлдэнэ. Дараагийн банкны гүйлгээгээр үлдэгдлийг төлнө.'}</p></div>
+    <label className="block space-y-1 text-xs font-semibold">Төлөлтийн төрөл<select value={paymentKind} onChange={e => { setPaymentKind(e.target.value as 'salary' | 'advance'); setSelectedId(null); setConfirmed(false); setError(''); setSuccess(''); }} disabled={link.isPending || Boolean(success)} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm" data-testid="select-bank-payroll-kind"><option value="salary">Сүүл цалин</option><option value="advance">Урьдчилгаа цалин</option></select></label>
     <div className="grid grid-cols-2 gap-3">
       <label className="space-y-1 text-xs font-semibold">Банкны дүн<input readOnly value={money(bank.amount)} className="h-10 w-full rounded-lg border border-input bg-muted px-3 font-mono text-sm" data-testid="input-bank-payroll-amount" /></label>
       <label className="space-y-1 text-xs font-semibold">Банкны огноо<input readOnly value={bank.transactionAt.slice(0, 10)} className="h-10 w-full rounded-lg border border-input bg-muted px-3 font-mono text-sm" data-testid="input-bank-payroll-date" /></label>
@@ -75,7 +79,7 @@ export function BankPayrollLinkPanel({ bank, onLinked }: { bank: BankTransaction
       <div className="grid grid-cols-2 gap-2 font-mono text-xs"><div className="rounded-lg bg-secondary/40 p-2"><p className="font-sans text-muted-foreground">Өмнөх өр</p><p className="font-bold" data-testid="text-bank-payroll-before">{money(target.remainingBalance)}</p></div>
         <div className={cn('rounded-lg p-2', after > 0 ? 'bg-orange-50 text-orange-900' : 'bg-emerald-50 text-emerald-900')}><p className="font-sans">Дараах өр</p><p className="font-bold" data-testid="text-bank-payroll-after">{money(after)}</p><p className="font-sans text-[10px] font-bold">{after > 0 ? 'Цалингийн өр үлдэнэ' : 'Хаагдана'}</p></div></div>
       {excessive && <p className="text-sm font-semibold text-destructive" role="alert" data-testid="error-bank-payroll-excess">Банкны дүн цалингийн үлдэгдлээс ({money(target.remainingBalance)}) их байна.</p>}
-      <label className="flex items-start gap-2 text-xs font-semibold"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className="mt-0.5" data-testid="checkbox-bank-payroll-confirm" />Энэ банкны гүйлгээг {target.employeeName}-н {month} сарын сүүл цалинтай холбохыг баталгаажуулна.</label>
+      <label className="flex items-start gap-2 text-xs font-semibold"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className="mt-0.5" data-testid="checkbox-bank-payroll-confirm" />Энэ банкны гүйлгээг {target.employeeName}-н {month} сарын {paymentKind === 'advance' ? 'урьдчилгаатай' : 'сүүл цалинтай'} холбохыг баталгаажуулна.</label>
     </div>}
     {error && <p className="text-sm font-semibold text-destructive" role="alert" data-testid="error-bank-payroll-save">{error}</p>}
     {success && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-sm font-semibold text-emerald-800" role="status" data-testid="text-bank-payroll-success">{success}</p>}

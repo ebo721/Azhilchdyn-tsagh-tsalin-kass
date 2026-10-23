@@ -1,10 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function setup(page: Page, options: { remaining?: number; reuse?: boolean; fail?: boolean } = {}) {
+async function setup(page: Page, options: { remaining?: number; reuse?: boolean; fail?: boolean; advance?: boolean } = {}) {
   const month = new Date().toISOString().slice(0, 7);
   let remaining = options.remaining ?? 1000;
   const writes: Array<{path: string; body: any}> = [];
-  let rows = [300, 700].map((amount, i) => ({
+  let rows = (options.advance ? [300, 200, 500] : [300, 700]).map((amount, i) => ({
     id: 101 + i, bankAccountId: 1, type: "expense", amount, transactionAt: `${month}-20T10:00:00Z`,
     description: `Цалингийн төлөлт ${i + 1}`, counterparty: "Цалин ажилтан", accountId: 6,
     accountCode: "6000", accountName: "Цалин", cashTransactionId: null, journalEntryId: null,
@@ -16,7 +16,7 @@ async function setup(page: Page, options: { remaining?: number; reuse?: boolean;
     if (path === "/api/bank-accounts") return route.fulfill({ json: [{ id: 1, bankName: "Fixture bank", accountNumber: "1234567890" }] });
     if (path === "/api/chart-of-accounts") return route.fulfill({ json: [{ id: 6, code: "6000", name: "Цалин", type: "expense", isActive: true }] });
     if (path === "/api/bank-transactions") return route.fulfill({ json: rows });
-    if (/\/payroll-targets\//.test(path)) return route.fulfill({ json: [{
+    if (/\/(?:payroll|advance)-targets\//.test(path)) return route.fulfill({ json: [{
       employeeId: 2, employeeName: "Цалин ажилтан", month: path.split("/").at(-1),
       payable: 1000, paidAmount: 1000 - remaining, remainingBalance: remaining,
       existingCashId: options.reuse ? 15 : null,
@@ -44,6 +44,32 @@ async function setup(page: Page, options: { remaining?: number; reuse?: boolean;
 }
 
 for (const width of [1440, 402]) {
+  test(`approved advance can be paid with three bank transfers: ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 960 });
+    const { writes, month } = await setup(page, { advance: true });
+    for (const [id, before, after] of [[101, "1,000 ₮", "700 ₮"], [102, "700 ₮", "500 ₮"], [103, "500 ₮", "0 ₮"]]) {
+      await page.getByTestId(`button-transfer-bank-transaction-${id}`).click();
+      await page.getByTestId("select-bank-payroll-kind").selectOption("advance");
+      await expect(page.getByTestId("input-bank-payroll-amount")).toHaveJSProperty("readOnly", true);
+      await expect(page.getByTestId("input-bank-payroll-date")).toHaveJSProperty("readOnly", true);
+      await page.getByTestId("button-bank-payroll-target-2").click();
+      await expect(page.getByTestId("checkbox-bank-payroll-confirm").locator("..")).toContainText("урьдчилгаатай");
+      await expect(page.getByTestId("text-bank-payroll-before")).toHaveText(String(before));
+      await expect(page.getByTestId("text-bank-payroll-after")).toHaveText(String(after));
+      const button = page.getByTestId("button-bank-payroll-link");
+      await button.scrollIntoViewIfNeeded();
+      const bounds = await button.boundingBox();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+      await page.getByTestId("checkbox-bank-payroll-confirm").check();
+      await button.click();
+      await expect(page.getByTestId("text-bank-payroll-success")).toContainText(String(after));
+      await expect(page.getByTestId("section-bank-payroll-link")).toHaveCount(0);
+    }
+    expect(writes).toEqual([101, 102, 103].map(id => ({
+      path: `/api/bank-transactions/${id}/link-payroll`, body: { employeeId: 2, month, paymentKind: "advance" },
+    })));
+  });
   test(`smaller bank payment leaves payroll debt and next payment closes it: ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 960 });
     const { writes, month } = await setup(page);

@@ -11,6 +11,7 @@ import {
   chartOfAccountsTable,
   journalEntriesTable,
   payrollAdvanceApprovalsTable,
+  payrollAttendanceSnapshotsTable,
   usersTable,
 } from "@workspace/db";
 import app from "../app";
@@ -33,7 +34,8 @@ describe("concurrent payroll advance payments", () => {
     baseUrl = `http://127.0.0.1:${address.port}`;
 
     const usedMonths = new Set(
-      (await db.select({ month: payrollAdvanceApprovalsTable.month }).from(payrollAdvanceApprovalsTable))
+      [...await db.select({ month: payrollAdvanceApprovalsTable.month }).from(payrollAdvanceApprovalsTable),
+        ...await db.select({ month: payrollAttendanceSnapshotsTable.month }).from(payrollAttendanceSnapshotsTable)]
         .map((row) => row.month),
     );
     const availableMonths = Array.from({ length: 120 }, (_, index) => {
@@ -95,7 +97,7 @@ describe("concurrent payroll advance payments", () => {
     server.close();
   });
 
-  it("serializes edits so both approval lines, deductions, and cash expenses survive", async () => {
+  it("serializes edits so both approval lines and cash expenses survive without implicitly pulling payroll", async () => {
     const amounts = [125_000, 135_000];
     const responses = await Promise.all(employeeIds.map((employeeId, index) => (
       fetch(`${baseUrl}/api/payroll-advance/payment`, {
@@ -175,17 +177,13 @@ describe("concurrent payroll advance payments", () => {
     const payrollResponse = await fetch(`${baseUrl}/api/payroll?month=${month}`, {
       headers: { cookie: adminCookie },
     });
-    assert.equal(payrollResponse.status, 200);
-    const payroll = await payrollResponse.json() as {
-      lines: Array<{ employeeId: number; advanceAmount: number }>;
-    };
-    assert.deepEqual(
-      employeeIds.map((id) => payroll.lines.find((line) => line.employeeId === id)?.advanceAmount),
-      [130_000, amounts[1]],
-    );
+    assert.equal(payrollResponse.status, 409);
+    assert.equal((await db.select().from(payrollAttendanceSnapshotsTable)
+      .where(eq(payrollAttendanceSnapshotsTable.month, month))).length, 0,
+    "Recording advances must not create a salary calculation from attendance");
   });
 
-  it("refreshes salary and worked days when a paid line is changed back to unpaid", async () => {
+  it("keeps frozen salary and attendance when a paid line is changed back to unpaid", async () => {
     const employeeId = employeeIds[0];
     await db.update(employeesTable)
       .set({ baseSalary: 1_200_000 })
@@ -247,10 +245,10 @@ describe("concurrent payroll advance payments", () => {
     };
     const refreshedLine = result.lines.find((line) => line.employeeId === employeeId);
     assert.ok(refreshedLine);
-    assert.equal(refreshedLine.baseSalary, 1_200_000);
-    assert.equal(refreshedLine.daysWorked, 1);
-    assert.equal(refreshedLine.totalSalary, 1_200_000);
-    assert.equal(refreshedLine.advanceAmount, 600_000);
+    assert.equal(refreshedLine.baseSalary, 1_000_000);
+    assert.equal(refreshedLine.daysWorked, 0);
+    assert.equal(refreshedLine.totalSalary, 1_000_000);
+    assert.equal(refreshedLine.advanceAmount, 130_000);
     assert.equal(refreshedLine.paid, false);
     assert.equal(refreshedLine.paymentDate, null);
 
