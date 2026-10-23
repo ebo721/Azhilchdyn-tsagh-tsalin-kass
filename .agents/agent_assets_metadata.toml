@@ -1,0 +1,38 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "frcmY3WyMnYtjm6wQOW-8"
+uri = "file://generated-artifacts/bank-duplicate-readonly-report.html"
+type = "html"
+title = "99 сэжигтэй хосын шалгалтын тайлан"
+description = "Зөвхөн уншсан production тайлан: гүйлгээний хосууд, касс/журнал, өглөг, payroll болон дотоод шилжүүлгийн холбоос. Өгөгдөл өөрчлөөгүй."
+logical_id = "46192616-2162-44ff-b28d-911fe81edd67"
+content_hash = "sha256:f58c0bd28b674d084a3c24c87a80c4f3c5e7be78518e24d72de2dab50fbd0404"
+size = 73857
+mtime_ms = 1792672076548
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:77f87a0b-bb9f-4789-b0be-b97d1f1a7945/46192616-2162-44ff-b28d-911fe81edd67/2c415ebc-1d94-4454-93e2-3f04812620da"
+storage_version_token = "1792672078653155"
+content_type = "text/html"
+
+[[outputs]]
+id = "2KfXifYL1qabXxsCmDJK6"
+uri = "file://generated-artifacts/bank-duplicate-cleanup-approval.html"
+type = "html"
+title = "99 давхардлыг цэвэрлэх — зөвшөөрөл авах төлөвлөгөө"
+description = "Эх хуулгаар батлагдсан 99 хосын жагсаалт, хадгалах санхүүгийн холбоосууд, бүрэн production SQL болон rollback. Хараахан ажиллуулаагүй."
+logical_id = "b17c64f7-53a9-4bca-8dd3-30ad88e8f736"
+content_hash = "sha256:599067c54f3deb692be997008eed2195bec68a5f127bf790debfdf8e280fd244"
+size = 1244767
+mtime_ms = 1792737128283
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:77f87a0b-bb9f-4789-b0be-b97d1f1a7945/b17c64f7-53a9-4bca-8dd3-30ad88e8f736/ce1c774e-94ef-4c7f-8a69-d97d54188f00"
+storage_version_token = "1792737146561845"
+content_type = "text/html"
+
+[[outputs]]
+id = "jdXIAc0zv2kciVJ9sl16b"
+uri = "file://generated-artifacts/bank-duplicate-cleanup-result.html"
+type = "html"
+title = "Давхардал цэвэрлэсэн эцсийн тайлан"
+description = "99 буруу импорт устсан, 2 журнал зөв банкны мөрт холбогдсон, бүх санхүүгийн холбоос хадгалагдсаныг дахин шалгасан үр дүн."
+content_type = "text/html"
