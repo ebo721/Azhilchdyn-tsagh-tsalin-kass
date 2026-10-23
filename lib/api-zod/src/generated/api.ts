@@ -3144,6 +3144,56 @@ export const TransferBankTransactionToCashResponse = zod.object({
 
 
 /**
+ * @summary List saved payroll balances and existing payments for a bank expense
+ */
+export const listBankPayrollTargetsPathMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+
+
+export const ListBankPayrollTargetsParams = zod.object({
+  "id": zod.coerce.number().int(),
+  "month": zod.coerce.string().regex(listBankPayrollTargetsPathMonthRegExp)
+})
+
+export const ListBankPayrollTargetsResponseItem = zod.object({
+  "employeeId": zod.number().int(),
+  "employeeName": zod.string(),
+  "month": zod.string(),
+  "payable": zod.number(),
+  "paidAmount": zod.number(),
+  "remainingBalance": zod.number(),
+  "existingCashId": zod.number().int().nullable()
+})
+export const ListBankPayrollTargetsResponse = zod.array(ListBankPayrollTargetsResponseItem)
+
+
+/**
+ * @summary Record a bank expense as a partial salary payment or link an existing salary payment atomically
+ */
+export const LinkBankPayrollParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+
+export const linkBankPayrollBodyMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+
+
+export const LinkBankPayrollBody = zod.object({
+  "employeeId": zod.number().int().min(1),
+  "month": zod.string().regex(linkBankPayrollBodyMonthRegExp)
+})
+
+export const LinkBankPayrollResponse = zod.object({
+  "bankTransactionId": zod.number().int(),
+  "cashTransactionId": zod.number().int(),
+  "employeeId": zod.number().int(),
+  "month": zod.string(),
+  "paidAmount": zod.number(),
+  "remainingBalance": zod.number(),
+  "reusedPayment": zod.boolean()
+})
+
+
+/**
  * @summary List matching unlinked cash transactions for a bank transaction
  */
 export const ListBankTransactionCashSuggestionsParams = zod.object({
