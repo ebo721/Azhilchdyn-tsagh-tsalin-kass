@@ -1,13 +1,41 @@
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { bankTransactionsTable, cashTransactionsTable, cashClosuresTable, chartOfAccountsTable, journalEntriesTable, operatingExpensesTable } from "@workspace/db";
 import { lockCashDate } from "./cash-date-lock.js";
 import { postJournalEntry, voidJournalEntry } from "./journal-posting.js";
 import { inventoryPurchaseAccountCodes, type Tx } from "./route-shared.js";
+import { syncOperatingExpenseForBankCash } from "./operating-expense-sync.js";
 
 type Bank = typeof bankTransactionsTable.$inferSelect;
 type Cash = typeof cashTransactionsTable.$inferSelect;
 type Account = typeof chartOfAccountsTable.$inferSelect;
 const conflict = (message: string) => Object.assign(new Error(message), { status: 409 });
+export class BankCashLinkConflictError extends Error {}
+
+/** Caller locks and validates the bank/cash rows before claiming either side. */
+export async function attachBankCash(tx: Tx, bank: Bank, cash: Cash) {
+  const verifiedAt = new Date();
+  const [linkedCash] = await tx.update(cashTransactionsTable).set({
+    bankTransactionId: bank.id, bankVerifiedAt: verifiedAt,
+    ...(cash.sourceType === null ? { sourceType: "bank_transaction", sourceKey: `bank:${bank.id}` } : {}),
+  }).where(and(eq(cashTransactionsTable.id, cash.id), isNull(cashTransactionsTable.bankTransactionId))).returning();
+  if (!linkedCash) throw new BankCashLinkConflictError();
+  const [linkedBank] = await tx.update(bankTransactionsTable)
+    .set({ cashTransactionId: cash.id, transferredAt: verifiedAt })
+    .where(and(eq(bankTransactionsTable.id, bank.id), isNull(bankTransactionsTable.cashTransactionId), isNull(bankTransactionsTable.transferredAt)))
+    .returning();
+  if (!linkedBank) throw new BankCashLinkConflictError();
+  if (cash.journalEntryId) await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
+  const mappedId = bank.accountId ?? cash.accountId;
+  const [mapped] = mappedId ? await tx.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, mappedId)) : [];
+  const valid = mapped?.isActive && (cash.type === "income" ? mapped.type === "revenue" : ["expense", "asset"].includes(mapped.type));
+  if (bank.accountId !== null && !valid) throw conflict("Банкны гүйлгээний данс идэвхгүй эсвэл төрөл тохирохгүй байна.");
+  const counter = valid ? mapped! : await accountByCode(tx, cash.type === "income" ? "4900" : "6900", cash.type === "income" ? "revenue" : "expense");
+  const journalEntryId = await postBankCashJournal(tx, bank, linkedCash, counter);
+  await tx.update(cashTransactionsTable).set({ journalEntryId, accountId: counter.id }).where(eq(cashTransactionsTable.id, cash.id));
+  const [posted] = await tx.update(bankTransactionsTable).set({ journalEntryId }).where(eq(bankTransactionsTable.id, bank.id)).returning();
+  await syncOperatingExpenseForBankCash(tx, bank.id, cash.id);
+  return posted;
+}
 
 export async function accountByCode(tx: Tx, code: string, type: string) {
   const [account] = await tx.select().from(chartOfAccountsTable).where(and(

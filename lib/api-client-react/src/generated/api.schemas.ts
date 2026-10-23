@@ -912,6 +912,34 @@ export interface HourBalanceLine {
   leaveDays: number;
 }
 
+export interface BankPayrollTarget {
+  employeeId: number;
+  employeeName: string;
+  month: string;
+  payable: number;
+  paidAmount: number;
+  remainingBalance: number;
+  /** @nullable */
+  existingCashId: number | null;
+}
+
+export interface BankPayrollLinkInput {
+  /** @minimum 1 */
+  employeeId: number;
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])$ */
+  month: string;
+}
+
+export interface BankPayrollLinkResult {
+  bankTransactionId: number;
+  cashTransactionId: number;
+  employeeId: number;
+  month: string;
+  paidAmount: number;
+  remainingBalance: number;
+  reusedPayment: boolean;
+}
+
 export interface PayrollAdditionalPayment {
   /**
      * @minimum 3

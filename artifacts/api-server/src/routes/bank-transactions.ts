@@ -1,4 +1,8 @@
 import { Router, raw, type IRouter, type Response, type NextFunction } from "express";
+import { ListBankPayrollTargetsParams, ListBankPayrollTargetsResponse, LinkBankPayrollParams, LinkBankPayrollBody, LinkBankPayrollResponse } from "@workspace/api-zod";
+import { listBankPayrollTargets, linkBankPayroll } from "../lib/bank-payroll.js";
+import { PayrollSnapshotMissingError } from "../lib/payroll-attendance-snapshot.js";
+import { PayrollBalancesNotReadyError } from "../lib/payroll-balance-store.js";
 import { bankTransactionResponse as response } from "../lib/bank-transaction-response.js";
 import {
   assertNotInternalTransfer, notInternalTransfer, transferFor, transferSuggestions, countTransferSuggestions, pairTransfer, unpairTransfer,
@@ -70,7 +74,7 @@ import { inventoryPurchaseAccountCodes } from "../lib/route-shared.js";
 import { bankSuggestionScore } from "../lib/bank-suggestion-score.js";
 import { postPendingInventoryPurchase } from "../lib/pending-inventory-purchases.js";
 import { checkBankLinkEligibility } from "../lib/bank-link-eligibility.js";
-import { accountByCode, postBankCashJournal, unlinkBankCash, restoreBankCashJournal } from "../lib/bank-cash-lifecycle.js";
+import { accountByCode, postBankCashJournal, unlinkBankCash, restoreBankCashJournal, attachBankCash, BankCashLinkConflictError } from "../lib/bank-cash-lifecycle.js";
 import {
   cancelBankPurchaseGroup,
   linkBankPurchase,
@@ -89,16 +93,6 @@ const maxXmlBytes = 8 * 1024 * 1024;
 const maxRows = 20_000;
 const requiredHeaders = ["Огноо", "Зарлага", "Орлого", "Exchange", "Харьцсан данс / Нэр", "Үлдэгдэл", "Гүйлгээний утга", "Гүйлгээ хийсэн огноо"];
 const payrollBankRoundingTolerance = 1;
-
-class BankCashLinkConflictError extends Error {}
-
-async function counterAccount(tx: any, type: string, category: string, mapped: any) {
-  if (type === "income" && mapped?.isActive && mapped.type === "revenue") return mapped;
-  if (type === "expense" && mapped?.isActive && ["expense", "asset"].includes(mapped.type)) return mapped;
-  return type === "income"
-    ? accountByCode(tx, "4900", "revenue")
-    : accountByCode(tx, "6900", "expense");
-}
 
 function lifecycleFailure(error: unknown, res: Response, next: NextFunction) {
   if (error && typeof error === "object" && "status" in error) {
@@ -1117,6 +1111,26 @@ router.post("/bank-transactions/:id/transfer-to-cash", async (req, res, next) =>
   }
 });
 
+router.get("/bank-transactions/:id/payroll-targets/:month", async (req, res, next) => {
+  try {
+    const { id, month } = ListBankPayrollTargetsParams.parse(req.params);
+    res.json(ListBankPayrollTargetsResponse.parse(await listBankPayrollTargets(id, month)));
+  } catch (error) {
+    if (error instanceof PayrollSnapshotMissingError || error instanceof PayrollBalancesNotReadyError) return void res.status(409).json({ error: error.message });
+    lifecycleFailure(error, res, next);
+  }
+});
+router.post("/bank-transactions/:id/link-payroll", async (req, res, next) => {
+  try {
+    const { id } = LinkBankPayrollParams.parse(req.params);
+    const { month, employeeId } = LinkBankPayrollBody.parse(req.body);
+    res.json(LinkBankPayrollResponse.parse(await linkBankPayroll(id, employeeId, month)));
+  } catch (error) {
+    if (error instanceof PayrollSnapshotMissingError || error instanceof PayrollBalancesNotReadyError) return void res.status(409).json({ error: error.message });
+    lifecycleFailure(error, res, next);
+  }
+});
+
 router.get("/bank-transactions/:id/cash-suggestions", async (req, res, next) => {
   try {
     const { id } = ListBankTransactionCashSuggestionsParams.parse(req.params);
@@ -1194,43 +1208,7 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
       if (!bankAndCashAmountsMatch(bank, cash)) return "amount-mismatch" as const;
       if (cash.bankTransactionId !== null) return "cash-linked" as const;
       if (eligibility.closed) return "closed" as const;
-      const verifiedAt = new Date();
-       const [linkedCash] = await tx.update(cashTransactionsTable)
-         .set({
-           bankTransactionId: id,
-           bankVerifiedAt: verifiedAt,
-           ...(cash.sourceType === null
-             ? { sourceType: "bank_transaction", sourceKey: `bank:${id}` }
-             : {}),
-         })
-        .where(and(eq(cashTransactionsTable.id, cashTransactionId), isNull(cashTransactionsTable.bankTransactionId)))
-        .returning({ id: cashTransactionsTable.id });
-      if (!linkedCash) throw new BankCashLinkConflictError();
-      const [linkedBank] = await tx.update(bankTransactionsTable)
-        .set({ cashTransactionId, transferredAt: verifiedAt })
-        .where(and(eq(bankTransactionsTable.id, id), isNull(bankTransactionsTable.cashTransactionId), isNull(bankTransactionsTable.transferredAt)))
-        .returning();
-      if (!linkedBank) throw new BankCashLinkConflictError();
-       if (cash.journalEntryId) {
-         await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
-       }
-       const mappedAccountId = bank.accountId ?? cash.accountId;
-       const mapped = mappedAccountId
-         ? (await tx.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, mappedAccountId)))[0]
-         : null;
-       if (bank.accountId !== null && (!mapped?.isActive
-         || !(cash.type === "income" ? mapped.type === "revenue" : ["expense", "asset"].includes(mapped.type)))) {
-         throw Object.assign(new Error("Банкны гүйлгээний данс идэвхгүй эсвэл төрөл тохирохгүй байна."), { status: 409 });
-       }
-       const counter = await counterAccount(tx, cash.type, cash.category, mapped);
-       const journalEntryId = await postBankCashJournal(tx, bank, { ...cash, bankTransactionId: id }, counter);
-       await tx.update(cashTransactionsTable).set({ journalEntryId, accountId: counter.id }).where(eq(cashTransactionsTable.id, cashTransactionId));
-       const [postedBank] = await tx.update(bankTransactionsTable)
-         .set({ journalEntryId })
-         .where(eq(bankTransactionsTable.id, id))
-         .returning();
-       await syncOperatingExpenseForBankCash(tx, id, cash.id);
-      return postedBank;
+      return attachBankCash(tx, bank, cash);
     });
     if (result === "missing-bank" || result === "missing-cash") {
       res.status(404).json({ error: result === "missing-bank" ? "Банкны гүйлгээ олдсонгүй" : "Кассын гүйлгээ олдсонгүй" });

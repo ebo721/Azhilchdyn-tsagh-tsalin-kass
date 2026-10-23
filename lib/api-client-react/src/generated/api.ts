@@ -43,6 +43,9 @@ import type {
   BankExpenseLinkResult,
   BankFixedAssetLinkInput,
   BankFixedAssetLinkResult,
+  BankPayrollLinkInput,
+  BankPayrollLinkResult,
+  BankPayrollTarget,
   BankPurchaseGroupCancellationResult,
   BankPurchaseLinkInput,
   BankPurchaseLinkResult,
@@ -7082,6 +7085,160 @@ export const useTransferBankTransactionToCash = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getTransferBankTransactionToCashMutationOptions(options));
+    }
+
+export const getListBankPayrollTargetsUrl = (id: number,
+    month: string,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}/payroll-targets/${month}`
+}
+
+/**
+ * @summary List saved payroll balances and existing payments for a bank expense
+ */
+export const listBankPayrollTargets = async (id: number,
+    month: string, options?: Parameters<typeof customFetch>[1]): Promise<BankPayrollTarget[]> => {
+
+  return customFetch<BankPayrollTarget[]>(getListBankPayrollTargetsUrl(id,month),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListBankPayrollTargetsQueryKey = (id: number,
+    month: string,) => {
+    return [
+    `/api/bank-transactions/${id}/payroll-targets/${month}`
+    ] as const;
+    }
+
+
+export const getListBankPayrollTargetsQueryOptions = <TData = Awaited<ReturnType<typeof listBankPayrollTargets>>, TError = ErrorType<unknown>>(id: number,
+    month: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankPayrollTargets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListBankPayrollTargetsQueryKey(id,month);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBankPayrollTargets>>> = ({ signal }) => listBankPayrollTargets(id,month, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && month !== null && month !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBankPayrollTargets>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListBankPayrollTargetsQueryResult = NonNullable<Awaited<ReturnType<typeof listBankPayrollTargets>>>
+export type ListBankPayrollTargetsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List saved payroll balances and existing payments for a bank expense
+ */
+
+export function useListBankPayrollTargets<TData = Awaited<ReturnType<typeof listBankPayrollTargets>>, TError = ErrorType<unknown>>(
+ id: number,
+    month: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankPayrollTargets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListBankPayrollTargetsQueryOptions(id,month,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getLinkBankPayrollUrl = (id: number,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}/link-payroll`
+}
+
+/**
+ * @summary Record a bank expense as a partial salary payment or link an existing salary payment atomically
+ */
+export const linkBankPayroll = async (id: number,
+    bankPayrollLinkInput: BankPayrollLinkInput, options?: Parameters<typeof customFetch>[1]): Promise<BankPayrollLinkResult> => {
+
+  return customFetch<BankPayrollLinkResult>(getLinkBankPayrollUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bankPayrollLinkInput)
+  }
+);}
+
+
+
+
+
+export const getLinkBankPayrollMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkBankPayroll>>, TError,{id: number;data: BodyType<BankPayrollLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof linkBankPayroll>>, TError,{id: number;data: BodyType<BankPayrollLinkInput>}, TContext> => {
+
+const mutationKey = ['linkBankPayroll'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof linkBankPayroll>>, {id: number;data: BodyType<BankPayrollLinkInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  linkBankPayroll(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LinkBankPayrollMutationResult = NonNullable<Awaited<ReturnType<typeof linkBankPayroll>>>
+    export type LinkBankPayrollMutationBody = BodyType<BankPayrollLinkInput>
+    export type LinkBankPayrollMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Record a bank expense as a partial salary payment or link an existing salary payment atomically
+ */
+export const useLinkBankPayroll = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkBankPayroll>>, TError,{id: number;data: BodyType<BankPayrollLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof linkBankPayroll>>,
+        TError,
+        {id: number;data: BodyType<BankPayrollLinkInput>},
+        TContext
+      > => {
+      return useMutation(getLinkBankPayrollMutationOptions(options));
     }
 
 export const getListBankTransactionCashSuggestionsUrl = (id: number,) => {

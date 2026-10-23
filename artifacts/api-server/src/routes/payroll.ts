@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { payrollPayments, payrollPaymentSourceKey } from "../lib/payroll-payments.js";
+import { ensurePayrollReceivableJournal } from "../lib/payroll-receivable-posting.js";
 import { DownloadSocialInsuranceReportQueryParams } from "@workspace/api-zod";
 import { buildInsuranceWorkbook, InsuranceReportValidationError } from "../lib/social-insurance-report.js";
 import { createServer } from "node:http";
@@ -500,44 +501,11 @@ router.put("/payroll-adjustments", async (req, res, next) => {
       }
 
       if (selectedReceivableId !== null) {
-        if (input.manualDeduction <= 0) {
-          throw Object.assign(new Error("Авлагаас суутгах дүн 0-ээс их байх ёстой"), { status: 400 });
-        }
-        const [receivable] = await tx.select().from(receivablesTable)
-          .where(eq(receivablesTable.id, selectedReceivableId))
-          .for("update");
-        if (!receivable || Number(receivable.employeeId) !== input.employeeId) {
-          throw Object.assign(new Error("Сонгосон авлага энэ ажилтанд хамаарахгүй байна"), { status: 409 });
-        }
-        if (!journalEntryId && settlementDate) {
-          const accounts = await tx.select({ id: chartOfAccountsTable.id, code: chartOfAccountsTable.code })
-            .from(chartOfAccountsTable)
-            .where(and(inArray(chartOfAccountsTable.code, ["1200", "2100"]), eq(chartOfAccountsTable.isActive, true)));
-          const accountByCode = new Map(accounts.map((account) => [account.code, account.id]));
-          const receivableAccountId = accountByCode.get("1200");
-          const payrollPayableAccountId = accountByCode.get("2100");
-          if (!receivableAccountId || !payrollPayableAccountId) {
-            throw Object.assign(new Error("1200 болон 2100 данс идэвхтэй байх шаардлагатай"), { status: 409 });
-          }
-          const posting = await postJournalEntry(tx, {
-            date: settlementDate,
-            description: `${employee.name} · ${input.month} сарын цалингаас авлага суутгав`,
-            sourceType: "payroll_receivable",
-            sourceId: existingAdjustment?.id ?? null,
-            createdBy: null,
-            lines: [
-              { accountId: payrollPayableAccountId, debit: input.manualDeduction, credit: 0 },
-              {
-                accountId: receivableAccountId,
-                debit: 0,
-                credit: input.manualDeduction,
-                allocation: { kind: "settle", receivableId: selectedReceivableId },
-              },
-            ],
-          });
-          if (posting.status !== "posted") throw new Error("Payroll receivable journal must be balanced");
-          journalEntryId = posting.journalEntryId;
-        }
+        journalEntryId = await ensurePayrollReceivableJournal(tx, {
+          employeeId: input.employeeId, employeeName: employee.name, month: input.month,
+          amount: input.manualDeduction, receivableId: selectedReceivableId, date: settlementDate ?? null,
+          adjustmentId: existingAdjustment?.id ?? null, journalEntryId,
+        });
       } else if (journalEntryId) {
         await voidJournalEntry(tx, { journalEntryId, voidedBy: null });
         journalEntryId = null;
