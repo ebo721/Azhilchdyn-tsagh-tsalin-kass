@@ -14,3 +14,9 @@ The statement's owner account must match the selected destination account before
 **Why:** Selecting an account in the UI does not prove the uploaded statement belongs to it. The same transactions were imported under different real accounts because account-scoped duplicate keys correctly treated those destinations as different.
 
 **How to apply:** Trust explicit owner-account metadata before the transaction table, not counterparty accounts, filenames, or transaction text. Compare equivalent valid IBAN/domestic forms. Retain account-scoped deduplication: do not solve this by globally collapsing genuinely separate accounts' transactions. Repair historical duplicates separately, preserving source links and requiring approval for production writes.
+
+Zero-amount informational rows can display a balance from elsewhere within a same-time transaction group. Check the running balance over nonzero monetary movements and validate opening/closing totals separately; report informational-row anomalies rather than silently rewriting them.
+
+**Why:** An original statement contained an out-of-sequence displayed balance on a zero-amount penalty-information row even though every monetary movement and the statement totals reconciled exactly.
+
+**How to apply:** Preserve the original statement as evidence. Require each candidate monetary transaction's own balance to match, and do not treat an informational-row discrepancy as permission to ignore a monetary imbalance.
