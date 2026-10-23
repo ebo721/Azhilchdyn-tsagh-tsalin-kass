@@ -6,6 +6,7 @@ import { defaultPayrollSchedule, type Tx } from "./route-shared.js";
 import { nextMonth, previousMonth, money } from "./date-utils.js";
 import { latestPayrollOpening } from "./payroll-opening.js";
 import { emptyPayrollEarnings } from "./payroll-empty-line.js";
+import { advancePaidAmount } from "./payroll-advance-installments.js";
 
 /** Saved earnings only. No attendance reads and no database writes. */
 export async function readSelectivePayroll(month: string, tx: Tx) {
@@ -40,7 +41,7 @@ export async function readSelectivePayroll(month: string, tx: Tx) {
   const byMonth = new Map(ledgers.map(l => [l.month, l]));
   const closedMonths = new Set(closed.map(c => c.month));
   const advanceLines = approvals[0] ? GetPayrollAdvanceResponse.shape.lines.parse(approvals[0].lines) : [];
-  const paidAdvances = new Map(advanceLines.filter(l => l.paid).map(l => [l.employeeId, l.advanceAmount]));
+  const paidAdvances = new Map(advanceLines.map(l => [l.employeeId, advancePaidAmount(l)]));
   const rows = employees.filter(e => (e.joinedAt <= period.periodEnd && (!e.inactiveAt || e.inactiveAt >= period.periodStart))
     || saved.has(e.id) || Number(lastSavedBalance(e.id)) !== 0);
   const lines = rows.map(employee => {

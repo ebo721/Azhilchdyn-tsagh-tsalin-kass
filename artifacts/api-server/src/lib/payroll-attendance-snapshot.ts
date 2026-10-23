@@ -1,3 +1,4 @@
+import { advancePaidAmount } from "./payroll-advance-installments.js";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db, employeesTable, payrollAttendanceSnapshotsTable, payrollAdjustmentsTable, payrollAdvanceApprovalsTable, payrollMonthBalancesTable, payrollMonthClosuresTable } from "@workspace/db";
 import { GetPayrollResponse, GetPayrollAdvanceResponse } from "@workspace/api-zod";
@@ -63,8 +64,7 @@ export async function readSavedPayroll(month: string, connection?: Tx) {
     if (dirty[0] && dirty[0].month < month) throw new PayrollBalancesNotReadyError(month);
     const byEmployee = new Map(adjustments.map((row) => [row.employeeId, row]));
     const approvedLines = approvals[0] ? GetPayrollAdvanceResponse.shape.lines.parse(approvals[0].lines) : [];
-    const paidAdvances = new Map(approvedLines.filter((line) => line.paid === true)
-      .map((line) => [line.employeeId, Number(line.advanceAmount)]));
+    const paidAdvances = new Map(approvedLines.map((line) => [line.employeeId, advancePaidAmount(line)]));
     const opening = new Map((previous[0]?.lines ?? []).map((row) => [row.employeeId, row.balanceAmount]));
     const reporting = new Map(employees.map((employee) => [employee.id, employee]));
     const lines = saved.lines.map((line) => ({

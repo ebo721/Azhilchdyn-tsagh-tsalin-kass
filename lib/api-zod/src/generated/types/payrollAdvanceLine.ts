@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PayrollAdvanceInstallment } from './payrollAdvanceInstallment';
 import type { PayrollAdvanceLineEmployeeType } from './payrollAdvanceLineEmployeeType';
 
 export interface PayrollAdvanceLine {
@@ -19,4 +20,12 @@ export interface PayrollAdvanceLine {
   paid: boolean;
   /** @nullable */
   paymentDate?: string | null;
+  paidAmount?: number;
+  remainingBalance?: number;
+  /**
+     * @minimum 1
+     * @maximum 10001
+     */
+  nextPaymentSequence?: number;
+  payments?: PayrollAdvanceInstallment[];
 }

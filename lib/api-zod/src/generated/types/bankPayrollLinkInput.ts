@@ -5,8 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BankPayrollLinkInputPaymentKind } from './bankPayrollLinkInputPaymentKind';
 
 export interface BankPayrollLinkInput {
+  paymentKind?: BankPayrollLinkInputPaymentKind;
   /** @minimum 1 */
   employeeId: number;
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])$ */

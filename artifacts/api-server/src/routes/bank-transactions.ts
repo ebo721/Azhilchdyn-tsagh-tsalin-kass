@@ -1,5 +1,5 @@
 import { Router, raw, type IRouter, type Response, type NextFunction } from "express";
-import { ListBankPayrollTargetsParams, ListBankPayrollTargetsResponse, LinkBankPayrollParams, LinkBankPayrollBody, LinkBankPayrollResponse } from "@workspace/api-zod";
+import { ListBankAdvanceTargetsParams, ListBankAdvanceTargetsResponse, ListBankPayrollTargetsParams, ListBankPayrollTargetsResponse, LinkBankPayrollParams, LinkBankPayrollBody, LinkBankPayrollResponse } from "@workspace/api-zod";
 import { listBankPayrollTargets, linkBankPayroll } from "../lib/bank-payroll.js";
 import { PayrollSnapshotMissingError } from "../lib/payroll-attendance-snapshot.js";
 import { PayrollBalancesNotReadyError } from "../lib/payroll-balance-store.js";
@@ -1120,11 +1120,17 @@ router.get("/bank-transactions/:id/payroll-targets/:month", async (req, res, nex
     lifecycleFailure(error, res, next);
   }
 });
+router.get("/bank-transactions/:id/advance-targets/:month", async (req, res, next) => {
+  try {
+    const { id, month } = ListBankAdvanceTargetsParams.parse(req.params);
+    res.json(ListBankAdvanceTargetsResponse.parse(await listBankPayrollTargets(id, month, "advance")));
+  } catch (error) { lifecycleFailure(error, res, next); }
+});
 router.post("/bank-transactions/:id/link-payroll", async (req, res, next) => {
   try {
     const { id } = LinkBankPayrollParams.parse(req.params);
-    const { month, employeeId } = LinkBankPayrollBody.parse(req.body);
-    res.json(LinkBankPayrollResponse.parse(await linkBankPayroll(id, employeeId, month)));
+    const { month, employeeId, paymentKind } = LinkBankPayrollBody.parse(req.body);
+    res.json(LinkBankPayrollResponse.parse(await linkBankPayroll(id, employeeId, month, paymentKind)));
   } catch (error) {
     if (error instanceof PayrollSnapshotMissingError || error instanceof PayrollBalancesNotReadyError) return void res.status(409).json({ error: error.message });
     lifecycleFailure(error, res, next);
@@ -1170,6 +1176,7 @@ router.post("/bank-transactions/:id/link-cash", async (req, res, next) => {
     const { id } = LinkBankTransactionToCashParams.parse(req.params);
     const { cashTransactionId } = LinkBankTransactionToCashBody.parse(req.body);
     const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
       const [bank] = await tx.select().from(bankTransactionsTable)
         .where(eq(bankTransactionsTable.id, id))
         .for("update");

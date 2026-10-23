@@ -1,5 +1,5 @@
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
-import { bankTransactionsTable, cashTransactionsTable, cashClosuresTable, chartOfAccountsTable, journalEntriesTable, operatingExpensesTable } from "@workspace/db";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { bankTransactionsTable, cashTransactionsTable, cashClosuresTable, chartOfAccountsTable, journalEntriesTable, operatingExpensesTable, payrollMonthClosuresTable } from "@workspace/db";
 import { lockCashDate } from "./cash-date-lock.js";
 import { postJournalEntry, voidJournalEntry } from "./journal-posting.js";
 import { inventoryPurchaseAccountCodes, type Tx } from "./route-shared.js";
@@ -11,8 +11,18 @@ type Account = typeof chartOfAccountsTable.$inferSelect;
 const conflict = (message: string) => Object.assign(new Error(message), { status: 409 });
 export class BankCashLinkConflictError extends Error {}
 
+async function assertAdvanceMonthOpen(tx: Tx, cash: Cash) {
+  if (cash.sourceType !== "payroll_advance") return;
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
+  const month = cash.sourceKey?.split(":")[0];
+  if (!month || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw conflict("Урьдчилгааны эх үүсвэрийн сар тодорхойгүй байна.");
+  const [closed] = await tx.select().from(payrollMonthClosuresTable).where(eq(payrollMonthClosuresTable.month, month));
+  if (closed) throw conflict("Цалингийн сар хаалттай. Урьдчилгааны банкны холбоос, журналыг өөрчлөх боломжгүй.");
+}
+
 /** Caller locks and validates the bank/cash rows before claiming either side. */
 export async function attachBankCash(tx: Tx, bank: Bank, cash: Cash) {
+  await assertAdvanceMonthOpen(tx, cash);
   const verifiedAt = new Date();
   const [linkedCash] = await tx.update(cashTransactionsTable).set({
     bankTransactionId: bank.id, bankVerifiedAt: verifiedAt,
@@ -61,6 +71,8 @@ export async function postBankCashJournal(tx: Tx, bank: Bank, cash: Cash, counte
 }
 
 async function lockedPair(tx: Tx, id: number) {
+  // Match payroll settlement's lock order before taking cash-date and bank locks.
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
   const [snapshot] = await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, id));
   if (!snapshot) throw Object.assign(new Error("Банкны гүйлгээ олдсонгүй"), { status: 404 });
   if (snapshot.cashTransactionId === null) throw conflict("Банк–кассын холбоос алга.");
@@ -76,6 +88,7 @@ async function lockedPair(tx: Tx, id: number) {
     || bank.transactionAt.toISOString().slice(0, 10) !== bankDate || cash.date !== cashSnapshot.date) {
     throw conflict("Банк–кассын холбоос өөрчлөгдсөн эсвэл бүрэн бус байна. Дахин ачаална уу.");
   }
+  await assertAdvanceMonthOpen(tx, cash);
   if ((await tx.select({ id: cashClosuresTable.id }).from(cashClosuresTable).where(inArray(cashClosuresTable.date, dates)).limit(1)).length) {
     throw conflict("Өндөрлөсөн өдрийн холбоос, журналыг өөрчлөх боломжгүй.");
   }

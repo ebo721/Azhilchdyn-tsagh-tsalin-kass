@@ -137,6 +137,7 @@ import {
   employeeShiftPlansTable,
   payrollAdjustmentsTable,
   payrollAdvanceApprovalsTable,
+  payrollMonthClosuresTable,
   journalEntriesTable,
   journalLinesTable,
   inventoryPurchasesTable,
@@ -155,6 +156,8 @@ import {
 } from "@workspace/db";
 import { getStaffRole, getStaffSession, type StaffRole } from "../lib/hr-session.js";
 import { planPayrollAdvancePayment } from "../lib/payroll-advance-payment.js";
+import { advancePaidAmount, advancePayments } from "../lib/payroll-advance-installments.js";
+import { DeletePayrollAdvanceInstallmentParams } from "@workspace/api-zod";
 import { postJournalEntry, voidJournalEntry } from "../lib/journal-posting.js";
 import { planShiftPlanCopy } from "../lib/shift-plan-copy.js";
 import { reconcileOperatingExpenses } from "../lib/operating-expense-sync.js";
@@ -761,7 +764,7 @@ router.delete("/payroll-advance/approval", async (req, res, next) => {
         .where(eq(payrollAdvanceApprovalsTable.month, month)).for("update");
       if (!approval) return { status: 404, error: "Батлагдсан урьдчилгаа цалин олдсонгүй" } as const;
       const lines = GetPayrollAdvanceResponse.shape.lines.parse(approval.lines);
-      if (lines.some((line) => line.paid === true)) return { status: 409, error: "Эхлээд олгосон урьдчилгаа цалингийн мөрүүдийг Олгоогүй болгоно уу" } as const;
+      if (lines.some((line) => advancePaidAmount(line) > 0)) return { status: 409, error: "Эхлээд олгосон урьдчилгаа цалингийн мөрүүдийг Олгоогүй болгоно уу" } as const;
       // Validate the saved draft before deletion so failure cannot leave a half-completed reversal.
       const draft = await getPayrollAdvanceSummary(month, tx, { savedOnly: true, ignoreApproval: true });
       await tx.delete(payrollAdvanceApprovalsTable).where(eq(payrollAdvanceApprovalsTable.id, approval.id));
@@ -771,6 +774,46 @@ router.delete("/payroll-advance/approval", async (req, res, next) => {
     res.json(GetPayrollAdvanceResponse.parse(result.draft));
   } catch (error) {
     next(error);
+  }
+});
+
+router.delete("/payroll-advance/:month/:employeeId/transactions/:sequence", async (req, res, next) => {
+  try {
+    const { month, employeeId, sequence } = DeletePayrollAdvanceInstallmentParams.parse(req.params);
+    await db.transaction(async tx => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
+      const [closure] = await tx.select().from(payrollMonthClosuresTable).where(eq(payrollMonthClosuresTable.month, month));
+      if (closure) throw Object.assign(new Error("Цалингийн сар хаалттай"), { status: 409 });
+      const [approval] = await tx.select().from(payrollAdvanceApprovalsTable).where(eq(payrollAdvanceApprovalsTable.month, month)).for("update");
+      if (!approval) throw Object.assign(new Error("Батлагдсан урьдчилгаа олдсонгүй"), { status: 404 });
+      const lines = GetPayrollAdvanceResponse.shape.lines.parse(approval.lines);
+      const line = lines.find(row => row.employeeId === employeeId);
+      if (!line) throw Object.assign(new Error("Ажилтан олдсонгүй"), { status: 404 });
+      const payments = advancePayments(line);
+      const payment = payments.find(row => row.sequence === sequence);
+      if (!payment) throw Object.assign(new Error("Олголт олдсонгүй"), { status: 404 });
+      await lockCashDate(tx, payment.date);
+      const [cashClosure] = await tx.select().from(cashClosuresTable).where(eq(cashClosuresTable.date, payment.date));
+      if (cashClosure) throw Object.assign(new Error("Касс өндөрлөсөн өдрийн олголтыг буцаах боломжгүй"), { status: 409 });
+      const [cash] = await tx.select().from(cashTransactionsTable).where(and(
+        eq(cashTransactionsTable.sourceType, "payroll_advance"),
+        eq(cashTransactionsTable.sourceKey, `${month}:${employeeId}${sequence === 1 ? "" : `:${sequence}`}`),
+      )).for("update");
+      if (cash?.bankTransactionId || cash?.bankVerifiedAt) throw Object.assign(new Error("Банкны холбоосыг эхлээд журналаас буцаана уу"), { status: 409 });
+      if (cash?.journalEntryId) await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
+      if (cash) await tx.delete(cashTransactionsTable).where(eq(cashTransactionsTable.id, cash.id));
+      const remaining = payments.filter(row => row.sequence !== sequence);
+      const updated = { ...line, payments: remaining, paid: advancePaidAmount({ payments: remaining }) >= line.advanceAmount,
+        paymentDate: remaining[0]?.date ?? null,
+        nextPaymentSequence: Math.max(line.nextPaymentSequence ?? 1, ...payments.map(p => p.sequence + 1)) };
+      await tx.update(payrollAdvanceApprovalsTable).set({ lines: lines.map(row => row.employeeId === employeeId ? updated : row) })
+        .where(eq(payrollAdvanceApprovalsTable.id, approval.id));
+    });
+    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month, db, { savedOnly: true })));
+  } catch (error) {
+    if (error instanceof Error && "status" in error && typeof error.status === "number") {
+      res.status(error.status).json({ error: error.message });
+    } else next(error);
   }
 });
 
@@ -802,11 +845,15 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
         return "line_not_found" as const;
       }
       const previousLine = sourceLines.find((line) => Number(line.employeeId) === input.employeeId);
+      if (Array.isArray(previousLine?.payments)) {
+        throw Object.assign(new Error("Хэсэгчилсэн урьдчилгааг нэг төлөлтөөр дарж засах эсвэл буцаах боломжгүй. Банкны холбоос болон олголт тус бүрийг шалгана уу."), { status: 409 });
+      }
       const protectedDates = new Set([
         previousLine?.paid === true && typeof previousLine.paymentDate === "string" ? previousLine.paymentDate : null,
         input.paid ? input.paymentDate : null,
       ].filter((date): date is string => typeof date === "string"));
       for (const date of protectedDates) {
+        await lockCashDate(tx, date);
         const [closure] = await tx
           .select({ id: cashClosuresTable.id })
           .from(cashClosuresTable)
@@ -874,7 +921,7 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
           ))
           .for("update");
         if (cash && (cash.bankTransactionId !== null || cash.bankVerifiedAt !== null)) {
-          return "bank_linked" as const;
+          throw Object.assign(new Error("Банкны хуулгаар баталгаажсан урьдчилгаа цалинг эхлээд журналаас буцаана уу"), { status: 409 });
         }
         if (cash?.journalEntryId) {
           await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
@@ -898,13 +945,11 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
       res.status(409).json({ error: "Касс өндөрлөсөн өдрийн урьдчилгааны гүйлгээг засах боломжгүй" });
       return;
     }
-    if (paymentResult === "bank_linked") {
-      res.status(409).json({ error: "Банкны хуулгаар баталгаажсан урьдчилгаа цалинг эхлээд журналаас буцаана уу" });
-      return;
-    }
     res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(input.month, db, { savedOnly: true })));
   } catch (error) {
-    next(error);
+    if (error instanceof Error && "status" in error && typeof error.status === "number") {
+      res.status(error.status).json({ error: error.message });
+    } else next(error);
   }
 });
 

@@ -1,6 +1,6 @@
 - [OpenAPI calendar-date validation](openapi-calendar-date-validation.md) — Orval cannot combine string date format and pattern; keep shape in schema and calendar checks at the route boundary.
 - [Historical salary coverage](historical-salary-coverage.md) — Gaps before known salary history must not use current tax settings or imply retroactive exemptions.
-- [Orval DELETE parameter collisions](orval-delete-parameter-collisions.md) — Mixed path and query parameters on DELETE can generate duplicate Zod exports; prefer path-only parameters.
+- [Orval parameter collisions](orval-delete-parameter-collisions.md) — Mixed path and query parameters can generate duplicate exports on GET too; prefer path-only or separate resource endpoints.
 - [Effective-dated payroll](effective-dated-payroll.md) — Prorate monthly salary by Mon–Fri workdays; employment end dates are inclusive and paid months stay immutable.
 - [Monthly payroll balances](monthly-payroll-balances.md) — Read current-period attendance only; use saved prior financial debt, with explicit initialization/repair rather than historical GET recomputation.
 - [Payroll payables scope](payroll-payables-scope.md) — Show live saved payroll debt in payables; no automatic liability journals or generic payable settlements.

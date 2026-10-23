@@ -42,6 +42,7 @@ export const deletionTargetPatterns = [
   /^\/attendance\/shifts\/\d+$/,
   /^\/attendance\?employeeId=\d+&date=\d{4}-\d{2}-\d{2}$/,
   /^\/payroll-advance\/approval\?month=\d{4}-\d{2}$/,
+  /^\/payroll-advance\/\d{4}-(?:0[1-9]|1[0-2])\/[1-9]\d*\/transactions\/[1-9]\d{0,4}$/,
   /^\/payroll-adjustments\/\d{4}-\d{2}\/\d+\/transactions\/[1-9]\d{0,4}$/,
   /^\/cash\/transactions\/\d+$/,
   /^\/bank-transactions\/\d+$/,

@@ -1,5 +1,7 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-import { bankTransactionsTable, cashTransactionsTable, chartOfAccountsTable, db, payrollAdjustmentsTable } from "@workspace/db";
+import { bankTransactionsTable, cashTransactionsTable, chartOfAccountsTable, db, payrollAdjustmentsTable, payrollAdvanceApprovalsTable, payrollMonthClosuresTable } from "@workspace/db";
+import { advanceFinancials, advancePayments } from "./payroll-advance-installments.js";
+import { GetPayrollAdvanceResponse } from "@workspace/api-zod";
 import { readSavedPayroll } from "./payroll-attendance-snapshot.js";
 import { attachBankCash } from "./bank-cash-lifecycle.js";
 import { checkBankLinkEligibility } from "./bank-link-eligibility.js";
@@ -13,7 +15,29 @@ import type { Tx } from "./route-shared.js";
 type Bank = typeof bankTransactionsTable.$inferSelect;
 const fail = (message: string, status = 409) => Object.assign(new Error(message), { status });
 
-async function savedTargets(tx: Tx, bank: Bank, month: string) {
+type PaymentKind = "salary" | "advance";
+async function savedTargets(tx: Tx, bank: Bank, month: string, kind: PaymentKind = "salary") {
+  if (kind === "advance") {
+    const [closed] = await tx.select().from(payrollMonthClosuresTable).where(eq(payrollMonthClosuresTable.month, month));
+    if (closed) throw fail("Цалингийн сар хаалттай. Админ эхлээд дахин нээнэ үү.");
+    const [approval] = await tx.select().from(payrollAdvanceApprovalsTable).where(eq(payrollAdvanceApprovalsTable.month, month));
+    if (!approval) return [];
+    const lines = GetPayrollAdvanceResponse.shape.lines.parse(approval.lines);
+    const pending = await tx.select().from(cashTransactionsTable).where(and(
+      eq(cashTransactionsTable.sourceType, "payroll_advance"), isNull(cashTransactionsTable.bankTransactionId),
+      isNull(cashTransactionsTable.bankVerifiedAt), isNull(cashTransactionsTable.unclearAt),
+    ));
+    return lines.map(line => {
+      const financials = advanceFinancials(line);
+      const keys = new Set(advancePayments(line).map(p => payrollPaymentSourceKey(month, line.employeeId, p.sequence)));
+      const existing = pending.find(cash => keys.has(cash.sourceKey!)
+        && money(Number(cash.amount)) === money(Number(bank.amount))
+        && Math.abs(Date.parse(String(cash.date)) - Date.parse(bank.transactionAt.toISOString().slice(0, 10))) <= 7 * 86400000);
+      return { employeeId: line.employeeId, employeeName: line.employeeName, month,
+        payable: line.advanceAmount, paidAmount: financials.paidAmount,
+        remainingBalance: financials.remainingBalance, existingCashId: existing?.id ?? null };
+    }).filter(line => line.remainingBalance > 0 || line.existingCashId !== null);
+  }
   const payroll = await readSavedPayroll(month, tx);
   if (payroll.closedAt) throw fail("Цалингийн сар хаалттай. Админ эхлээд дахин нээнэ үү.");
   const adjustments = await tx.select().from(payrollAdjustmentsTable).where(eq(payrollAdjustmentsTable.month, month));
@@ -43,18 +67,18 @@ async function savedTargets(tx: Tx, bank: Bank, month: string) {
     }).filter(line => line.remainingBalance > 1 || line.existingCashId !== null);
 }
 
-export async function listBankPayrollTargets(bankId: number, month: string) {
+export async function listBankPayrollTargets(bankId: number, month: string, kind: PaymentKind = "salary") {
   return db.transaction(async tx => {
     const [bank] = await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, bankId));
     if (!bank) throw fail("Банкны гүйлгээ олдсонгүй", 404);
     await assertNotInternalTransfer(tx, bankId);
     if (bank.type !== "expense" || bank.cashTransactionId || bank.journalEntryId || bank.transferredAt || bank.unclearAt) return [];
-    return savedTargets(tx, bank, month);
+    return savedTargets(tx, bank, month, kind);
   }, { isolationLevel: "repeatable read", accessMode: "read only" });
 }
 
 /** One bank movement creates/claims exactly one salary payment; no new earnings or generic payable. */
-export async function linkBankPayroll(bankId: number, employeeId: number, month: string) {
+export async function linkBankPayroll(bankId: number, employeeId: number, month: string, kind: PaymentKind = "salary") {
   return db.transaction(async tx => {
     // Same serialization as manual salary writes and schedule/month closure.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
@@ -63,6 +87,14 @@ export async function linkBankPayroll(bankId: number, employeeId: number, month:
     await assertNotInternalTransfer(tx, bankId);
     const prefix = `${month}:${employeeId}`;
     const result = async (cashId: number, reusedPayment: boolean) => {
+      if (kind === "advance") {
+        const [approval] = await tx.select().from(payrollAdvanceApprovalsTable).where(eq(payrollAdvanceApprovalsTable.month, month));
+        const line = GetPayrollAdvanceResponse.shape.lines.parse(approval?.lines).find(row => row.employeeId === employeeId);
+        if (!line) throw fail("Батлагдсан урьдчилгаа олдсонгүй", 404);
+        const financials = advanceFinancials(line);
+        return { bankTransactionId: bankId, cashTransactionId: cashId, employeeId, month,
+          paidAmount: financials.paidAmount, remainingBalance: financials.remainingBalance, reusedPayment };
+      }
       const payroll = await readSavedPayroll(month, tx);
       const line = payroll.lines.find(row => row.employeeId === employeeId);
       if (!line) throw fail("Хадгалсан цалинд ажилтан олдсонгүй", 404);
@@ -71,7 +103,7 @@ export async function linkBankPayroll(bankId: number, employeeId: number, month:
     };
     if (bank.cashTransactionId !== null) {
       const [cash] = await tx.select().from(cashTransactionsTable).where(eq(cashTransactionsTable.id, bank.cashTransactionId));
-      if (cash?.sourceType === "payroll" && (cash.sourceKey === prefix || cash.sourceKey?.startsWith(`${prefix}:`))
+      if (cash?.sourceType === (kind === "advance" ? "payroll_advance" : "payroll") && (cash.sourceKey === prefix || cash.sourceKey?.startsWith(`${prefix}:`))
         && cash.bankTransactionId === bankId && cash.journalEntryId !== null && cash.journalEntryId === bank.journalEntryId) {
         return result(cash.id, true);
       }
@@ -86,7 +118,7 @@ export async function linkBankPayroll(bankId: number, employeeId: number, month:
       const [account] = await tx.select().from(chartOfAccountsTable).where(eq(chartOfAccountsTable.id, bank.accountId));
       if (account?.code !== "6000" || !account.isActive) throw fail("Цалинд холбохын өмнө банкны GL дансыг 6000 — Цалин болгож сонгоно уу.");
     }
-    const target = (await savedTargets(tx, bank, month)).find(line => line.employeeId === employeeId);
+    const target = (await savedTargets(tx, bank, month, kind)).find(line => line.employeeId === employeeId);
     if (!target) throw fail("Бодогдсон цалингийн төлөгдөөгүй үлдэгдэл эсвэл холбох төлөлт олдсонгүй.");
     let cash: typeof cashTransactionsTable.$inferSelect | undefined;
     if (target.existingCashId !== null) {
@@ -94,14 +126,39 @@ export async function linkBankPayroll(bankId: number, employeeId: number, month:
       if (!cash || cash.bankTransactionId !== null || cash.bankVerifiedAt !== null) throw fail("Төлөлт өөр банкны гүйлгээнд холбогдсон байна");
     }
     const cashDate = cash ? String(cash.date) : date;
-    await lockCashDate(tx, cashDate);
+    for (const protectedDate of [...new Set([cashDate, date])].sort()) await lockCashDate(tx, protectedDate);
     const currentEligibility = await checkBankLinkEligibility(tx, bank, "cash", cashDate);
-    if (currentEligibility.closed) throw fail("Өндөрлөсөн өдрийн цалингийн төлөлтийг холбох боломжгүй");
+    const bankEligibility = await checkBankLinkEligibility(tx, bank, "cash", date);
+    if (currentEligibility.closed || bankEligibility.closed) throw fail("Өндөрлөсөн өдрийн цалингийн төлөлтийг холбох боломжгүй");
     const reused = Boolean(cash);
+    const [account] = await tx.select().from(chartOfAccountsTable).where(and(eq(chartOfAccountsTable.code, "6000"), eq(chartOfAccountsTable.isActive, true)));
+    if (!account || account.type !== "expense") throw fail("6000 — Цалин данс идэвхтэй байх шаардлагатай");
+    if (cash && cash.accountId !== account.id) {
+      [cash] = await tx.update(cashTransactionsTable).set({ accountId: account.id }).where(eq(cashTransactionsTable.id, cash.id)).returning();
+    }
     if (!cash) {
       if (money(Number(bank.amount)) > money(target.remainingBalance)) throw fail("Банкны дүн цалингийн төлөгдөөгүй үлдэгдлээс их байна. Илүү төлөлтийг автоматаар бүртгэхгүй.");
-      const [account] = await tx.select().from(chartOfAccountsTable).where(and(eq(chartOfAccountsTable.code, "6000"), eq(chartOfAccountsTable.isActive, true)));
-      if (!account || account.type !== "expense") throw fail("6000 — Цалин данс идэвхтэй байх шаардлагатай");
+      if (kind === "advance") {
+        const [approval] = await tx.select().from(payrollAdvanceApprovalsTable).where(eq(payrollAdvanceApprovalsTable.month, month)).for("update");
+        const lines = GetPayrollAdvanceResponse.shape.lines.parse(approval.lines);
+        const line = lines.find(row => row.employeeId === employeeId)!;
+        const payments = advancePayments(line);
+        const sequence = Math.max(line.nextPaymentSequence ?? 1, Math.max(0, ...payments.map(p => p.sequence)) + 1);
+        if (sequence > 10000 || payments.length >= 1000) throw fail("Урьдчилгааны олголтын тоо хязгаарт хүрсэн байна");
+        const amount = money(Number(bank.amount));
+        const updated = { ...line, payments: [...payments, { sequence, amount, date }],
+          nextPaymentSequence: sequence + 1,
+          paid: money(target.paidAmount + amount) >= money(line.advanceAmount),
+          paymentDate: line.paymentDate ?? date };
+        await tx.update(payrollAdvanceApprovalsTable).set({
+          lines: lines.map(row => row.employeeId === employeeId ? updated : row),
+        }).where(eq(payrollAdvanceApprovalsTable.id, approval.id));
+        [cash] = await tx.insert(cashTransactionsTable).values({
+          type: "expense", category: "Урьдчилгаа цалин", accountId: account.id, amount, date,
+          description: `${target.employeeName} · ${month} сарын урьдчилгаа · ${sequence}-р олголт`,
+          sourceType: "payroll_advance", sourceKey: payrollPaymentSourceKey(month, employeeId, sequence),
+        }).returning();
+      } else {
       const [old] = await tx.select().from(payrollAdjustmentsTable).where(and(
         eq(payrollAdjustmentsTable.month, month), eq(payrollAdjustmentsTable.employeeId, employeeId),
       )).for("update");
@@ -128,6 +185,7 @@ export async function linkBankPayroll(bankId: number, employeeId: number, month:
         description: `${target.employeeName} · ${month} сарын цалин${sequence === 1 ? "" : ` · ${sequence}-р олголт`}`,
         sourceType: "payroll", sourceKey: payrollPaymentSourceKey(month, employeeId, sequence),
       }).returning();
+      }
     }
     await attachBankCash(tx, bank, cash);
     return result(cash.id, reused);

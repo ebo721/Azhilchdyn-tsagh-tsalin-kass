@@ -923,7 +923,16 @@ export interface BankPayrollTarget {
   existingCashId: number | null;
 }
 
+export type BankPayrollLinkInputPaymentKind = typeof BankPayrollLinkInputPaymentKind[keyof typeof BankPayrollLinkInputPaymentKind];
+
+
+export const BankPayrollLinkInputPaymentKind = {
+  salary: 'salary',
+  advance: 'advance',
+} as const;
+
 export interface BankPayrollLinkInput {
+  paymentKind?: BankPayrollLinkInputPaymentKind;
   /** @minimum 1 */
   employeeId: number;
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])$ */
@@ -1180,6 +1189,18 @@ export const PayrollAdvanceLineEmployeeType = {
   office: 'office',
 } as const;
 
+export interface PayrollAdvanceInstallment {
+  /**
+     * @minimum 1
+     * @maximum 10000
+     */
+  sequence: number;
+  /** @minimum 0.01 */
+  amount: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  date: string;
+}
+
 export interface PayrollAdvanceLine {
   employeeId: number;
   employeeName: string;
@@ -1192,6 +1213,14 @@ export interface PayrollAdvanceLine {
   paid: boolean;
   /** @nullable */
   paymentDate?: string | null;
+  paidAmount?: number;
+  remainingBalance?: number;
+  /**
+     * @minimum 1
+     * @maximum 10001
+     */
+  nextPaymentSequence?: number;
+  payments?: PayrollAdvanceInstallment[];
 }
 
 export interface PayrollAdvanceSummary {

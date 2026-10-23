@@ -1081,6 +1081,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PayrollAdvanceSummary"
+  /payroll-advance/{month}/{employeeId}/transactions/{sequence}:
+    delete:
+      operationId: deletePayrollAdvanceInstallment
+      tags: [payroll]
+      summary: Remove one unlinked advance installment without renumbering other payments
+      parameters:
+        - in: path
+          name: month
+          required: true
+          schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+        - in: path
+          name: employeeId
+          required: true
+          schema: { type: integer, minimum: 1 }
+        - in: path
+          name: sequence
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 10000 }
+      responses:
+        "200":
+          description: Updated monthly advance summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayrollAdvanceSummary" }
   /hour-balance:
     get:
       operationId: getHourBalance
@@ -1634,6 +1658,25 @@ paths:
       responses:
         "200":
           description: Saved payroll payment targets
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BankPayrollTarget" }
+  /bank-transactions/{id}/advance-targets/{month}:
+    get:
+      operationId: listBankAdvanceTargets
+      tags: [bank-transactions]
+      summary: List approved advance balances and existing payments for a bank expense
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - in: path
+          name: month
+          required: true
+          schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+      responses:
+        "200":
+          description: Approved advance payment targets
           content:
             application/json:
               schema:
@@ -3720,6 +3763,7 @@ components:
       type: object
       required: [employeeId, month]
       properties:
+        paymentKind: { type: string, enum: [salary, advance] }
         employeeId: { type: integer, minimum: 1 }
         month: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
     BankPayrollLinkResult:
@@ -3919,6 +3963,19 @@ components:
         advanceAmount: { type: number }
         paid: { type: boolean }
         paymentDate: { type: ["string", "null"] }
+        paidAmount: { type: number }
+        remainingBalance: { type: number }
+        nextPaymentSequence: { type: integer, minimum: 1, maximum: 10001 }
+        payments:
+          type: array
+          items: { $ref: "#/components/schemas/PayrollAdvanceInstallment" }
+    PayrollAdvanceInstallment:
+      type: object
+      required: [sequence, amount, date]
+      properties:
+        sequence: { type: integer, minimum: 1, maximum: 10000 }
+        amount: { type: number, minimum: 0.01 }
+        date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
     PayrollAdvanceSummary:
       type: object
       required: [month, periodStart, advancePeriodEnd, periodEnd, advancePaymentDate, finalPaymentDate, schedule, approved, approvalDate, totalAmount, lines]

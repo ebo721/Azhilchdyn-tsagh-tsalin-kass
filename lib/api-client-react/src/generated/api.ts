@@ -4948,6 +4948,81 @@ export const useUpdatePayrollAdvancePayment = <TError = ErrorType<unknown>,
       return useMutation(getUpdatePayrollAdvancePaymentMutationOptions(options));
     }
 
+export const getDeletePayrollAdvanceInstallmentUrl = (month: string,
+    employeeId: number,
+    sequence: number,) => {
+
+
+
+
+  return `/api/payroll-advance/${month}/${employeeId}/transactions/${sequence}`
+}
+
+/**
+ * @summary Remove one unlinked advance installment without renumbering other payments
+ */
+export const deletePayrollAdvanceInstallment = async (month: string,
+    employeeId: number,
+    sequence: number, options?: Parameters<typeof customFetch>[1]): Promise<PayrollAdvanceSummary> => {
+
+  return customFetch<PayrollAdvanceSummary>(getDeletePayrollAdvanceInstallmentUrl(month,employeeId,sequence),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeletePayrollAdvanceInstallmentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePayrollAdvanceInstallment>>, TError,{month: string;employeeId: number;sequence: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePayrollAdvanceInstallment>>, TError,{month: string;employeeId: number;sequence: number}, TContext> => {
+
+const mutationKey = ['deletePayrollAdvanceInstallment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePayrollAdvanceInstallment>>, {month: string;employeeId: number;sequence: number}> = (props) => {
+          const {month,employeeId,sequence} = props ?? {};
+
+          return  deletePayrollAdvanceInstallment(month,employeeId,sequence,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePayrollAdvanceInstallmentMutationResult = NonNullable<Awaited<ReturnType<typeof deletePayrollAdvanceInstallment>>>
+
+    export type DeletePayrollAdvanceInstallmentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Remove one unlinked advance installment without renumbering other payments
+ */
+export const useDeletePayrollAdvanceInstallment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePayrollAdvanceInstallment>>, TError,{month: string;employeeId: number;sequence: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deletePayrollAdvanceInstallment>>,
+        TError,
+        {month: string;employeeId: number;sequence: number},
+        TContext
+      > => {
+      return useMutation(getDeletePayrollAdvanceInstallmentMutationOptions(options));
+    }
+
 export const getGetHourBalanceUrl = (params?: GetHourBalanceParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -7157,6 +7232,88 @@ export function useListBankPayrollTargets<TData = Awaited<ReturnType<typeof list
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListBankPayrollTargetsQueryOptions(id,month,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListBankAdvanceTargetsUrl = (id: number,
+    month: string,) => {
+
+
+
+
+  return `/api/bank-transactions/${id}/advance-targets/${month}`
+}
+
+/**
+ * @summary List approved advance balances and existing payments for a bank expense
+ */
+export const listBankAdvanceTargets = async (id: number,
+    month: string, options?: Parameters<typeof customFetch>[1]): Promise<BankPayrollTarget[]> => {
+
+  return customFetch<BankPayrollTarget[]>(getListBankAdvanceTargetsUrl(id,month),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListBankAdvanceTargetsQueryKey = (id: number,
+    month: string,) => {
+    return [
+    `/api/bank-transactions/${id}/advance-targets/${month}`
+    ] as const;
+    }
+
+
+export const getListBankAdvanceTargetsQueryOptions = <TData = Awaited<ReturnType<typeof listBankAdvanceTargets>>, TError = ErrorType<unknown>>(id: number,
+    month: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankAdvanceTargets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListBankAdvanceTargetsQueryKey(id,month);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBankAdvanceTargets>>> = ({ signal }) => listBankAdvanceTargets(id,month, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && month !== null && month !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBankAdvanceTargets>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListBankAdvanceTargetsQueryResult = NonNullable<Awaited<ReturnType<typeof listBankAdvanceTargets>>>
+export type ListBankAdvanceTargetsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List approved advance balances and existing payments for a bank expense
+ */
+
+export function useListBankAdvanceTargets<TData = Awaited<ReturnType<typeof listBankAdvanceTargets>>, TError = ErrorType<unknown>>(
+ id: number,
+    month: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBankAdvanceTargets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListBankAdvanceTargetsQueryOptions(id,month,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
