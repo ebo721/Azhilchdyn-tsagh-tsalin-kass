@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PayrollAdditionalPayment } from './payrollAdditionalPayment';
 import type { PayrollLineEmployeeType } from './payrollLineEmployeeType';
 
 export interface PayrollLine {
@@ -39,6 +40,7 @@ export interface PayrollLine {
   secondPaidAmount: number;
   /** @nullable */
   secondPaymentDate: string | null;
+  additionalPayments?: PayrollAdditionalPayment[];
   remainingAmount: number;
   overpaidAmount: number;
   balanceAmount: number;

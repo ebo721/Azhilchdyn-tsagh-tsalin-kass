@@ -44,3 +44,4 @@
 - [Browser test pool lifetime](browser-test-pool-lifetime.md) — Run DB-backed browser specs separately until shared-pool teardown is worker-scoped.
 - [Monthly statistics scope](monthly-statistics-scope.md) — Monthly salary means saved gross before advances/deductions, with office and per-shift totals, not actual payments.
 - [Historical bank duplicate evidence](historical-bank-duplicate-evidence.md) — Equal balances and earlier postings do not establish statement ownership; require original statements before cleanup.
+- [Payroll installments](payroll-installment-scope.md) — Support three or more smaller transfers; each links separately while unpaid salary remains outstanding.

@@ -1166,6 +1166,13 @@ export const getPayrollResponseScheduleAdvancePayDayMax = 31;
 
 export const getPayrollResponseScheduleFinalPayDayMax = 31;
 
+export const getPayrollResponseLinesItemAdditionalPaymentsItemSequenceMin = 3;
+export const getPayrollResponseLinesItemAdditionalPaymentsItemSequenceMax = 10000;
+
+export const getPayrollResponseLinesItemAdditionalPaymentsItemAmountMin = 0.01;
+export const getPayrollResponseLinesItemAdditionalPaymentsItemAmountMax = 9999999999.99;
+
+export const getPayrollResponseLinesItemAdditionalPaymentsItemDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const GetPayrollResponse = zod.object({
@@ -1223,6 +1230,11 @@ export const GetPayrollResponse = zod.object({
   "paymentDate": zod.string().nullable(),
   "secondPaidAmount": zod.number(),
   "secondPaymentDate": zod.string().nullable(),
+  "additionalPayments": zod.array(zod.object({
+  "sequence": zod.number().int().min(getPayrollResponseLinesItemAdditionalPaymentsItemSequenceMin).max(getPayrollResponseLinesItemAdditionalPaymentsItemSequenceMax),
+  "amount": zod.number().min(getPayrollResponseLinesItemAdditionalPaymentsItemAmountMin).max(getPayrollResponseLinesItemAdditionalPaymentsItemAmountMax),
+  "date": zod.string().regex(getPayrollResponseLinesItemAdditionalPaymentsItemDateRegExp)
+})).optional(),
   "remainingAmount": zod.number(),
   "overpaidAmount": zod.number(),
   "balanceAmount": zod.number(),
@@ -1257,6 +1269,13 @@ export const closePayrollMonthResponseScheduleAdvancePayDayMax = 31;
 
 export const closePayrollMonthResponseScheduleFinalPayDayMax = 31;
 
+export const closePayrollMonthResponseLinesItemAdditionalPaymentsItemSequenceMin = 3;
+export const closePayrollMonthResponseLinesItemAdditionalPaymentsItemSequenceMax = 10000;
+
+export const closePayrollMonthResponseLinesItemAdditionalPaymentsItemAmountMin = 0.01;
+export const closePayrollMonthResponseLinesItemAdditionalPaymentsItemAmountMax = 9999999999.99;
+
+export const closePayrollMonthResponseLinesItemAdditionalPaymentsItemDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const ClosePayrollMonthResponse = zod.object({
@@ -1314,6 +1333,11 @@ export const ClosePayrollMonthResponse = zod.object({
   "paymentDate": zod.string().nullable(),
   "secondPaidAmount": zod.number(),
   "secondPaymentDate": zod.string().nullable(),
+  "additionalPayments": zod.array(zod.object({
+  "sequence": zod.number().int().min(closePayrollMonthResponseLinesItemAdditionalPaymentsItemSequenceMin).max(closePayrollMonthResponseLinesItemAdditionalPaymentsItemSequenceMax),
+  "amount": zod.number().min(closePayrollMonthResponseLinesItemAdditionalPaymentsItemAmountMin).max(closePayrollMonthResponseLinesItemAdditionalPaymentsItemAmountMax),
+  "date": zod.string().regex(closePayrollMonthResponseLinesItemAdditionalPaymentsItemDateRegExp)
+})).optional(),
   "remainingAmount": zod.number(),
   "overpaidAmount": zod.number(),
   "balanceAmount": zod.number(),
@@ -1348,6 +1372,13 @@ export const reopenPayrollMonthResponseScheduleAdvancePayDayMax = 31;
 
 export const reopenPayrollMonthResponseScheduleFinalPayDayMax = 31;
 
+export const reopenPayrollMonthResponseLinesItemAdditionalPaymentsItemSequenceMin = 3;
+export const reopenPayrollMonthResponseLinesItemAdditionalPaymentsItemSequenceMax = 10000;
+
+export const reopenPayrollMonthResponseLinesItemAdditionalPaymentsItemAmountMin = 0.01;
+export const reopenPayrollMonthResponseLinesItemAdditionalPaymentsItemAmountMax = 9999999999.99;
+
+export const reopenPayrollMonthResponseLinesItemAdditionalPaymentsItemDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const ReopenPayrollMonthResponse = zod.object({
@@ -1405,6 +1436,11 @@ export const ReopenPayrollMonthResponse = zod.object({
   "paymentDate": zod.string().nullable(),
   "secondPaidAmount": zod.number(),
   "secondPaymentDate": zod.string().nullable(),
+  "additionalPayments": zod.array(zod.object({
+  "sequence": zod.number().int().min(reopenPayrollMonthResponseLinesItemAdditionalPaymentsItemSequenceMin).max(reopenPayrollMonthResponseLinesItemAdditionalPaymentsItemSequenceMax),
+  "amount": zod.number().min(reopenPayrollMonthResponseLinesItemAdditionalPaymentsItemAmountMin).max(reopenPayrollMonthResponseLinesItemAdditionalPaymentsItemAmountMax),
+  "date": zod.string().regex(reopenPayrollMonthResponseLinesItemAdditionalPaymentsItemDateRegExp)
+})).optional(),
   "remainingAmount": zod.number(),
   "overpaidAmount": zod.number(),
   "balanceAmount": zod.number(),
@@ -1439,6 +1475,13 @@ export const pullPayrollAttendanceResponsePayrollScheduleAdvancePayDayMax = 31;
 
 export const pullPayrollAttendanceResponsePayrollScheduleFinalPayDayMax = 31;
 
+export const pullPayrollAttendanceResponsePayrollLinesItemAdditionalPaymentsItemSequenceMin = 3;
+export const pullPayrollAttendanceResponsePayrollLinesItemAdditionalPaymentsItemSequenceMax = 10000;
+
+export const pullPayrollAttendanceResponsePayrollLinesItemAdditionalPaymentsItemAmountMin = 0.01;
+export const pullPayrollAttendanceResponsePayrollLinesItemAdditionalPaymentsItemAmountMax = 9999999999.99;
+
+export const pullPayrollAttendanceResponsePayrollLinesItemAdditionalPaymentsItemDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const pullPayrollAttendanceResponseAdvancePeriodStartRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const pullPayrollAttendanceResponseAdvanceAdvancePeriodEndRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const pullPayrollAttendanceResponseAdvancePeriodEndRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
@@ -1513,6 +1556,11 @@ export const PullPayrollAttendanceResponse = zod.object({
   "paymentDate": zod.string().nullable(),
   "secondPaidAmount": zod.number(),
   "secondPaymentDate": zod.string().nullable(),
+  "additionalPayments": zod.array(zod.object({
+  "sequence": zod.number().int().min(pullPayrollAttendanceResponsePayrollLinesItemAdditionalPaymentsItemSequenceMin).max(pullPayrollAttendanceResponsePayrollLinesItemAdditionalPaymentsItemSequenceMax),
+  "amount": zod.number().min(pullPayrollAttendanceResponsePayrollLinesItemAdditionalPaymentsItemAmountMin).max(pullPayrollAttendanceResponsePayrollLinesItemAdditionalPaymentsItemAmountMax),
+  "date": zod.string().regex(pullPayrollAttendanceResponsePayrollLinesItemAdditionalPaymentsItemDateRegExp)
+})).optional(),
   "remainingAmount": zod.number(),
   "overpaidAmount": zod.number(),
   "balanceAmount": zod.number(),
@@ -1584,6 +1632,13 @@ export const refreshEmployeePayrollResponsePayrollScheduleAdvancePayDayMax = 31;
 
 export const refreshEmployeePayrollResponsePayrollScheduleFinalPayDayMax = 31;
 
+export const refreshEmployeePayrollResponsePayrollLinesItemAdditionalPaymentsItemSequenceMin = 3;
+export const refreshEmployeePayrollResponsePayrollLinesItemAdditionalPaymentsItemSequenceMax = 10000;
+
+export const refreshEmployeePayrollResponsePayrollLinesItemAdditionalPaymentsItemAmountMin = 0.01;
+export const refreshEmployeePayrollResponsePayrollLinesItemAdditionalPaymentsItemAmountMax = 9999999999.99;
+
+export const refreshEmployeePayrollResponsePayrollLinesItemAdditionalPaymentsItemDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const refreshEmployeePayrollResponseAdvancePeriodStartRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const refreshEmployeePayrollResponseAdvanceAdvancePeriodEndRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const refreshEmployeePayrollResponseAdvancePeriodEndRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
@@ -1658,6 +1713,11 @@ export const RefreshEmployeePayrollResponse = zod.object({
   "paymentDate": zod.string().nullable(),
   "secondPaidAmount": zod.number(),
   "secondPaymentDate": zod.string().nullable(),
+  "additionalPayments": zod.array(zod.object({
+  "sequence": zod.number().int().min(refreshEmployeePayrollResponsePayrollLinesItemAdditionalPaymentsItemSequenceMin).max(refreshEmployeePayrollResponsePayrollLinesItemAdditionalPaymentsItemSequenceMax),
+  "amount": zod.number().min(refreshEmployeePayrollResponsePayrollLinesItemAdditionalPaymentsItemAmountMin).max(refreshEmployeePayrollResponsePayrollLinesItemAdditionalPaymentsItemAmountMax),
+  "date": zod.string().regex(refreshEmployeePayrollResponsePayrollLinesItemAdditionalPaymentsItemDateRegExp)
+})).optional(),
   "remainingAmount": zod.number(),
   "overpaidAmount": zod.number(),
   "balanceAmount": zod.number(),
@@ -1888,6 +1948,15 @@ export const upsertPayrollAdjustmentBodyPaidAmountMin = 0;
 
 export const upsertPayrollAdjustmentBodySecondPaidAmountMin = 0;
 
+export const upsertPayrollAdjustmentBodyAdditionalPaymentsItemSequenceMin = 3;
+export const upsertPayrollAdjustmentBodyAdditionalPaymentsItemSequenceMax = 10000;
+
+export const upsertPayrollAdjustmentBodyAdditionalPaymentsItemAmountMin = 0.01;
+export const upsertPayrollAdjustmentBodyAdditionalPaymentsItemAmountMax = 9999999999.99;
+
+export const upsertPayrollAdjustmentBodyAdditionalPaymentsItemDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const upsertPayrollAdjustmentBodyAdditionalPaymentsMax = 1000;
+
 
 
 export const UpsertPayrollAdjustmentBody = zod.object({
@@ -1898,8 +1967,22 @@ export const UpsertPayrollAdjustmentBody = zod.object({
   "paidAmount": zod.number().min(upsertPayrollAdjustmentBodyPaidAmountMin),
   "paymentDate": zod.string().nullish(),
   "secondPaidAmount": zod.number().min(upsertPayrollAdjustmentBodySecondPaidAmountMin),
-  "secondPaymentDate": zod.string().nullish()
+  "secondPaymentDate": zod.string().nullish(),
+  "additionalPayments": zod.array(zod.object({
+  "sequence": zod.number().int().min(upsertPayrollAdjustmentBodyAdditionalPaymentsItemSequenceMin).max(upsertPayrollAdjustmentBodyAdditionalPaymentsItemSequenceMax),
+  "amount": zod.number().min(upsertPayrollAdjustmentBodyAdditionalPaymentsItemAmountMin).max(upsertPayrollAdjustmentBodyAdditionalPaymentsItemAmountMax),
+  "date": zod.string().regex(upsertPayrollAdjustmentBodyAdditionalPaymentsItemDateRegExp)
+})).max(upsertPayrollAdjustmentBodyAdditionalPaymentsMax).optional()
 })
+
+export const upsertPayrollAdjustmentResponseAdditionalPaymentsItemSequenceMin = 3;
+export const upsertPayrollAdjustmentResponseAdditionalPaymentsItemSequenceMax = 10000;
+
+export const upsertPayrollAdjustmentResponseAdditionalPaymentsItemAmountMin = 0.01;
+export const upsertPayrollAdjustmentResponseAdditionalPaymentsItemAmountMax = 9999999999.99;
+
+export const upsertPayrollAdjustmentResponseAdditionalPaymentsItemDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
 
 export const UpsertPayrollAdjustmentResponse = zod.object({
   "employeeId": zod.number().int(),
@@ -1910,7 +1993,12 @@ export const UpsertPayrollAdjustmentResponse = zod.object({
   "paidAmount": zod.number(),
   "paymentDate": zod.string().nullish(),
   "secondPaidAmount": zod.number(),
-  "secondPaymentDate": zod.string().nullish()
+  "secondPaymentDate": zod.string().nullish(),
+  "additionalPayments": zod.array(zod.object({
+  "sequence": zod.number().int().min(upsertPayrollAdjustmentResponseAdditionalPaymentsItemSequenceMin).max(upsertPayrollAdjustmentResponseAdditionalPaymentsItemSequenceMax),
+  "amount": zod.number().min(upsertPayrollAdjustmentResponseAdditionalPaymentsItemAmountMin).max(upsertPayrollAdjustmentResponseAdditionalPaymentsItemAmountMax),
+  "date": zod.string().regex(upsertPayrollAdjustmentResponseAdditionalPaymentsItemDateRegExp)
+})).optional()
 })
 
 
@@ -1918,12 +2006,14 @@ export const UpsertPayrollAdjustmentResponse = zod.object({
  * @summary Delete one payroll payment transaction
  */
 export const deletePayrollAdjustmentTransactionPathMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+export const deletePayrollAdjustmentTransactionPathSequenceMax = 10000;
+
 
 
 export const DeletePayrollAdjustmentTransactionParams = zod.object({
   "month": zod.coerce.string().regex(deletePayrollAdjustmentTransactionPathMonthRegExp),
   "employeeId": zod.coerce.number().int(),
-  "sequence": zod.union([zod.literal(1),zod.literal(2)])
+  "sequence": zod.coerce.number().int().min(1).max(deletePayrollAdjustmentTransactionPathSequenceMax)
 })
 
 export const DeletePayrollAdjustmentTransactionResponse = zod.void()

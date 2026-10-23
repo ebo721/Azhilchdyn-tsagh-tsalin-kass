@@ -75,7 +75,7 @@ function fixture(): { data: PayrollCalculationData; schedules: Schedule[] } {
           manualDeduction: e.id === 3 ? 0 : 1000, advanceAmount: 0, taxRelief: 0,
           paidAmount: e.id === 3 ? 80 : m % 3 === 0 ? 1_900_000 : 100_000,
           paymentDate: `${month}-26`, secondPaidAmount: e.id === 3 ? 10 : 20_000,
-          secondPaymentDate: `${month}-28`, receivableId: null, journalEntryId: null, updatedAt: epoch,
+          secondPaymentDate: `${month}-28`, additionalPayments: [], receivableId: null, journalEntryId: null, updatedAt: epoch,
         });
       }
       data.allAdvanceApprovals.push({
@@ -160,8 +160,9 @@ it("preserves complete summaries across ten years, schedule versions and salary 
   };
   for (const month of Object.keys(expected) as Array<keyof typeof expected>) {
     const summary = calculateThrough(month, data, schedules);
-    // Goldens predate recipient-account metadata. Compare every legacy calculation field.
-    assert.equal(digest({ ...summary, lines: summary.lines.map(({ bankAccountNumber: _account, ...line }) => line) }),
+    // Goldens predate recipient-account metadata and extra payment slots.
+    assert.ok(summary.lines.every(line => line.additionalPayments.length === 0));
+    assert.equal(digest({ ...summary, lines: summary.lines.map(({ bankAccountNumber: _account, additionalPayments: _extras, ...line }) => line) }),
       expected[month], `${month}: all calculation fields must match the approved payroll rules`);
     if (month === "2025-12") {
       assert.equal(summary.lines.find(line => line.employeeId === 3)?.carryoverAmount, 1190);
@@ -173,7 +174,7 @@ it("preserves complete summaries across ten years, schedule versions and salary 
   assert.deepEqual(data, before, "calculation must not mutate payments or inputs");
   data.salaryHistory.find(row => row.id === 11)!.baseSalary = 2_100_000;
   const corrected = calculateThrough("2025-12", data, schedules);
-  assert.equal(digest({ ...corrected, lines: corrected.lines.map(({ bankAccountNumber: _account, ...line }) => line) }),
+  assert.equal(digest({ ...corrected, lines: corrected.lines.map(({ bankAccountNumber: _account, additionalPayments: _extras, ...line }) => line) }),
     "31314426a2be71c8e55f61730da54f0f937111af41b9b59b20a966e0d0999650");
   assert.equal(corrected.lines[0].paidAmount, 1_920_000);
   assert.equal(corrected.lines[0].secondPaidAmount, 20_000);

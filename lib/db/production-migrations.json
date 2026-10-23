@@ -116,7 +116,11 @@
     {
       "filename": "20261022_payroll_opening_selective.sql",
       "releaseMode": "expand"
+    },
+    {
+      "filename": "20261023_payroll_additional_payments.sql",
+      "releaseMode": "expand"
     }
   ],
-  "schemaFingerprint": "effade5a834ca4ba081c9c1fce21edde8f573f36979b60bd2425fe77465cde51"
+  "schemaFingerprint": "37e32463cd5efd9935828cc8f76156441a1aee284e75f1786d15bfda965a005f"
 }

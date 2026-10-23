@@ -4568,7 +4568,7 @@ export const useUpsertPayrollAdjustment = <TError = ErrorType<unknown>,
 
 export const getDeletePayrollAdjustmentTransactionUrl = (month: string,
     employeeId: number,
-    sequence: 1 | 2,) => {
+    sequence: number,) => {
 
 
 
@@ -4581,7 +4581,7 @@ export const getDeletePayrollAdjustmentTransactionUrl = (month: string,
  */
 export const deletePayrollAdjustmentTransaction = async (month: string,
     employeeId: number,
-    sequence: 1 | 2, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+    sequence: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
 
   return customFetch<void>(getDeletePayrollAdjustmentTransactionUrl(month,employeeId,sequence),
   {
@@ -4597,8 +4597,8 @@ export const deletePayrollAdjustmentTransaction = async (month: string,
 
 
 export const getDeletePayrollAdjustmentTransactionMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePayrollAdjustmentTransaction>>, TError,{month: string;employeeId: number;sequence: 1 | 2}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof deletePayrollAdjustmentTransaction>>, TError,{month: string;employeeId: number;sequence: 1 | 2}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePayrollAdjustmentTransaction>>, TError,{month: string;employeeId: number;sequence: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePayrollAdjustmentTransaction>>, TError,{month: string;employeeId: number;sequence: number}, TContext> => {
 
 const mutationKey = ['deletePayrollAdjustmentTransaction'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -4610,7 +4610,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePayrollAdjustmentTransaction>>, {month: string;employeeId: number;sequence: 1 | 2}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePayrollAdjustmentTransaction>>, {month: string;employeeId: number;sequence: number}> = (props) => {
           const {month,employeeId,sequence} = props ?? {};
 
           return  deletePayrollAdjustmentTransaction(month,employeeId,sequence,requestOptions)
@@ -4631,11 +4631,11 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
  * @summary Delete one payroll payment transaction
  */
 export const useDeletePayrollAdjustmentTransaction = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePayrollAdjustmentTransaction>>, TError,{month: string;employeeId: number;sequence: 1 | 2}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePayrollAdjustmentTransaction>>, TError,{month: string;employeeId: number;sequence: number}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof deletePayrollAdjustmentTransaction>>,
         TError,
-        {month: string;employeeId: number;sequence: 1 | 2},
+        {month: string;employeeId: number;sequence: number},
         TContext
       > => {
       return useMutation(getDeletePayrollAdjustmentTransactionMutationOptions(options));

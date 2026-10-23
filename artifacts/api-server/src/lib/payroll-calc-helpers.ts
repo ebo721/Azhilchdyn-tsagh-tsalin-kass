@@ -105,7 +105,9 @@ export function applyPayrollFinancials(
   const manualDeduction = money(Number(adjustment?.manualDeduction ?? 0));
   const firstPaidAmount = money(Number(adjustment?.paidAmount ?? 0));
   const secondPaidAmount = money(Number(adjustment?.secondPaidAmount ?? 0));
-  const paidAmount = money(firstPaidAmount + secondPaidAmount);
+  const additionalPayments = adjustment?.additionalPayments ?? [];
+  const paidAmount = money(firstPaidAmount + secondPaidAmount
+    + additionalPayments.reduce((total, payment) => total + payment.amount, 0));
   const deductions = money(base.socialInsurance + base.incomeTax + advanceAmount + manualDeduction);
   const payableBeforePayment = money(base.gross - deductions + carryoverAmount);
   const payable = money(Math.max(0, payableBeforePayment));
@@ -115,6 +117,7 @@ export function applyPayrollFinancials(
     advanceAmount, manualDeduction, receivableId: adjustment?.receivableId ?? null, deductions,
     carryoverAmount, payable, paidAmount, paymentDate: adjustment?.paymentDate ?? null,
     secondPaidAmount, secondPaymentDate: adjustment?.secondPaymentDate ?? null,
+    additionalPayments,
     remainingAmount: money(Math.max(0, balanceAmount)), overpaidAmount: money(Math.max(0, -balanceAmount)),
     balanceAmount, net: payable,
   };

@@ -566,11 +566,12 @@ router.delete("/employees/:id/salary-history/:historyId", async (req, res, next)
       month: payrollAdjustmentsTable.month,
       paidAmount: payrollAdjustmentsTable.paidAmount,
       secondPaidAmount: payrollAdjustmentsTable.secondPaidAmount,
+      additionalPayments: payrollAdjustmentsTable.additionalPayments,
     }).from(payrollAdjustmentsTable).where(eq(payrollAdjustmentsTable.employeeId, id));
     const affectedPaidMonth = affectedPaidPayroll.find((row) =>
       row.month >= String(target.effectiveFrom).slice(0, 7)
       && (!next || row.month <= String(next.effectiveFrom).slice(0, 7))
-      && (Number(row.paidAmount) > 0 || Number(row.secondPaidAmount) > 0)
+      && (Number(row.paidAmount) > 0 || Number(row.secondPaidAmount) > 0 || row.additionalPayments.length > 0)
     );
     if (affectedPaidMonth) {
       res.status(409).json({ error: `${affectedPaidMonth.month} сарын олгосон цалинд нөлөөлөх тул энэ мөрийг устгах боломжгүй` });
