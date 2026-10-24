@@ -113,7 +113,9 @@ export function PartyLedger() {
               </div>
             ))}
           </div>
-          <p className="rounded-lg bg-primary/10 px-4 py-2 text-sm font-semibold text-primary" data-testid="text-party-ledger-conclusion">
+          <p className={`rounded-lg px-4 py-2 text-sm font-semibold ${data.conclusion === 'receivable'
+            ? 'bg-emerald-50 text-emerald-800' : data.conclusion === 'payable'
+              ? 'bg-amber-50 text-amber-900' : 'bg-muted text-muted-foreground'}`} data-testid="text-party-ledger-conclusion">
             {data.partyName}: {conclusionText[data.conclusion]} · {data.from} – {data.to}
           </p>
           {data.warnings.length > 0 && (

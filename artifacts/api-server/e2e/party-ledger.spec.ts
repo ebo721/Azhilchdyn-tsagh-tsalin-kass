@@ -6,7 +6,7 @@ async function fixture(page: Page, role = "accountant") {
   await page.route("**/api/**", async route => {
     const req = route.request(), url = new URL(req.url()), path = url.pathname;
     if (req.method() !== "GET") mutations.push(path);
-    if (path === "/api/auth/me") return route.fulfill({ json: { authenticated: true, id: 1, username: "fixture", role, menuPaths: ["/ar-ap"] } });
+    if (path === "/api/auth/me") return route.fulfill({ json: { authenticated: true, id: 1, username: "fixture", role, menuPaths: role === "admin" ? null : ["/ar-ap"] } });
     if (path === "/api/employees") return route.fulfill({ json: [{ id: 1, name: "Тайлан ажилтан" }] });
     if (path === "/api/journal/suppliers") return route.fulfill({ json: [{ id: 2, name: "Тайлан харилцагч" }] });
     if (path === "/api/ar-ap/party-ledger") {
@@ -90,5 +90,26 @@ test("invalid calendar dates do not query, errors can be retried, and old tabs r
   await page.getByRole("tab", { name: "Авлага", exact: true }).click();
   await expect(page.getByTestId("button-create-employee-balance")).toBeVisible();
   await expect(page.getByTestId("section-party-ledger")).toHaveCount(0);
+  expect(f.mutations).toEqual([]);
+});
+
+test("source links open the exact journal and a bank transaction outside the current month", async ({ page }) => {
+  const f = await fixture(page, "admin");
+  const entry = { id: 22, date: "2026-02-10", description: "Exact source document", sourceType: "bank_transaction",
+    sourceId: 33, status: "posted", voidedAt: null, lines: [
+      { id: 1, accountCode: "1010", accountName: "Bank", debit: 40, credit: 0 },
+      { id: 2, accountCode: "1200", accountName: "Receivable", debit: 0, credit: 40 },
+    ] };
+  await page.route("**/api/journal/entries**", route => route.fulfill({ json: new URL(route.request().url()).pathname.endsWith("/22") ? entry : [entry] }));
+  await page.route("**/api/bank-transactions", route => route.fulfill({ json: [33,34].map(id => ({
+    id, type: "income", amount: 40, transactionAt: "2026-02-10T12:00:00.000Z",
+    account: "", description: `Exact bank ${id}`, journalEntryId: 22, internalTransfer: null,
+  })) }));
+  await page.goto("/journal?entryId=22");
+  await expect(page.getByRole("dialog")).toContainText("Журнал #22");
+  await expect(page.getByRole("dialog")).toContainText("Exact source document");
+  await page.goto("/bank-transactions?transactionId=33");
+  await expect(page.getByTestId("row-bank-transaction-33")).toBeVisible();
+  await expect(page.getByTestId("row-bank-transaction-34")).toHaveCount(0);
   expect(f.mutations).toEqual([]);
 });

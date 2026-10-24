@@ -34,9 +34,8 @@ export async function readPartyLedger(input: PartyLedgerInput, connection?: Tx):
         FROM journal_entries e
         LEFT JOIN journal_entries original ON e.source_type = 'reversal' AND original.id = e.source_id
         WHERE e.status = 'posted' AND e.voided_at IS NULL AND e.date <= ${to}::date
-          AND e.source_type <> 'manual'
           AND (e.source_type <> 'reversal' OR
-            (original.status = 'posted' AND original.voided_at IS NULL AND original.source_type <> 'manual'))
+            (original.status = 'posted' AND original.voided_at IS NULL))
       ), line_parties AS (
         SELECT origin_journal_line_id AS line_id,
           CASE WHEN employee_id IS NOT NULL THEN 'employee' ELSE 'supplier' END AS party_type,
@@ -73,6 +72,12 @@ export async function readPartyLedger(input: PartyLedgerInput, connection?: Tx):
             OR (e.owner_type IN ('payroll','payroll_advance') AND e.owner_source_id = c.id AND c.source_type = e.owner_type)
           WHERE c.source_type IN ('payroll','payroll_advance')
             AND c.source_key ~ '^[1-9][0-9]{3}-(0[1-9]|1[0-2]):[1-9][0-9]{0,9}(:[1-9][0-9]{0,4})?$'
+      ), ranked_lines AS (
+        SELECT l.*, row_number() OVER (
+          PARTITION BY l.journal_entry_id, l.account_id, l.debit, l.credit, l.memo ORDER BY l.id
+        ) AS occurrence
+        FROM journal_lines l
+        WHERE EXISTS (SELECT 1 FROM effective e WHERE e.id = l.journal_entry_id OR e.owner_id = l.journal_entry_id)
       ), scoped AS (
         SELECT l.id, e.date, e.source_type, e.description, c.code AS account_code, c.name AS account_name,
           l.debit, l.credit, c.code IN ('1200','2000') AS affects_balance, e.id AS journal_entry_id,
@@ -80,15 +85,20 @@ export async function readPartyLedger(input: PartyLedgerInput, connection?: Tx):
             WHERE b.journal_entry_id = e.owner_id
               OR (e.owner_type = 'bank_transaction' AND b.id = e.owner_source_id)
               OR (e.owner_type = 'cash' AND b.cash_transaction_id = e.owner_source_id)) AS bank_transaction_id
-        FROM effective e JOIN journal_lines l ON l.journal_entry_id = e.id
+        FROM effective e JOIN ranked_lines l ON l.journal_entry_id = e.id
+        LEFT JOIN ranked_lines original_line ON e.source_type = 'reversal'
+          AND original_line.journal_entry_id = e.owner_id AND original_line.account_id = l.account_id
+          AND original_line.debit = l.credit AND original_line.credit = l.debit
+          AND original_line.memo IS NOT DISTINCT FROM l.memo AND original_line.occurrence = l.occurrence
         JOIN chart_of_accounts c ON c.id = l.account_id
         WHERE EXISTS (SELECT 1 FROM entry_parties p WHERE p.entry_id = e.owner_id
           AND p.party_type = ${partyType} AND p.party_id = ${partyId})
           AND (c.code NOT IN ('1200','2000')
             OR EXISTS (SELECT 1 FROM line_parties p
-              WHERE p.line_id = CASE WHEN e.source_type = 'reversal' THEN NULL ELSE l.id END
+              WHERE p.line_id = CASE WHEN e.source_type = 'reversal' THEN original_line.id ELSE l.id END
                 AND p.party_type = ${partyType} AND p.party_id = ${partyId})
-            OR (NOT EXISTS(SELECT 1 FROM line_parties p WHERE p.line_id = l.id)
+            OR (NOT EXISTS(SELECT 1 FROM line_parties p
+                WHERE p.line_id = CASE WHEN e.source_type = 'reversal' THEN original_line.id ELSE l.id END)
               AND (SELECT count(*) FROM entry_parties p WHERE p.entry_id = e.owner_id) = 1))
       ), opening AS (
         SELECT COALESCE(sum(debit-credit) FILTER(WHERE affects_balance),0) AS balance
@@ -115,7 +125,7 @@ export async function readPartyLedger(input: PartyLedgerInput, connection?: Tx):
     const closingBalance = money(openingBalance + totalDebit - totalCredit);
     const warnings: string[] = [
       "Үлдэгдэл болон нийт дебит/кредитэд зөвхөн 1200, 2000 дансны хөдөлгөөн орсон. Бусад мөр нь мэдээллийн зориулалттай.",
-      "Гараар бичсэн болон харилцагчийн баталгаатай холбоосгүй журнал ороогүй. Нийлүүлэгчийн худалдан авалтад supplierId холбоос байхгүй тул нэрээр таамаглан хамааруулаагүй.",
+      "Эх баримтаар харилцагч нь баталгаатай manual журнал орсон; баталгаатай холбоосгүй журнал ороогүй. Нийлүүлэгчийн худалдан авалтад supplierId холбоос байхгүй тул нэрээр таамаглан хамааруулаагүй.",
     ];
     const twoYearsLater = `${Number(from.slice(0, 4)) + 2}${from.slice(4)}`;
     if (to > twoYearsLater) warnings.push("Сонгосон огнооны завсар 2 жилээс их байна. Тайлан удаан ачаалж болзошгүй.");

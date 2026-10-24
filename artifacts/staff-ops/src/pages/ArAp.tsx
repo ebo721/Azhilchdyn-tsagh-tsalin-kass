@@ -120,7 +120,7 @@ export function ArAp({ canCreate }: { canCreate: boolean }) {
         />
       )}
 
-      {tab === 'ledger' && canLedger ? <PartyLedger /> : <div id="ar-ap-table" role="tabpanel" className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      {tab === 'ledger' && canLedger ? <div id="ar-ap-table" role="tabpanel"><PartyLedger /></div> : <div id="ar-ap-table" role="tabpanel" className="overflow-hidden rounded-xl border bg-card shadow-sm">
         {current.isLoading ? (
           <div className="p-8"><LoadingBlock className="h-48" /></div>
         ) : current.isError ? (

@@ -47,16 +47,16 @@ test("read-only party ledger source ownership, reversals and authorization", { t
       (1,'1200','Receivable','asset','debit'),(2,'2000','Payable','liability','credit'),
       (3,'6000','Expense','expense','debit'),(4,'1010','Bank','asset','debit'),(5,'1500','Stock','asset','debit')`);
     await query(`INSERT INTO journal_entries(id,date,description,source_type,source_id,status,voided_at) VALUES
-      (1,'2026-01-01','Opening debt','employee_receivable',1,'posted',NULL),
+      (1,'2026-01-01','Opening debt','manual',NULL,'posted',NULL),
       (2,'2026-02-10','Debt repayment','bank_transaction',1,'posted',NULL),
       (3,'2026-02-02','Manual not attributable','manual',1,'posted',NULL),
-      (4,'2026-02-03','Voided debt','employee_receivable',1,'void',now()),
+      (4,'2026-02-03','Voided debt','manual',NULL,'void',now()),
       (5,'2026-02-03','Voided compensation','reversal',4,'posted',NULL),
       (6,'2026-02-05','Salary payment','cash',1,'posted',NULL),
-      (7,'2026-02-06','Supplier debt','payable',1,'posted',NULL),
+      (7,'2026-02-06','Supplier debt','manual',NULL,'posted',NULL),
       (8,'2026-02-07','Supplier settlement','bank_transaction',7,'posted',NULL),
       (9,'2026-02-08','Ledger supplier purchase without supplier ID','inventory_purchase',1,'posted',NULL),
-      (10,'2026-02-08','Two employees','employee_receivable',NULL,'posted',NULL),
+      (10,'2026-02-08','Two employees','manual',NULL,'posted',NULL),
       (11,'2026-02-08','Draft debt','employee_receivable',1,'draft',NULL)`);
     await query(`INSERT INTO journal_lines(id,journal_entry_id,account_id,debit,credit,allocation) VALUES
       (1,1,1,100,0,NULL),(2,1,3,0,100,NULL),
@@ -89,7 +89,7 @@ test("read-only party ledger source ownership, reversals and authorization", { t
       (6,'expense',20,'2026-02-10','','Missing account','ledger-6',NULL,NULL),
       (7,'expense',50,'2026-02-07','Vendor','Supplier repayment','ledger-7',8,NULL)`);
     const input = { partyType: "employee" as const, partyId: 1, from: "2026-02-01", to: "2026-02-28" };
-    await t.test("opening SUM, exact line attribution, salary as information, and void/reversal pair exclusion", async () => {
+    await t.test("document-backed manual opening and mixed-party lines count; unlinked manual and voided reversal pairs do not", async () => {
       const result = await readPartyLedger(input);
       assert.equal(result.openingBalance, 100);
       assert.equal(result.totalDebit, 20);
@@ -115,6 +115,26 @@ test("read-only party ledger source ownership, reversals and authorization", { t
       assert.equal(result.payroll, null);
       assert.deepEqual(result.unmatchedBankTransactions, []);
       assert.ok(result.warnings.some(s => s.includes("supplierId")));
+    });
+    await t.test("an active manual source reversal inherits only each party's own financial lines", async () => {
+      await query(`INSERT INTO journal_entries(id,date,description,source_type,source_id,status)
+        VALUES(12,'2026-02-15','Active mixed-party reversal','reversal',10,'posted')`);
+      await query(`INSERT INTO journal_lines(id,journal_entry_id,account_id,debit,credit)
+        VALUES(24,12,1,0,20),(25,12,1,0,30),(26,12,3,50,0)`);
+      try {
+        const first = await readPartyLedger(input);
+        assert.equal(first.closingBalance, 60);
+        assert.equal(first.lines.find(row => row.id === 24)?.credit, 20);
+        assert.equal(first.lines.some(row => row.id === 25), false);
+        const second = await readPartyLedger({ ...input, partyId: 2 });
+        assert.equal(second.closingBalance, 0);
+        assert.equal(second.conclusion, "balanced");
+        assert.equal(second.lines.find(row => row.id === 25)?.credit, 30);
+        assert.equal(second.lines.some(row => row.id === 24), false);
+      } finally {
+        await query("DELETE FROM journal_lines WHERE journal_entry_id=12");
+        await query("DELETE FROM journal_entries WHERE id=12");
+      }
     });
     await t.test("saved employee payroll is separate from the ledger and reports its sign-normalized difference", async () => {
       const saved = {
