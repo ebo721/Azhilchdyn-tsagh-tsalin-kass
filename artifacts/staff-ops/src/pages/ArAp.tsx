@@ -8,10 +8,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { EmptyState, ErrorBlock, LoadingBlock, PageHeading } from '@/components/ui-primitives';
 import { formatDate } from '@/pages/Journal/utils';
+import { PartyLedger } from '@/components/PartyLedger';
 import { PayrollPayables } from '@/components/PayrollPayables';
 import { EmployeeArApForm, type SavedArAp } from '@/pages/EmployeeArApForm';
 
-type Tab = 'receivables' | 'payables';
+type Tab = 'receivables' | 'payables' | 'ledger';
 const money = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export function ArAp({ canCreate }: { canCreate: boolean }) {
@@ -36,6 +37,7 @@ export function ArAp({ canCreate }: { canCreate: boolean }) {
   const role = session.data?.authenticated ? String(session.data.role) : '';
   const canOpenPayroll = ['admin', 'accountant', 'viewer'].includes(role) && (menuPaths == null || menuPaths.includes('/payroll'));
 
+  const canLedger = ['admin', 'accountant'].includes(role);
   const rows = useMemo(() => tab === 'receivables'
     ? (receivables.data ?? []).map((row) => ({ ...row, balance: row.openAmount }))
     : (payables.data ?? []).map((row) => ({ ...row, balance: row.remainingBalance })),
@@ -58,7 +60,7 @@ export function ArAp({ canCreate }: { canCreate: boolean }) {
         eyebrow="Нягтлан бодох бүртгэл"
         title="Авлага, Өглөг"
         detail="Ажилтан, харилцагчийн бүртгэл болон үлдэгдэл"
-        action={canCreate && (<>
+        action={canCreate && tab !== 'ledger' && (<>
           {canOpenJournal && (
             <Button variant="outline" onClick={() => navigate(`/journal/new?account=${tab === 'receivables' ? '1200' : '2000'}`)} data-testid="button-create-journal-entry">
               Журналаар бүртгэх
@@ -75,7 +77,8 @@ export function ArAp({ canCreate }: { canCreate: boolean }) {
           {([
             ['receivables', 'Авлага'],
             ['payables', 'Өглөг'],
-          ] as const).map(([value, label]) => (
+            ...(canLedger ? [['ledger', 'Харилцагчийн гүйлгээ'] as const] : []),
+          ] as (readonly [Tab, string])[]).map(([value, label]) => (
             <button
               key={value}
               type="button"
@@ -83,13 +86,14 @@ export function ArAp({ canCreate }: { canCreate: boolean }) {
               aria-selected={tab === value}
               aria-controls="ar-ap-table"
               onClick={() => { setTab(value); setParty(''); setSaved(''); }}
+              data-testid={`tab-ar-ap-${value}`}
               className={`border-b-2 px-1 pb-3 text-sm font-semibold transition-colors ${tab === value ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
             >
               {label}
             </button>
           ))}
         </div>
-        <div className="pb-3">
+        {tab !== 'ledger' && <div className="pb-3">
           <label htmlFor="ar-ap-party" className="mb-1 block text-xs font-semibold text-muted-foreground">Ажилтан / харилцагч</label>
           <select
             id="ar-ap-party"
@@ -100,11 +104,11 @@ export function ArAp({ canCreate }: { canCreate: boolean }) {
             <option value="">Бүгд</option>
             {parties.map(({ key, label }) => <option key={key} value={key}>{label}</option>)}
           </select>
-        </div>
+        </div>}
       </div>
 
       {saved && <p className="rounded-lg bg-primary/10 px-4 py-2 text-sm font-semibold text-primary" role="status" data-testid="status-ar-ap-saved">{saved}</p>}
-      {canCreate && formOpen && (
+      {canCreate && tab !== 'ledger' && formOpen && (
         <EmployeeArApForm
           kind={tab}
           onClose={() => setFormOpen(false)}
@@ -116,7 +120,7 @@ export function ArAp({ canCreate }: { canCreate: boolean }) {
         />
       )}
 
-      <div id="ar-ap-table" role="tabpanel" className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      {tab === 'ledger' && canLedger ? <PartyLedger /> : <div id="ar-ap-table" role="tabpanel" className="overflow-hidden rounded-xl border bg-card shadow-sm">
         {current.isLoading ? (
           <div className="p-8"><LoadingBlock className="h-48" /></div>
         ) : current.isError ? (
@@ -157,7 +161,7 @@ export function ArAp({ canCreate }: { canCreate: boolean }) {
             </table>
           </div>
         )}
-      </div>
+      </div>}
 
       {tab === 'payables' && (
         <PayrollPayables

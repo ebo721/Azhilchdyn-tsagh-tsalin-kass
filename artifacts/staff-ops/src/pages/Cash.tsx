@@ -455,6 +455,7 @@ export function BankTransactions() {
   const [debtBank, setDebtBank] = useState<BankTransaction | null>(null);
   const searchParams = new URLSearchParams(useSearch());
   const peerParam = Number(searchParams.get('transferPeerId')) || null;
+  const transactionParam = Number(searchParams.get('transactionId')) || null;
   const [view, setView] = useState<'unresolved' | 'paired'>(searchParams.get('view') === 'paired' || peerParam ? 'paired' : 'unresolved');
   const [transferBank, setTransferBank] = useState<BankTransaction | null>(null);
   useEffect(() => { if (peerParam || searchParams.get('view') === 'paired') setView('paired'); }, [peerParam, searchParams.get('view')]);
@@ -475,7 +476,7 @@ export function BankTransactions() {
   ));
   const suggestions = useListBankTransactionCashSuggestions(selectedBank?.id ?? 0, { query: { queryKey: getListBankTransactionCashSuggestionsQueryKey(selectedBank?.id ?? 0), enabled: Boolean(selectedBank) } });
   const pendingJournalReviewCount = journalReview.data?.length ?? 0;
-  const filteredBankTransactions = list.data?.filter((transaction) => peerParam ? transaction.id === peerParam : (view === 'paired' ? Boolean(transaction.internalTransfer) : !transaction.internalTransfer) && transaction.transactionAt.slice(0, 7) === filterMonth) ?? [];
+  const filteredBankTransactions = list.data?.filter((transaction) => transactionParam ? transaction.id === transactionParam : peerParam ? transaction.id === peerParam : (view === 'paired' ? Boolean(transaction.internalTransfer) : !transaction.internalTransfer) && transaction.transactionAt.slice(0, 7) === filterMonth) ?? [];
   useEffect(() => {
     if (selectedAccountId === null && bankAccounts.data?.length) setSelectedAccountId(bankAccounts.data[0].id);
   }, [bankAccounts.data, selectedAccountId]);

@@ -5,6 +5,75 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type PartyLedgerPartyType = typeof PartyLedgerPartyType[keyof typeof PartyLedgerPartyType];
+
+
+export const PartyLedgerPartyType = {
+  employee: 'employee',
+  supplier: 'supplier',
+} as const;
+
+export type PartyLedgerConclusion = typeof PartyLedgerConclusion[keyof typeof PartyLedgerConclusion];
+
+
+export const PartyLedgerConclusion = {
+  receivable: 'receivable',
+  payable: 'payable',
+  balanced: 'balanced',
+} as const;
+
+export type PartyLedgerLinesItem = {
+  id: number;
+  date: string;
+  sourceType: string;
+  description: string;
+  accountCode: string;
+  accountName: string;
+  debit: number;
+  credit: number;
+  balance: number;
+  affectsBalance: boolean;
+  journalEntryId: number;
+  bankTransactionId: number | null;
+};
+
+export type PartyLedgerPayroll = {
+  month: string;
+  available: boolean;
+  note: string;
+  openingBalance?: number;
+  payable?: number;
+  paidAmount?: number;
+  advanceAmount?: number;
+  balanceAmount?: number;
+  difference?: number;
+} | null;
+
+export type PartyLedgerUnmatchedBankTransactionsItem = {
+  id: number;
+  date: string;
+  type: string;
+  amount: number;
+  description: string;
+};
+
+export interface PartyLedger {
+  partyType: PartyLedgerPartyType;
+  partyId: number;
+  partyName: string;
+  from: string;
+  to: string;
+  openingBalance: number;
+  totalDebit: number;
+  totalCredit: number;
+  closingBalance: number;
+  conclusion: PartyLedgerConclusion;
+  warnings: string[];
+  lines: PartyLedgerLinesItem[];
+  payroll: PartyLedgerPayroll;
+  unmatchedBankTransactions: PartyLedgerUnmatchedBankTransactionsItem[];
+}
+
 /**
  * @pattern ^\d{4}-\d{2}-\d{2}$
  */
@@ -3057,6 +3126,31 @@ sourceType?: JournalSourceTypeParameter;
 accountId?: JournalAccountIdParameter;
 status?: JournalStatusParameter;
 };
+
+export type GetPartyLedgerParams = {
+partyType: GetPartyLedgerPartyType;
+/**
+ * @minimum 1
+ * @maximum 2147483647
+ */
+partyId: number;
+/**
+ * @pattern ^[1-9][0-9]{3}-(0[1-9]|1[0-2])-[0-9]{2}$
+ */
+from: string;
+/**
+ * @pattern ^[1-9][0-9]{3}-(0[1-9]|1[0-2])-[0-9]{2}$
+ */
+to: string;
+};
+
+export type GetPartyLedgerPartyType = typeof GetPartyLedgerPartyType[keyof typeof GetPartyLedgerPartyType];
+
+
+export const GetPartyLedgerPartyType = {
+  employee: 'employee',
+  supplier: 'supplier',
+} as const;
 
 export type ListJournalReceivablesParams = {
 status?: ListJournalReceivablesStatus;

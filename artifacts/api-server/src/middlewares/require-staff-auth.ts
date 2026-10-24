@@ -110,6 +110,11 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
     return;
   }
   const matchesPrefix = (prefix: string) => req.path === prefix || req.path.startsWith(`${prefix}/`);
+  if (req.method === "GET" && req.path === "/ar-ap/party-ledger") {
+    if (role === "accountant") next();
+    else res.status(403).json({ error: "Зөвхөн админ, нягтлан харилцагчийн дэвтэр харах эрхтэй" });
+    return;
+  }
   const viewerReadPrefixes = ["/employees", "/attendance", "/hour-balance", "/payroll", "/payroll-advance", "/cash", "/bank-accounts", "/bank-transactions", "/inventory", "/meals", "/meal-schedule", "/meal-counts", "/fixed-assets", "/operating-expenses", "/journal"];
   // HR's existing payroll action is limited to reading saved pay and pulling
   // attendance. Do not grant opening-balance approval, financial writes or
