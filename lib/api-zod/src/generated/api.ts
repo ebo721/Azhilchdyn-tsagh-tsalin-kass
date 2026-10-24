@@ -5619,6 +5619,69 @@ export const CreateJournalEntryResponse = zod.object({
 
 
 /**
+ * @summary Read a party subledger without changing accounting or payroll
+ */
+export const getPartyLedgerQueryPartyIdMax = 2147483647;
+
+export const getPartyLedgerQueryFromRegExp = new RegExp('^[1-9][0-9]{3}-(0[1-9]|1[0-2])-[0-9]{2}$');
+export const getPartyLedgerQueryToRegExp = new RegExp('^[1-9][0-9]{3}-(0[1-9]|1[0-2])-[0-9]{2}$');
+
+
+export const GetPartyLedgerQueryParams = zod.object({
+  "partyType": zod.enum(['employee', 'supplier']),
+  "partyId": zod.coerce.number().int().min(1).max(getPartyLedgerQueryPartyIdMax),
+  "from": zod.coerce.string().regex(getPartyLedgerQueryFromRegExp),
+  "to": zod.coerce.string().regex(getPartyLedgerQueryToRegExp)
+})
+
+export const GetPartyLedgerResponse = zod.object({
+  "partyType": zod.enum(['employee', 'supplier']),
+  "partyId": zod.number().int(),
+  "partyName": zod.string(),
+  "from": zod.string(),
+  "to": zod.string(),
+  "openingBalance": zod.number(),
+  "totalDebit": zod.number(),
+  "totalCredit": zod.number(),
+  "closingBalance": zod.number(),
+  "conclusion": zod.enum(['receivable', 'payable', 'balanced']),
+  "warnings": zod.array(zod.string()),
+  "lines": zod.array(zod.object({
+  "id": zod.number().int(),
+  "date": zod.string(),
+  "sourceType": zod.string(),
+  "description": zod.string(),
+  "accountCode": zod.string(),
+  "accountName": zod.string(),
+  "debit": zod.number(),
+  "credit": zod.number(),
+  "balance": zod.number(),
+  "affectsBalance": zod.boolean(),
+  "journalEntryId": zod.number().int(),
+  "bankTransactionId": zod.number().int().nullable()
+})),
+  "payroll": zod.object({
+  "month": zod.string(),
+  "available": zod.boolean(),
+  "note": zod.string(),
+  "openingBalance": zod.number().optional(),
+  "payable": zod.number().optional(),
+  "paidAmount": zod.number().optional(),
+  "advanceAmount": zod.number().optional(),
+  "balanceAmount": zod.number().optional(),
+  "difference": zod.number().optional()
+}).nullable(),
+  "unmatchedBankTransactions": zod.array(zod.object({
+  "id": zod.number().int(),
+  "date": zod.string(),
+  "type": zod.string(),
+  "amount": zod.number(),
+  "description": zod.string()
+}))
+})
+
+
+/**
  * @summary Register an employee receivable with a balanced journal
  */
 export const createEmployeeReceivableBodyEmployeeIdMax = 2147483647;

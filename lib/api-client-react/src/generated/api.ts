@@ -97,6 +97,7 @@ import type {
   GetDashboardParams,
   GetHourBalanceParams,
   GetInventoryClosingQuoteParams,
+  GetPartyLedgerParams,
   GetPayroll409,
   GetPayrollAdvanceParams,
   GetPayrollOpeningBalancesParams,
@@ -168,6 +169,7 @@ import type {
   OperatingExpenseBankSuggestion,
   OperatingExpenseInput,
   OperatingExpensePaymentInput,
+  PartyLedger,
   PayrollAdjustment,
   PayrollAdjustmentInput,
   PayrollAdvanceApprovalInput,
@@ -12920,6 +12922,90 @@ export const useCreateJournalEntry = <TError = ErrorType<BadRequestResponse | No
       > => {
       return useMutation(getCreateJournalEntryMutationOptions(options));
     }
+
+export const getGetPartyLedgerUrl = (params: GetPartyLedgerParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/ar-ap/party-ledger?${stringifiedParams}` : `/api/ar-ap/party-ledger`
+}
+
+/**
+ * @summary Read a party subledger without changing accounting or payroll
+ */
+export const getPartyLedger = async (params: GetPartyLedgerParams, options?: Parameters<typeof customFetch>[1]): Promise<PartyLedger> => {
+
+  return customFetch<PartyLedger>(getGetPartyLedgerUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPartyLedgerQueryKey = (params?: GetPartyLedgerParams,) => {
+    return [
+    `/api/ar-ap/party-ledger`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetPartyLedgerQueryOptions = <TData = Awaited<ReturnType<typeof getPartyLedger>>, TError = ErrorType<void>>(params: GetPartyLedgerParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPartyLedger>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPartyLedgerQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPartyLedger>>> = ({ signal }) => getPartyLedger(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPartyLedger>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPartyLedgerQueryResult = NonNullable<Awaited<ReturnType<typeof getPartyLedger>>>
+export type GetPartyLedgerQueryError = ErrorType<void>
+
+
+/**
+ * @summary Read a party subledger without changing accounting or payroll
+ */
+
+export function useGetPartyLedger<TData = Awaited<ReturnType<typeof getPartyLedger>>, TError = ErrorType<void>>(
+ params: GetPartyLedgerParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPartyLedger>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPartyLedgerQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getCreateEmployeeReceivableUrl = () => {
 
