@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { EmptyState, ErrorBlock, LoadingBlock, Modal, StatusPill } from '@/components/ui-primitives';
-import { Pencil, Plus, Search, Trash2, UsersRound } from 'lucide-react';
+import { Download, Pencil, Plus, Search, Trash2, UsersRound } from 'lucide-react';
 import {
   getEmployeeSalaryBankAccount,
   EmployeeEmployeeType,
@@ -243,8 +243,23 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
 export function Employees() {
   const query = useListEmployees();
   const shifts = useListShifts();
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
   const [shiftMonth, setShiftMonth] = useState(currentMonth());
   const shiftPlans = useListShiftPlans({ month: shiftMonth });
+  const downloadExcel = async () => {
+    if (!query.data || !shifts.data || !shiftPlans.data) return;
+    setExporting(true);
+    setExportError('');
+    try {
+      const { downloadEmployeeExcel } = await import('@/lib/employee-excel');
+      await downloadEmployeeExcel(query.data, shifts.data, shiftPlans.data, shiftMonth);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'Excel файл бэлтгэж чадсангүй. Дахин оролдоно уу.');
+    } finally {
+      setExporting(false);
+    }
+  };
   const deletion = useQueueDeletion();
   const qc = useQueryClient();
   const [modal, setModal] = useState<{ open: boolean; employee?: Employee }>({ open: false });
@@ -284,7 +299,16 @@ export function Employees() {
     </div>
   );
   return <div className="page-enter space-y-5">
-    <div className="flex justify-end"><Button onClick={() => setModal({ open: true })} data-testid="button-add-employee"><Plus className="size-4" />Ажилтан нэмэх</Button></div>
+    <div className="flex flex-wrap justify-end gap-2">
+      <Button variant="outline" onClick={downloadExcel}
+        disabled={exporting || query.isFetching || shifts.isFetching || shiftPlans.isFetching || query.isError || shifts.isError || shiftPlans.isError || !query.data?.length || !shifts.data || !shiftPlans.data}
+        title="Идэвхтэй, идэвхгүй бүх ажилтныг татна. Ээлжийн мэдээлэл сонгосон сарын хуваариас орно."
+        data-testid="button-export-employees">
+        <Download className="size-4" />{exporting ? 'Excel бэлтгэж байна…' : 'Бүх ажилтан · Excel'}
+      </Button>
+      <Button onClick={() => setModal({ open: true })} data-testid="button-add-employee"><Plus className="size-4" />Ажилтан нэмэх</Button>
+    </div>
+    {exportError && <p role="alert" className="text-sm text-destructive" data-testid="error-export-employees">{exportError}</p>}
     <section className="rounded-2xl border border-border bg-card p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
         <div className="flex flex-wrap gap-2">
