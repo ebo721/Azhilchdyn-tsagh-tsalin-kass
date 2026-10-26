@@ -416,6 +416,10 @@ importers:
         version: 3.25.76
 
   artifacts/staff-ops:
+    dependencies:
+      exceljs:
+        specifier: ^4.4.0
+        version: 4.4.0
     devDependencies:
       '@hookform/resolvers':
         specifier: ^3.10.0
