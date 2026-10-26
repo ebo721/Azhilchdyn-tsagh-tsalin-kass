@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearch } from 'wouter';
 import { getListJournalEntriesQueryKey, useListJournalEntries, useGetAuthSession, type JournalEntry } from '@workspace/api-client-react';
 import { PageHeading, EmptyState, LoadingBlock, ErrorBlock, StatCard } from '@/components/ui-primitives';
 import { formatMoney, formatDate } from './utils';
@@ -45,6 +46,11 @@ function JournalContent({ openNew = false, initialAccountCode, onCloseNew }: {
   });
 
   const [detailId, setDetailId] = useState<number | null>(null);
+  const entryParam = new URLSearchParams(useSearch()).get('entryId');
+  useEffect(() => {
+    const id = Number(entryParam);
+    if (entryParam && Number.isInteger(id) && id > 0 && id <= 2147483647) setDetailId(id);
+  }, [entryParam]);
   const [showForm, setShowForm] = useState(openNew);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
   const [showLedger, setShowLedger] = useState(false);

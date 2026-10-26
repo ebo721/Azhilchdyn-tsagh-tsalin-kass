@@ -15,6 +15,7 @@ function requiredMenus(path: string, method: string): StaffMenuPath[] {
   const p = path.toLowerCase().replace(/\/+$/, "") || "/";
   const starts = (prefix: string) => p === prefix || p.startsWith(`${prefix}/`);
   const read = method === "GET";
+  if (read && p === "/ar-ap/party-ledger") return ["/ar-ap"];
   if (starts("/dashboard")) return ["/"];
   if (starts("/attendance/devices")) return ["/attendance/devices"];
   if (read && ["/attendance/shifts", "/attendance/shift-plans"].some(starts)) return ["/attendance", "/hour-balance", "/payroll"];
@@ -37,7 +38,8 @@ function requiredMenus(path: string, method: string): StaffMenuPath[] {
   if (starts("/operating-expenses")) return ["/operating-expenses"];
   if (starts("/journal/receivables") || starts("/journal/payables")) return read
     ? ["/journal", "/ar-ap", "/payroll", "/bank-transactions"] : ["/journal", "/ar-ap"];
-  if ((read || method === "POST") && p === "/journal/suppliers") return ["/journal", "/bank-transactions"];
+  if (p === "/journal/suppliers" && read) return ["/journal", "/bank-transactions", "/ar-ap"];
+  if (method === "POST" && p === "/journal/suppliers") return ["/journal", "/bank-transactions"];
   if (starts("/journal")) return ["/journal"];
   if (starts("/meal-schedule")) return ["/meal-schedule"];
   if (starts("/meal-counts")) return ["/meal-counts"];
