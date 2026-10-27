@@ -23,6 +23,12 @@ For shift employees without the full-salary exception, the user chose: social-in
 
 When an approved payroll-advance line is changed from paid back to unpaid, refresh that employee's salary and first-half worked days, recalculate the advance, and remove its cash expense in the same transaction.
 
+When an employee moves between office and shift work within an advance period, keep the effective-dated classification unchanged. The office component is 50% of one monthly office salary, not prorated by office days; add earnings only from attendance on dates whose effective classification is shift. Do not apply a shift daily-rate formula to office salary settings.
+
+**Why:** The user explicitly confirmed that the historical office-to-shift change was correct and chose “Сарын цалингийн 50%” rather than prorating the office component.
+
+**How to apply:** Resolve each attendance date's classification independently; use only office salary history overlapping the advance period. Preserve saved approvals and actual payments unless explicitly corrected.
+
 Salary-history correction may change its effective date, base salary, and social-insurance salary even when it recalculates a paid month. The recorded paid amount must remain unchanged; recalculation produces the resulting payable or receivable balance. A salary effective date is independent of the employment joined date and must not change it. Deletion must preserve the baseline salary row. Editing or deleting the latest row must update the employee's current salary fields in the same transaction.
 
 Each month's signed payroll balance carries forward into the next month's take-home pay: underpayment increases it, overpayment decreases it, and any excess balance continues across later months until fully offset.

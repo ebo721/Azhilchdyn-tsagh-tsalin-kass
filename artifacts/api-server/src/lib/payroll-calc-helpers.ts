@@ -64,8 +64,12 @@ export function payrollPeriod(month: string, schedule: typeof defaultPayrollSche
 }
 
 export function shiftDailyRate(salary: Pick<SalaryHistoryRow, "salaryType" | "baseSalary" | "monthlyExpectedWorkDays">) {
+  if (salary.salaryType === "monthly"
+    && (!Number.isInteger(salary.monthlyExpectedWorkDays) || salary.monthlyExpectedWorkDays <= 0)) {
+    throw new PayrollConfigurationError("Ээлжийн сарын цалинг бодоход «Сард ажиллах ёстой хоног» эерэг бүхэл тоо байх ёстой.");
+  }
   return salary.salaryType === "monthly"
-    ? Number(salary.baseSalary) / Math.max(1, salary.monthlyExpectedWorkDays)
+    ? Number(salary.baseSalary) / salary.monthlyExpectedWorkDays
     : Number(salary.baseSalary);
 }
 
@@ -406,35 +410,44 @@ export function calculatePayrollAdvanceLine(
   const attendedRecords = records.filter((record) =>
     record.employeeId === employee.id
     && ["present", "late"].includes(record.status)
+    && String(record.date) >= employee.joinedAt
+    && (!employee.inactiveAt || String(record.date) <= employee.inactiveAt)
     && (!periodStart || String(record.date) >= periodStart)
     && (!advancePeriodEnd || String(record.date) <= advancePeriodEnd),
   );
   const daysWorked = attendedRecords.length;
   const salaryFor = (date: string) => salaryAt(employee, salaryHistory, date);
-  const firstSalary = salaryFor(
-    attendedRecords[0] ? String(attendedRecords[0].date) : (advancePeriodEnd ?? employee.joinedAt),
-  );
-  const officeSalary = salaryFor(advancePeriodEnd ?? employee.joinedAt);
-  const effectiveEmployeeType = officeSalary.employeeType;
-  const dailySalary = effectiveEmployeeType === "shift"
-      ? money(shiftDailyRate(firstSalary))
-    : 0;
-  const totalSalary = effectiveEmployeeType === "shift"
-    ? money(attendedRecords.reduce((total, record) => {
-      const salary = salaryFor(String(record.date));
-      const rate = shiftDailyRate(salary);
-      return total + rate;
-    }, 0))
-    : money(Number(officeSalary.baseSalary));
+  const cutoff = advancePeriodEnd ?? periodEnd ?? employee.joinedAt;
+  const cutoffSalary = salaryFor(cutoff);
+  const eligibleStart = [periodStart ?? employee.joinedAt, employee.joinedAt].sort().at(-1)!;
+  const eligibleEnd = [cutoff, employee.inactiveAt ?? cutoff].sort()[0];
+  const datedHistory = salaryHistory.filter(row => row.employeeId === employee.id)
+    .sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+  // Office advances remain 50% of one monthly salary, not a daily shift rate.
+  // Use the latest office rate whose effective interval overlaps this advance
+  // period; earlier months and future changes must not contribute a second half.
+  const officeSalary = eligibleStart <= eligibleEnd
+    ? datedHistory.filter((row, index) =>
+      row.employeeType === "office" && row.effectiveFrom <= eligibleEnd
+      && (!datedHistory[index + 1] || datedHistory[index + 1].effectiveFrom > eligibleStart),
+    ).at(-1)
+    : undefined;
+  const shiftRecords = attendedRecords.map(record => ({
+    date: String(record.date), salary: salaryFor(String(record.date)),
+  })).filter(record => record.salary.employeeType === "shift");
+  const shiftSalary = shiftRecords.reduce((total, record) => total + shiftDailyRate(record.salary), 0);
+  const officeBase = officeSalary ? Number(officeSalary.baseSalary) : 0;
+  const dailySalary = shiftRecords.length ? money(shiftDailyRate(shiftRecords[0].salary)) : 0;
+  const totalSalary = money(officeBase + shiftSalary);
   return {
     employeeId: employee.id,
     employeeName: employee.name,
-    employeeType: effectiveEmployeeType,
-    baseSalary: money(Number(officeSalary.baseSalary)),
+    employeeType: cutoffSalary.employeeType,
+    baseSalary: money(Number(cutoffSalary.baseSalary)),
     daysWorked,
     dailySalary,
     totalSalary,
-    advanceAmount: effectiveEmployeeType === "shift" ? totalSalary : money(totalSalary * 0.5),
+    advanceAmount: money(officeBase * 0.5 + shiftSalary),
     paid: false,
     paymentDate: null,
   };
