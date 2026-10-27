@@ -29,8 +29,13 @@ export async function refreshEmployeePayroll(month: string, employeeId: number) 
     ]);
     if (closures.some(c => c.month === month)) throw new PayrollOpeningConflict("Цалингийн сар хаалттай. Админ эхлээд дахин нээнэ үү.");
     for (let m = start; m <= month; m = nextMonth(m)) {
-      if (employee.joinedAt.slice(0, 7) > m || closures.some(c => c.month === m)) continue;
+      if (closures.some(c => c.month === m)) continue;
       const ledger = ledgers.find(l => l.month === m);
+      // Moving the joined date forward can invalidate an already saved earlier
+      // month. Repair that employee's dirty entry before reading the next opening
+      // balance, even though no new earnings are eligible before employment.
+      // The calculation still preserves recorded payments and prior debt.
+      if (employee.joinedAt.slice(0, 7) > m && !ledger?.dirtyEmployeeIds.includes(employeeId)) continue;
       const old = snapshots.find(s => s.month === m);
       const saved = old ? GetPayrollResponse.parse(old.payroll) : undefined;
       const savedLine = saved?.lines.find(l => l.employeeId === employeeId && l.calculationReady !== false);

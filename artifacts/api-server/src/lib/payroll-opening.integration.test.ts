@@ -173,6 +173,42 @@ it("real SQL: reviewed opening debt and employee-scoped refresh preserve other p
         server.close();
       }
     });
+    await t.test("refresh repairs dirty months before a corrected joined date without erasing payments or other employees", async () => {
+      await query(`INSERT INTO employees (id,name,role,employee_type,salary_type,base_salary,payroll_tax_exempt,joined_at,pay_frequency)
+        VALUES (3,'Joined-date correction','Test','shift','daily',1000,true,'2024-09-01','twice')`);
+      await query(`INSERT INTO employee_salary_history (employee_id,effective_from,employee_type,salary_type,base_salary,payroll_tax_exempt,pay_frequency)
+        VALUES (3,'2024-09-01','shift','daily',1000,true,'twice')`);
+      await query(`INSERT INTO attendance (employee_id,date,clock_in,clock_out,hours,status)
+        VALUES (3,'2024-09-08','08:00','16:00',8,'present'),
+               (3,'2024-10-08','08:00','16:00',8,'present')`);
+      await query(`INSERT INTO payroll_adjustments (employee_id,month,paid_amount)
+        VALUES (3,'2024-09',50)`);
+      await query(`INSERT INTO payroll_advance_approvals (month,lines,total_amount,approval_date)
+        VALUES ('2024-09','[{"employeeId":3,"employeeName":"Joined-date correction","employeeType":"shift","baseSalary":1000,"daysWorked":1,"dailySalary":1000,"totalSalary":1000,"advanceAmount":25,"paid":true,"paymentDate":"2024-09-15"}]',25,'2024-09-15')`);
+      await refreshEmployeePayroll("2024-09", 3);
+      await query(`UPDATE employees SET joined_at='2024-10-01' WHERE id=3`);
+      await query(`UPDATE employee_salary_history SET effective_from='2024-10-01' WHERE employee_id=3`);
+      const before = await query(`SELECT lines,dirty_employee_ids FROM payroll_month_balances WHERE month='2024-09'`);
+      assert.ok(before.rows[0].dirty_employee_ids.includes(3));
+      const otherLines = before.rows[0].lines.filter((line: { employeeId: number }) => line.employeeId !== 3);
+      const sourceBefore = await query(`SELECT paid_amount FROM payroll_adjustments WHERE employee_id=3 AND month='2024-09'`);
+      const advanceBefore = await query(`SELECT lines FROM payroll_advance_approvals WHERE month='2024-09'`);
+      statements.length = 0;
+      const refreshed = await refreshEmployeePayroll("2024-10", 3);
+      const current = refreshed.payroll.lines.find(line => line.employeeId === 3)!;
+      assert.equal(current.gross, 1_000);
+      assert.equal(current.carryoverAmount, -75);
+      assert.equal(current.balanceAmount, 925);
+      const after = await query(`SELECT lines,dirty_employee_ids,earnings_dirty_employee_ids FROM payroll_month_balances WHERE month='2024-09'`);
+      const prior = after.rows[0].lines.find((line: { employeeId: number }) => line.employeeId === 3);
+      assert.equal(prior.movement, -75);
+      assert.equal(prior.balanceAmount, -75);
+      assert.ok(!after.rows[0].dirty_employee_ids.includes(3));
+      assert.ok(!after.rows[0].earnings_dirty_employee_ids.includes(3));
+      assert.deepEqual(after.rows[0].lines.filter((line: { employeeId: number }) => line.employeeId !== 3), otherLines);
+      assert.deepEqual((await query(`SELECT paid_amount FROM payroll_adjustments WHERE employee_id=3 AND month='2024-09'`)).rows, sourceBefore.rows);
+      assert.deepEqual((await query(`SELECT lines FROM payroll_advance_approvals WHERE month='2024-09'`)).rows, advanceBefore.rows);
+    });
   } finally {
     t.mock.restoreAll();
     await query("RESET search_path");
