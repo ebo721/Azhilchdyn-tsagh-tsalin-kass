@@ -3,7 +3,11 @@ name: Effective-dated payroll
 description: Durable rules for employment dates, salary history, monthly proration, and protecting paid payroll.
 ---
 
-Monthly office salary is prorated across the month's Monday–Friday workdays. The joined date is the first eligible day, and the inactive date is the final eligible day. Attendance marked as leave is not a paid workday and must be excluded from office salary and social-insurance salary proration. Salary changes apply beginning on their effective date, splitting old and new rates by eligible workdays. Shift attendance uses the rate effective on each attendance date.
+Monthly office salary is prorated across the month's Monday–Friday workdays, paying only dates with present/late attendance unless the effective full-salary exception is enabled. Missing attendance, absence and leave are unpaid for both salary and social-insurance proration. The joined date is the first eligible day, and the inactive date is the final eligible day. Salary changes apply beginning on their effective date, splitting old and new rates by actually worked dates. Shift attendance uses the rate effective on each attendance date.
+
+**Why:** The user explicitly confirmed “Тийм, зөвхөн ажилласан ирцээр” for office payroll. Treating every weekday except recorded leave as paid created excess salary when attendance was missing.
+
+**How to apply:** Use present/late dates for office earnings and insurance, including worked weekends, with the monthly weekday denominator. Keep the effective full-salary exception and recorded payments unchanged. Do not silently rewrite saved previous months.
 
 Оффисын ажилтан амралтын өдөр ажилласан ирцтэй бол тухайн өдрийг ажилласанд тооцно. Add one daily share of salary and social-insurance salary for each present/late weekend date, using the rate effective on that date, even if weekday leave keeps total attendance below the month's weekday count. Preserve the full-salary exception.
 
@@ -43,7 +47,7 @@ Label that table column “Гарт олгох”. Its adjacent difference is cu
 
 Treat signed payroll balances from -1₮ through +1₮ as zero. Display underpayments in parentheses and overpayments as ordinary positive amounts, without text labels.
 
-An office employee must have at least one attendance record in a month before base salary or payroll taxes are calculated. A month with no attendance contributes zero new salary and zero new balance.
+An office employee without the full-salary exception must have present/late attendance before base salary or payroll taxes are calculated. A month with no worked attendance contributes zero new earnings; recorded payments and prior financial balances still carry forward.
 
 An admin-only full-salary exception may override attendance for a specific employee. Store it in effective-dated salary history. While enabled, eligible employment days receive the full monthly office salary or the shift rate multiplied by expected workdays, with social-insurance salary prorated over employment dates; joined and inactive dates still bound eligibility. Non-admin roles must not be able to change this exception through the API.
 

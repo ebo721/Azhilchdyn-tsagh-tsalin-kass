@@ -141,6 +141,38 @@ it("real SQL and HTTP: payroll reads saved earnings; only explicit pull reads at
       assert.equal(((await previous.json()) as { lines: Array<{ hours: number }> }).lines[0].hours, 16);
       await query("DROP TRIGGER reject_snapshot ON payroll_attendance_snapshots");
     });
+    await t.test("office pull pays only present/late dates and preserves recorded salary and advance payments", async () => {
+      await query(`INSERT INTO employees (id,name,role,employee_type,salary_type,base_salary,payroll_tax_exempt,joined_at)
+        VALUES (2,'Office attendance fixture','Test','office','monthly',2300,true,'2024-01-01')`);
+      await query(`INSERT INTO employee_salary_history (employee_id,effective_from,employee_type,salary_type,base_salary,payroll_tax_exempt)
+        VALUES (2,'2024-01-01','office','monthly',2300,true)`);
+      await query(`INSERT INTO attendance (employee_id,date,clock_in,clock_out,hours,status) VALUES
+        (2,'2024-01-02','08:00','16:00',8,'present'),(2,'2024-01-03','08:00','08:00',0,'absent'),
+        (2,'2024-01-04','08:00','08:00',0,'leave'),(2,'2024-01-06','09:00','17:00',8,'late')`);
+      await query("INSERT INTO payroll_adjustments (employee_id,month,paid_amount) VALUES (2,'2024-01',75)");
+      await query(`INSERT INTO payroll_advance_approvals (month,lines,total_amount,approval_date)
+        VALUES ('2024-01',$1,50,'2024-01-20')
+        ON CONFLICT (month) DO UPDATE SET lines=payroll_advance_approvals.lines || EXCLUDED.lines,
+        total_amount=payroll_advance_approvals.total_amount + EXCLUDED.total_amount`, [JSON.stringify([{
+        employeeId: 2, employeeName: "Office attendance fixture", employeeType: "office",
+        baseSalary: 2300, daysWorked: 2, dailySalary: 0, totalSalary: 2300,
+        advanceAmount: 50, paid: true, paymentDate: "2024-01-20",
+      }])]);
+      const before = await query("SELECT lines,total_amount FROM payroll_advance_approvals WHERE month='2024-01'");
+      const response = await request("/payroll/pull-attendance", { month: "2024-01" });
+      assert.equal(response.status, 200, await response.clone().text());
+      const result = await response.json() as { payroll: { lines: Array<{ employeeId: number; gross: number; paidAmount: number; advanceAmount: number; balanceAmount: number }> } };
+      const office = result.payroll.lines.find(line => line.employeeId === 2)!;
+      assert.equal(office.gross, 200); // 2300 / 23 weekdays * 2 actual days.
+      assert.equal(office.paidAmount, 75);
+      assert.equal(office.advanceAmount, 50);
+      assert.equal(office.balanceAmount, 75);
+      assert.deepEqual((await query("SELECT lines,total_amount FROM payroll_advance_approvals WHERE month='2024-01'")).rows, before.rows);
+      assert.equal((await query("SELECT paid_amount FROM payroll_adjustments WHERE employee_id=2 AND month='2024-01'")).rows[0].paid_amount, "75.00");
+      const saved = await request("/payroll?month=2024-01");
+      const lines = (await saved.json() as { lines: typeof result.payroll.lines }).lines;
+      assert.equal(lines.find(line => line.employeeId === 2)?.gross, 200);
+    });
     await t.test("invalid historical debt requests explicit repair instead of silently serving stale carryover", async () => {
       await query(`INSERT INTO payroll_month_balances (month,period_start,period_end,lines,dirty)
         VALUES ('2023-12','2023-12-01','2023-12-31','[]',true)`);
