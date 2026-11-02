@@ -195,11 +195,6 @@ export function calculatePayrollMonth(
         row.effectiveFrom <= (employee.joinedAt > period.periodStart ? employee.joinedAt : period.periodStart)))) {
       salaryAt(employee, salaryHistory, employee.joinedAt > period.periodStart ? employee.joinedAt : period.periodStart);
     }
-    const paidWeekdays = employeeRecords.length === 0
-      ? []
-      : eligibleWeekdays.filter((date) =>
-          !employeeRecords.some((record) => String(record.date) === date && record.status === "leave")
-        );
     const workedRecords = employeeRecords
       .filter((record) =>
         ["present", "late"].includes(record.status)
@@ -213,8 +208,11 @@ export function calculatePayrollMonth(
     // the month's weekday count. Use the same dates for earnings and insurance.
     const weekendWorkedRecords = workedRecords
       .filter((record) => !weekdays.includes(String(record.date)));
+    // Missing, absent and leave records never establish ordinary office pay.
+    // Only the effective-dated full-salary exception can pay unworked weekdays.
+    const workedDates = new Set(workedRecords.map(record => String(record.date)));
     const officeSalaryDates = eligibleWeekdays.filter(date =>
-      fullSalaryDates.includes(date) || paidWeekdays.includes(date));
+      fullSalaryDates.includes(date) || workedDates.has(date));
     const officeGross = officeSalaryDates.reduce((total, date) => {
       const salary = salaryAt(employee, salaryHistory, date);
       return total + (salary.employeeType === "office" ? Number(salary.baseSalary) / weekdays.length : 0);

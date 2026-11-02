@@ -68,8 +68,8 @@ test("late weekends count, leave and absence weekends do not", () => {
   }));
   const line = calculate([], [], {}, [], { records });
   assert.equal(line.daysWorked, 1);
-  assert.equal(line.gross, 2_300_000); // Existing monthly-office weekday entitlement is unchanged.
-  assert.equal(line.socialInsuranceSalary, 1_150_000);
+  assert.equal(line.gross, 100_000);
+  assert.equal(line.socialInsuranceSalary, 50_000);
 });
 test("weekend earnings and insurance use salary effective on each worked date", () => {
   const history: History[] = [
