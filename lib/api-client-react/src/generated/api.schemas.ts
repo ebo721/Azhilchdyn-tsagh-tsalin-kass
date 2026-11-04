@@ -3023,6 +3023,25 @@ export type RebuildPayrollBalances422 = {
   error: string;
 };
 
+export type DownloadPayrollWorkbookParams = {
+/**
+ * @pattern ^\d{4}-(0[1-9]|1[0-2])$
+ */
+month: string;
+};
+
+export type DownloadPayrollWorkbook403 = {
+  error: string;
+};
+
+export type DownloadPayrollWorkbook409 = {
+  error: string;
+};
+
+export type DownloadPayrollWorkbook422 = {
+  error: string;
+};
+
 export type DownloadSocialInsuranceReportParams = {
 /**
  * @pattern ^\d{4}-(0[1-9]|1[0-2])$

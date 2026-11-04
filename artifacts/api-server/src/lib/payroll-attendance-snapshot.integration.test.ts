@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { after, it } from "node:test";
+import ExcelJS from "exceljs";
+import { eq } from "drizzle-orm";
 import { db, pool, usersTable } from "@workspace/db";
 import app from "../app.js";
 import { createStaffSession, hrCookie } from "./hr-session.js";
@@ -173,6 +175,39 @@ it("real SQL and HTTP: payroll reads saved earnings; only explicit pull reads at
       const lines = (await saved.json() as { lines: typeof result.payroll.lines }).lines;
       assert.equal(lines.find(line => line.employeeId === 2)?.gross, 200);
     });
+    await t.test("payroll Excel exports saved salary without attendance reads or writes", async () => {
+      statements.length = 0;
+      const response = await request("/payroll/export?month=2024-01");
+      assert.equal(response.status, 200, await response.clone().text());
+      assert.match(response.headers.get("content-type") ?? "", /spreadsheetml/);
+      assert.match(response.headers.get("content-disposition") ?? "", /Payroll-2024-01.xlsx/);
+      assert.equal(response.headers.get("cache-control"), "private, no-store");
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(Buffer.from(await response.arrayBuffer()) as never);
+      const sheet = workbook.worksheets[0];
+      const office = sheet.getRows(5, 2)!.find(row => row.getCell(4).value === "Office attendance fixture")!;
+      assert.equal(office.getCell(13).value, 200);
+      assert.equal(office.getCell(18).value, 50);
+      assert.equal(office.getCell(20).value, 150);
+      assert.equal(office.getCell(21).value, 75);
+      assert.equal(attendanceReads().length, 0);
+      assert.equal(writes().length, 0);
+      assert.equal((await request("/payroll/export?month=2024-13")).status, 400);
+    });
+    await t.test("Excel payroll export denies unauthorized roles, including trailing-slash routes", async () => {
+      await query("INSERT INTO users (id,username,normalized_username,role,password_hash) VALUES (2,'export-viewer','export-viewer','viewer','invalid-test-hash')");
+      const [viewer] = await db.select().from(usersTable).where(eq(usersTable.id, 2));
+      const viewerCookie = `${hrCookie.name}=${createStaffSession(viewer)}`;
+      for (const path of ["/payroll/export?month=2024-01", "/payroll/export/?month=2024-01"]) {
+        const response = await fetch(base + path, { headers: { Cookie: viewerCookie } });
+        assert.equal(response.status, 403);
+      }
+      assert.equal((await fetch(base + "/payroll/export?month=2024-01")).status, 401);
+      await query("UPDATE users SET role='accountant' WHERE id=2");
+      const [accountant] = await db.select().from(usersTable).where(eq(usersTable.id, 2));
+      const accountantCookie = `${hrCookie.name}=${createStaffSession(accountant)}`;
+      assert.equal((await fetch(base + "/payroll/export?month=2024-01", { headers: { Cookie: accountantCookie } })).status, 200);
+    });
     await t.test("invalid historical debt requests explicit repair instead of silently serving stale carryover", async () => {
       await query(`INSERT INTO payroll_month_balances (month,period_start,period_end,lines,dirty)
         VALUES ('2023-12','2023-12-01','2023-12-31','[]',true)`);
@@ -182,6 +217,7 @@ it("real SQL and HTTP: payroll reads saved earnings; only explicit pull reads at
       assert.match((await response.json() as { error: string }).error, /өмнөх сарын/);
       assert.equal(attendanceReads().length, 0);
       assert.equal(writes().length, 0);
+      assert.equal((await request("/payroll/export?month=2024-01")).status, 409);
     });
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));

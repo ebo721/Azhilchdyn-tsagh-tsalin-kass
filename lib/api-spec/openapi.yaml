@@ -910,6 +910,37 @@ paths:
           content:
             application/json:
               schema: { type: object, required: [error], properties: { error: { type: string } } }
+  /payroll/export:
+    get:
+      operationId: downloadPayrollWorkbook
+      tags: [payroll]
+      summary: Download the saved monthly payroll register with employee reporting details
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+      responses:
+        "200":
+          description: Payroll register and effective salary settings in an Excel workbook
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "403":
+          description: Only administrators and accountants may export payroll
+          content:
+            application/json:
+              schema: { type: object, required: [error], properties: { error: { type: string } } }
+        "409":
+          description: Saved payroll is missing, stale or requires opening balance review
+          content:
+            application/json:
+              schema: { type: object, required: [error], properties: { error: { type: string } } }
+        "422":
+          description: No saved employee lines are available
+          content:
+            application/json:
+              schema: { type: object, required: [error], properties: { error: { type: string } } }
   /payroll/social-insurance-report:
     get:
       operationId: downloadSocialInsuranceReport

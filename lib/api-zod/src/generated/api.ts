@@ -1882,6 +1882,19 @@ export const RebuildPayrollBalancesResponse = zod.object({
 
 
 /**
+ * @summary Download the saved monthly payroll register with employee reporting details
+ */
+export const downloadPayrollWorkbookQueryMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+
+
+export const DownloadPayrollWorkbookQueryParams = zod.object({
+  "month": zod.coerce.string().regex(downloadPayrollWorkbookQueryMonthRegExp)
+})
+
+export const DownloadPayrollWorkbookResponse = zod.unknown()
+
+
+/**
  * @summary Download the selected month's social insurance upload workbook
  */
 export const downloadSocialInsuranceReportQueryMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');

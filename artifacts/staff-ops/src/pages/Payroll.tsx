@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { cn } from '@/lib/utils';
 import { CalendarDays, Banknote, Check, Coins, Download, Pencil, RefreshCw, Trash2 } from 'lucide-react';
-import { downloadSocialInsuranceReport, useRefreshEmployeePayroll } from '@workspace/api-client-react';
+import { downloadPayrollWorkbook, downloadSocialInsuranceReport, useRefreshEmployeePayroll } from '@workspace/api-client-react';
 import { getGetDashboardQueryKey, getGetPayrollAdvanceQueryKey, getGetPayrollQueryKey, getGetPayrollScheduleQueryKey, getListJournalReceivablesQueryKey, useApprovePayrollAdvance, useClosePayrollMonth, useReopenPayrollMonth, useGetAuthSession, useGetPayroll, useGetPayrollAdvance, useGetPayrollSchedule, useListCashClosures, useListJournalReceivables, useUpdatePayrollAdvancePayment, useUpdatePayrollSchedule, useUpsertPayrollAdjustment, type PayrollLine, type PayrollScheduleInput, type PayrollSummary } from '@workspace/api-client-react';
 import { EmptyState, ErrorBlock, LoadingBlock, Modal } from '@/components/ui-primitives';
 import { MonthNavigator } from '@/components/MonthNavigator';
@@ -244,8 +244,8 @@ export function Payroll() {
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const balancesAbort = useRef<AbortController | null>(null);
   useEffect(() => () => balancesAbort.current?.abort(), []);
-  const [downloadingInsurance, setDownloadingInsurance] = useState(false);
-  const [insuranceError, setInsuranceError] = useState<string | null>(null);
+  const [downloadingReport, setDownloadingReport] = useState<'payroll' | 'insurance' | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
   const [month, setMonth] = useState(() => {
     const requested = new URLSearchParams(window.location.search).get('month') ?? '';
     return /^\d{4}-(0[1-9]|1[0-2])$/.test(requested) ? requested : currentMonth();
@@ -311,6 +311,7 @@ export function Payroll() {
     setSelectedLine(null);
     setRefreshingAdvanceEmployeeId(null);
     setClosureError(null);
+    setReportError(null);
     setAdvanceAmounts({});
     setAdvanceDates({});
     setAttendanceError(null);
@@ -397,23 +398,25 @@ export function Payroll() {
       },
     });
   };
-  const downloadInsurance = async () => {
-    setDownloadingInsurance(true);
-    setInsuranceError(null);
+  const downloadReport = async (kind: 'payroll' | 'insurance') => {
+    setDownloadingReport(kind);
+    setReportError(null);
+    const targetMonth = month;
     try {
-      const workbook = await downloadSocialInsuranceReport({ month }, { responseType: 'blob' });
+      const download = kind === 'payroll' ? downloadPayrollWorkbook : downloadSocialInsuranceReport;
+      const workbook = await download({ month: targetMonth }, { responseType: 'blob' });
       const url = URL.createObjectURL(workbook);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `NDSH-${month}.xlsx`;
+      link.download = `${kind === 'payroll' ? 'Payroll' : 'NDSH'}-${targetMonth}.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (error) {
-      setInsuranceError(error instanceof Error ? error.message : 'НДШ тайлан татаж чадсангүй.');
+      if (selectedMonth.current === targetMonth) setReportError(error instanceof Error ? error.message : 'Excel тайлан татаж чадсангүй.');
     } finally {
-      setDownloadingInsurance(false);
+      setDownloadingReport(null);
     }
   };
   const prepareBalances = async () => {
@@ -480,7 +483,10 @@ export function Payroll() {
   };
   return <div className="page-enter">
     <div className="mb-6 flex flex-wrap items-center justify-end gap-2">
-      {(session.data?.role === 'admin' || session.data?.role === 'accountant') && <Button onClick={downloadInsurance} variant="outline" disabled={downloadingInsurance || query.isFetching || query.isError || !month} data-testid="button-download-insurance-report"><Download className="size-4" />{downloadingInsurance ? 'Тайлан бэлдэж байна...' : 'НДШ тайлан · Excel'}</Button>}
+      {(session.data?.role === 'admin' || session.data?.role === 'accountant') && <>
+        <Button onClick={() => void downloadReport('payroll')} variant="outline" disabled={downloadingReport !== null || query.isFetching || query.isError || !month} data-testid="button-download-payroll-workbook"><Download className="size-4" />{downloadingReport === 'payroll' ? 'Хүснэгт бэлдэж байна...' : 'Цалингийн хүснэгт · Excel'}</Button>
+        <Button onClick={() => void downloadReport('insurance')} variant="outline" disabled={downloadingReport !== null || query.isFetching || query.isError || !month} data-testid="button-download-insurance-report"><Download className="size-4" />{downloadingReport === 'insurance' ? 'Тайлан бэлдэж байна...' : 'НДШ тайлан · Excel'}</Button>
+      </>}
       <Button onClick={() => setShowScheduleSettings(true)} variant="outline" data-testid="button-payroll-schedule-settings"><CalendarDays className="size-4" />Цалингийн хуваарь</Button>
       {['admin', 'accountant', 'hr'].includes(session.data?.role ?? '') && <Button onClick={() => void refreshAllChanged()} variant="outline" disabled={bulkRunning || closed || refreshableLines.length === 0} title={closed ? 'Сар хаагдсан' : refreshableLines.length === 0 ? 'Шинэчлэх ажилтан алга' : undefined} data-testid="button-refresh-changed-payroll"><RefreshCw className={cn('size-4', bulkRunning && 'animate-spin')} />{bulkRunning ? 'Шинэчилж байна...' : `Өөрчлөгдсөнийг шинэчлэх (${refreshableLines.length})`}</Button>}
       <Button onClick={() => setShowAdvance((value) => !value)} variant={showAdvance ? 'default' : 'outline'} data-testid="button-payroll-advance"><Coins className="size-4" />Урьдчилгаа цалин</Button>
@@ -501,7 +507,7 @@ export function Payroll() {
     {Object.keys(refreshFailures).length > 0 && <div role="alert" className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" data-testid="payroll-refresh-failures"><p className="font-semibold">Шинэчлэхэд алдаа гарсан ажилтнууд:</p><ul className="mt-1 list-disc pl-5">{Object.entries(refreshFailures).map(([id, message]) => <li key={id}>{query.data?.lines.find((l) => l.employeeId === Number(id))?.employeeName ?? `#${id}`}: {message}</li>)}</ul></div>}
     {attendanceError && <p role="alert" className="mb-5 whitespace-pre-line text-sm text-destructive" data-testid="payroll-attendance-error">{attendanceError}</p>}
     {query.data?.attendancePulledAt && <p className="mb-4 text-sm text-muted-foreground" data-testid="payroll-attendance-status">Сүүлд цаг татсан: {new Date(query.data.attendancePulledAt).toLocaleString('mn-MN')}. {query.data.attendanceNeedsRefresh ? 'Эх бүртгэл өөрчлөгдсөн. Хадгалсан тооцоог харуулж байна; Өөрчлөгдсөн ажилтныг «Шинэчлэх» үйлдлээр шинэчилнэ үү.' : 'Хадгалсан тооцоог харуулж байна.'}</p>}
-    {insuranceError && <div role="alert" className="mb-5 whitespace-pre-line rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" data-testid="error-insurance-report">{insuranceError}</div>}
+    {reportError && <div role="alert" className="mb-5 whitespace-pre-line rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" data-testid="error-insurance-report">{reportError}</div>}
     {query.isError && query.error instanceof Error && <p role="alert" className="mb-5 whitespace-pre-line text-sm text-destructive">{query.error.message}</p>}
     {!query.isLoading && !query.isError && query.data && (
       <div className="mb-6 rounded-2xl border border-border bg-card p-4 shadow-sm" data-testid="panel-payroll-schedule-info">
