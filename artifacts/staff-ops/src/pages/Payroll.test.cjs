@@ -12,7 +12,7 @@ let lines = [];
 const baseLine = {
   employeeId: 1, employeeName: 'Fixture', role: 'Test', daysWorked: 20,
   gross: 1000, deductions: 100, paidAmount: 900, carryoverAmount: 0,
-  socialInsurance: 0, incomeTax: 0, taxRelief: 0, advanceAmount: 0,
+  socialInsuranceSalary: 0, socialInsurance: 0, incomeTax: 0, taxRelief: 0, advanceAmount: 0,
   manualDeduction: 0, paymentDate: null, secondPaymentDate: null,
 };
 const money = (value = 0) => `${new Intl.NumberFormat('mn-MN', { maximumFractionDigits: 0 }).format(value)} ₮`;
@@ -94,16 +94,30 @@ test('updated data replaces the total and negative totals retain row formatting'
   assert.equal(remainingCell(render([{ paidAmount: 900 }])), money(0));
 });
 
-test('remaining total occupies column 15 in the 16-column footer; empty data has no stale total', () => {
+test('remaining total occupies column 16 in the 17-column footer; empty data has no stale total', () => {
   const html = render([{}]);
   const footer = html.match(/<tfoot[\s\S]*?<\/tfoot>/)[0];
   let column = 1;
   for (const cell of footer.matchAll(/<td([^>]*)>[\s\S]*?<\/td>/g)) {
-    if (cell[1].includes('value-payroll-total-remaining')) assert.equal(column, 15);
+    if (cell[1].includes('value-payroll-total-remaining')) assert.equal(column, 16);
     column += Number(cell[1].match(/colSpan="(\d+)"/i)?.[1] ?? 1);
   }
-  assert.equal(column, 17);
+  assert.equal(column, 18);
   assert.doesNotMatch(render([]), /value-payroll-total-remaining/);
+});
+
+test('shows the saved insurance salary separately from gross and deductions, including zero and uncomputed rows', () => {
+  const html = render([
+    { gross: 2500000, socialInsuranceSalary: 1200000, socialInsurance: 138000 },
+    { socialInsuranceSalary: 0 },
+    { socialInsuranceSalary: 999999, calculationReady: false },
+  ]);
+  assert.match(html, /<th[^>]*>НДШ бодох цалин<\/th>/);
+  assert.equal(remainingCell(html, 'value-payroll-insurance-salary-1'), money(1200000));
+  assert.equal(remainingCell(html, 'value-payroll-insurance-salary-2'), money(0));
+  assert.equal(remainingCell(html, 'value-payroll-insurance-salary-3'), '—');
+  assert.equal(remainingCell(html, 'value-payroll-total-insurance-salary'), money(1200000));
+  assert.doesNotMatch(render([]), /value-payroll-total-insurance-salary/);
 });
 
 test('adjustment shows the full recipient account without truncation or masking', () => {

@@ -20,7 +20,7 @@ test("downloads selected-month payroll Excel, shows server errors, and fits the 
     totalGross: 1000, totalSocialInsurance: 0, totalIncomeTax: 0, totalDeductions: 100, totalNet: 900,
     lines: [{
       employeeId: 1, employeeName: "Excel шалгалт", employeeType: "office", role: "Жолооч",
-      daysWorked: 19, hours: 152, gross: 1000, socialInsuranceSalary: 0, socialInsurance: 0,
+      daysWorked: 19, hours: 152, gross: 1000, socialInsuranceSalary: 1200000, socialInsurance: 0,
       taxableIncome: 0, calculatedIncomeTax: 0, taxRelief: 0, incomeTax: 0, advanceAmount: 100,
       manualDeduction: 0, receivableId: null, deductions: 100, carryoverAmount: 0, payable: 900,
       paidAmount: 0, paymentDate: null, secondPaidAmount: 0, secondPaymentDate: null,
@@ -38,6 +38,10 @@ test("downloads selected-month payroll Excel, shows server errors, and fits the 
       : route.fulfill({ contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", body: buffer });
   });
   await page.goto("/payroll?month=2026-10");
+  const insuranceSalary = `${new Intl.NumberFormat("mn-MN", { maximumFractionDigits: 0 }).format(1200000)} ₮`;
+  await expect(page.getByRole("columnheader", { name: "НДШ бодох цалин", exact: true })).toBeVisible();
+  await expect(page.getByTestId("value-payroll-insurance-salary-1")).toHaveText(insuranceSalary);
+  await expect(page.getByTestId("value-payroll-total-insurance-salary")).toHaveText(insuranceSalary);
   const button = page.getByTestId("button-download-payroll-workbook");
   await expect(button).toBeEnabled();
   await expect(page.getByTestId("button-download-insurance-report")).toBeVisible();
