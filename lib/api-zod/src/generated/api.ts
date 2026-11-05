@@ -752,6 +752,7 @@ export const UpdateEmployeeSalaryHistoryBody = zod.object({
   "effectiveFrom": zod.coerce.date(),
   "baseSalary": zod.number().min(updateEmployeeSalaryHistoryBodyBaseSalaryMin),
   "socialInsuranceSalary": zod.number().min(updateEmployeeSalaryHistoryBodySocialInsuranceSalaryMin),
+  "payrollTaxExempt": zod.boolean().optional(),
   "fullSalaryRegardlessAttendance": zod.boolean().optional(),
   "payFrequency": zod.enum(['once', 'twice']).optional(),
   "salaryType": zod.enum(['daily', 'monthly']).optional(),

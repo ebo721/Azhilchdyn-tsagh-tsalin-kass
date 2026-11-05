@@ -813,6 +813,7 @@ export interface EmployeeSalaryHistoryUpdate {
   baseSalary: number;
   /** @minimum 0 */
   socialInsuranceSalary: number;
+  payrollTaxExempt?: boolean;
   fullSalaryRegardlessAttendance?: boolean;
   payFrequency?: EmployeeSalaryHistoryUpdatePayFrequency;
   salaryType?: EmployeeSalaryHistoryUpdateSalaryType;
