@@ -145,15 +145,15 @@ describe("actual shift attendance insurance proration", () => {
       [attendance(0), attendance(1, "late"), attendance(2)]);
     assert.equal(line.socialInsuranceSalary, 792_000);
   });
-  it("does not deduct the minimum without eligible work or when tax exempt", async () => {
+  it("distinguishes guaranteed salary from ordinary unworked months and tax exemptions", async () => {
     for (const employeeType of ["office", "shift"] as const) {
       for (const fullSalaryRegardlessAttendance of [false, true]) {
         const e = employee({ employeeType, fullSalaryRegardlessAttendance, socialInsuranceSalary: 792_000 });
         for (const records of [[], [attendance(0, "absent"), attendance(1, "leave")]]) {
           const line = await calculate(e, records);
-          assert.equal(line.socialInsuranceSalary, 0);
-          assert.equal(line.socialInsurance, 0);
-          assert.equal(line.incomeTax, 0);
+          assert.equal(line.socialInsuranceSalary, fullSalaryRegardlessAttendance ? 792_000 : 0);
+          assert.equal(line.socialInsurance, fullSalaryRegardlessAttendance ? 91_080 : 0);
+          assert.equal(line.incomeTax, fullSalaryRegardlessAttendance ? 52_092 : 0);
         }
         const exempt = await calculate({ ...e, payrollTaxExempt: true }, [attendance(0)]);
         assert.equal(exempt.socialInsuranceSalary, 0);
@@ -256,7 +256,7 @@ describe("actual shift attendance insurance proration", () => {
     assert.equal(needsShiftWorkDays(employee()), true);
     assert.equal(needsShiftWorkDays(employee({ payrollTaxExempt: true })), false);
   });
-  it("preserves gross salary override while requiring work for the full lower insurance base", async () => {
+  it("preserves gross salary override and its insurance without requiring attendance", async () => {
     const full = await calculate(employee({ fullSalaryRegardlessAttendance: true }), []);
     assert.equal(full.socialInsuranceSalary, 1_200_000);
     assert.equal(full.gross, 1_500_000);
@@ -269,6 +269,44 @@ describe("actual shift attendance insurance proration", () => {
     const prorated = await calculate(employee({ employeeType: "office", salaryType: "monthly" }), [leave]);
     assert.equal(prorated.gross, 0);
     assert.equal(prorated.socialInsuranceSalary, 0);
+  });
+  it("deducts both taxes on guaranteed executive salary without attendance", async () => {
+    const e = employee({ employeeType: "office", salaryType: "monthly", baseSalary: 10_000_000,
+      socialInsuranceSalary: 6_000_000, monthlyExpectedWorkDays: 0, fullSalaryRegardlessAttendance: true });
+    const line = await calculate(e, []);
+    assert.equal(line.daysWorked, 0);
+    assert.equal(line.gross, 10_000_000);
+    assert.equal(line.socialInsuranceSalary, 6_000_000);
+    assert.equal(line.socialInsurance, 690_000);
+    assert.equal(line.incomeTax, 531_000);
+    assert.equal(line.net, 8_779_000);
+  });
+  it("covers tax entitlement across employee type, salary type, insurance base, exemption and attendance", async () => {
+    for (const employeeType of ["office", "shift"] as const) {
+      for (const salaryType of ["monthly", "daily"] as const) {
+        for (const socialInsuranceSalary of [792_000, 1_000_000, 2_000_000, 2_400_000]) {
+          for (const fullSalaryRegardlessAttendance of [false, true]) {
+            for (const payrollTaxExempt of [false, true]) {
+              for (const worked of [false, true]) {
+                const e = employee({ employeeType, salaryType, baseSalary: 2_000_000,
+                  socialInsuranceSalary, fullSalaryRegardlessAttendance, payrollTaxExempt });
+                const records = worked ? [{ ...attendance(0), date: weekdayDatesBetween(start, end)[0] }] : [];
+                const line = await calculate(e, records);
+                const entitled = !payrollTaxExempt && (worked || fullSalaryRegardlessAttendance);
+                const context = JSON.stringify({ employeeType, salaryType, socialInsuranceSalary,
+                  fullSalaryRegardlessAttendance, payrollTaxExempt, worked });
+                assert.equal(line.socialInsuranceSalary > 0, entitled, context);
+                if (entitled && (socialInsuranceSalary === 792_000 || socialInsuranceSalary < 2_000_000)) {
+                  assert.equal(line.socialInsuranceSalary, socialInsuranceSalary, context);
+                }
+                assert.equal(line.socialInsurance, Math.round(line.socialInsuranceSalary * 0.115 * 100) / 100, context);
+                assert.equal(line.deductions, line.socialInsurance + line.incomeTax, context);
+              }
+            }
+          }
+        }
+      }
+    }
   });
   it("keeps recorded payments unchanged during recalculation", async () => {
     const line = await calculate(employee(), [attendance(0)], [], {

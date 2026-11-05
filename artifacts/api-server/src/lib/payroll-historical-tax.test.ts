@@ -153,7 +153,9 @@ test("a historical full-salary override still pays an attendance-free month", ()
     history("2026-09-08", false, 2)];
   const line = calculate(rows, current, { records: [] }, "2026-07").lines[0];
   assert.equal(line.gross, 2_200_000);
-  assert.equal(line.socialInsuranceSalary, 0);
+  assert.equal(line.socialInsuranceSalary, 1_000_000);
+  assert.equal(line.socialInsurance, 115_000);
+  assert.equal(line.incomeTax, 70_500);
 });
 
 test("an undocumented full-salary override cannot silently become a zero-earning month", () => {

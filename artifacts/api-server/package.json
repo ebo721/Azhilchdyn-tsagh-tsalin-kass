@@ -10,6 +10,7 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "test:e2e": "playwright test --config playwright.config.ts",
     "test": "tsx --test src/**/*.test.ts",
+    "audit:payroll": "tsx --conditions=workspace src/tools/audit-payroll.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p e2e/tsconfig.json --noEmit"
   },
   "dependencies": {

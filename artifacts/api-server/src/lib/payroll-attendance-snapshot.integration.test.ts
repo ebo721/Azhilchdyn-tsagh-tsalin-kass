@@ -219,6 +219,58 @@ it("real SQL and HTTP: payroll reads saved earnings; only explicit pull reads at
       assert.equal(writes().length, 0);
       assert.equal((await request("/payroll/export?month=2024-01")).status, 409);
     });
+    await t.test("explicit pull repairs zero-tax guaranteed salary, preserves installments, and survives reopening", async () => {
+      // Remove only the preceding subtest's deliberately invalid debt fixture.
+      await query("DELETE FROM payroll_month_balances WHERE month='2023-12'");
+      await query(`INSERT INTO employees
+        (id,name,role,employee_type,salary_type,base_salary,social_insurance_salary,
+          payroll_tax_exempt,full_salary_regardless_attendance,joined_at)
+        VALUES (3,'Guaranteed salary fixture','Test','office','monthly',10000000,6000000,false,true,'2024-01-01')`);
+      await query(`INSERT INTO employee_salary_history
+        (employee_id,effective_from,employee_type,salary_type,base_salary,social_insurance_salary,
+          payroll_tax_exempt,full_salary_regardless_attendance)
+        VALUES (3,'2024-01-01','office','monthly',10000000,6000000,false,true)`);
+      await query(`INSERT INTO payroll_adjustments
+        (employee_id,month,paid_amount,second_paid_amount,payment_date,second_payment_date)
+        VALUES (3,'2024-01',2000000,1000000,'2024-01-15','2024-01-25')`);
+      const firstPull = await request("/payroll/pull-attendance", { month: "2024-01" });
+      assert.equal(firstPull.status, 200, await firstPull.clone().text());
+      // Recreate the old clean saved result without dirty attendance, then
+      // verify GET does not silently repair it and an explicit pull does.
+      await query(`UPDATE payroll_attendance_snapshots SET payroll=jsonb_set(payroll,'{lines}',
+        (SELECT jsonb_agg(CASE WHEN (line->>'employeeId')::int=3 THEN
+          line || '{"socialInsuranceSalary":0,"socialInsurance":0,"incomeTax":0,
+            "calculatedIncomeTax":0,"taxableIncome":0,"deductions":0}'::jsonb
+          ELSE line END) FROM jsonb_array_elements(payroll->'lines') line))
+        WHERE month='2024-01'`);
+      type SavedLine = { employeeId: number; gross: number; daysWorked: number;
+        socialInsuranceSalary: number; socialInsurance: number; incomeTax: number;
+        paidAmount: number; secondPaidAmount: number; balanceAmount: number };
+      const savedRead = await request("/payroll?month=2024-01");
+      assert.equal(savedRead.status, 200);
+      assert.equal(((await savedRead.json()) as { lines: SavedLine[] }).lines
+        .find(line => line.employeeId === 3)!.socialInsurance, 0);
+      const adjustments = await query("SELECT * FROM payroll_adjustments WHERE employee_id=3");
+      const repair = await request("/payroll/pull-attendance", { month: "2024-01" });
+      assert.equal(repair.status, 200, await repair.clone().text());
+      const repaired = ((await repair.json()) as { payroll: { lines: SavedLine[] } }).payroll.lines
+        .find(line => line.employeeId === 3)!;
+      assert.equal(repaired.daysWorked, 0);
+      assert.equal(repaired.gross, 10_000_000);
+      assert.equal(repaired.socialInsuranceSalary, 6_000_000);
+      assert.equal(repaired.socialInsurance, 690_000);
+      assert.equal(repaired.incomeTax, 531_000);
+      assert.equal(repaired.paidAmount, 3_000_000);
+      assert.equal(repaired.secondPaidAmount, 1_000_000);
+      assert.equal(repaired.balanceAmount, 5_779_000);
+      assert.deepEqual((await query("SELECT * FROM payroll_adjustments WHERE employee_id=3")).rows, adjustments.rows);
+      statements.length = 0;
+      const reopened = await request("/payroll?month=2024-01");
+      assert.equal(reopened.status, 200);
+      assert.deepEqual(((await reopened.json()) as { lines: SavedLine[] }).lines.find(line => line.employeeId === 3), repaired);
+      assert.equal(attendanceReads().length, 0);
+      assert.equal(writes().length, 0);
+    });
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     t.mock.restoreAll();

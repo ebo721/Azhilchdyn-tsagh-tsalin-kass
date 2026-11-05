@@ -245,23 +245,25 @@ export function calculatePayrollMonth(
       && (Number(salary.socialInsuranceSalary) === minimumInsuredSalary
         || Number(salary.socialInsuranceSalary) < Number(salary.baseSalary));
     const fixedInsuredSalary = Number(insuredRates[0]?.socialInsuranceSalary ?? 0);
-    const workedFixedRates = new Set(workedRecords
-      .map(record => salaryAt(employee, salaryHistory, String(record.date)))
+    // Guaranteed salary is paid employment even without clocked attendance.
+    // Only ordinary attendance-based employees need worked records for tax.
+    const payableFixedRates = new Set([...workedDates, ...fullSalaryDates]
+      .map(date => salaryAt(employee, salaryHistory, date))
       .filter(isFixedInsuredRate).map(salary => salary.effectiveFrom));
     // A base-salary change must not split an unchanged insurance base into
     // ordinary attendance proration plus a fixed portion. Once worked dates
     // qualify for the fixed rule, use that unchanged, non-exempt base once.
-    const usesFixedInsuredSalary = workedFixedRates.size > 0
+    const usesFixedInsuredSalary = payableFixedRates.size > 0
       && insuredRates.every(salary => Number(salary.socialInsuranceSalary) === fixedInsuredSalary
         && !salary.payrollTaxExempt);
     // A mid-month rate/exemption change still follows salary history. Split
     // fixed bases by their effective eligible weekdays, not worked attendance.
     const datedFixedBase = eligibleWeekdays.reduce((total, date) => {
       const salary = employeeHistory.find(row => row.effectiveFrom <= date);
-      return total + (salary && workedFixedRates.has(salary.effectiveFrom) && isFixedInsuredRate(salary)
+      return total + (salary && payableFixedRates.has(salary.effectiveFrom) && isFixedInsuredRate(salary)
         ? Number(salary.socialInsuranceSalary) / eligibleWeekdays.length : 0);
     }, 0);
-    const socialInsuranceSalary = usesFixedInsuredSalary ? (workedFixedRates.size > 0 ? fixedInsuredSalary : 0) : money(datedFixedBase + insuredSalaryDates.reduce((total, date) => {
+    const socialInsuranceSalary = usesFixedInsuredSalary ? fixedInsuredSalary : money(datedFixedBase + insuredSalaryDates.reduce((total, date) => {
       const salary = salaryAt(employee, salaryHistory, date);
       return total + (salary.payrollTaxExempt || isFixedInsuredRate(salary)
         || (salary.employeeType === "shift" && !salary.fullSalaryRegardlessAttendance)
