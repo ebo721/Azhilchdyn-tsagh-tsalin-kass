@@ -2,7 +2,7 @@
 - [Historical salary coverage](historical-salary-coverage.md) — Gaps before known salary history must not use current tax settings or imply retroactive exemptions.
 - [Orval parameter collisions](orval-delete-parameter-collisions.md) — Mixed path and query parameters can generate duplicate exports on GET too; prefer path-only or separate resource endpoints.
 - [Effective-dated payroll](effective-dated-payroll.md) — Prorate monthly salary by Mon–Fri workdays; employment end dates are inclusive and paid months stay immutable.
-- [Fixed minimum insurance base](fixed-minimum-insurance-base.md) — 792,000₮ insurance-base employees use the full base when they work; no work means no deductions.
+- [Fixed insurance bases](fixed-minimum-insurance-base.md) — Use full insurance salary when below configured base salary; retain the 792,000₮ exception and no-work exemption.
 - [Monthly payroll balances](monthly-payroll-balances.md) — Read current-period attendance only; use saved prior financial debt, with explicit initialization/repair rather than historical GET recomputation.
 - [Payroll payables scope](payroll-payables-scope.md) — Show live saved payroll debt in payables; no automatic liability journals or generic payable settlements.
 - [Saved payroll refresh policy](saved-payroll-refresh-policy.md) — Opening, login and refresh show saved earnings; attendance is pulled explicitly, and recorded payments remain intact.

@@ -42,7 +42,7 @@ test("weekday leave does not discard worked weekends when total attendance is be
   const line = calculate(["2026-09-11", "2026-09-18", "2026-09-22"], ["2026-09-13", "2026-09-20"]);
   assert.equal(line.daysWorked, 21);
   assert.equal(line.gross, 2_100_000);
-  assert.equal(line.socialInsuranceSalary, 1_050_000);
+  assert.equal(line.socialInsuranceSalary, 1_100_000);
 });
 test("the two September attendance patterns both pay 21/22 of their monthly base", () => {
   const cases = [
@@ -59,7 +59,7 @@ test("the two September attendance patterns both pay 21/22 of their monthly base
 test("weekend pay remains additional when all weekdays have been worked", () => {
   const line = calculate([], ["2026-09-12", "2026-09-13"]);
   assert.equal(line.gross, 2_400_000);
-  assert.equal(line.socialInsuranceSalary, 1_200_000);
+  assert.equal(line.socialInsuranceSalary, 1_100_000);
 });
 test("late weekends count, leave and absence weekends do not", () => {
   const records = ["late", "leave", "absent"].map((status, i) => ({
@@ -69,7 +69,7 @@ test("late weekends count, leave and absence weekends do not", () => {
   const line = calculate([], [], {}, [], { records });
   assert.equal(line.daysWorked, 1);
   assert.equal(line.gross, 100_000);
-  assert.equal(line.socialInsuranceSalary, 50_000);
+  assert.equal(line.socialInsuranceSalary, 1_100_000);
 });
 test("weekend earnings and insurance use salary effective on each worked date", () => {
   const history: History[] = [
@@ -83,13 +83,14 @@ test("weekend earnings and insurance use salary effective on each worked date", 
   const base = calculate([], [], {}, history);
   const withWeekends = calculate([], ["2026-09-13", "2026-09-20"], {}, history);
   assert.equal(withWeekends.gross - base.gross, 300_000);
-  assert.equal(withWeekends.socialInsuranceSalary - base.socialInsuranceSalary, 150_000);
+  assert.equal(base.socialInsuranceSalary, 1_700_000);
+  assert.equal(withWeekends.socialInsuranceSalary, base.socialInsuranceSalary);
 });
 test("weekends outside employment are excluded and inactive date is inclusive", () => {
   const line = calculate([], ["2026-09-05", "2026-09-12", "2026-09-13", "2026-09-19", "2026-09-20"],
     { joinedAt: "2026-09-10", inactiveAt: "2026-09-19", status: "inactive" });
   assert.equal(line.gross, 1_000_000); // Seven eligible weekdays plus three worked weekend days.
-  assert.equal(line.socialInsuranceSalary, 500_000);
+  assert.equal(line.socialInsuranceSalary, 1_100_000);
 });
 test("full salary override does not double-count weekends and no attendance still pays no new salary", () => {
   const full = calculate(["2026-09-11"], ["2026-09-12", "2026-09-13"], { fullSalaryRegardlessAttendance: true });

@@ -235,31 +235,42 @@ export function calculatePayrollMonth(
       }, 0);
     const gross = money(officeGross + fullShiftGross + attendedShiftGross);
     const insuredSalaryDates = officeSalaryDates;
-    // The fixed minimum applies to employees insured at 792,000, not to
-    // every prorated amount below it. Resolve history rather than current settings.
+    // Compare configured salaries, never attendance-prorated gross. Preserve
+    // effective salary history rather than reading today's employee settings.
     const minimumInsuredSalary = 792_000;
     const insuredRates = [...new Set([...insuredSalaryDates, ...workedDates])]
-      .map(date => salaryAt(employee, salaryHistory, date))
-      .filter(salary => !salary.payrollTaxExempt && Number(salary.socialInsuranceSalary) > 0);
-    const usesFixedMinimum = insuredRates.length > 0
-      && insuredRates.every(salary => Number(salary.socialInsuranceSalary) === minimumInsuredSalary);
-    const hasInsuredWork = workedRecords.some(record => {
-      const salary = salaryAt(employee, salaryHistory, String(record.date));
-      return !salary.payrollTaxExempt && Number(salary.socialInsuranceSalary) === minimumInsuredSalary;
-    });
-    const socialInsuranceSalary = usesFixedMinimum ? (hasInsuredWork ? minimumInsuredSalary : 0) : money(insuredSalaryDates.reduce((total, date) => {
+      .map(date => salaryAt(employee, salaryHistory, date));
+    const isFixedInsuredRate = (salary: SalaryHistoryRow) => !salary.payrollTaxExempt
+      && Number(salary.socialInsuranceSalary) > 0
+      && (Number(salary.socialInsuranceSalary) === minimumInsuredSalary
+        || Number(salary.socialInsuranceSalary) < Number(salary.baseSalary));
+    const fixedInsuredSalary = Number(insuredRates[0]?.socialInsuranceSalary ?? 0);
+    const usesFixedInsuredSalary = insuredRates.length > 0
+      && insuredRates.every(salary => Number(salary.socialInsuranceSalary) === fixedInsuredSalary
+        && isFixedInsuredRate(salary));
+    const workedFixedRates = new Set(workedRecords
+      .map(record => salaryAt(employee, salaryHistory, String(record.date)))
+      .filter(isFixedInsuredRate).map(salary => salary.effectiveFrom));
+    // A mid-month rate/exemption change still follows salary history. Split
+    // fixed bases by their effective eligible weekdays, not worked attendance.
+    const datedFixedBase = eligibleWeekdays.reduce((total, date) => {
+      const salary = employeeHistory.find(row => row.effectiveFrom <= date);
+      return total + (salary && workedFixedRates.has(salary.effectiveFrom) && isFixedInsuredRate(salary)
+        ? Number(salary.socialInsuranceSalary) / eligibleWeekdays.length : 0);
+    }, 0);
+    const socialInsuranceSalary = usesFixedInsuredSalary ? (workedFixedRates.size > 0 ? fixedInsuredSalary : 0) : money(datedFixedBase + insuredSalaryDates.reduce((total, date) => {
       const salary = salaryAt(employee, salaryHistory, date);
-      return total + (salary.payrollTaxExempt
+      return total + (salary.payrollTaxExempt || isFixedInsuredRate(salary)
         || (salary.employeeType === "shift" && !salary.fullSalaryRegardlessAttendance)
         ? 0 : Number(salary.socialInsuranceSalary) / weekdays.length);
     }, 0) + weekendWorkedRecords.reduce((total, record) => {
       const salary = salaryAt(employee, salaryHistory, String(record.date));
-      return total + (salary.payrollTaxExempt || salary.fullSalaryRegardlessAttendance || salary.employeeType !== "office"
+      return total + (salary.payrollTaxExempt || isFixedInsuredRate(salary) || salary.fullSalaryRegardlessAttendance || salary.employeeType !== "office"
         ? 0 : Number(salary.socialInsuranceSalary) / weekdays.length);
     }, 0) + workedRecords.reduce((total, record) => {
       const date = String(record.date);
       const salary = salaryAt(employee, salaryHistory, date);
-      return total + (salary.employeeType === "shift" && !salary.fullSalaryRegardlessAttendance
+      return total + (salary.employeeType === "shift" && !salary.fullSalaryRegardlessAttendance && !isFixedInsuredRate(salary)
         ? shiftInsuredDailySalary(salary, employee.name, date) : 0);
     }, 0));
     const payrollTaxExempt = socialInsuranceSalary === 0;

@@ -66,9 +66,9 @@ test("insurance and effective salary use the same actually worked dates", () => 
   const line = calculate([record("2026-10-01"), record("2026-10-16"), record("2026-10-18", "late")],
     { payrollTaxExempt: false }, rows);
   assert.equal(line.gross, 513_636.36);
-  assert.equal(line.socialInsuranceSalary, 250_000);
-  assert.equal(line.socialInsurance, 28_750);
-  assert.equal(line.incomeTax, 2_125);
+  assert.equal(line.socialInsuranceSalary, 1_700_000);
+  assert.equal(line.socialInsurance, 195_500);
+  assert.equal(line.incomeTax, 136_450);
 });
 test("employment boundaries, other employees and dates outside the period cannot add office salary", () => {
   const line = calculate([record("2026-09-30"), record("2026-10-01"), record("2026-10-02"),

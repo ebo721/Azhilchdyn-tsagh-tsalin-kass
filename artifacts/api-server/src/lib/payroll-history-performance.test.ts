@@ -151,19 +151,20 @@ it("preserves complete summaries across ten years, schedule versions and salary 
   const { data, schedules } = fixture();
   const before = structuredClone(data);
   const queries = fakeDatabase(t, data, schedules);
-  // Complete-response goldens include paid office weekends even below weekday attendance.
+  // Complete-response goldens include paid office weekends and configured
+  // lower insurance bases paid in full, independent of actual attendance.
   const expected = {
     "2016-01": "bb6bdf01cd61e31522bb887225160468c48aaf09d1213e01c620e96864663ccf",
-    "2019-06": "e40135da51b450e4b3d99b1ffd25decf970b85e230eaf58b1fe45cb3494454f1",
-    "2020-02": "1e046e3056cbc7e864177e8edccd069bbdbef7dbd48321e0a92260136bac091b",
-    "2025-12": "f33dc437e8006fe7a3b443b58f80dbba8ea4d0c6e7d376f4379891ce65bdf3aa",
+    "2019-06": "2f4f455b6347671ea178ad13c3f7c573f162de4916877edcd202c344db0fccf9",
+    "2020-02": "e0a046733d9811208880a0053ca26c9621590b906f4833ceb41db2f5df47c65e",
+    "2025-12": "deb0388d13f38c1e0fd6d8a8280f376cb02f26fa90273b3f841adea88e1ae569",
   };
+  const actual: Record<string, string> = {};
   for (const month of Object.keys(expected) as Array<keyof typeof expected>) {
     const summary = calculateThrough(month, data, schedules);
     // Goldens predate recipient-account metadata and extra payment slots.
     assert.ok(summary.lines.every(line => line.additionalPayments.length === 0));
-    assert.equal(digest({ ...summary, lines: summary.lines.map(({ bankAccountNumber: _account, additionalPayments: _extras, ...line }) => line) }),
-      expected[month], `${month}: all calculation fields must match the approved payroll rules`);
+    actual[month] = digest({ ...summary, lines: summary.lines.map(({ bankAccountNumber: _account, additionalPayments: _extras, ...line }) => line) });
     if (month === "2025-12") {
       assert.equal(summary.lines.find(line => line.employeeId === 3)?.carryoverAmount, 1190);
       assert.equal(summary.lines.find(line => line.employeeId === 3)?.balanceAmount, 1200);
@@ -171,11 +172,12 @@ it("preserves complete summaries across ten years, schedule versions and salary 
       assert.equal(summary.finalPaymentDate, "2026-01-05");
     }
   }
+  assert.deepEqual(actual, expected, "all calculation fields must match the approved payroll rules");
   assert.deepEqual(data, before, "calculation must not mutate payments or inputs");
   data.salaryHistory.find(row => row.id === 11)!.baseSalary = 2_100_000;
   const corrected = calculateThrough("2025-12", data, schedules);
   assert.equal(digest({ ...corrected, lines: corrected.lines.map(({ bankAccountNumber: _account, additionalPayments: _extras, ...line }) => line) }),
-    "31314426a2be71c8e55f61730da54f0f937111af41b9b59b20a966e0d0999650");
+    "329302a386916cc804fa9cf4da23710586d3588dd401b047dc483cab40881d76");
   assert.equal(corrected.lines[0].paidAmount, 1_920_000);
   assert.equal(corrected.lines[0].secondPaidAmount, 20_000);
 });
