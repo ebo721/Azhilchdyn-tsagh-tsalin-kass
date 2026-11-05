@@ -24,7 +24,7 @@ const api = {
   useListCashClosures: () => query([]),
   useGetAuthSession: () => query({ role: 'admin' }),
 };
-const stub = (props) => React.createElement('div', null, props.children);
+const stub = (props) => React.createElement('div', { 'data-testid': props['data-testid'] }, props.children);
 const source = fs.readFileSync(path.join(__dirname, 'Payroll.tsx'), 'utf8');
 const compiled = ts.transpileModule(source, {
   reportDiagnostics: true,
@@ -34,10 +34,11 @@ assert.equal(compiled.diagnostics.length, 0);
 const pageModule = { exports: {} };
 vm.runInNewContext(compiled.outputText + '\nexports.AdjustmentFixture = PayrollAdjustmentModal;', {
   module: pageModule, exports: pageModule.exports, console,
+  URLSearchParams, window: { location: { search: '' } },
   require(id) {
     if (id === 'react') return {
       ...React, useEffect() {}, useRef: (value) => ({ current: value }),
-      useState: (value) => [value, () => {}],
+      useState: (value) => [typeof value === 'function' ? value() : value, () => {}],
     };
     if (id === 'react/jsx-runtime') return require('react/jsx-runtime');
     if (id === '@workspace/api-client-react') return new Proxy(api, {
@@ -78,6 +79,13 @@ test('zeroes each row within one tugrik before summing', () => {
   for (const id of [1, 2, 3]) {
     assert.equal(remainingCell(html, `value-payroll-remaining-${id}`), money(0));
   }
+});
+
+test('payroll register Excel and insurance upload remain separate admin controls', () => {
+  const html = render([]);
+  assert.match(html, /data-testid="button-download-payroll-workbook"/);
+  assert.match(html, /Цалингийн хүснэгт · Excel/);
+  assert.match(html, /data-testid="button-download-insurance-report"/);
 });
 
 test('updated data replaces the total and negative totals retain row formatting', () => {

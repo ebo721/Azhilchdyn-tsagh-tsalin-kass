@@ -81,6 +81,10 @@ import type {
   DeleteAttendanceParams,
   DeletionRequest,
   DeletionRequestInput,
+  DownloadPayrollWorkbook403,
+  DownloadPayrollWorkbook409,
+  DownloadPayrollWorkbook422,
+  DownloadPayrollWorkbookParams,
   DownloadSocialInsuranceReport409,
   DownloadSocialInsuranceReport422,
   DownloadSocialInsuranceReportParams,
@@ -4267,6 +4271,90 @@ export const useRebuildPayrollBalances = <TError = ErrorType<RebuildPayrollBalan
       > => {
       return useMutation(getRebuildPayrollBalancesMutationOptions(options));
     }
+
+export const getDownloadPayrollWorkbookUrl = (params: DownloadPayrollWorkbookParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/payroll/export?${stringifiedParams}` : `/api/payroll/export`
+}
+
+/**
+ * @summary Download the saved monthly payroll register with employee reporting details
+ */
+export const downloadPayrollWorkbook = async (params: DownloadPayrollWorkbookParams, options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+  return customFetch<Blob>(getDownloadPayrollWorkbookUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadPayrollWorkbookQueryKey = (params?: DownloadPayrollWorkbookParams,) => {
+    return [
+    `/api/payroll/export`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getDownloadPayrollWorkbookQueryOptions = <TData = Awaited<ReturnType<typeof downloadPayrollWorkbook>>, TError = ErrorType<DownloadPayrollWorkbook403 | DownloadPayrollWorkbook409 | DownloadPayrollWorkbook422>>(params: DownloadPayrollWorkbookParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadPayrollWorkbook>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadPayrollWorkbookQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadPayrollWorkbook>>> = ({ signal }) => downloadPayrollWorkbook(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadPayrollWorkbook>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadPayrollWorkbookQueryResult = NonNullable<Awaited<ReturnType<typeof downloadPayrollWorkbook>>>
+export type DownloadPayrollWorkbookQueryError = ErrorType<DownloadPayrollWorkbook403 | DownloadPayrollWorkbook409 | DownloadPayrollWorkbook422>
+
+
+/**
+ * @summary Download the saved monthly payroll register with employee reporting details
+ */
+
+export function useDownloadPayrollWorkbook<TData = Awaited<ReturnType<typeof downloadPayrollWorkbook>>, TError = ErrorType<DownloadPayrollWorkbook403 | DownloadPayrollWorkbook409 | DownloadPayrollWorkbook422>>(
+ params: DownloadPayrollWorkbookParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadPayrollWorkbook>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadPayrollWorkbookQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getDownloadSocialInsuranceReportUrl = (params: DownloadSocialInsuranceReportParams,) => {
   const normalizedParams = new URLSearchParams();

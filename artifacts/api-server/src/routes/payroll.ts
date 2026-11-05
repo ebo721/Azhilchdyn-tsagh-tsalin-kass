@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { payrollPayments, payrollPaymentSourceKey } from "../lib/payroll-payments.js";
 import { ensurePayrollReceivableJournal } from "../lib/payroll-receivable-posting.js";
-import { DownloadSocialInsuranceReportQueryParams } from "@workspace/api-zod";
+import { DownloadPayrollWorkbookQueryParams, DownloadSocialInsuranceReportQueryParams } from "@workspace/api-zod";
 import { buildInsuranceWorkbook, InsuranceReportValidationError } from "../lib/social-insurance-report.js";
+import { buildPayrollWorkbook, PayrollWorkbookError } from "../lib/payroll-workbook.js";
 import { createServer } from "node:http";
 import {
   CreateAttendanceBody,
@@ -283,6 +284,33 @@ router.put("/payroll-schedule", async (req, res, next) => {
     }
     res.json(UpdatePayrollScheduleResponse.parse(result.saved));
   } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/payroll/export", async (req, res, next) => {
+  try {
+    const session = await getStaffSession(req);
+    if (!session || !["admin", "accountant"].includes(session.role)) {
+      res.status(403).json({ error: "Цалингийн хүснэгтийг зөвхөн админ, нягтлан татна." });
+      return;
+    }
+    const { month } = DownloadPayrollWorkbookQueryParams.parse(req.query);
+    const summary = await readSavedPayroll(month);
+    const [employees, history] = await Promise.all([
+      db.select().from(employeesTable),
+      db.select().from(employeeSalaryHistoryTable),
+    ]);
+    const workbook = await buildPayrollWorkbook(summary, employees, history);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="Payroll-${month}.xlsx"`);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(workbook);
+  } catch (error) {
+    if (error instanceof PayrollWorkbookError) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
     next(error);
   }
 });
