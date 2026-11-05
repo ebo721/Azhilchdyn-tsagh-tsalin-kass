@@ -235,7 +235,19 @@ export function calculatePayrollMonth(
       }, 0);
     const gross = money(officeGross + fullShiftGross + attendedShiftGross);
     const insuredSalaryDates = officeSalaryDates;
-    const socialInsuranceSalary = money(insuredSalaryDates.reduce((total, date) => {
+    // The fixed minimum applies to employees insured at 792,000, not to
+    // every prorated amount below it. Resolve history rather than current settings.
+    const minimumInsuredSalary = 792_000;
+    const insuredRates = [...new Set([...insuredSalaryDates, ...workedDates])]
+      .map(date => salaryAt(employee, salaryHistory, date))
+      .filter(salary => !salary.payrollTaxExempt && Number(salary.socialInsuranceSalary) > 0);
+    const usesFixedMinimum = insuredRates.length > 0
+      && insuredRates.every(salary => Number(salary.socialInsuranceSalary) === minimumInsuredSalary);
+    const hasInsuredWork = workedRecords.some(record => {
+      const salary = salaryAt(employee, salaryHistory, String(record.date));
+      return !salary.payrollTaxExempt && Number(salary.socialInsuranceSalary) === minimumInsuredSalary;
+    });
+    const socialInsuranceSalary = usesFixedMinimum ? (hasInsuredWork ? minimumInsuredSalary : 0) : money(insuredSalaryDates.reduce((total, date) => {
       const salary = salaryAt(employee, salaryHistory, date);
       return total + (salary.payrollTaxExempt
         || (salary.employeeType === "shift" && !salary.fullSalaryRegardlessAttendance)

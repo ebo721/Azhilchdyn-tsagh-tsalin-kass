@@ -50,6 +50,83 @@ before(async () => {
 after(() => pool.end());
 
 describe("actual shift attendance insurance proration", () => {
+  it("uses the full 792,000 minimum for both deductions without changing earned salary", async () => {
+    for (const employeeType of ["office", "shift"] as const) {
+      for (const salaryType of ["monthly", "daily"] as const) {
+        const e = employee({ employeeType, salaryType, socialInsuranceSalary: 792_000 });
+        const record = { ...attendance(0), date: weekdayDatesBetween(start, end)[0] };
+        const line = await calculate(e, [record]);
+        const ordinary = await calculate({ ...e, socialInsuranceSalary: 1_200_000 }, [record]);
+        assert.equal(line.socialInsuranceSalary, 792_000);
+        assert.equal(line.socialInsurance, 91_080);
+        assert.equal(line.taxableIncome, 700_920);
+        assert.equal(line.taxRelief, 18_000);
+        assert.equal(line.incomeTax, 52_092);
+        assert.equal(line.gross, ordinary.gross);
+      }
+    }
+  });
+  it("does not increase the fixed minimum for attendance above expected days", async () => {
+    const line = await calculate(employee({ socialInsuranceSalary: 792_000, monthlyExpectedWorkDays: 1 }),
+      [attendance(0), attendance(1, "late"), attendance(2)]);
+    assert.equal(line.socialInsuranceSalary, 792_000);
+  });
+  it("does not deduct the minimum without eligible work or when tax exempt", async () => {
+    for (const employeeType of ["office", "shift"] as const) {
+      for (const fullSalaryRegardlessAttendance of [false, true]) {
+        const e = employee({ employeeType, fullSalaryRegardlessAttendance, socialInsuranceSalary: 792_000 });
+        for (const records of [[], [attendance(0, "absent"), attendance(1, "leave")]]) {
+          const line = await calculate(e, records);
+          assert.equal(line.socialInsuranceSalary, 0);
+          assert.equal(line.socialInsurance, 0);
+          assert.equal(line.incomeTax, 0);
+        }
+        const exempt = await calculate({ ...e, payrollTaxExempt: true }, [attendance(0)]);
+        assert.equal(exempt.socialInsuranceSalary, 0);
+        assert.equal(exempt.incomeTax, 0);
+      }
+    }
+  });
+  it("does not prorate the minimum for mid-month employment or weekend work", async () => {
+    const e = employee({ joinedAt: day(2), inactiveAt: day(4), socialInsuranceSalary: 792_000 });
+    const line = await calculate(e, [attendance(1), attendance(2, "late"), attendance(5)]);
+    assert.equal(line.daysWorked, 1);
+    assert.equal(line.socialInsuranceSalary, 792_000);
+    const unworked = await calculate(e, [attendance(1), attendance(5)]);
+    assert.equal(unworked.socialInsuranceSalary, 0);
+    const weekend = Array.from({ length: 7 }, (_, i) => day(i))
+      .find(date => !weekdayDatesBetween(start, end).includes(date))!;
+    const office = await calculate(employee({ employeeType: "office", socialInsuranceSalary: 792_000 }),
+      [{ ...attendance(0), date: weekend }]);
+    assert.equal(office.socialInsuranceSalary, 792_000);
+  });
+  it("uses the saved effective salary rather than today's minimum setting", async () => {
+    const e = employee();
+    const history: History[] = [{
+      id: 1, employeeId: e.id, effectiveFrom: start, employeeType: e.employeeType,
+      salaryType: e.salaryType, monthlyExpectedWorkDays: e.monthlyExpectedWorkDays,
+      baseSalary: Number(e.baseSalary), socialInsuranceSalary: 792_000,
+      payrollTaxExempt: false, fullSalaryRegardlessAttendance: false, payFrequency: "twice", createdAt: new Date(0),
+    }];
+    assert.equal((await calculate(e, [attendance(0)], history)).socialInsuranceSalary, 792_000);
+    history[0].socialInsuranceSalary = 1_200_000;
+    assert.equal((await calculate({ ...e, socialInsuranceSalary: 792_000 }, [attendance(0)], history))
+      .socialInsuranceSalary, 80_000);
+  });
+  it("preserves paid installments and prior balances when recalculating minimum deductions", async () => {
+    const line = await calculate(employee({ socialInsuranceSalary: 792_000 }), [attendance(0)], [], {
+      allAdjustments: [{
+        id: 1, employeeId: 999, month, manualDeduction: 0, paidAmount: 50_000, paymentDate: day(0),
+        secondPaidAmount: 10_000, secondPaymentDate: day(1), receivableId: null, journalEntryId: null,
+        advanceAmount: 0, taxRelief: 0, additionalPayments: [], updatedAt: new Date(0),
+      }],
+      openingBalances: [{ employeeId: 999, balanceAmount: 25_000 }],
+    });
+    assert.equal(line.socialInsuranceSalary, 792_000);
+    assert.equal(line.paidAmount, 60_000);
+    assert.equal(line.secondPaidAmount, 10_000);
+    assert.equal(line.balanceAmount, line.gross - 91_080 - 52_092 - 60_000 + 25_000);
+  });
   it("uses 10 actual days / 15 expected days for daily-paid workers", async () => {
     const line = await calculate(employee(), Array.from({ length: 10 }, (_, i) => attendance(i)));
     assert.equal(line.daysWorked, 10);
