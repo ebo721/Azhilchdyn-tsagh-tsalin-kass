@@ -13,7 +13,7 @@ Explicit recalculation must remain available even when attendance itself has not
 
 **Why:** A payroll calculation-rule change can leave saved deductions outdated without setting an attendance-change flag. The user needs to deliberately apply the new rule to an open month.
 
-**How to apply:** Keep manual full-month recalculation distinct from changed-attendance-only refresh. Preserve month-closure, role, and opening-balance-review protections; never automatically reopen or recalculate a closed month.
+**How to apply:** Keep manual full-month recalculation distinct from changed-attendance-only refresh. A financial-only fast path may reuse earlier months' saved earnings, but must never skip earnings/tax recalculation for the explicitly selected month. Preserve month-closure, role, and opening-balance-review protections; never automatically reopen or recalculate a closed month.
 
 Цалингийн сарыг хаадаг байх; хаасан сарын үлдэгдлийг дахин татах шаардлагагүй байх.
 Хаасан сарыг зөвхөн админ дахин нээж засдаг байх.

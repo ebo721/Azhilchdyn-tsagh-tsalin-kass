@@ -40,7 +40,11 @@ export async function refreshEmployeePayroll(month: string, employeeId: number) 
       const saved = old ? GetPayrollResponse.parse(old.payroll) : undefined;
       const savedLine = saved?.lines.find(l => l.employeeId === employeeId && l.calculationReady !== false);
       if (m !== month && ledger?.lines.some(l => l.employeeId === employeeId) && !ledger.dirtyEmployeeIds.includes(employeeId)) continue;
-      const financialOnly = Boolean(savedLine && ledger && !ledger.earningsDirtyEmployeeIds.includes(employeeId));
+      // An explicit pull must recalculate the selected month even if attendance
+      // is unchanged (for example, after a payroll tax rule changes). Earlier
+      // months still reuse saved earnings unless their source data is dirty.
+      const financialOnly = m !== month
+        && Boolean(savedLine && ledger && !ledger.earningsDirtyEmployeeIds.includes(employeeId));
       let payroll;
       if (financialOnly) {
         const live = await readSavedPayroll(m, tx);

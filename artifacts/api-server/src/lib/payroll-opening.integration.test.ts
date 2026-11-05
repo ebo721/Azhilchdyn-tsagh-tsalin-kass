@@ -111,9 +111,7 @@ it("real SQL: reviewed opening debt and employee-scoped refresh preserve other p
       await query(`INSERT INTO payroll_adjustments (employee_id,month,paid_amount)
         VALUES (1,'2024-09',50)`);
       statements.length = 0;
-      const financial = await refreshEmployeePayroll("2024-09", 1);
-      status = financial.payroll;
-      assert.deepEqual(financial.advance.lines.map(l => l.employeeId).sort(), [1, 2]);
+      status = await readSavedPayroll("2024-09");
       assert.equal(status.lines[0].paidAmount, 50);
       assert.equal(status.lines[0].balanceAmount, 1_150);
       assert.equal(status.lines[1].paidAmount, 0);
@@ -208,6 +206,54 @@ it("real SQL: reviewed opening debt and employee-scoped refresh preserve other p
       assert.deepEqual(after.rows[0].lines.filter((line: { employeeId: number }) => line.employeeId !== 3), otherLines);
       assert.deepEqual((await query(`SELECT paid_amount FROM payroll_adjustments WHERE employee_id=3 AND month='2024-09'`)).rows, sourceBefore.rows);
       assert.deepEqual((await query(`SELECT lines FROM payroll_advance_approvals WHERE month='2024-09'`)).rows, advanceBefore.rows);
+    });
+    await t.test("explicit pull replaces a clean legacy 756,000 insurance base with the fixed 792,000 base", async () => {
+      await query(`INSERT INTO employees
+        (id,name,role,employee_type,salary_type,base_salary,social_insurance_salary,
+         monthly_expected_work_days,payroll_tax_exempt,joined_at,pay_frequency)
+        VALUES (4,'Minimum insurance regression','Test','shift','daily',36000,792000,22,false,'2024-09-01','twice')`);
+      await query(`INSERT INTO employee_salary_history
+        (employee_id,effective_from,employee_type,salary_type,base_salary,social_insurance_salary,
+         monthly_expected_work_days,payroll_tax_exempt,pay_frequency)
+        VALUES (4,'2024-09-01','shift','daily',36000,792000,22,false,'twice')`);
+      await query(`INSERT INTO attendance (employee_id,date,clock_in,clock_out,hours,status)
+        SELECT 4,d::date,'08:00','16:00',8,'present'
+        FROM generate_series('2024-09-01'::date,'2024-09-21'::date,'1 day') d`);
+      await query(`INSERT INTO payroll_adjustments (employee_id,month,paid_amount)
+        VALUES (4,'2024-09',12345)`);
+      const initial = await refreshEmployeePayroll("2024-09", 4);
+      const initialLine = initial.payroll.lines.find(l => l.employeeId === 4)!;
+      assert.equal(initialLine.socialInsuranceSalary, 792_000);
+      assert.equal(initialLine.gross, 756_000);
+      const otherLines = initial.payroll.lines.filter(l => l.employeeId !== 4);
+
+      // Recreate a snapshot written by the former attendance-prorated rule,
+      // without changing any source attendance or salary history.
+      const legacy = { ...initial.payroll, lines: initial.payroll.lines.map(l => l.employeeId === 4
+        ? { ...l, socialInsuranceSalary: 756_000, socialInsurance: 86_940,
+          taxableIncome: 669_060, calculatedIncomeTax: 66_906, incomeTax: 48_906 }
+        : l) };
+      await query(`UPDATE payroll_attendance_snapshots SET payroll=$1::jsonb,
+        pulled_at='2024-10-01T00:00:00Z' WHERE month='2024-09'`, [JSON.stringify(legacy)]);
+      const before = await readSavedPayroll("2024-09");
+      const beforeLine = before.lines.find(l => l.employeeId === 4)!;
+      assert.equal(beforeLine.socialInsuranceSalary, 756_000);
+      assert.equal(beforeLine.attendanceNeedsRefresh, false);
+
+      const result = await refreshEmployeePayroll("2024-09", 4);
+      const line = result.payroll.lines.find(l => l.employeeId === 4)!;
+      assert.equal(line.daysWorked, 21);
+      assert.equal(line.gross, 756_000);
+      assert.equal(line.socialInsuranceSalary, 792_000);
+      assert.equal(line.socialInsurance, 91_080);
+      assert.equal(line.incomeTax, 52_092);
+      assert.equal(line.paidAmount, 12_345);
+      assert.equal(line.balanceAmount, 600_483);
+      assert.deepEqual(result.payroll.lines.filter(l => l.employeeId !== 4), otherLines);
+      const saved = await readSavedPayroll("2024-09");
+      assert.equal(saved.lines.find(l => l.employeeId === 4)!.socialInsuranceSalary, 792_000);
+      const snapshot = await query(`SELECT pulled_at FROM payroll_attendance_snapshots WHERE month='2024-09'`);
+      assert.ok(new Date(snapshot.rows[0].pulled_at) > new Date('2024-10-01T00:00:00Z'));
     });
   } finally {
     t.mock.restoreAll();
