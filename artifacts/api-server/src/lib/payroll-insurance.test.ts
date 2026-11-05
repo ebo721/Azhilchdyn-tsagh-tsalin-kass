@@ -86,6 +86,29 @@ describe("actual shift attendance insurance proration", () => {
       assert.equal(line.socialInsuranceSalary, Math.round(socialInsuranceSalary / 15 * 100) / 100);
     }
   });
+  it("uses an unchanged insurance base once when a mid-month raise makes it lower than base salary", async () => {
+    const e = employee({ salaryType: "monthly", baseSalary: 1_700_000,
+      socialInsuranceSalary: 1_500_000, monthlyExpectedWorkDays: 14 });
+    const history: History[] = [
+      { id: 1, employeeId: e.id, effectiveFrom: start, employeeType: "shift", salaryType: "monthly",
+        monthlyExpectedWorkDays: 14, baseSalary: 1_500_000, socialInsuranceSalary: 1_500_000,
+        payrollTaxExempt: false, fullSalaryRegardlessAttendance: false, payFrequency: "twice", createdAt: new Date(0) },
+      { id: 2, employeeId: e.id, effectiveFrom: day(1), employeeType: "shift", salaryType: "monthly",
+        monthlyExpectedWorkDays: 14, baseSalary: 1_700_000, socialInsuranceSalary: 1_500_000,
+        payrollTaxExempt: false, fullSalaryRegardlessAttendance: false, payFrequency: "twice", createdAt: new Date(0) },
+    ];
+    for (const count of [2, 14, 20]) {
+      const records = Array.from({ length: count }, (_, i) => attendance(i));
+      const line = await calculate(e, records, history);
+      assert.equal(line.socialInsuranceSalary, 1_500_000);
+      assert.equal(line.socialInsurance, 172_500);
+      assert.equal(line.incomeTax, 116_750);
+      assert.equal(line.gross, Math.round((1_500_000 / 14 + 1_700_000 / 14 * (count - 1)) * 100) / 100);
+    }
+    assert.equal((await calculate(e, [], history)).socialInsuranceSalary, 0);
+    // A later raise does not retroactively qualify attendance before it.
+    assert.equal((await calculate(e, [attendance(0)], history)).socialInsuranceSalary, 107_142.86);
+  });
   it("preserves all paid amounts and prior debt when using a configured lower base", async () => {
     const e = employee({ salaryType: "monthly", baseSalary: 2_000_000, socialInsuranceSalary: 1_000_000 });
     const line = await calculate(e, [attendance(0)], [], {

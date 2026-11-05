@@ -245,12 +245,15 @@ export function calculatePayrollMonth(
       && (Number(salary.socialInsuranceSalary) === minimumInsuredSalary
         || Number(salary.socialInsuranceSalary) < Number(salary.baseSalary));
     const fixedInsuredSalary = Number(insuredRates[0]?.socialInsuranceSalary ?? 0);
-    const usesFixedInsuredSalary = insuredRates.length > 0
-      && insuredRates.every(salary => Number(salary.socialInsuranceSalary) === fixedInsuredSalary
-        && isFixedInsuredRate(salary));
     const workedFixedRates = new Set(workedRecords
       .map(record => salaryAt(employee, salaryHistory, String(record.date)))
       .filter(isFixedInsuredRate).map(salary => salary.effectiveFrom));
+    // A base-salary change must not split an unchanged insurance base into
+    // ordinary attendance proration plus a fixed portion. Once worked dates
+    // qualify for the fixed rule, use that unchanged, non-exempt base once.
+    const usesFixedInsuredSalary = workedFixedRates.size > 0
+      && insuredRates.every(salary => Number(salary.socialInsuranceSalary) === fixedInsuredSalary
+        && !salary.payrollTaxExempt);
     // A mid-month rate/exemption change still follows salary history. Split
     // fixed bases by their effective eligible weekdays, not worked attendance.
     const datedFixedBase = eligibleWeekdays.reduce((total, date) => {
