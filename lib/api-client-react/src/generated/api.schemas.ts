@@ -632,6 +632,8 @@ export const EmployeeStatus = {
 } as const;
 
 export interface SocialInsuranceProfile {
+  /** @maxLength 100 */
+  givenName?: string;
   /** @maxLength 30 */
   registrationNumber: string;
   /** @maxLength 100 */
@@ -667,6 +669,87 @@ export interface Employee {
   joinedAt: string;
   /** @nullable */
   inactiveAt: string | null;
+}
+
+export interface EmployeeImportError {
+  error: string;
+}
+
+export interface EmployeeInsuranceFileInput {
+  /**
+     * @minLength 1
+     * @maxLength 250
+     */
+  fileName: string;
+  /**
+     * @minLength 1
+     * @maxLength 1400000
+     */
+  contentBase64: string;
+}
+
+export interface EmployeeInsuranceImportCandidate {
+  employeeId: number;
+  name: string;
+  parentName: string;
+  registrationNumber: string;
+  role: string;
+  status: string;
+}
+
+export type EmployeeInsuranceImportRowStatus = typeof EmployeeInsuranceImportRowStatus[keyof typeof EmployeeInsuranceImportRowStatus];
+
+
+export const EmployeeInsuranceImportRowStatus = {
+  matched: 'matched',
+  ambiguous: 'ambiguous',
+  unmatched: 'unmatched',
+  conflict: 'conflict',
+  invalid: 'invalid',
+} as const;
+
+export interface EmployeeInsuranceImportRow {
+  rowNumber: number;
+  name: string;
+  phone: string;
+  profile: SocialInsuranceProfile;
+  status: EmployeeInsuranceImportRowStatus;
+  candidates: EmployeeInsuranceImportCandidate[];
+  /** @nullable */
+  suggestedEmployeeId: number | null;
+  issues: string[];
+}
+
+export interface EmployeeInsuranceImportPreview {
+  previewToken: string;
+  rows: EmployeeInsuranceImportRow[];
+  totalRows: number;
+}
+
+export interface EmployeeInsuranceImportChoice {
+  /** @minimum 1 */
+  rowNumber: number;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  employeeId: number | null;
+}
+
+export interface EmployeeInsuranceImportInput {
+  /**
+     * @minLength 1
+     * @maxLength 1000000
+     */
+  previewToken: string;
+  /** @maxItems 500 */
+  selections: EmployeeInsuranceImportChoice[];
+}
+
+export interface EmployeeInsuranceImportResult {
+  updated: number;
+  skipped: number;
+  unchanged: number;
 }
 
 export type EmployeeSalaryHistoryEmployeeType = typeof EmployeeSalaryHistoryEmployeeType[keyof typeof EmployeeSalaryHistoryEmployeeType];

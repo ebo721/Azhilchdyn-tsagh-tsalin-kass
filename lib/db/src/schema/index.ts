@@ -27,6 +27,7 @@ export const employeesTable = pgTable("employees", {
   phone: text("phone").notNull().default(""),
   bankAccountNumber: text("bank_account_number").notNull().default(""),
   socialInsuranceProfile: jsonb("social_insurance_profile").$type<{
+    givenName?: string;
     registrationNumber: string;
     clanName: string;
     parentName: string;

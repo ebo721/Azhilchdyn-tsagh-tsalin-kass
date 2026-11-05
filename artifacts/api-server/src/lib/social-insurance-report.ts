@@ -44,7 +44,7 @@ export async function buildInsuranceWorkbook(lines: InsuredPayrollLine[], employ
     const p = profile!;
     const amount = Math.round(line.socialInsuranceSalary * 100) / 100;
     rows.push([
-      registration, p.clanName.trim(), p.parentName.trim(), employee.name.trim(),
+      registration, p.clanName.trim(), p.parentName.trim(), p.givenName?.trim() || employee.name.trim(),
       p.insuranceTypeCode.trim(), p.occupationCode.trim(), amount, amount,
       0, 0, 0, 0, p.citizenship.trim(), employee.phone.trim(), p.email.trim() || "empty",
     ]);
