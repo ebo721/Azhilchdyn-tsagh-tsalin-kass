@@ -44,6 +44,8 @@ app.use(
   }),
 );
 app.use(cors());
+// Keep the general JSON limit small; only the bounded XLSX import needs base64 payloads.
+app.use("/api/employees/insurance-import", express.json({ limit: "2mb" }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

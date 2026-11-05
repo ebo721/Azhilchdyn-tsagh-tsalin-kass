@@ -258,6 +258,53 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Dashboard"
+  /employees/insurance-import/preview:
+    post:
+      operationId: previewEmployeeInsuranceImport
+      tags: [employees]
+      summary: Preview identity-only updates from an insurance XLSX template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmployeeInsuranceFileInput" }
+      responses:
+        "200":
+          description: Parsed rows and possible existing employee matches
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmployeeInsuranceImportPreview" }
+        "422":
+          description: Invalid spreadsheet
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmployeeImportError" }
+  /employees/insurance-import/apply:
+    post:
+      operationId: applyEmployeeInsuranceImport
+      tags: [employees]
+      summary: Confirm employee choices and atomically update reporting metadata only
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmployeeInsuranceImportInput" }
+      responses:
+        "200":
+          description: Reporting metadata updated; salary and historical documents unchanged
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmployeeInsuranceImportResult" }
+        "409":
+          description: Employee data changed since preview or selections conflict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmployeeImportError" }
+        "422":
+          description: Preview expired or invalid
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmployeeImportError" }
   /employees:
     get:
       operationId: listEmployees
@@ -3682,10 +3729,80 @@ components:
         status: { type: string, enum: [active, inactive] }
         joinedAt: { type: string }
         inactiveAt: { type: [string, "null"] }
+    EmployeeImportError:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    EmployeeInsuranceFileInput:
+      type: object
+      additionalProperties: false
+      required: [fileName, contentBase64]
+      properties:
+        fileName: { type: string, minLength: 1, maxLength: 250 }
+        contentBase64: { type: string, minLength: 1, maxLength: 1400000 }
+    EmployeeInsuranceImportCandidate:
+      type: object
+      required: [employeeId, name, parentName, registrationNumber, role, status]
+      properties:
+        employeeId: { type: integer }
+        name: { type: string }
+        parentName: { type: string }
+        registrationNumber: { type: string }
+        role: { type: string }
+        status: { type: string }
+    EmployeeInsuranceImportRow:
+      type: object
+      required: [rowNumber, name, phone, profile, status, candidates, suggestedEmployeeId, issues]
+      properties:
+        rowNumber: { type: integer }
+        name: { type: string }
+        phone: { type: string }
+        profile: { $ref: "#/components/schemas/SocialInsuranceProfile" }
+        status: { type: string, enum: [matched, ambiguous, unmatched, conflict, invalid] }
+        candidates:
+          type: array
+          items: { $ref: "#/components/schemas/EmployeeInsuranceImportCandidate" }
+        suggestedEmployeeId: { type: ["integer", "null"] }
+        issues: { type: array, items: { type: string } }
+    EmployeeInsuranceImportPreview:
+      type: object
+      required: [previewToken, rows, totalRows]
+      properties:
+        previewToken: { type: string }
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/EmployeeInsuranceImportRow" }
+        totalRows: { type: integer }
+    EmployeeInsuranceImportChoice:
+      type: object
+      additionalProperties: false
+      required: [rowNumber, employeeId]
+      properties:
+        rowNumber: { type: integer, minimum: 1 }
+        employeeId: { type: ["integer", "null"], minimum: 1 }
+    EmployeeInsuranceImportInput:
+      type: object
+      additionalProperties: false
+      required: [previewToken, selections]
+      properties:
+        previewToken: { type: string, minLength: 1, maxLength: 1000000 }
+        selections:
+          type: array
+          maxItems: 500
+          items: { $ref: "#/components/schemas/EmployeeInsuranceImportChoice" }
+    EmployeeInsuranceImportResult:
+      type: object
+      required: [updated, skipped, unchanged]
+      properties:
+        updated: { type: integer }
+        skipped: { type: integer }
+        unchanged: { type: integer }
     SocialInsuranceProfile:
       type: object
       required: [registrationNumber, clanName, parentName, insuranceTypeCode, occupationCode, citizenship, email]
       properties:
+        givenName: { type: string, maxLength: 100 }
         registrationNumber: { type: string, maxLength: 30 }
         clanName: { type: string, maxLength: 100 }
         parentName: { type: string, maxLength: 100 }

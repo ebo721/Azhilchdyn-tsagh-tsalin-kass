@@ -90,7 +90,12 @@ import type {
   DownloadSocialInsuranceReportParams,
   Employee,
   EmployeeArApInput,
+  EmployeeImportError,
   EmployeeInput,
+  EmployeeInsuranceFileInput,
+  EmployeeInsuranceImportInput,
+  EmployeeInsuranceImportPreview,
+  EmployeeInsuranceImportResult,
   EmployeeSalaryBankAccount,
   EmployeeSalaryHistory,
   EmployeeSalaryHistoryUpdate,
@@ -1449,6 +1454,148 @@ export function useGetDashboard<TData = Awaited<ReturnType<typeof getDashboard>>
 
 
 
+
+export const getPreviewEmployeeInsuranceImportUrl = () => {
+
+
+
+
+  return `/api/employees/insurance-import/preview`
+}
+
+/**
+ * @summary Preview identity-only updates from an insurance XLSX template
+ */
+export const previewEmployeeInsuranceImport = async (employeeInsuranceFileInput: EmployeeInsuranceFileInput, options?: Parameters<typeof customFetch>[1]): Promise<EmployeeInsuranceImportPreview> => {
+
+  return customFetch<EmployeeInsuranceImportPreview>(getPreviewEmployeeInsuranceImportUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(employeeInsuranceFileInput)
+  }
+);}
+
+
+
+
+
+export const getPreviewEmployeeInsuranceImportMutationOptions = <TError = ErrorType<EmployeeImportError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewEmployeeInsuranceImport>>, TError,{data: BodyType<EmployeeInsuranceFileInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewEmployeeInsuranceImport>>, TError,{data: BodyType<EmployeeInsuranceFileInput>}, TContext> => {
+
+const mutationKey = ['previewEmployeeInsuranceImport'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewEmployeeInsuranceImport>>, {data: BodyType<EmployeeInsuranceFileInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  previewEmployeeInsuranceImport(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewEmployeeInsuranceImportMutationResult = NonNullable<Awaited<ReturnType<typeof previewEmployeeInsuranceImport>>>
+    export type PreviewEmployeeInsuranceImportMutationBody = BodyType<EmployeeInsuranceFileInput>
+    export type PreviewEmployeeInsuranceImportMutationError = ErrorType<EmployeeImportError>
+
+    /**
+ * @summary Preview identity-only updates from an insurance XLSX template
+ */
+export const usePreviewEmployeeInsuranceImport = <TError = ErrorType<EmployeeImportError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewEmployeeInsuranceImport>>, TError,{data: BodyType<EmployeeInsuranceFileInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewEmployeeInsuranceImport>>,
+        TError,
+        {data: BodyType<EmployeeInsuranceFileInput>},
+        TContext
+      > => {
+      return useMutation(getPreviewEmployeeInsuranceImportMutationOptions(options));
+    }
+
+export const getApplyEmployeeInsuranceImportUrl = () => {
+
+
+
+
+  return `/api/employees/insurance-import/apply`
+}
+
+/**
+ * @summary Confirm employee choices and atomically update reporting metadata only
+ */
+export const applyEmployeeInsuranceImport = async (employeeInsuranceImportInput: EmployeeInsuranceImportInput, options?: Parameters<typeof customFetch>[1]): Promise<EmployeeInsuranceImportResult> => {
+
+  return customFetch<EmployeeInsuranceImportResult>(getApplyEmployeeInsuranceImportUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(employeeInsuranceImportInput)
+  }
+);}
+
+
+
+
+
+export const getApplyEmployeeInsuranceImportMutationOptions = <TError = ErrorType<EmployeeImportError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof applyEmployeeInsuranceImport>>, TError,{data: BodyType<EmployeeInsuranceImportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof applyEmployeeInsuranceImport>>, TError,{data: BodyType<EmployeeInsuranceImportInput>}, TContext> => {
+
+const mutationKey = ['applyEmployeeInsuranceImport'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof applyEmployeeInsuranceImport>>, {data: BodyType<EmployeeInsuranceImportInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  applyEmployeeInsuranceImport(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApplyEmployeeInsuranceImportMutationResult = NonNullable<Awaited<ReturnType<typeof applyEmployeeInsuranceImport>>>
+    export type ApplyEmployeeInsuranceImportMutationBody = BodyType<EmployeeInsuranceImportInput>
+    export type ApplyEmployeeInsuranceImportMutationError = ErrorType<EmployeeImportError>
+
+    /**
+ * @summary Confirm employee choices and atomically update reporting metadata only
+ */
+export const useApplyEmployeeInsuranceImport = <TError = ErrorType<EmployeeImportError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof applyEmployeeInsuranceImport>>, TError,{data: BodyType<EmployeeInsuranceImportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof applyEmployeeInsuranceImport>>,
+        TError,
+        {data: BodyType<EmployeeInsuranceImportInput>},
+        TContext
+      > => {
+      return useMutation(getApplyEmployeeInsuranceImportMutationOptions(options));
+    }
 
 export const getListEmployeesUrl = () => {
 

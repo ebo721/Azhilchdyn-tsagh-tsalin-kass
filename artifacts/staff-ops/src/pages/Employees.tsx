@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { EmptyState, ErrorBlock, LoadingBlock, Modal, StatusPill } from '@/components/ui-primitives';
-import { Download, Pencil, Plus, Search, Trash2, UsersRound } from 'lucide-react';
+import { Download, FileSpreadsheet, Pencil, Plus, Search, Trash2, UsersRound } from 'lucide-react';
 import {
   getEmployeeSalaryBankAccount,
   EmployeeEmployeeType,
@@ -28,11 +28,14 @@ import {
 } from '@workspace/api-client-react';
 import { currentMonth, dateLabel, money, today } from '@/lib/app-shared';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
+import { EmployeeInsuranceImport } from '@/components/EmployeeInsuranceImport';
+import type { EmployeeInsuranceImportResult } from '@workspace/api-client-react';
 type EmployeeForm = { name: string; role: string; phone: string; bankAccountNumber: string; employeeType: 'shift' | 'office'; salaryType: 'daily' | 'monthly'; payFrequency: 'once' | 'twice'; baseSalary: string; socialInsuranceSalary: string; payrollTaxExempt: boolean; fullSalaryRegardlessAttendance: boolean; monthlyExpectedWorkDays: string; joinedAt: string; status?: 'active' | 'inactive'; inactiveAt: string; salaryEffectiveDate: string; socialInsuranceProfile: SocialInsuranceProfile };
 const normalizeBankAccount = (value: string) => value.replace(/\s/g, '').toUpperCase();
 
-const emptyInsuranceProfile: SocialInsuranceProfile = { registrationNumber: '', clanName: '', parentName: '', insuranceTypeCode: '', occupationCode: '', citizenship: '', email: '' };
+const emptyInsuranceProfile: SocialInsuranceProfile = { givenName: '', registrationNumber: '', clanName: '', parentName: '', insuranceTypeCode: '', occupationCode: '', citizenship: '', email: '' };
 const insuranceProfileFields = [
+  ['givenName', 'Нэр (НДШ)', ''],
   ['registrationNumber', 'Регистрийн дугаар', ''], ['clanName', 'Ургийн овог', ''],
   ['parentName', 'Эцэг/эхийн нэр', ''], ['insuranceTypeCode', 'Даатгуулагчийн төрөл (5 оронтой код)', '01001'],
   ['occupationCode', 'Ажил мэргэжлийн ангиллын код', '0000-00'], ['citizenship', 'Иргэншил', 'Монгол'],
@@ -102,7 +105,7 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
   const salaryHistoryDeletion = useQueueDeletion();
   const [bankAccountLoading, setBankAccountLoading] = useState(false);
   const [bankAccountMessage, setBankAccountMessage] = useState<{ text: string; error: boolean } | null>(null);
-  const form = useForm<EmployeeForm>({ defaultValues: { socialInsuranceProfile: employee?.socialInsuranceProfile ?? emptyInsuranceProfile, name: employee?.name ?? '', role: employee?.role ?? '', phone: employee?.phone ?? '', bankAccountNumber: employee?.bankAccountNumber ?? '', employeeType: employee?.employeeType ?? 'office', salaryType: employee?.salaryType ?? 'monthly', payFrequency: employee?.payFrequency ?? 'twice', baseSalary: '', socialInsuranceSalary: String(employee?.socialInsuranceSalary ?? ''), payrollTaxExempt: employee?.payrollTaxExempt ?? false, fullSalaryRegardlessAttendance: employee?.fullSalaryRegardlessAttendance ?? false, monthlyExpectedWorkDays: String(employee?.monthlyExpectedWorkDays ?? 0), joinedAt: employee?.joinedAt ?? today(), status: employee?.status ?? 'active', inactiveAt: employee?.inactiveAt ?? '', salaryEffectiveDate: '' } });
+  const form = useForm<EmployeeForm>({ defaultValues: { socialInsuranceProfile: { ...emptyInsuranceProfile, ...(employee?.socialInsuranceProfile ?? {}) }, name: employee?.name ?? '', role: employee?.role ?? '', phone: employee?.phone ?? '', bankAccountNumber: employee?.bankAccountNumber ?? '', employeeType: employee?.employeeType ?? 'office', salaryType: employee?.salaryType ?? 'monthly', payFrequency: employee?.payFrequency ?? 'twice', baseSalary: '', socialInsuranceSalary: String(employee?.socialInsuranceSalary ?? ''), payrollTaxExempt: employee?.payrollTaxExempt ?? false, fullSalaryRegardlessAttendance: employee?.fullSalaryRegardlessAttendance ?? false, monthlyExpectedWorkDays: String(employee?.monthlyExpectedWorkDays ?? 0), joinedAt: employee?.joinedAt ?? today(), status: employee?.status ?? 'active', inactiveAt: employee?.inactiveAt ?? '', salaryEffectiveDate: '' } });
   const [salaryBaseline, setSalaryBaseline] = useState({
     baseSalary: Number(employee?.baseSalary ?? 0),
     socialInsuranceSalary: employee?.payrollTaxExempt ? 0 : Number(employee?.socialInsuranceSalary ?? 0),
@@ -262,6 +265,10 @@ export function Employees() {
   };
   const deletion = useQueueDeletion();
   const qc = useQueryClient();
+  const session = useGetAuthSession();
+  const canImportInsurance = session.data?.authenticated === true && (session.data.role === 'admin' || session.data.role === 'hr' || session.data.role === 'accountant');
+  const [importOpen, setImportOpen] = useState(false);
+  const [importResult, setImportResult] = useState<EmployeeInsuranceImportResult | null>(null);
   const [modal, setModal] = useState<{ open: boolean; employee?: Employee }>({ open: false });
   const [search, setSearch] = useState('');
   const [employeeTypeFilter, setEmployeeTypeFilter] = useState<'all' | 'office' | 'shift'>('all');
@@ -276,7 +283,7 @@ export function Employees() {
     return result;
   }, [shiftPlans.data]);
   const employees = useMemo(() => (query.data ?? []).filter((employee) => {
-    if (!`${employee.name} ${employee.role} ${employee.phone}`.toLowerCase().includes(search.toLowerCase())) return false;
+    if (!`${employee.name} ${employee.role} ${employee.phone} ${employee.socialInsuranceProfile?.parentName ?? ''} ${employee.socialInsuranceProfile?.registrationNumber ?? ''}`.toLowerCase().includes(search.toLowerCase())) return false;
     if (employeeTypeFilter !== 'all' && employee.employeeType !== employeeTypeFilter) return false;
     if (employee.employeeType === EmployeeEmployeeType.shift && shiftFilter !== 'all') {
       const assigned = employeeShiftIds.get(employee.id);
@@ -292,7 +299,7 @@ export function Employees() {
     <div className="overflow-x-auto">
       <table className="w-full min-w-[850px] text-left">
         <thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3 font-bold">Ажилтан</th><th className="px-5 py-3 font-bold whitespace-nowrap">Ажилд орсон огноо</th><th className="px-5 py-3 font-bold">Утас</th><th className="px-5 py-3 font-bold">Банкны данс</th><th className="px-5 py-3 font-bold">Төрөл</th><th className="px-5 py-3 font-bold">Цалин</th><th className="px-5 py-3 font-bold">НДШ-ийн цалин</th><th className="px-5 py-3 font-bold">Төлөв</th><th className="px-5 py-3 text-right font-bold">Үйлдэл</th></tr></thead>
-        <tbody className="divide-y divide-border">{rows.map((employee) => <tr className="group transition-colors hover:bg-secondary/35" key={employee.id} data-testid={`row-employee-${employee.id}`}><td className="px-5 py-4"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent/30 text-xs font-bold text-foreground">{employee.name.slice(0, 1)}</span><div><p className="text-sm font-semibold">{employee.name}</p><p className="text-xs text-muted-foreground">{employee.role}</p></div></div></td>
+        <tbody className="divide-y divide-border">{rows.map((employee) => <tr className="group transition-colors hover:bg-secondary/35" key={employee.id} data-testid={`row-employee-${employee.id}`}><td className="px-5 py-4"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent/30 text-xs font-bold text-foreground">{employee.name.slice(0, 1)}</span><div><p className="text-sm font-semibold">{employee.name}</p><p className="text-xs text-muted-foreground">{employee.role}</p>{(employee.socialInsuranceProfile?.parentName || employee.socialInsuranceProfile?.registrationNumber || employee.socialInsuranceProfile?.clanName) && <p className="text-[10px] text-muted-foreground" data-testid={`text-employee-identity-${employee.id}`}>{[employee.socialInsuranceProfile?.clanName, employee.socialInsuranceProfile?.parentName].filter(Boolean).join(' · ')}{employee.socialInsuranceProfile?.registrationNumber && <span className="ml-1 font-mono">{employee.socialInsuranceProfile.registrationNumber}</span>}</p>}</div></div></td>
           <td className="px-5 py-4 whitespace-nowrap text-sm text-muted-foreground" data-testid={`value-employee-joined-at-${employee.id}`}>{employee.joinedAt ? <time dateTime={employee.joinedAt}>{dateLabel(employee.joinedAt)}</time> : '—'}</td>
           <td className="px-5 py-4 text-sm text-muted-foreground">{employee.phone || '—'}</td><td className="px-5 py-4 whitespace-nowrap font-mono text-xs select-all" data-testid={`value-employee-bank-account-${employee.id}`}>{employee.bankAccountNumber || '—'}</td><td className="px-5 py-4 text-sm">{employee.employeeType === EmployeeEmployeeType.office ? 'Оффис' : employee.salaryType === 'monthly' ? 'Ээлж (сарын)' : 'Ээлж (өдрийн)'}</td><td className="px-5 py-4"><p className="font-mono text-sm">{money(employee.baseSalary)}</p><p className="text-[10px] text-muted-foreground">{employee.salaryType === 'monthly' ? 'сарын' : 'өдрийн'}</p></td><td className="px-5 py-4 font-mono text-sm">{money(employee.socialInsuranceSalary)}</td><td className="px-5 py-4"><StatusPill value={employee.status} /></td><td className="px-5 py-4"><div className="flex justify-end gap-1"><button className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={() => setModal({ open: true, employee })} aria-label={`${employee.name} засах`} data-testid={`button-edit-employee-${employee.id}`}><Pencil className="size-4" /></button><button className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => del(employee)} aria-label={`${employee.name} устгах хүсэлт`} data-testid={`button-delete-employee-${employee.id}`}><Trash2 className="size-4" /></button></div></td></tr>)}</tbody>
       </table>
@@ -306,8 +313,10 @@ export function Employees() {
         data-testid="button-export-employees">
         <Download className="size-4" />{exporting ? 'Excel бэлтгэж байна…' : 'Бүх ажилтан · Excel'}
       </Button>
+      {canImportInsurance && <Button variant="outline" onClick={() => setImportOpen(true)} disabled={!query.data} data-testid="button-import-employee-insurance"><FileSpreadsheet className="size-4" />НДШ Excel уншуулах</Button>}
       <Button onClick={() => setModal({ open: true })} data-testid="button-add-employee"><Plus className="size-4" />Ажилтан нэмэх</Button>
     </div>
+    {canImportInsurance && importResult && <p role="status" className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-2 text-sm" data-testid="status-employee-insurance-last-result">НДШ Excel: {importResult.updated} шинэчилсэн, {importResult.skipped} алгассан, {importResult.unchanged} өөрчлөлтгүй.</p>}
     {exportError && <p role="alert" className="text-sm text-destructive" data-testid="error-export-employees">{exportError}</p>}
     <section className="rounded-2xl border border-border bg-card p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
@@ -329,6 +338,7 @@ export function Employees() {
       {employeeTypeFilter !== 'shift' && officeEmployees.length > 0 && <section className="overflow-hidden rounded-2xl border border-border bg-card"><div className="flex items-center justify-between border-b border-border px-5 py-4"><div><h2 className="font-bold">Оффис ажилтнууд</h2><p className="text-xs text-muted-foreground">Тогтмол ажлын хуваарьтай ажилтнууд</p></div><span className="rounded-full bg-secondary px-3 py-1 font-mono text-xs font-bold">{officeEmployees.length}</span></div>{employeeTable(officeEmployees)}</section>}
       {employeeTypeFilter !== 'office' && shiftEmployees.length > 0 && <section className="overflow-hidden rounded-2xl border border-border bg-card"><div className="flex items-center justify-between border-b border-border px-5 py-4"><div><h2 className="font-bold">Ээлжийн ажилтнууд</h2><p className="text-xs text-muted-foreground">{shiftMonth} сарын ээлжийн хуваариар шүүж байна</p></div><span className="rounded-full bg-secondary px-3 py-1 font-mono text-xs font-bold">{shiftEmployees.length}</span></div>{employeeTable(shiftEmployees)}</section>}
     </>}
+    {importOpen && canImportInsurance && <EmployeeInsuranceImport roster={query.data ?? []} onClose={() => setImportOpen(false)} onApplied={setImportResult} />}
     {modal.open && <EmployeeModal employee={modal.employee} onClose={() => setModal({ open: false })} />}
   </div>;
   /*

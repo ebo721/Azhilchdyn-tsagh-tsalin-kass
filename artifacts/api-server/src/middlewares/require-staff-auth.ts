@@ -110,6 +110,10 @@ const requireStaffAuth: RequestHandler = async (req, res, next) => {
     return;
   }
   const matchesPrefix = (prefix: string) => req.path === prefix || req.path.startsWith(`${prefix}/`);
+  if (role === "accountant" && req.method === "POST" && /^\/employees\/insurance-import\/(?:preview|apply)\/?$/.test(req.path)) {
+    next();
+    return;
+  }
   if (req.method === "GET" && req.path === "/ar-ap/party-ledger") {
     if (role === "accountant") next();
     else res.status(403).json({ error: "Зөвхөн админ, нягтлан харилцагчийн дэвтэр харах эрхтэй" });

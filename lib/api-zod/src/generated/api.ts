@@ -317,8 +317,100 @@ export const GetDashboardResponse = zod.object({
 
 
 /**
+ * @summary Preview identity-only updates from an insurance XLSX template
+ */
+export const previewEmployeeInsuranceImportBodyFileNameMax = 250;
+
+export const previewEmployeeInsuranceImportBodyContentBase64Max = 1400000;
+
+
+
+export const PreviewEmployeeInsuranceImportBody = zod.object({
+  "fileName": zod.string().min(1).max(previewEmployeeInsuranceImportBodyFileNameMax),
+  "contentBase64": zod.string().min(1).max(previewEmployeeInsuranceImportBodyContentBase64Max)
+})
+
+export const previewEmployeeInsuranceImportResponseRowsItemProfileGivenNameMax = 100;
+
+export const previewEmployeeInsuranceImportResponseRowsItemProfileRegistrationNumberMax = 30;
+
+export const previewEmployeeInsuranceImportResponseRowsItemProfileClanNameMax = 100;
+
+export const previewEmployeeInsuranceImportResponseRowsItemProfileParentNameMax = 100;
+
+export const previewEmployeeInsuranceImportResponseRowsItemProfileInsuranceTypeCodeMax = 20;
+
+export const previewEmployeeInsuranceImportResponseRowsItemProfileOccupationCodeMax = 30;
+
+export const previewEmployeeInsuranceImportResponseRowsItemProfileCitizenshipMax = 100;
+
+export const previewEmployeeInsuranceImportResponseRowsItemProfileEmailMax = 200;
+
+
+
+export const PreviewEmployeeInsuranceImportResponse = zod.object({
+  "previewToken": zod.string(),
+  "rows": zod.array(zod.object({
+  "rowNumber": zod.number().int(),
+  "name": zod.string(),
+  "phone": zod.string(),
+  "profile": zod.object({
+  "givenName": zod.string().max(previewEmployeeInsuranceImportResponseRowsItemProfileGivenNameMax).optional(),
+  "registrationNumber": zod.string().max(previewEmployeeInsuranceImportResponseRowsItemProfileRegistrationNumberMax),
+  "clanName": zod.string().max(previewEmployeeInsuranceImportResponseRowsItemProfileClanNameMax),
+  "parentName": zod.string().max(previewEmployeeInsuranceImportResponseRowsItemProfileParentNameMax),
+  "insuranceTypeCode": zod.string().max(previewEmployeeInsuranceImportResponseRowsItemProfileInsuranceTypeCodeMax),
+  "occupationCode": zod.string().max(previewEmployeeInsuranceImportResponseRowsItemProfileOccupationCodeMax),
+  "citizenship": zod.string().max(previewEmployeeInsuranceImportResponseRowsItemProfileCitizenshipMax),
+  "email": zod.string().max(previewEmployeeInsuranceImportResponseRowsItemProfileEmailMax)
+}),
+  "status": zod.enum(['matched', 'ambiguous', 'unmatched', 'conflict', 'invalid']),
+  "candidates": zod.array(zod.object({
+  "employeeId": zod.number().int(),
+  "name": zod.string(),
+  "parentName": zod.string(),
+  "registrationNumber": zod.string(),
+  "role": zod.string(),
+  "status": zod.string()
+})),
+  "suggestedEmployeeId": zod.number().int().nullable(),
+  "issues": zod.array(zod.string())
+})),
+  "totalRows": zod.number().int()
+})
+
+
+/**
+ * @summary Confirm employee choices and atomically update reporting metadata only
+ */
+export const applyEmployeeInsuranceImportBodyPreviewTokenMax = 1000000;
+
+
+
+export const applyEmployeeInsuranceImportBodySelectionsMax = 500;
+
+
+
+export const ApplyEmployeeInsuranceImportBody = zod.object({
+  "previewToken": zod.string().min(1).max(applyEmployeeInsuranceImportBodyPreviewTokenMax),
+  "selections": zod.array(zod.object({
+  "rowNumber": zod.number().int().min(1),
+  "employeeId": zod.number().int().min(1).nullable()
+})).max(applyEmployeeInsuranceImportBodySelectionsMax)
+})
+
+export const ApplyEmployeeInsuranceImportResponse = zod.object({
+  "updated": zod.number().int(),
+  "skipped": zod.number().int(),
+  "unchanged": zod.number().int()
+})
+
+
+/**
  * @summary List employees
  */
+export const listEmployeesResponseSocialInsuranceProfileOneGivenNameMax = 100;
+
 export const listEmployeesResponseSocialInsuranceProfileOneRegistrationNumberMax = 30;
 
 export const listEmployeesResponseSocialInsuranceProfileOneClanNameMax = 100;
@@ -337,6 +429,7 @@ export const listEmployeesResponseSocialInsuranceProfileOneEmailMax = 200;
 
 export const ListEmployeesResponseItem = zod.object({
   "socialInsuranceProfile": zod.union([zod.object({
+  "givenName": zod.string().max(listEmployeesResponseSocialInsuranceProfileOneGivenNameMax).optional(),
   "registrationNumber": zod.string().max(listEmployeesResponseSocialInsuranceProfileOneRegistrationNumberMax),
   "clanName": zod.string().max(listEmployeesResponseSocialInsuranceProfileOneClanNameMax),
   "parentName": zod.string().max(listEmployeesResponseSocialInsuranceProfileOneParentNameMax),
@@ -368,6 +461,8 @@ export const ListEmployeesResponse = zod.array(ListEmployeesResponseItem)
 /**
  * @summary Create an employee
  */
+export const createEmployeeBodySocialInsuranceProfileGivenNameMax = 100;
+
 export const createEmployeeBodySocialInsuranceProfileRegistrationNumberMax = 30;
 
 export const createEmployeeBodySocialInsuranceProfileClanNameMax = 100;
@@ -399,6 +494,7 @@ export const createEmployeeBodyMonthlyExpectedWorkDaysMax = 31;
 
 export const CreateEmployeeBody = zod.object({
   "socialInsuranceProfile": zod.object({
+  "givenName": zod.string().max(createEmployeeBodySocialInsuranceProfileGivenNameMax).optional(),
   "registrationNumber": zod.string().max(createEmployeeBodySocialInsuranceProfileRegistrationNumberMax),
   "clanName": zod.string().max(createEmployeeBodySocialInsuranceProfileClanNameMax),
   "parentName": zod.string().max(createEmployeeBodySocialInsuranceProfileParentNameMax),
@@ -422,6 +518,8 @@ export const CreateEmployeeBody = zod.object({
   "joinedAt": zod.coerce.date()
 })
 
+export const createEmployeeResponseSocialInsuranceProfileOneGivenNameMax = 100;
+
 export const createEmployeeResponseSocialInsuranceProfileOneRegistrationNumberMax = 30;
 
 export const createEmployeeResponseSocialInsuranceProfileOneClanNameMax = 100;
@@ -440,6 +538,7 @@ export const createEmployeeResponseSocialInsuranceProfileOneEmailMax = 200;
 
 export const CreateEmployeeResponse = zod.object({
   "socialInsuranceProfile": zod.union([zod.object({
+  "givenName": zod.string().max(createEmployeeResponseSocialInsuranceProfileOneGivenNameMax).optional(),
   "registrationNumber": zod.string().max(createEmployeeResponseSocialInsuranceProfileOneRegistrationNumberMax),
   "clanName": zod.string().max(createEmployeeResponseSocialInsuranceProfileOneClanNameMax),
   "parentName": zod.string().max(createEmployeeResponseSocialInsuranceProfileOneParentNameMax),
@@ -474,6 +573,8 @@ export const UpdateEmployeeParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+export const updateEmployeeBodySocialInsuranceProfileGivenNameMax = 100;
+
 export const updateEmployeeBodySocialInsuranceProfileRegistrationNumberMax = 30;
 
 export const updateEmployeeBodySocialInsuranceProfileClanNameMax = 100;
@@ -505,6 +606,7 @@ export const updateEmployeeBodySocialInsuranceSalaryMin = 0;
 
 export const UpdateEmployeeBody = zod.object({
   "socialInsuranceProfile": zod.object({
+  "givenName": zod.string().max(updateEmployeeBodySocialInsuranceProfileGivenNameMax).optional(),
   "registrationNumber": zod.string().max(updateEmployeeBodySocialInsuranceProfileRegistrationNumberMax),
   "clanName": zod.string().max(updateEmployeeBodySocialInsuranceProfileClanNameMax),
   "parentName": zod.string().max(updateEmployeeBodySocialInsuranceProfileParentNameMax),
@@ -531,6 +633,8 @@ export const UpdateEmployeeBody = zod.object({
   "salaryEffectiveDate": zod.coerce.date().optional()
 })
 
+export const updateEmployeeResponseSocialInsuranceProfileOneGivenNameMax = 100;
+
 export const updateEmployeeResponseSocialInsuranceProfileOneRegistrationNumberMax = 30;
 
 export const updateEmployeeResponseSocialInsuranceProfileOneClanNameMax = 100;
@@ -549,6 +653,7 @@ export const updateEmployeeResponseSocialInsuranceProfileOneEmailMax = 200;
 
 export const UpdateEmployeeResponse = zod.object({
   "socialInsuranceProfile": zod.union([zod.object({
+  "givenName": zod.string().max(updateEmployeeResponseSocialInsuranceProfileOneGivenNameMax).optional(),
   "registrationNumber": zod.string().max(updateEmployeeResponseSocialInsuranceProfileOneRegistrationNumberMax),
   "clanName": zod.string().max(updateEmployeeResponseSocialInsuranceProfileOneClanNameMax),
   "parentName": zod.string().max(updateEmployeeResponseSocialInsuranceProfileOneParentNameMax),

@@ -7,6 +7,8 @@
  */
 
 export interface SocialInsuranceProfile {
+  /** @maxLength 100 */
+  givenName?: string;
   /** @maxLength 30 */
   registrationNumber: string;
   /** @maxLength 100 */
