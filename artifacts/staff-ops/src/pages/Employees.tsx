@@ -49,9 +49,20 @@ function SalaryHistoryRowEditor({ employee, row, isBaseline, isCurrent, canChang
   const [effectiveFrom, setEffectiveFrom] = useState(row.effectiveFrom);
   const [baseSalary, setBaseSalary] = useState(String(row.baseSalary));
   const [socialInsuranceSalary, setSocialInsuranceSalary] = useState(String(row.socialInsuranceSalary));
+  const [payrollTaxExempt, setPayrollTaxExempt] = useState(row.payrollTaxExempt);
   const [salaryType, setSalaryType] = useState(row.salaryType);
   const [payFrequency, setPayFrequency] = useState(row.payFrequency);
   const [monthlyExpectedWorkDays, setMonthlyExpectedWorkDays] = useState(String(row.monthlyExpectedWorkDays));
+  const startEditing = () => {
+    setEffectiveFrom(row.effectiveFrom);
+    setBaseSalary(String(row.baseSalary));
+    setSocialInsuranceSalary(String(row.socialInsuranceSalary));
+    setPayrollTaxExempt(row.payrollTaxExempt);
+    setSalaryType(row.salaryType);
+    setPayFrequency(row.payFrequency);
+    setMonthlyExpectedWorkDays(String(row.monthlyExpectedWorkDays));
+    setEditing(true);
+  };
   const save = () => {
     const base = Number(baseSalary);
     const social = Number(socialInsuranceSalary);
@@ -60,7 +71,7 @@ function SalaryHistoryRowEditor({ employee, row, isBaseline, isCurrent, canChang
       window.alert('Огноо болон цалингийн дүнг зөв оруулна уу.');
       return;
     }
-    update.mutate({ id: employee.id, historyId: row.id, data: { effectiveFrom, baseSalary: base, socialInsuranceSalary: social, salaryType, payFrequency, monthlyExpectedWorkDays: monthlyExpected } }, {
+    update.mutate({ id: employee.id, historyId: row.id, data: { effectiveFrom, baseSalary: base, socialInsuranceSalary: social, payrollTaxExempt, salaryType, payFrequency, monthlyExpectedWorkDays: monthlyExpected } }, {
       onSuccess: (saved) => {
         qc.invalidateQueries({ queryKey: getListEmployeeSalaryHistoryQueryKey(employee.id) });
         qc.invalidateQueries({ queryKey: getListEmployeesQueryKey() });
@@ -84,11 +95,11 @@ function SalaryHistoryRowEditor({ employee, row, isBaseline, isCurrent, canChang
       </div></td>
       <td className="px-2 py-2 text-right"><input type="number" min="0" value={baseSalary} onChange={(event) => setBaseSalary(event.target.value)} className="h-8 w-28 rounded-lg border border-input bg-background px-2 text-right font-mono text-xs" data-testid={`input-salary-history-base-${row.id}`} /></td>
       <td className="px-2 py-2 text-right"><input type="number" min="0" value={socialInsuranceSalary} onChange={(event) => setSocialInsuranceSalary(event.target.value)} className="h-8 w-28 rounded-lg border border-input bg-background px-2 text-right font-mono text-xs" data-testid={`input-salary-history-social-${row.id}`} /></td>
-      <td className="px-4 py-3 text-center text-xs">{row.payrollTaxExempt ? 'Чөлөөлсөн' : 'Тооцно'}</td>
+      <td className="px-2 py-2"><select value={String(payrollTaxExempt)} onChange={(event) => setPayrollTaxExempt(event.target.value === 'true')} disabled={update.isPending} aria-label="НДШ, ХХОАТ тооцох төлөв" className="h-8 rounded-lg border border-input bg-background px-2 text-xs" data-testid={`select-salary-history-tax-${row.id}`}><option value="false">Татвар тооцно</option><option value="true">Чөлөөлсөн</option></select></td>
       <td className="px-2 py-2"><div className="flex justify-end gap-1"><Button type="button" size="sm" onClick={save} disabled={update.isPending} data-testid={`button-save-salary-history-${row.id}`}>{update.isPending ? 'Хадгалж байна...' : 'Хадгалах'}</Button><Button type="button" size="sm" variant="outline" onClick={() => setEditing(false)}>Болих</Button></div></td>
     </tr>;
   }
-  return <tr data-testid={`row-salary-history-${row.id}`}><td className="px-4 py-3 font-mono text-xs">{row.effectiveFrom}</td><td className="px-4 py-3 text-xs">{row.employeeType === 'office' ? 'Оффис' : row.salaryType === 'monthly' ? `Ээлж (сарын, ${row.monthlyExpectedWorkDays} өдөр)` : 'Ээлж (өдрийн)'}<span className="mt-1 block text-[10px] text-muted-foreground">{row.payFrequency === 'once' ? 'Сард 1 удаа' : 'Сард 2 удаа'}</span></td><td className="px-4 py-3 text-right font-mono text-xs">{money(row.baseSalary)}</td><td className="px-4 py-3 text-right font-mono text-xs">{money(row.socialInsuranceSalary)}</td><td className="px-4 py-3 text-center text-xs">{row.payrollTaxExempt ? 'Чөлөөлсөн' : 'Тооцно'}</td><td className="px-4 py-3"><div className="flex justify-end gap-1">{canChange && <><Button type="button" size="icon" variant="outline" onClick={() => setEditing(true)} aria-label="Цалингийн түүх засах" data-testid={`button-edit-salary-history-${row.id}`}><Pencil className="size-3.5" /></Button><Button type="button" size="icon" variant="outline" disabled={isBaseline || deletionPending} title={isBaseline ? 'Анхны цалингийн мөрийг устгах боломжгүй' : 'Буруу цалингийн мөр устгах'} onClick={onDelete} data-testid={`button-delete-salary-history-${row.id}`}><Trash2 className="size-3.5" /></Button></>}</div></td></tr>;
+  return <tr data-testid={`row-salary-history-${row.id}`}><td className="px-4 py-3 font-mono text-xs">{row.effectiveFrom}</td><td className="px-4 py-3 text-xs">{row.employeeType === 'office' ? 'Оффис' : row.salaryType === 'monthly' ? `Ээлж (сарын, ${row.monthlyExpectedWorkDays} өдөр)` : 'Ээлж (өдрийн)'}<span className="mt-1 block text-[10px] text-muted-foreground">{row.payFrequency === 'once' ? 'Сард 1 удаа' : 'Сард 2 удаа'}</span></td><td className="px-4 py-3 text-right font-mono text-xs">{money(row.baseSalary)}</td><td className="px-4 py-3 text-right font-mono text-xs">{money(row.socialInsuranceSalary)}</td><td className="px-4 py-3 text-center text-xs">{row.payrollTaxExempt ? 'Чөлөөлсөн' : 'Тооцно'}</td><td className="px-4 py-3"><div className="flex justify-end gap-1">{canChange && <><Button type="button" size="icon" variant="outline" onClick={startEditing} aria-label="Цалингийн түүх засах" data-testid={`button-edit-salary-history-${row.id}`}><Pencil className="size-3.5" /></Button><Button type="button" size="icon" variant="outline" disabled={isBaseline || deletionPending} title={isBaseline ? 'Анхны цалингийн мөрийг устгах боломжгүй' : 'Буруу цалингийн мөр устгах'} onClick={onDelete} data-testid={`button-delete-salary-history-${row.id}`}><Trash2 className="size-3.5" /></Button></>}</div></td></tr>;
 }
 
 function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: () => void }) {
@@ -185,13 +196,14 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
     if (!isCurrent) return;
     form.setValue('baseSalary', '');
     form.setValue('socialInsuranceSalary', String(saved.socialInsuranceSalary));
+    form.setValue('payrollTaxExempt', saved.payrollTaxExempt);
     form.setValue('employeeType', saved.employeeType);
     form.setValue('salaryType', saved.salaryType);
     form.setValue('payFrequency', saved.payFrequency);
     form.setValue('monthlyExpectedWorkDays', String(saved.monthlyExpectedWorkDays));
     setSalaryBaseline({
       baseSalary: Number(saved.baseSalary),
-      socialInsuranceSalary: Number(saved.socialInsuranceSalary),
+      socialInsuranceSalary: saved.payrollTaxExempt ? 0 : Number(saved.socialInsuranceSalary),
       payrollTaxExempt: saved.payrollTaxExempt,
       fullSalaryRegardlessAttendance: saved.fullSalaryRegardlessAttendance,
       employeeType: saved.employeeType,

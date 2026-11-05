@@ -3833,6 +3833,7 @@ components:
         effectiveFrom: { type: string, format: date }
         baseSalary: { type: number, minimum: 0 }
         socialInsuranceSalary: { type: number, minimum: 0 }
+        payrollTaxExempt: { type: boolean }
         fullSalaryRegardlessAttendance: { type: boolean }
         payFrequency: { type: string, enum: [once, twice] }
         salaryType: { type: string, enum: [daily, monthly] }

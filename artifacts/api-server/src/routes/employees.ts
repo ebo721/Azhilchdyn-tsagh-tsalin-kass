@@ -500,6 +500,9 @@ router.patch("/employees/:id/salary-history/:historyId", async (req, res, next) 
         effectiveFrom,
         baseSalary: input.baseSalary,
         socialInsuranceSalary: input.socialInsuranceSalary,
+        ...(input.payrollTaxExempt === undefined ? {} : {
+          payrollTaxExempt: input.payrollTaxExempt,
+        }),
         ...(input.salaryType === undefined ? {} : {
           salaryType: targetSalaryType,
         }),
@@ -517,6 +520,9 @@ router.patch("/employees/:id/salary-history/:historyId", async (req, res, next) 
         await tx.update(employeesTable).set({
           baseSalary: input.baseSalary,
           socialInsuranceSalary: input.socialInsuranceSalary,
+          ...(input.payrollTaxExempt === undefined ? {} : {
+            payrollTaxExempt: input.payrollTaxExempt,
+          }),
           ...(input.salaryType === undefined ? {} : {
             salaryType: employee.employeeType === "office" ? "monthly" : input.salaryType,
           }),
