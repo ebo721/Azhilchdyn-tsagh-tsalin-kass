@@ -361,12 +361,13 @@ export function Payroll() {
     try { await refreshOne(employeeId, true); } finally { setRefreshingAdvanceEmployeeId(null); }
   };
   const needsRefresh = (line: PayrollLine) => line.calculationReady === false || line.attendanceNeedsRefresh === true;
-  const refreshableLines = (query.data?.lines ?? []).filter((line) => needsRefresh(line) && !line.openingBalanceReviewRequired);
+  const pullableLines = (query.data?.lines ?? []).filter((line) => !line.openingBalanceReviewRequired);
+  const refreshableLines = pullableLines.filter(needsRefresh);
   const reviewBlockedCount = (query.data?.lines ?? []).filter((line) => line.openingBalanceReviewRequired).length;
-  const refreshAllChanged = async () => {
-    if (closed || bulkRunning || !refreshableLines.length) return;
+  const refreshLines = async (targetLines: PayrollLine[]) => {
+    if (closed || bulkRunning || refreshingIds.length > 0 || !targetLines.length) return;
     const targetMonth = month;
-    const ids = refreshableLines.map((line) => line.employeeId);
+    const ids = targetLines.map((line) => line.employeeId);
     setBulkRunning(true);
     setRefreshNotice(null);
     let ok = 0;
@@ -489,7 +490,10 @@ export function Payroll() {
         <Button onClick={() => void downloadReport('insurance')} variant="outline" disabled={downloadingReport !== null || query.isFetching || query.isError || !month} data-testid="button-download-insurance-report"><Download className="size-4" />{downloadingReport === 'insurance' ? 'Тайлан бэлдэж байна...' : 'НДШ тайлан · Excel'}</Button>
       </>}
       <Button onClick={() => setShowScheduleSettings(true)} variant="outline" data-testid="button-payroll-schedule-settings"><CalendarDays className="size-4" />Цалингийн хуваарь</Button>
-      {['admin', 'accountant', 'hr'].includes(session.data?.role ?? '') && <Button onClick={() => void refreshAllChanged()} variant="outline" disabled={bulkRunning || closed || refreshableLines.length === 0} title={closed ? 'Сар хаагдсан' : refreshableLines.length === 0 ? 'Шинэчлэх ажилтан алга' : undefined} data-testid="button-refresh-changed-payroll"><RefreshCw className={cn('size-4', bulkRunning && 'animate-spin')} />{bulkRunning ? 'Шинэчилж байна...' : `Өөрчлөгдсөнийг шинэчлэх (${refreshableLines.length})`}</Button>}
+      {canEditPayroll && <>
+        <Button onClick={() => void refreshLines(pullableLines)} variant="outline" disabled={bulkRunning || refreshingIds.length > 0 || closed || query.isFetching || query.isError || pullableLines.length === 0} title={closed ? 'Сар хаагдсан. Админ дахин нээсний дараа цаг татна.' : 'Сонгосон сарын бүх ажилтны ирц, цалинг дахин бодно. Бүртгэсэн олголт хэвээр үлдэнэ.'} data-testid="button-pull-payroll-attendance"><RefreshCw className={cn('size-4', bulkRunning && 'animate-spin')} />{bulkRunning ? 'Шинэчилж байна...' : 'Цаг татах'}</Button>
+        <Button onClick={() => void refreshLines(refreshableLines)} variant="outline" disabled={bulkRunning || refreshingIds.length > 0 || closed || refreshableLines.length === 0} title={closed ? 'Сар хаагдсан' : refreshableLines.length === 0 ? 'Шинэчлэх ажилтан алга' : undefined} data-testid="button-refresh-changed-payroll"><RefreshCw className={cn('size-4', bulkRunning && 'animate-spin')} />{bulkRunning ? 'Шинэчилж байна...' : `Өөрчлөгдсөнийг шинэчлэх (${refreshableLines.length})`}</Button>
+      </>}
       <Button onClick={() => setShowAdvance((value) => !value)} variant={showAdvance ? 'default' : 'outline'} data-testid="button-payroll-advance"><Coins className="size-4" />Урьдчилгаа цалин</Button>
       <MonthNavigator month={month} onChange={setMonth} prefix="payroll" ariaLabel="Цалингийн сар сонгох" />
     </div>

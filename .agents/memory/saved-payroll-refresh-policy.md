@@ -9,6 +9,12 @@ description: User-required distinction between viewing saved calculations, pulli
 
 **How to apply:** Report downloads and approving/reversing advance payments must not silently pull attendance. Payments and deductions still update financial amounts without refreshing saved earnings. Approved advances stay frozen. A month with no saved calculation must ask for an explicit pull; the separate explicit historical-balance repair remains necessary when prior financial debt is invalid.
 
+Explicit recalculation must remain available even when attendance itself has not changed.
+
+**Why:** A payroll calculation-rule change can leave saved deductions outdated without setting an attendance-change flag. The user needs to deliberately apply the new rule to an open month.
+
+**How to apply:** Keep manual full-month recalculation distinct from changed-attendance-only refresh. Preserve month-closure, role, and opening-balance-review protections; never automatically reopen or recalculate a closed month.
+
 Цалингийн сарыг хаадаг байх; хаасан сарын үлдэгдлийг дахин татах шаардлагагүй байх.
 Хаасан сарыг зөвхөн админ дахин нээж засдаг байх.
 

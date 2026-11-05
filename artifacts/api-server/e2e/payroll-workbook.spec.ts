@@ -29,6 +29,16 @@ test("downloads selected-month payroll Excel, shows server errors, and fits the 
   });
   const buffer = await buildPayrollWorkbook(summary, [], []);
   await page.route(/\/api\/payroll\?/, route => route.fulfill({ json: summary }));
+  // No real payroll writes: exercise a deliberate pull even when attendance
+  // has not changed, then verify that a closed month cannot be pulled.
+  const refreshRequests: string[] = [];
+  await page.route(/\/api\/payroll\/2026-10\/employees\/1\/refresh$/, route => {
+    refreshRequests.push(route.request().method());
+    return route.fulfill({ json: {
+      payroll: summary,
+      advance: { month: "2026-10", lines: [], approved: false },
+    } });
+  });
   let requestedMonth: string | null = null;
   let fail = false;
   await page.route(/\/api\/payroll\/export\?/, route => {
@@ -42,6 +52,19 @@ test("downloads selected-month payroll Excel, shows server errors, and fits the 
   await expect(page.getByRole("columnheader", { name: "НДШ бодох цалин", exact: true })).toBeVisible();
   await expect(page.getByTestId("value-payroll-insurance-salary-1")).toHaveText(insuranceSalary);
   await expect(page.getByTestId("value-payroll-total-insurance-salary")).toHaveText(insuranceSalary);
+  const pull = page.getByTestId("button-pull-payroll-attendance");
+  await expect(pull).toBeEnabled();
+  await expect(page.getByTestId("button-refresh-changed-payroll")).toBeDisabled();
+  await pull.click();
+  await expect(page.getByText("1/1 ажилтан шинэчлэгдлээ.", { exact: true })).toBeVisible();
+  expect(refreshRequests).toEqual(["POST"]);
+  summary.closedAt = "2026-11-01T00:00:00.000Z";
+  await page.reload();
+  await expect(pull).toBeDisabled();
+  await expect(page.getByTestId("button-reopen-payroll-month")).toBeVisible();
+  summary.closedAt = null;
+  await page.reload();
+  await expect(pull).toBeEnabled();
   const button = page.getByTestId("button-download-payroll-workbook");
   await expect(button).toBeEnabled();
   await expect(page.getByTestId("button-download-insurance-report")).toBeVisible();
