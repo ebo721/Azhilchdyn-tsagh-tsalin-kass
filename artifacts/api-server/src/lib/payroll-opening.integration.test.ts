@@ -10,6 +10,7 @@ import { payrollOpeningDraft, confirmPayrollOpening, PayrollOpeningConflict } fr
 import { refreshEmployeePayroll } from "./payroll-employee-refresh.js";
 import { readSavedPayroll } from "./payroll-attendance-snapshot.js";
 import { getPayrollAdvanceSummary } from "./payroll-calc-helpers.js";
+import { readPayrollRegister } from "./payroll-register.js";
 
 after(() => pool.end());
 
@@ -254,6 +255,72 @@ it("real SQL: reviewed opening debt and employee-scoped refresh preserve other p
       assert.equal(saved.lines.find(l => l.employeeId === 4)!.socialInsuranceSalary, 792_000);
       const snapshot = await query(`SELECT pulled_at FROM payroll_attendance_snapshots WHERE month='2024-09'`);
       assert.ok(new Date(snapshot.rows[0].pulled_at) > new Date('2024-10-01T00:00:00Z'));
+    });
+    await t.test("register excludes debt-only and unpaid absence rows, keeping worked and effective guaranteed staff", async () => {
+      await query(`INSERT INTO employees
+        (id,name,role,employee_type,salary_type,base_salary,payroll_tax_exempt,joined_at,pay_frequency,full_salary_regardless_attendance,inactive_at)
+        VALUES
+          (20,'Debt only payable','Test','shift','daily',100,true,'2024-07-01','twice',false,null),
+          (21,'Debt only receivable','Test','shift','daily',100,true,'2024-07-01','twice',false,null),
+          (22,'New worked late','Test','shift','daily',100,true,'2024-09-01','twice',false,null),
+          (23,'Leave only','Test','office','monthly',2000,true,'2024-09-01','twice',false,null),
+          (24,'Guaranteed no attendance','Test','office','monthly',2000,true,'2024-09-01','twice',true,null),
+          (25,'Future guarantee','Test','shift','monthly',2000,true,'2024-09-01','twice',true,null),
+          (26,'History gap','Test','office','monthly',2000,true,'2024-09-01','twice',true,null),
+          (27,'Ended before work','Test','shift','daily',100,true,'2024-08-01','twice',false,'2024-08-31'),
+          (28,'Not yet joined','Test','shift','daily',100,true,'2024-10-01','twice',false,null),
+          (29,'Historical guarantee','Test','shift','monthly',2000,true,'2024-09-01','twice',false,null)`);
+      await query(`INSERT INTO employee_salary_history
+        (employee_id,effective_from,employee_type,salary_type,base_salary,payroll_tax_exempt,pay_frequency,full_salary_regardless_attendance)
+        SELECT id,joined_at,employee_type,salary_type,base_salary,true,'twice',false
+        FROM employees WHERE id BETWEEN 20 AND 29 AND id NOT IN (24,26,29)`);
+      await query(`INSERT INTO employee_salary_history
+        (employee_id,effective_from,employee_type,salary_type,base_salary,payroll_tax_exempt,pay_frequency,full_salary_regardless_attendance)
+        VALUES (25,'2024-10-01','shift','monthly',2000,true,'twice',true),
+          (26,'2024-10-01','office','monthly',2000,true,'twice',true),
+          (29,'2024-09-01','shift','monthly',2000,true,'twice',true),
+          (29,'2024-10-01','shift','monthly',2000,true,'twice',false)`);
+      await query(`INSERT INTO attendance (employee_id,date,clock_in,clock_out,hours,status)
+        VALUES (22,'2024-09-07','08:00','16:00',8,'late'),
+          (23,'2024-09-06','00:00','00:00',0,'leave'),
+          (23,'2024-09-07','00:00','00:00',0,'absent'),
+          (27,'2024-09-06','08:00','16:00',8,'present'),
+          (28,'2024-09-06','08:00','16:00',8,'present')`);
+      await query(`UPDATE payroll_month_balances SET lines=lines ||
+        '[{"employeeId":20,"movement":0,"balanceAmount":4000},{"employeeId":21,"movement":0,"balanceAmount":-3000}]'::jsonb
+        WHERE month='2024-08'`);
+      const financialTables = ["payroll_month_balances", "payroll_attendance_snapshots", "payroll_adjustments", "payroll_advance_approvals"];
+      const before = await Promise.all(financialTables.map(table => query(`SELECT * FROM ${table} ORDER BY month`)));
+      const full = await readSavedPayroll("2024-09");
+      assert.equal(full.lines.find(l => l.employeeId === 20)?.carryoverAmount, 4000);
+      assert.equal(full.lines.find(l => l.employeeId === 21)?.carryoverAmount, -3000);
+      statements.length = 0;
+      const register = await readPayrollRegister("2024-09");
+      assert.deepEqual(register.lines.filter(l => l.employeeId >= 20).map(l => l.employeeId), [22, 24, 29]);
+      assert.equal(register.lines.find(l => l.employeeId === 22)?.calculationReady, false);
+      assert.equal(register.totalNet, register.lines.reduce((sum, l) => sum + l.net, 0));
+      assert.equal(register.totalGross, full.totalGross);
+      assert.ok(!statements.some(s => /^\s*(insert|update|delete)\b/i.test(s)), "register GET must never write");
+      const after = await Promise.all(financialTables.map(table => query(`SELECT * FROM ${table} ORDER BY month`)));
+      assert.deepEqual(after.map(r => r.rows), before.map(r => r.rows), "all debt, payment and saved earnings records remain unchanged");
+
+      await query("UPDATE users SET role='admin' WHERE id=1");
+      const [user] = await db.select().from(usersTable);
+      const server = app.listen(0);
+      try {
+        const response = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/payroll?month=2024-09`,
+          { headers: { Cookie: `${hrCookie.name}=${createStaffSession({ ...user, role: "admin" })}` } });
+        assert.equal(response.status, 200, await response.clone().text());
+        const body = await response.json() as typeof register;
+        assert.deepEqual(body.lines.map(l => l.employeeId), register.lines.map(l => l.employeeId));
+      } finally {
+        server.close();
+      }
+      // After an explicit pull, the saved calculation remains visible on reopening.
+      const refreshed = await refreshEmployeePayroll("2024-09", 22);
+      assert.equal(refreshed.payroll.lines.find(l => l.employeeId === 22)?.gross, 100);
+      assert.equal((await readPayrollRegister("2024-09")).lines.find(l => l.employeeId === 22)?.gross, 100);
+      assert.equal((await readSavedPayroll("2024-09")).lines.find(l => l.employeeId === 20)?.carryoverAmount, 4000);
     });
   } finally {
     t.mock.restoreAll();

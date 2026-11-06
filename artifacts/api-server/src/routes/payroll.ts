@@ -4,6 +4,7 @@ import { ensurePayrollReceivableJournal } from "../lib/payroll-receivable-postin
 import { DownloadPayrollWorkbookQueryParams, DownloadSocialInsuranceReportQueryParams } from "@workspace/api-zod";
 import { buildInsuranceWorkbook, InsuranceReportValidationError } from "../lib/social-insurance-report.js";
 import { buildPayrollWorkbook, PayrollWorkbookError } from "../lib/payroll-workbook.js";
+import { readPayrollRegister } from "../lib/payroll-register.js";
 import { createServer } from "node:http";
 import {
   CreateAttendanceBody,
@@ -296,7 +297,7 @@ router.get("/payroll/export", async (req, res, next) => {
       return;
     }
     const { month } = DownloadPayrollWorkbookQueryParams.parse(req.query);
-    const summary = await readSavedPayroll(month);
+    const summary = await readPayrollRegister(month);
     const [employees, history] = await Promise.all([
       db.select().from(employeesTable),
       db.select().from(employeeSalaryHistoryTable),
@@ -323,7 +324,7 @@ router.get("/payroll/social-insurance-report", async (req, res, next) => {
       return;
     }
     const { month } = DownloadSocialInsuranceReportQueryParams.parse(req.query);
-    const summary = await readSavedPayroll(month);
+    const summary = await readPayrollRegister(month);
     const employees = await db.select().from(employeesTable);
     const workbook = await buildInsuranceWorkbook(summary.lines, employees);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -342,7 +343,7 @@ router.get("/payroll/social-insurance-report", async (req, res, next) => {
 router.get("/payroll", async (req, res, next) => {
   try {
     const { month } = GetPayrollQueryParams.parse(req.query);
-    res.json(GetPayrollResponse.parse(await readSavedPayroll(month ?? currentMonth())));
+    res.json(GetPayrollResponse.parse(await readPayrollRegister(month ?? currentMonth())));
   } catch (error) {
     next(error);
   }
