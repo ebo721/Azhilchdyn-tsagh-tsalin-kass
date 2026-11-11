@@ -30,3 +30,9 @@ The Cash screen's delete action is limited to manually entered transactions.
 **Why:** The user explicitly chose “Зөвхөн гараар оруулсан гүйлгээ” when asked whether deletion should also include automatic bank and salary transactions.
 
 **How to apply:** Keep automatic transactions outside this action unless the user changes this scope; their deletion requires separate source-lifecycle handling.
+
+An existing unlinked manual salary cash entry may represent the same real payment as an unlinked bank transaction without being recorded as a payroll disbursement. Correcting payroll must claim that existing cash entry, not create another cash expense.
+
+**Why:** A legacy payment appeared in Cash while payroll still showed zero paid. The user explicitly chose the earning month and accepted the resulting overpayment balance before linking it.
+
+**How to apply:** Confirm the employee and earning month independently of the transfer date. Preserve the cash amount, date and identity; use the existing bank-funded journal lifecycle and an atomic payment/link correction. Keep saved earnings unchanged, propagate only the affected employee's financial balances, and never infer consent to overpayment or rewrite other employees' records.
