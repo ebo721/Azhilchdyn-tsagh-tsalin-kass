@@ -16,6 +16,7 @@ import { PayrollOpeningBalances } from '@/components/PayrollOpeningBalances';
 import { AdvancePaymentHistory } from '@/components/AdvancePaymentHistory';
 import { rebuildPayrollBalances } from '@workspace/api-client-react';
 import { getListJournalEntriesQueryKey, getGetJournalTrialBalanceQueryKey } from '@workspace/api-client-react';
+import { getListShiftsQueryKey, getListShiftPlansQueryKey, useListShifts, useListShiftPlans } from '@workspace/api-client-react';
 
 const mongolianMonthLabel = (value: string) => {
   const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value);
@@ -39,8 +40,17 @@ type PayrollAdjustmentForm = {
 type ExtraRow = { sequence: number; amount: string; date: string; saved: boolean };
 type AdvanceEmployeeFilter = 'all' | 'shift' | 'office';
 const round2 = (n: number) => Number(n.toFixed(2));
-const filterPayrollAdvanceLines = <T extends { employeeType: string }>(lines: T[], filter: AdvanceEmployeeFilter) =>
-  filter === 'all' ? lines : lines.filter((line) => line.employeeType === filter);
+const filterPayrollAdvanceLines = <T extends { employeeId: number; employeeType: string }>(
+  lines: T[], filter: AdvanceEmployeeFilter, shiftFilter = 'all',
+  plans: Array<{ employeeId: number; shiftId: number; date: string }> = [],
+  periodStart?: string, periodEnd?: string,
+) => {
+  const assigned = new Set(plans.filter(plan => String(plan.shiftId) === shiftFilter
+    && (!periodStart || plan.date >= periodStart) && (!periodEnd || plan.date <= periodEnd))
+    .map(plan => plan.employeeId));
+  return lines.filter(line => (filter === 'all' || line.employeeType === filter)
+    && (shiftFilter === 'all' || assigned.has(line.employeeId)));
+};
 
 function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; month: string; onClose: () => void }) {
   const save = useUpsertPayrollAdjustment();
@@ -269,8 +279,23 @@ export function Payroll() {
   const [advanceDates, setAdvanceDates] = useState<Record<number, string>>({});
   const [advanceAmounts, setAdvanceAmounts] = useState<Record<number, string>>({});
   const [advanceEmployeeFilter, setAdvanceEmployeeFilter] = useState<AdvanceEmployeeFilter>('all');
+  const [advanceShiftFilter, setAdvanceShiftFilter] = useState('all');
   const query = useGetPayroll({ month });
   const advanceQuery = useGetPayrollAdvance({ month }, { query: { queryKey: getGetPayrollAdvanceQueryKey({ month }), enabled: showAdvance } });
+  const advanceShifts = useListShifts({ query: { queryKey: getListShiftsQueryKey(), enabled: showAdvance } });
+  const advanceStartMonth = advanceQuery.data?.periodStart.slice(0, 7) ?? month;
+  const advanceEndMonth = advanceQuery.data?.advancePeriodEnd.slice(0, 7) ?? month;
+  const needsShiftPlans = showAdvance && advanceShiftFilter !== 'all';
+  const advanceStartPlans = useListShiftPlans({ month: advanceStartMonth }, {
+    query: { queryKey: getListShiftPlansQueryKey({ month: advanceStartMonth }), enabled: needsShiftPlans },
+  });
+  const advanceEndPlans = useListShiftPlans({ month: advanceEndMonth }, {
+    query: { queryKey: getListShiftPlansQueryKey({ month: advanceEndMonth }), enabled: needsShiftPlans && advanceEndMonth !== advanceStartMonth },
+  });
+  const advanceShiftLoading = needsShiftPlans && (advanceStartPlans.isLoading
+    || (advanceEndMonth !== advanceStartMonth && advanceEndPlans.isLoading));
+  const advanceShiftError = needsShiftPlans && (advanceStartPlans.isError
+    || (advanceEndMonth !== advanceStartMonth && advanceEndPlans.isError));
   const cashClosures = useListCashClosures();
   const closedCashDates = new Set(cashClosures.data?.map((closure) => closure.date) ?? []);
   const session = useGetAuthSession();
@@ -334,7 +359,10 @@ export function Payroll() {
     { gross: 0, socialInsuranceSalary: 0, advanceAmount: 0, payable: 0, paidAmount: 0, remaining: 0 },
   );
   const partial = !closed && (query.data?.lines ?? []).some((line) => line.calculationReady === false || line.attendanceNeedsRefresh || line.openingBalanceReviewRequired);
-  const filteredAdvanceLines = filterPayrollAdvanceLines(advanceQuery.data?.lines ?? [], advanceEmployeeFilter);
+  const filteredAdvanceLines = filterPayrollAdvanceLines(advanceQuery.data?.lines ?? [], advanceEmployeeFilter,
+    advanceShiftFilter, [...(advanceStartPlans.data ?? []),
+      ...(advanceEndMonth !== advanceStartMonth ? advanceEndPlans.data ?? [] : [])],
+    advanceQuery.data?.periodStart, advanceQuery.data?.advancePeriodEnd);
   const displayedAdvanceTotal = filteredAdvanceLines.reduce((total, line) => {
     const amount = Number(advanceAmounts[line.employeeId] ?? line.advanceAmount);
     return total + (Number.isFinite(amount) ? amount : 0);
@@ -542,10 +570,20 @@ export function Payroll() {
               <option value="office">Оффис</option>
             </select>
           </label>
+          <label className="flex items-center gap-2 text-xs font-semibold">Ээлж
+            <select value={advanceShiftFilter} onChange={(event) => setAdvanceShiftFilter(event.target.value)}
+              disabled={advanceShifts.isLoading || advanceShifts.isError}
+              className="h-9 max-w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary"
+              aria-label="Урьдчилгаа цалинг ээлжээр шүүх" data-testid="select-payroll-advance-shift-filter">
+              <option value="all">Бүх ээлж</option>
+              {(advanceShifts.data ?? []).map(shift => <option key={shift.id} value={shift.id}>{shift.name}</option>)}
+            </select>
+          </label>
+          {advanceShifts.isError && <button type="button" onClick={() => void advanceShifts.refetch()} className="text-xs text-destructive" role="alert">Ээлж ачаалсангүй. Дахин оролдох</button>}
         </div>
         {advanceQuery.data?.approved ? <div className="flex flex-wrap items-center gap-2"><div className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground" data-testid="status-advance-approved"><Check className="mr-2 inline size-4" />Батлагдсан · {advanceQuery.data.approvalDate ? dateLabel(advanceQuery.data.approvalDate) : ''}</div><Button variant="outline" onClick={revertApproval} disabled={revertAdvanceApproval.isPending || closed} data-testid="button-revert-payroll-advance">{revertAdvanceApproval.isPending ? 'Хүсэлт илгээж байна...' : 'Батлалт устгах хүсэлт'}</Button></div> : <div className="flex flex-wrap items-end gap-2"><label className="space-y-1 text-xs font-semibold">Батлах огноо<input type="date" value={advanceApprovalDate} onChange={(event) => setAdvanceApprovalDate(event.target.value)} className="block h-10 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="input-payroll-advance-approval-date" /></label><Button onClick={approve} disabled={approveAdvance.isPending || advanceQuery.isLoading || closed} data-testid="button-approve-payroll-advance"><Check className="size-4" />{approveAdvance.isPending ? 'Баталж байна...' : 'Урьдчилгаа батлах'}</Button></div>}
       </div>
-      {advanceQuery.isLoading ? <div className="p-5"><LoadingBlock className="h-36" /></div> : advanceQuery.isError ? <div className="p-5"><ErrorBlock onRetry={() => advanceQuery.refetch()} /></div> : <div className="overflow-x-auto">
+      {advanceQuery.isLoading || advanceShiftLoading ? <div className="p-5"><LoadingBlock className="h-36" /></div> : advanceQuery.isError || advanceShiftError ? <div className="p-5"><ErrorBlock onRetry={() => { void advanceQuery.refetch(); if (needsShiftPlans) { void advanceStartPlans.refetch(); if (advanceEndMonth !== advanceStartMonth) void advanceEndPlans.refetch(); } }} /></div> : <div className="overflow-x-auto">
         <table className="w-full min-w-[1400px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Ажилтан</th><th className="px-5 py-3 text-right">Үндсэн цалин</th><th className="px-5 py-3 text-right">Ажилласан хоног</th><th className="px-5 py-3 text-right">Өдрийн цалин</th><th className="px-5 py-3 text-right">Нийт олгох цалин</th><th className="px-5 py-3 text-right">Олгох урьдчилгаа</th><th className="px-5 py-3 text-center">Гүйлгээний огноо</th><th className="px-5 py-3 text-center">Төлөв</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead>
           <tbody className="divide-y divide-border">{filteredAdvanceLines.length === 0 ? <tr><td colSpan={9} className="px-5 py-8 text-center text-sm text-muted-foreground" data-testid="empty-payroll-advance-filter">Шүүлтүүрт тохирох ажилтан алга.</td></tr> : filteredAdvanceLines.map((line) => {
             const selectedDate = advanceDates[line.employeeId] ?? line.paymentDate ?? advanceQuery.data?.approvalDate ?? today();

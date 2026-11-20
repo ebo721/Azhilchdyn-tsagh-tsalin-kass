@@ -11,6 +11,8 @@ const { renderToStaticMarkup } = require('react-dom/server');
 let lines = [];
 let advanceLines = [];
 let advanceFilter = 'all';
+let advanceShiftFilter = 'all';
+let shiftPlans = [];
 let renderAdvanceSection = false;
 let stateIndex = 0;
 const baseLine = {
@@ -24,7 +26,9 @@ const query = (data) => ({ data, isLoading: false, isError: false });
 const mutation = () => ({ isPending: false, mutate() {} });
 const api = {
   useGetPayroll: () => query({ month: '2026-09', lines }),
-  useGetPayrollAdvance: () => query({ lines: advanceLines, approved: false }),
+  useGetPayrollAdvance: () => query({ lines: advanceLines, approved: false, periodStart: '2026-09-01', advancePeriodEnd: '2026-09-15' }),
+  useListShifts: () => query([{ id: 1, name: 'Нэгдүгээр ээлж' }, { id: 2, name: 'Хоёрдугаар ээлж' }]),
+  useListShiftPlans: ({ month }) => query(shiftPlans.filter(plan => plan.date.startsWith(month))),
   useListCashClosures: () => query([]),
   useGetAuthSession: () => query({ role: 'admin' }),
 };
@@ -46,6 +50,7 @@ vm.runInNewContext(compiled.outputText + '\nexports.AdjustmentFixture = PayrollA
         stateIndex += 1;
         if (stateIndex === 13 && renderAdvanceSection) return [true, () => {}];
         if (stateIndex === 19) return [advanceFilter, () => {}];
+        if (stateIndex === 20) return [advanceShiftFilter, () => {}];
         return [typeof value === 'function' ? value() : value, () => {}];
       },
     };
@@ -151,6 +156,57 @@ test('advance employee filter shows the selected type and sums only visible adva
   renderAdvanceSection = false;
   advanceFilter = 'all';
   advanceLines = [];
+});
+
+test('advance shift filter uses plans in the advance period and totals only matching employees', () => {
+  renderAdvanceSection = true;
+  advanceFilter = 'all';
+  advanceShiftFilter = '1';
+  advanceLines = [
+    { employeeId: 10, employeeName: 'Early shift', employeeType: 'shift', advanceAmount: 250000 },
+    { employeeId: 20, employeeName: 'Other shift', employeeType: 'shift', advanceAmount: 700000 },
+    { employeeId: 30, employeeName: 'Later assignment', employeeType: 'shift', advanceAmount: 900000 },
+  ];
+  shiftPlans = [
+    { employeeId: 10, shiftId: 1, date: '2026-09-03' },
+    { employeeId: 10, shiftId: 1, date: '2026-09-05' },
+    { employeeId: 20, shiftId: 2, date: '2026-09-03' },
+    { employeeId: 30, shiftId: 1, date: '2026-09-16' },
+  ];
+  try {
+    const html = render([]);
+    assert.match(html, /select-payroll-advance-shift-filter/);
+    assert.match(html, /Нэгдүгээр ээлж/);
+    assert.match(html, /Early shift/);
+    assert.doesNotMatch(html, /Other shift|Later assignment/);
+    assert.match(html, new RegExp(`data-testid="value-total-payroll-advance"[^>]*>${money(250000)}`));
+    advanceShiftFilter = '2';
+    const second = render([]);
+    assert.match(second, /Other shift/);
+    assert.doesNotMatch(second, /Early shift|Later assignment/);
+    advanceShiftFilter = 'all';
+    assert.match(render([]), /Later assignment/);
+  } finally {
+    advanceShiftFilter = 'all';
+    advanceFilter = 'all';
+    renderAdvanceSection = false;
+    shiftPlans = [];
+    advanceLines = [];
+  }
+});
+
+test('advance shift filtering handles cross-month periods, boundaries and combined employee type filters', () => {
+  const filter = pageModule.exports.filterPayrollAdvanceLines;
+  const fixtures = [{ employeeId: 1, employeeType: 'shift' }, { employeeId: 2, employeeType: 'office' }];
+  const plans = [
+    { employeeId: 1, shiftId: 4, date: '2026-08-31' },
+    { employeeId: 2, shiftId: 4, date: '2026-09-05' },
+    { employeeId: 1, shiftId: 5, date: '2026-09-06' },
+  ];
+  assert.deepEqual(Array.from(filter(fixtures, 'all', '4', plans, '2026-08-31', '2026-09-05'), l => l.employeeId), [1, 2]);
+  assert.deepEqual(Array.from(filter(fixtures, 'shift', '4', plans, '2026-08-31', '2026-09-05'), l => l.employeeId), [1]);
+  assert.equal(filter(fixtures, 'all', '5', plans, '2026-08-31', '2026-09-05').length, 0);
+  assert.equal(filter(fixtures, 'all', '99', plans).length, 0);
 });
 
 test('adjustment shows the full recipient account without truncation or masking', () => {
