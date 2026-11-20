@@ -9,6 +9,10 @@ const { renderToStaticMarkup } = require('react-dom/server');
 
 // Render the real page with read-only fixtures: no authentication or database writes.
 let lines = [];
+let advanceLines = [];
+let advanceFilter = 'all';
+let renderAdvanceSection = false;
+let stateIndex = 0;
 const baseLine = {
   employeeId: 1, employeeName: 'Fixture', role: 'Test', daysWorked: 20,
   gross: 1000, deductions: 100, paidAmount: 900, carryoverAmount: 0,
@@ -20,7 +24,7 @@ const query = (data) => ({ data, isLoading: false, isError: false });
 const mutation = () => ({ isPending: false, mutate() {} });
 const api = {
   useGetPayroll: () => query({ month: '2026-09', lines }),
-  useGetPayrollAdvance: () => query({ lines: [], approved: false }),
+  useGetPayrollAdvance: () => query({ lines: advanceLines, approved: false }),
   useListCashClosures: () => query([]),
   useGetAuthSession: () => query({ role: 'admin' }),
 };
@@ -32,13 +36,18 @@ const compiled = ts.transpileModule(source, {
 });
 assert.equal(compiled.diagnostics.length, 0);
 const pageModule = { exports: {} };
-vm.runInNewContext(compiled.outputText + '\nexports.AdjustmentFixture = PayrollAdjustmentModal;', {
+vm.runInNewContext(compiled.outputText + '\nexports.AdjustmentFixture = PayrollAdjustmentModal; exports.filterPayrollAdvanceLines = filterPayrollAdvanceLines;', {
   module: pageModule, exports: pageModule.exports, console,
   URLSearchParams, window: { location: { search: '' } },
   require(id) {
     if (id === 'react') return {
       ...React, useEffect() {}, useRef: (value) => ({ current: value }),
-      useState: (value) => [typeof value === 'function' ? value() : value, () => {}],
+      useState: (value) => {
+        stateIndex += 1;
+        if (stateIndex === 13 && renderAdvanceSection) return [true, () => {}];
+        if (stateIndex === 19) return [advanceFilter, () => {}];
+        return [typeof value === 'function' ? value() : value, () => {}];
+      },
     };
     if (id === 'react/jsx-runtime') return require('react/jsx-runtime');
     if (id === '@workspace/api-client-react') return new Proxy(api, {
@@ -55,6 +64,7 @@ vm.runInNewContext(compiled.outputText + '\nexports.AdjustmentFixture = PayrollA
   },
 });
 const render = (fixtures) => {
+  stateIndex = 0;
   lines = fixtures.map((line, index) => ({ ...baseLine, employeeId: index + 1, ...line }));
   return renderToStaticMarkup(React.createElement(pageModule.exports.Payroll));
 };
@@ -118,6 +128,29 @@ test('shows the saved insurance salary separately from gross and deductions, inc
   assert.equal(remainingCell(html, 'value-payroll-insurance-salary-3'), '—');
   assert.equal(remainingCell(html, 'value-payroll-total-insurance-salary'), money(1200000));
   assert.doesNotMatch(render([]), /value-payroll-total-insurance-salary/);
+});
+
+test('advance employee filter shows the selected type and sums only visible advances', () => {
+  renderAdvanceSection = true;
+  advanceFilter = 'shift';
+  advanceLines = [
+    { employeeId: 10, employeeName: 'Shift fixture', employeeType: 'shift', baseSalary: 0, daysWorked: 5, dailySalary: 100, totalSalary: 500, advanceAmount: 400, paid: false },
+    { employeeId: 11, employeeName: 'Office fixture', employeeType: 'office', baseSalary: 1000, daysWorked: 20, dailySalary: 0, totalSalary: 1000, advanceAmount: 700, paid: false },
+  ];
+  const html = render([]);
+  assert.match(html, /data-testid="select-payroll-advance-employee-filter"/);
+  assert.match(html, /<option value="shift"[^>]*>Ээлжийн<\/option>/);
+  assert.match(html, /Shift fixture/);
+  assert.doesNotMatch(html, /Office fixture/);
+  assert.equal(remainingCell(html, 'value-total-payroll-advance'), money(400));
+
+  const filter = pageModule.exports.filterPayrollAdvanceLines;
+  assert.deepEqual(filter(advanceLines, 'all').map((line) => line.employeeType), ['shift', 'office']);
+  assert.deepEqual(filter(advanceLines, 'office').map((line) => line.employeeType), ['office']);
+  assert.deepEqual(filter([], 'shift'), []);
+  renderAdvanceSection = false;
+  advanceFilter = 'all';
+  advanceLines = [];
 });
 
 test('adjustment shows the full recipient account without truncation or masking', () => {

@@ -37,7 +37,10 @@ type PayrollAdjustmentForm = {
   secondPaymentDate: string;
 };
 type ExtraRow = { sequence: number; amount: string; date: string; saved: boolean };
+type AdvanceEmployeeFilter = 'all' | 'shift' | 'office';
 const round2 = (n: number) => Number(n.toFixed(2));
+const filterPayrollAdvanceLines = <T extends { employeeType: string }>(lines: T[], filter: AdvanceEmployeeFilter) =>
+  filter === 'all' ? lines : lines.filter((line) => line.employeeType === filter);
 
 function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; month: string; onClose: () => void }) {
   const save = useUpsertPayrollAdjustment();
@@ -265,6 +268,7 @@ export function Payroll() {
   const [advanceApprovalDate, setAdvanceApprovalDate] = useState(today());
   const [advanceDates, setAdvanceDates] = useState<Record<number, string>>({});
   const [advanceAmounts, setAdvanceAmounts] = useState<Record<number, string>>({});
+  const [advanceEmployeeFilter, setAdvanceEmployeeFilter] = useState<AdvanceEmployeeFilter>('all');
   const query = useGetPayroll({ month });
   const advanceQuery = useGetPayrollAdvance({ month }, { query: { queryKey: getGetPayrollAdvanceQueryKey({ month }), enabled: showAdvance } });
   const cashClosures = useListCashClosures();
@@ -330,7 +334,8 @@ export function Payroll() {
     { gross: 0, socialInsuranceSalary: 0, advanceAmount: 0, payable: 0, paidAmount: 0, remaining: 0 },
   );
   const partial = !closed && (query.data?.lines ?? []).some((line) => line.calculationReady === false || line.attendanceNeedsRefresh || line.openingBalanceReviewRequired);
-  const displayedAdvanceTotal = (advanceQuery.data?.lines ?? []).reduce((total, line) => {
+  const filteredAdvanceLines = filterPayrollAdvanceLines(advanceQuery.data?.lines ?? [], advanceEmployeeFilter);
+  const displayedAdvanceTotal = filteredAdvanceLines.reduce((total, line) => {
     const amount = Number(advanceAmounts[line.employeeId] ?? line.advanceAmount);
     return total + (Number.isFinite(amount) ? amount : 0);
   }, 0);
@@ -528,12 +533,21 @@ export function Payroll() {
 
     {showAdvance && <section className="mb-6 overflow-hidden rounded-2xl border border-accent/60 bg-card shadow-sm" data-testid="section-payroll-advance">
       <div className="flex flex-col justify-between gap-4 border-b border-border bg-accent/10 px-5 py-4 sm:flex-row sm:items-center">
-        <h2 className="text-lg font-bold">{month.replace('-', ' оны ')} сарын урьдчилгаа цалин</h2>
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-lg font-bold">{month.replace('-', ' оны ')} сарын урьдчилгаа цалин</h2>
+          <label className="flex items-center gap-2 text-xs font-semibold">Ажилтны төрөл
+            <select value={advanceEmployeeFilter} onChange={(event) => setAdvanceEmployeeFilter(event.target.value as AdvanceEmployeeFilter)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="select-payroll-advance-employee-filter">
+              <option value="all">Бүх ажилтан</option>
+              <option value="shift">Ээлжийн</option>
+              <option value="office">Оффис</option>
+            </select>
+          </label>
+        </div>
         {advanceQuery.data?.approved ? <div className="flex flex-wrap items-center gap-2"><div className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground" data-testid="status-advance-approved"><Check className="mr-2 inline size-4" />Батлагдсан · {advanceQuery.data.approvalDate ? dateLabel(advanceQuery.data.approvalDate) : ''}</div><Button variant="outline" onClick={revertApproval} disabled={revertAdvanceApproval.isPending || closed} data-testid="button-revert-payroll-advance">{revertAdvanceApproval.isPending ? 'Хүсэлт илгээж байна...' : 'Батлалт устгах хүсэлт'}</Button></div> : <div className="flex flex-wrap items-end gap-2"><label className="space-y-1 text-xs font-semibold">Батлах огноо<input type="date" value={advanceApprovalDate} onChange={(event) => setAdvanceApprovalDate(event.target.value)} className="block h-10 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="input-payroll-advance-approval-date" /></label><Button onClick={approve} disabled={approveAdvance.isPending || advanceQuery.isLoading || closed} data-testid="button-approve-payroll-advance"><Check className="size-4" />{approveAdvance.isPending ? 'Баталж байна...' : 'Урьдчилгаа батлах'}</Button></div>}
       </div>
       {advanceQuery.isLoading ? <div className="p-5"><LoadingBlock className="h-36" /></div> : advanceQuery.isError ? <div className="p-5"><ErrorBlock onRetry={() => advanceQuery.refetch()} /></div> : <div className="overflow-x-auto">
         <table className="w-full min-w-[1400px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Ажилтан</th><th className="px-5 py-3 text-right">Үндсэн цалин</th><th className="px-5 py-3 text-right">Ажилласан хоног</th><th className="px-5 py-3 text-right">Өдрийн цалин</th><th className="px-5 py-3 text-right">Нийт олгох цалин</th><th className="px-5 py-3 text-right">Олгох урьдчилгаа</th><th className="px-5 py-3 text-center">Гүйлгээний огноо</th><th className="px-5 py-3 text-center">Төлөв</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead>
-          <tbody className="divide-y divide-border">{advanceQuery.data?.lines.map((line) => {
+          <tbody className="divide-y divide-border">{filteredAdvanceLines.length === 0 ? <tr><td colSpan={9} className="px-5 py-8 text-center text-sm text-muted-foreground" data-testid="empty-payroll-advance-filter">Шүүлтүүрт тохирох ажилтан алга.</td></tr> : filteredAdvanceLines.map((line) => {
             const selectedDate = advanceDates[line.employeeId] ?? line.paymentDate ?? advanceQuery.data?.approvalDate ?? today();
             const cashClosed = closedCashDates.has(selectedDate) || Boolean(line.paymentDate && closedCashDates.has(line.paymentDate));
             const installments = Boolean(line.payments);
