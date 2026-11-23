@@ -11,6 +11,7 @@ for (const width of [1440, 402]) {
       finalPaymentDate: "2026-11-30", schedule };
     const lines = ["Previous month shift", "Current month shift", "Other shift", "Later assignment"].map((name, index) => ({
       employeeId: index + 1, employeeName: name, employeeType: "shift", baseSalary: 100000,
+      bankAccountNumber: index === 0 ? "MN000000000000000002" : "",
       daysWorked: 5, dailySalary: 100000, totalSalary: 500000, advanceAmount: 250000,
       paid: false, paymentDate: null,
     }));
@@ -46,6 +47,8 @@ for (const width of [1440, 402]) {
     });
     await page.goto(`/payroll?month=${month}`);
     await page.getByTestId("button-payroll-advance").click();
+    await expect(page.getByTestId("value-advance-bank-account-1")).toHaveText("MN000000000000000002");
+    await expect(page.getByTestId("value-advance-bank-account-2")).toHaveText("Бүртгээгүй");
     await page.getByTestId("input-advance-amount-1").fill("300000");
     const filter = page.getByTestId("select-payroll-advance-shift-filter");
     await filter.selectOption("1");

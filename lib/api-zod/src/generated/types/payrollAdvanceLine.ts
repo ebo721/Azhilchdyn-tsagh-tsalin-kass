@@ -11,6 +11,7 @@ import type { PayrollAdvanceLineEmployeeType } from './payrollAdvanceLineEmploye
 export interface PayrollAdvanceLine {
   employeeId: number;
   employeeName: string;
+  bankAccountNumber?: string;
   employeeType: PayrollAdvanceLineEmployeeType;
   baseSalary: number;
   daysWorked: number;

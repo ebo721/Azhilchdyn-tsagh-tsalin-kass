@@ -4181,6 +4181,7 @@ components:
       properties:
         employeeId: { type: integer }
         employeeName: { type: string }
+        bankAccountNumber: { type: string }
         employeeType: { type: string, enum: [shift, office] }
         baseSalary: { type: number }
         daysWorked: { type: number }

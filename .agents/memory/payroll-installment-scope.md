@@ -20,3 +20,9 @@ description: Business expectations for salary paid in smaller amounts across thr
 **Why:** The user requested extending direct bank installments to approved advances while preserving prior single-payment links.
 
 **How to apply:** Keep approved advance totals and actual disbursements distinct in every salary read, balance rebuild, and payable projection. Removing a bank link alone retains the recorded payment; cancelling an installment is a separate protected action.
+
+Урьдчилгаа цалингийн нээлттэй хүснэгтэд идэвхгүй болон тухайн урьдчилгааны хугацаанд огт ажиллаагүй ажилтан харагдахгүй. Ажилтны дансны дугаарыг тусдаа баганад харуулна.
+
+**Why:** The user explicitly reported inactive and unworked staff appearing in advances and requested an account-number column.
+
+**How to apply:** Ordinary office staff need present/late attendance too; an effective guaranteed-salary exception remains eligible without attendance. Apply the same roster rule when approving saved drafts so hidden legacy rows are not approved. Filtering is not permission to delete approved payments, recalculate saved earnings, or rewrite closed months. This active-status restriction applies to open advances, not to historical monthly payroll's date-based employment coverage.

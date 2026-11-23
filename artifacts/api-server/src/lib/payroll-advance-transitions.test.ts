@@ -3,6 +3,7 @@ import { test } from "node:test";
 import type { attendanceTable, employeesTable, employeeSalaryHistoryTable } from "@workspace/db";
 import { calculatePayrollAdvanceLine, shiftDailyRate } from "./payroll-calc-helpers.js";
 import { PayrollConfigurationError } from "./shift-insurance.js";
+import { hasPayrollAdvanceEntitlement } from "./payroll-advance-eligibility.js";
 
 type Employee = typeof employeesTable.$inferSelect;
 type History = typeof employeeSalaryHistoryTable.$inferSelect;
@@ -67,11 +68,26 @@ test("future office history is ignored and attendance order does not change shif
   assert.equal(line.advanceAmount, 1_785_714.29);
 });
 
-test("pure office keeps 50% even without attendance; office salary changes use latest effective rate once", () => {
-  assert.equal(calculate([history("2026-09-16", "office")], []).advanceAmount, 1_250_000);
+test("ordinary office without attendance gets no advance; worked office still uses its latest rate once", () => {
+  assert.equal(calculate([history("2026-09-16", "office")], []).advanceAmount, 0);
   assert.equal(calculate([history("2026-09-16", "office"), history("2026-10-10", "office", {
     baseSalary: 2_800_000,
   })]).advanceAmount, 1_400_000);
+});
+
+test("only present/late active employees or effective guaranteed salary qualify for an advance", () => {
+  const qualifies = (rows = [] as Attendance[], rates = [history("2026-09-16", "office")], current = employee) =>
+    hasPayrollAdvanceEntitlement(current, rows, rates, "2026-10-01", "2026-10-15");
+  assert.equal(qualifies(), false);
+  assert.equal(qualifies([attendance("2026-10-01", { status: "leave" }), attendance("2026-10-02", { status: "absent" })]), false);
+  assert.equal(qualifies([attendance("2026-10-15", { status: "late" })]), true);
+  assert.equal(qualifies([attendance("2026-10-16")]), false);
+  assert.equal(qualifies([attendance("2026-10-01")], undefined, { ...employee, status: "inactive" }), false);
+  assert.equal(qualifies([attendance("2026-10-01")], undefined, { ...employee, inactiveAt: "2026-09-30" }), false);
+  assert.equal(qualifies([], [history("2026-09-16", "office", { fullSalaryRegardlessAttendance: true })]), true);
+  assert.equal(qualifies([], [history("2026-10-16", "office", { fullSalaryRegardlessAttendance: true })],
+    { ...employee, fullSalaryRegardlessAttendance: true }), false);
+  assert.equal(calculate([history("2026-09-16", "office", { fullSalaryRegardlessAttendance: true })], []).advanceAmount, 1_250_000);
 });
 
 test("daily shift pay does not need expected days, but monthly shift pay must never divide by a guessed one", () => {

@@ -11,6 +11,7 @@ import { refreshEmployeePayroll } from "./payroll-employee-refresh.js";
 import { readSavedPayroll } from "./payroll-attendance-snapshot.js";
 import { getPayrollAdvanceSummary } from "./payroll-calc-helpers.js";
 import { readPayrollRegister } from "./payroll-register.js";
+import { readPayrollAdvanceRegister } from "./payroll-advance-register.js";
 
 after(() => pool.end());
 
@@ -321,6 +322,93 @@ it("real SQL: reviewed opening debt and employee-scoped refresh preserve other p
       assert.equal(refreshed.payroll.lines.find(l => l.employeeId === 22)?.gross, 100);
       assert.equal((await readPayrollRegister("2024-09")).lines.find(l => l.employeeId === 22)?.gross, 100);
       assert.equal((await readSavedPayroll("2024-09")).lines.find(l => l.employeeId === 20)?.carryoverAmount, 4000);
+    });
+    await t.test("advance register excludes inactive and unworked legacy rows, exposes accounts and approves only eligible staff", async () => {
+      // The earlier membership-only fixture deliberately had no salary history;
+      // actual calculation still requires a verified historical baseline.
+      await query(`INSERT INTO employee_salary_history
+        (employee_id,effective_from,employee_type,salary_type,base_salary,payroll_tax_exempt,pay_frequency,full_salary_regardless_attendance)
+        SELECT id,joined_at,employee_type,salary_type,base_salary,true,'twice',true FROM employees WHERE id=24`);
+      await query(`INSERT INTO employees
+        (id,name,role,employee_type,salary_type,base_salary,payroll_tax_exempt,joined_at,pay_frequency,status,full_salary_regardless_attendance,bank_account_number)
+        VALUES
+          (40,'Worked office','Test','office','monthly',2000,true,'2024-09-01','twice','active',false,'MN000000000000000002'),
+          (41,'Unworked office','Test','office','monthly',2000,true,'2024-09-01','twice','active',false,''),
+          (42,'Inactive worked','Test','office','monthly',2000,true,'2024-09-01','twice','inactive',false,''),
+          (43,'Worked shift','Test','shift','daily',100,true,'2024-09-01','twice','active',false,'00001234'),
+          (44,'Guaranteed office','Test','office','monthly',2000,true,'2024-09-01','twice','active',true,''),
+          (45,'Leave only office','Test','office','monthly',2000,true,'2024-09-01','twice','active',false,''),
+          (46,'Future guaranteed office','Test','office','monthly',2000,true,'2024-09-01','twice','active',true,'')`);
+      await query(`INSERT INTO employee_salary_history
+        (employee_id,effective_from,employee_type,salary_type,base_salary,payroll_tax_exempt,pay_frequency,full_salary_regardless_attendance)
+        SELECT id,joined_at,employee_type,salary_type,base_salary,true,'twice',id=44
+        FROM employees WHERE id BETWEEN 40 AND 46`);
+      await query(`INSERT INTO employee_salary_history
+        (employee_id,effective_from,employee_type,salary_type,base_salary,payroll_tax_exempt,pay_frequency,full_salary_regardless_attendance)
+        VALUES (46,'2024-10-01','office','monthly',2000,true,'twice',true)`);
+      await query(`INSERT INTO attendance (employee_id,date,clock_in,clock_out,hours,status)
+        VALUES (40,'2024-09-02','08:00','16:00',8,'present'),(42,'2024-09-02','08:00','16:00',8,'present'),
+          (43,'2024-09-03','08:00','16:00',8,'late'),(45,'2024-09-04','00:00','00:00',0,'leave')`);
+      const calculated = GetPayrollAdvanceResponse.parse(
+        await getPayrollAdvanceSummary("2024-09", db, { ignoreApproval: true }));
+      assert.deepEqual(calculated.lines.filter(l => l.employeeId >= 40).map(l => l.employeeId).sort(), [40, 43, 44]);
+      assert.equal(calculated.lines.find(l => l.employeeId === 40)?.bankAccountNumber, 'MN000000000000000002');
+      const ghosts = [41, 42, 45, 46].map(employeeId => ({
+        employeeId, employeeName: 'Legacy draft row', employeeType: 'office',
+        baseSalary: 2000, daysWorked: 0, dailySalary: 0, totalSalary: 2000,
+        advanceAmount: 1000, paid: false, paymentDate: null,
+      }));
+      const legacy = { ...calculated, lines: [...calculated.lines.filter(l => l.employeeId >= 40), ...ghosts] };
+      await query(`UPDATE payroll_attendance_snapshots SET advance=$1::jsonb WHERE month='2024-09'`, [JSON.stringify(legacy)]);
+      await query(`DELETE FROM payroll_advance_approvals WHERE month='2024-09'`);
+      const persistedBefore = (await query(`SELECT advance FROM payroll_attendance_snapshots WHERE month='2024-09'`)).rows;
+      const register = await readPayrollAdvanceRegister("2024-09");
+      assert.deepEqual(register.lines.map(l => l.employeeId).sort(), [40, 43, 44]);
+      assert.equal(register.totalAmount, 2100);
+      assert.equal(register.lines.find(l => l.employeeId === 43)?.bankAccountNumber, '00001234');
+      assert.equal(register.lines.find(l => l.employeeId === 44)?.bankAccountNumber, '');
+      assert.deepEqual((await query(`SELECT advance FROM payroll_attendance_snapshots WHERE month='2024-09'`)).rows, persistedBefore);
+      await query(`UPDATE users SET role='admin' WHERE id=1`);
+      const [user] = await db.select().from(usersTable);
+      const server = app.listen(0);
+      try {
+        const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api`;
+        const headers = { Cookie: `${hrCookie.name}=${createStaffSession({ ...user, role: "admin" })}`, 'Content-Type': 'application/json' };
+        const response = await fetch(`${url}/payroll-advance?month=2024-09`, { headers });
+        assert.equal(response.status, 200);
+        const body = await response.json() as typeof register;
+        assert.deepEqual(body.lines, register.lines);
+        const invalid = await fetch(`${url}/payroll-advance/approve`, {
+          method: 'POST', headers, body: JSON.stringify({ month: '2024-09', approvalDate: '2024-09-15',
+            lines: [{ employeeId: 41, advanceAmount: 1000 }] }),
+        });
+        assert.equal(invalid.status, 409);
+        const approval = await fetch(`${url}/payroll-advance/approve`, {
+          method: 'POST', headers, body: JSON.stringify({ month: '2024-09', approvalDate: '2024-09-15',
+            lines: register.lines.map(l => ({ employeeId: l.employeeId, advanceAmount: l.advanceAmount })) }),
+        });
+        assert.equal(approval.status, 200, await approval.clone().text());
+        const saved = (await query(`SELECT lines FROM payroll_advance_approvals WHERE month='2024-09'`)).rows[0].lines;
+        assert.deepEqual(saved.map((l: { employeeId: number }) => l.employeeId).sort(), [40, 43, 44]);
+        assert.equal((await readPayrollAdvanceRegister("2024-09")).totalAmount, 2100);
+        // A later status change hides the row but must never erase recorded paid installments.
+        saved[0] = { ...saved[0], paid: true, paymentDate: '2024-09-15' };
+        await query(`UPDATE payroll_advance_approvals SET lines=$1::jsonb WHERE month='2024-09'`, [JSON.stringify(saved)]);
+        await query(`UPDATE employees SET status='inactive' WHERE id=$1`, [saved[0].employeeId]);
+        const paidBefore = (await query(`SELECT lines FROM payroll_advance_approvals WHERE month='2024-09'`)).rows;
+        const filtered = await readPayrollAdvanceRegister("2024-09");
+        assert.ok(!filtered.lines.some(l => l.employeeId === saved[0].employeeId));
+        assert.deepEqual((await query(`SELECT lines FROM payroll_advance_approvals WHERE month='2024-09'`)).rows, paidBefore);
+        const closedAdvance = { ...register, lines: saved, approved: true };
+        await query(`INSERT INTO payroll_month_closures (month,payroll,advance,closed_by)
+          SELECT month,payroll,$1::jsonb,1 FROM payroll_attendance_snapshots WHERE month='2024-09'`,
+        [JSON.stringify(closedAdvance)]);
+        const closed = await readPayrollAdvanceRegister("2024-09");
+        assert.equal(closed.lines.length, 3, "closing preserves the original approved roster regardless of later status");
+        assert.equal(closed.lines.find(l => l.employeeId === saved[0].employeeId)?.paid, true);
+      } finally {
+        server.close();
+      }
     });
   } finally {
     t.mock.restoreAll();
