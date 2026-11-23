@@ -1704,6 +1704,7 @@ export const PullPayrollAttendanceResponse = zod.object({
   "lines": zod.array(zod.object({
   "employeeId": zod.number().int(),
   "employeeName": zod.string(),
+  "bankAccountNumber": zod.string().optional(),
   "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "daysWorked": zod.number(),
@@ -1876,6 +1877,7 @@ export const RefreshEmployeePayrollResponse = zod.object({
   "lines": zod.array(zod.object({
   "employeeId": zod.number().int(),
   "employeeName": zod.string(),
+  "bankAccountNumber": zod.string().optional(),
   "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "daysWorked": zod.number(),
@@ -2227,6 +2229,7 @@ export const GetPayrollAdvanceResponse = zod.object({
   "lines": zod.array(zod.object({
   "employeeId": zod.number().int(),
   "employeeName": zod.string(),
+  "bankAccountNumber": zod.string().optional(),
   "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "daysWorked": zod.number(),
@@ -2314,6 +2317,7 @@ export const ApprovePayrollAdvanceResponse = zod.object({
   "lines": zod.array(zod.object({
   "employeeId": zod.number().int(),
   "employeeName": zod.string(),
+  "bankAccountNumber": zod.string().optional(),
   "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "daysWorked": zod.number(),
@@ -2393,6 +2397,7 @@ export const RevertPayrollAdvanceApprovalResponse = zod.object({
   "lines": zod.array(zod.object({
   "employeeId": zod.number().int(),
   "employeeName": zod.string(),
+  "bankAccountNumber": zod.string().optional(),
   "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "daysWorked": zod.number(),
@@ -2478,6 +2483,7 @@ export const UpdatePayrollAdvancePaymentResponse = zod.object({
   "lines": zod.array(zod.object({
   "employeeId": zod.number().int(),
   "employeeName": zod.string(),
+  "bankAccountNumber": zod.string().optional(),
   "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "daysWorked": zod.number(),
@@ -2562,6 +2568,7 @@ export const DeletePayrollAdvanceInstallmentResponse = zod.object({
   "lines": zod.array(zod.object({
   "employeeId": zod.number().int(),
   "employeeName": zod.string(),
+  "bankAccountNumber": zod.string().optional(),
   "employeeType": zod.enum(['shift', 'office']),
   "baseSalary": zod.number(),
   "daysWorked": zod.number(),

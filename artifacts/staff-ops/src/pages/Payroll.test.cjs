@@ -209,6 +209,24 @@ test('advance shift filtering handles cross-month periods, boundaries and combin
   assert.equal(filter(fixtures, 'all', '99', plans).length, 0);
 });
 
+test('advance account column shows full saved numbers and missing accounts with correct footer alignment', () => {
+  renderAdvanceSection = true;
+  advanceLines = [
+    { employeeId: 1, employeeName: 'Account fixture', employeeType: 'office', bankAccountNumber: 'MN000000000000000002', advanceAmount: 100 },
+    { employeeId: 2, employeeName: 'No account fixture', employeeType: 'shift', advanceAmount: 200 },
+  ];
+  try {
+    const html = render([]);
+    assert.match(html, /<th[^>]*>Дансны дугаар<\/th>/);
+    assert.equal(remainingCell(html, 'value-advance-bank-account-1'), 'MN000000000000000002');
+    assert.equal(remainingCell(html, 'value-advance-bank-account-2'), 'Бүртгээгүй');
+    assert.match(html, /colSpan="6"[^>]*>Нийт олгох урьдчилгаа/);
+  } finally {
+    renderAdvanceSection = false;
+    advanceLines = [];
+  }
+});
+
 test('adjustment shows the full recipient account without truncation or masking', () => {
   const renderAdjustment = (account) => renderToStaticMarkup(React.createElement(pageModule.exports.AdjustmentFixture, {
     line: { ...baseLine, bankAccountNumber: account }, month: '2026-09', onClose() {},

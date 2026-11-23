@@ -17,6 +17,7 @@ import { currentMonth, daysInMonth, money, nextMonth, previousMonth } from "./da
 import { PayrollConfigurationError, shiftInsuredDailySalary } from "./shift-insurance.js";
 import { defaultPayrollSchedule, scheduleDate, weekdayDatesBetween, type PayrollCalculationData, type SalaryHistoryRow, type DbClient } from "./route-shared.js";
 import { readMonthlyPayroll } from "./payroll-balance-store.js";
+import { hasPayrollAdvanceEntitlement } from "./payroll-advance-eligibility.js";
 
 export const monthlyIncomeTaxRelief = (socialInsuranceSalary: number) => {
   if (socialInsuranceSalary <= 500_000) return 20_000;
@@ -387,16 +388,7 @@ export async function getPayrollAdvanceSummary(
     connection.select().from(employeeSalaryHistoryTable).where(employeeId ? eq(employeeSalaryHistoryTable.employeeId, employeeId) : undefined),
   ]);
   const employees = allEmployees.filter((employee) => {
-    if (employee.joinedAt > period.advancePeriodEnd
-      || (employee.inactiveAt && employee.inactiveAt < period.periodStart)) return false;
-    // An empty period before the first salary row has no advance to draft.
-    // Do not manufacture salary settings merely to decide payment frequency.
-    const hasHistory = salaryHistory.some(row =>
-      row.employeeId === employee.id && row.effectiveFrom <= period.advancePeriodEnd);
-    const hasAttendance = records.some(row => row.employeeId === employee.id
-      && String(row.date) >= employee.joinedAt
-      && (!employee.inactiveAt || String(row.date) <= employee.inactiveAt));
-    if (!hasHistory && !hasAttendance && !employee.fullSalaryRegardlessAttendance) return false;
+    if (!hasPayrollAdvanceEntitlement(employee, records, salaryHistory, period.periodStart, period.advancePeriodEnd)) return false;
     return salaryAt(employee, salaryHistory, period.advancePeriodEnd).payFrequency === "twice";
   });
   const firstHalfRecords = records.filter((record) =>
@@ -434,7 +426,7 @@ export function calculatePayrollAdvanceLine(
   advancePeriodEnd?: string,
 ) {
   const attendedRecords = records.filter((record) =>
-    record.employeeId === employee.id
+    employee.status === "active" && record.employeeId === employee.id
     && ["present", "late"].includes(record.status)
     && String(record.date) >= employee.joinedAt
     && (!employee.inactiveAt || String(record.date) <= employee.inactiveAt)
@@ -462,12 +454,14 @@ export function calculatePayrollAdvanceLine(
     date: String(record.date), salary: salaryFor(String(record.date)),
   })).filter(record => record.salary.employeeType === "shift");
   const shiftSalary = shiftRecords.reduce((total, record) => total + shiftDailyRate(record.salary), 0);
-  const officeBase = officeSalary ? Number(officeSalary.baseSalary) : 0;
+  const entitled = hasPayrollAdvanceEntitlement(employee, records, salaryHistory, eligibleStart, cutoff);
+  const officeBase = entitled && officeSalary ? Number(officeSalary.baseSalary) : 0;
   const dailySalary = shiftRecords.length ? money(shiftDailyRate(shiftRecords[0].salary)) : 0;
   const totalSalary = money(officeBase + shiftSalary);
   return {
     employeeId: employee.id,
     employeeName: employee.name,
+    bankAccountNumber: employee.bankAccountNumber ?? "",
     employeeType: cutoffSalary.employeeType,
     baseSalary: money(Number(cutoffSalary.baseSalary)),
     daysWorked,

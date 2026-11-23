@@ -5,6 +5,7 @@ import { DownloadPayrollWorkbookQueryParams, DownloadSocialInsuranceReportQueryP
 import { buildInsuranceWorkbook, InsuranceReportValidationError } from "../lib/social-insurance-report.js";
 import { buildPayrollWorkbook, PayrollWorkbookError } from "../lib/payroll-workbook.js";
 import { readPayrollRegister } from "../lib/payroll-register.js";
+import { readPayrollAdvanceRegister } from "../lib/payroll-advance-register.js";
 import { createServer } from "node:http";
 import {
   CreateAttendanceBody,
@@ -727,7 +728,7 @@ router.delete("/payroll-adjustments/:month/:employeeId/transactions/:sequence", 
 router.get("/payroll-advance", async (req, res, next) => {
   try {
     const { month } = GetPayrollAdvanceQueryParams.parse(req.query);
-    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month ?? currentMonth(), db, { savedOnly: true })));
+    res.json(GetPayrollAdvanceResponse.parse(await readPayrollAdvanceRegister(month ?? currentMonth())));
   } catch (error) {
     next(error);
   }
@@ -750,7 +751,7 @@ router.post("/payroll-advance/approve", async (req, res, next) => {
     }
     await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
-      const existing = await getPayrollAdvanceSummary(month, tx, { savedOnly: true });
+      const existing = await readPayrollAdvanceRegister(month, tx);
       if (!existing.approved) {
         const currentLines = existing.lines as Array<Record<string, unknown> & {
           employeeId: number;
@@ -774,8 +775,12 @@ router.post("/payroll-advance/approve", async (req, res, next) => {
         }).onConflictDoNothing();
       }
     });
-    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month, db, { savedOnly: true })));
+    res.json(GetPayrollAdvanceResponse.parse(await readPayrollAdvanceRegister(month)));
   } catch (error) {
+    if (error instanceof Error && "status" in error && error.status === 409) {
+      res.status(409).json({ error: error.message });
+      return;
+    }
     next(error);
   }
 });
