@@ -227,8 +227,8 @@ function BankArApCreateForm({ row, onClose, onSaved }: { row: BankArApRow; onClo
   const account = accounts.data?.find((a) => a.code === code && a.isActive);
   const q = search.trim().toLocaleLowerCase('mn-MN');
   const empOptions = useMemo(() => (employees.data ?? [])
-    .filter((e) => e.status === 'active' && (!q || e.name.toLocaleLowerCase('mn-MN').includes(q) || String(e.id) === employeeId))
-    .sort((a, b) => a.name.localeCompare(b.name, 'mn')), [employees.data, q, employeeId]);
+    .filter((e) => e.status === 'active' && (!q || e.name.toLocaleLowerCase('mn-MN').includes(q)))
+    .sort((a, b) => a.name.localeCompare(b.name, 'mn')), [employees.data, q]);
   const supOptions = useMemo(() => [...(suppliers.data ?? [])].sort((a, b) => a.name.localeCompare(b.name, 'mn')), [suppliers.data]);
 
   const loading = accounts.isLoading || (partyType === 'employee' ? employees.isLoading : suppliers.isLoading);
@@ -280,8 +280,10 @@ function BankArApCreateForm({ row, onClose, onSaved }: { row: BankArApRow; onClo
             {partyType === 'employee' ? (
               <div className="space-y-1.5 text-xs font-semibold">
                 <label htmlFor="bank-ar-ap-employee-search">Ажилтан</label>
-                <Input id="bank-ar-ap-employee-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ажилтны нэрээр хайх" disabled={pending} data-testid="input-bank-ar-ap-employee-search" />
-                <select aria-label="Ажилтан сонгох" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} disabled={pending} className={cls} data-testid="select-bank-ar-ap-employee">
+                <Input id="bank-ar-ap-employee-search" value={search} onChange={(e) => { setSearch(e.target.value); setEmployeeId(''); }} placeholder="Ажилтны нэрээр хайх" aria-controls="bank-ar-ap-employee-results" disabled={pending} data-testid="input-bank-ar-ap-employee-search" />
+                <select id="bank-ar-ap-employee-results" aria-label="Ажилтан сонгох" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}
+                  size={q ? Math.max(2, Math.min(empOptions.length + 1, 6)) : 1}
+                  disabled={pending} className={q ? cls.replace('h-10', 'h-auto py-2') : cls} data-testid="select-bank-ar-ap-employee">
                   <option value="">Ажилтан сонгоно уу</option>
                   {empOptions.map((e) => <option key={e.id} value={e.id}>{e.name} - {e.role}</option>)}
                 </select>
