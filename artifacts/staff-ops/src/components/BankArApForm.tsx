@@ -227,8 +227,8 @@ function BankArApCreateForm({ row, onClose, onSaved }: { row: BankArApRow; onClo
   const account = accounts.data?.find((a) => a.code === code && a.isActive);
   const q = search.trim().toLocaleLowerCase('mn-MN');
   const empOptions = useMemo(() => (employees.data ?? [])
-    .filter((e) => e.status === 'active' && (!q || e.name.toLocaleLowerCase('mn-MN').includes(q)))
-    .sort((a, b) => a.name.localeCompare(b.name, 'mn')), [employees.data, q]);
+    .filter((e) => (!receivable || e.status === 'active') && (!q || e.name.toLocaleLowerCase('mn-MN').includes(q)))
+    .sort((a, b) => a.name.localeCompare(b.name, 'mn')), [employees.data, q, receivable]);
   const supOptions = useMemo(() => [...(suppliers.data ?? [])].sort((a, b) => a.name.localeCompare(b.name, 'mn')), [suppliers.data]);
 
   const loading = accounts.isLoading || (partyType === 'employee' ? employees.isLoading : suppliers.isLoading);
@@ -285,7 +285,7 @@ function BankArApCreateForm({ row, onClose, onSaved }: { row: BankArApRow; onClo
                   size={q ? Math.max(2, Math.min(empOptions.length + 1, 6)) : 1}
                   disabled={pending} className={q ? cls.replace('h-10', 'h-auto py-2') : cls} data-testid="select-bank-ar-ap-employee">
                   <option value="">Ажилтан сонгоно уу</option>
-                  {empOptions.map((e) => <option key={e.id} value={e.id}>{e.name} - {e.role}</option>)}
+                  {empOptions.map((e) => <option key={e.id} value={e.id}>{e.name} - {e.role}{e.status !== 'active' ? ' · Идэвхгүй' : ''}</option>)}
                 </select>
                 {empOptions.length === 0 && <span className="block font-normal text-muted-foreground" data-testid="text-bank-ar-ap-employee-empty">Идэвхтэй ажилтан олдсонгүй.</span>}
               </div>

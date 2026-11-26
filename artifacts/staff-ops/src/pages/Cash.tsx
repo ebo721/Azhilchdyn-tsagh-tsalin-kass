@@ -463,6 +463,7 @@ export function BankTransactions() {
   const [incomeMonth, setIncomeMonth] = useState(currentMonth());
   const [filterMonth, setFilterMonth] = useState(currentMonth());
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
+  const [bankTypeFilter, setBankTypeFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
@@ -480,7 +481,10 @@ export function BankTransactions() {
     select: (rows) => rows.filter((row) => payrollAccountSelected || !['payroll', 'payroll_advance'].includes(row.transactionKind)),
   } });
   const pendingJournalReviewCount = journalReview.data?.length ?? 0;
-  const filteredBankTransactions = list.data?.filter((transaction) => transactionParam ? transaction.id === transactionParam : peerParam ? transaction.id === peerParam : (view === 'paired' ? Boolean(transaction.internalTransfer) : !transaction.internalTransfer) && transaction.transactionAt.slice(0, 7) === filterMonth) ?? [];
+  const filteredBankTransactions = list.data?.filter((transaction) =>
+    (bankTypeFilter === 'all' || transaction.type === bankTypeFilter)
+    && (transactionParam ? transaction.id === transactionParam : peerParam ? transaction.id === peerParam : (view === 'paired' ? Boolean(transaction.internalTransfer) : !transaction.internalTransfer) && transaction.transactionAt.slice(0, 7) === filterMonth)
+  ) ?? [];
   useEffect(() => {
     if (selectedAccountId === null && bankAccounts.data?.length) setSelectedAccountId(bankAccounts.data[0].id);
   }, [bankAccounts.data, selectedAccountId]);
@@ -595,6 +599,15 @@ export function BankTransactions() {
         <button type="button" onClick={() => setView('unresolved')} className={cn('rounded-lg px-3 py-1.5 text-xs font-bold', view === 'unresolved' && !peerParam ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground')} data-testid="button-view-unresolved">Шийдэгдээгүй</button>
         <button type="button" onClick={() => setView('paired')} className={cn('rounded-lg px-3 py-1.5 text-xs font-bold', view === 'paired' || peerParam ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground')} data-testid="button-view-paired">Дотоод шилжүүлэг</button>
         {peerParam && <Link href="/bank-transactions" className="text-xs font-semibold text-primary underline" data-testid="link-clear-peer">Хос гүйлгээ #{peerParam} харуулж байна · цэвэрлэх</Link>}
+        <label className="flex items-center gap-2 text-xs font-semibold">
+          Гүйлгээний төрөл
+          <select value={bankTypeFilter} onChange={(event) => setBankTypeFilter(event.target.value as typeof bankTypeFilter)}
+            className="h-9 rounded-lg border border-input bg-background px-2 text-sm" data-testid="select-bank-type-filter">
+            <option value="all">Бүгд</option>
+            <option value="income">Орлого</option>
+            <option value="expense">Зарлага</option>
+          </select>
+        </label>
       </div>
       {list.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : list.isError ? <ErrorBlock onRetry={() => list.refetch()} /> : !filteredBankTransactions.length ? <EmptyState title={view === 'paired' ? 'Дотоод шилжүүлэг алга' : 'Сонгосон сард банкны гүйлгээ алга'}  detail="Өмнөх эсвэл дараагийн сар руу шилжих, эсвэл Kapitron банкны .xlsx хуулгыг уншуулна уу." icon={Landmark} /> : <div className="overflow-x-auto"><table className="w-full min-w-[1360px] text-left" data-testid="table-bank-transactions"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Гүйлгээний огноо</th><th className="px-5 py-3">Төрөл</th><th className="px-5 py-3">Банк</th><th className="px-5 py-3">Өөрийн данс</th><th className="px-5 py-3">Харьцсан данс</th><th className="px-5 py-3">Гүйлгээний утга</th><th className="px-5 py-3">GL данс</th><th className="px-5 py-3 text-right">Дүн</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{filteredBankTransactions.map((row) => {
         const income = row.type === 'income';

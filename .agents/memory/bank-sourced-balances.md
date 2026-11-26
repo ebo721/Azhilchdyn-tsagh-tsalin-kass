@@ -26,3 +26,9 @@ description: User-required dates and financial meaning of creating new receivabl
 **Why:** The user requires non-employee individuals as debt counterparties, without registering them as employees.
 
 **How to apply:** Allow counterparty registration within either bank-sourced new-debt form. Keep counterparty registration separate from financial posting: registering a name alone must not create debt or payroll records.
+
+“өглөг үүсгэхэд идэвхигүй ажилтан дээр үүсгэж болдог байх”
+
+**Why:** The user explicitly requires bank-sourced payables to support inactive employees.
+
+**How to apply:** Include inactive employees when searching for the recipient of a new bank payable and permit posting against them. This request does not widen new-receivable eligibility.

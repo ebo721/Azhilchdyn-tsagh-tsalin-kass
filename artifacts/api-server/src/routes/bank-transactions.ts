@@ -627,10 +627,13 @@ router.post("/bank-transactions/:id/post-journal", async (req, res, next) => {
         // Share the employee deletion lock, including polymorphic payable origins.
         const [party] = allocation.partyType === "employee"
           ? await tx.select({ id: employeesTable.id }).from(employeesTable)
-            .where(and(eq(employeesTable.id, allocation.employeeId!), eq(employeesTable.status, "active"))).for("share")
+            .where(and(eq(employeesTable.id, allocation.employeeId!),
+              bank.type === "expense" ? eq(employeesTable.status, "active") : undefined)).for("share")
           : await tx.select({ id: inventorySuppliersTable.id }).from(inventorySuppliersTable)
             .where(eq(inventorySuppliersTable.id, allocation.supplierId!)).for("share");
-        if (!party) throw new JournalValidationError("Идэвхтэй ажилтан эсвэл бүртгэлтэй харилцагч сонгоно уу");
+        if (!party) throw new JournalValidationError(bank.type === "expense"
+          ? "Идэвхтэй ажилтан эсвэл бүртгэлтэй харилцагч сонгоно уу"
+          : "Бүртгэлтэй ажилтан эсвэл харилцагч сонгоно уу");
       }
       for (const { allocation } of repayments) {
         const [origin] = "receivableId" in allocation

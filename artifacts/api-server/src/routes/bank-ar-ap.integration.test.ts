@@ -182,6 +182,30 @@ describe("bank-sourced new receivables and payables", () => {
     }
   });
 
+  it("allows inactive employees for new payables but not new receivables", async () => {
+    await db.update(employeesTable).set({ status: "inactive" }).where(eq(employeesTable.id, otherEmployeeId));
+    try {
+      const incoming = await newBank("income");
+      const response = await call(`/bank-transactions/${incoming.id}/post-journal`, "POST", {
+        ...payload("income"), allocation: { kind: "create", partyType: "employee", employeeId: otherEmployeeId },
+      });
+      assert.equal(response.status, 200, await response.clone().text());
+      const { journalEntryId } = await response.json();
+      const [debt] = await db.select().from(payablesTable).where(eq(payablesTable.journalEntryId, journalEntryId));
+      assert.equal(debt.partyId, otherEmployeeId);
+      assert.equal(Number(debt.remainingBalance), Number(incoming.amount));
+      const outgoing = await newBank("expense");
+      const rejected = await call(`/bank-transactions/${outgoing.id}/post-journal`, "POST", {
+        ...payload("expense"), allocation: { kind: "create", partyType: "employee", employeeId: otherEmployeeId },
+      });
+      assert.equal(rejected.status, 400, await rejected.clone().text());
+      const [saved] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, outgoing.id));
+      assert.equal(saved.journalEntryId, null);
+    } finally {
+      await db.update(employeesTable).set({ status: "active" }).where(eq(employeesTable.id, otherEmployeeId));
+    }
+  });
+
   it("serializes duplicate submissions and rejects changing the party after posting", async () => {
     const bank = await newBank("income");
     const responses = await Promise.all([1, 2].map(() => call(`/bank-transactions/${bank.id}/post-journal`, "POST", payload("income"))));

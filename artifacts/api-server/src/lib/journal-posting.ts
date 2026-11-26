@@ -224,8 +224,8 @@ async function applyPayableEffect(tx: Tx, entryId: number, lineId: number, line:
     const partyId = allocation.partyType === "employee" ? allocation.employeeId! : allocation.supplierId!;
     if (allocation.partyType === "employee") {
       const [employee] = await tx.select({ id: employeesTable.id }).from(employeesTable)
-        .where(and(eq(employeesTable.id, partyId), eq(employeesTable.status, "active")));
-      if (!employee) throw new JournalValidationError("Employee not found or inactive");
+        .where(eq(employeesTable.id, partyId));
+      if (!employee) throw new JournalValidationError("Employee not found");
     } else {
       const [supplier] = await tx.select({ id: inventorySuppliersTable.id }).from(inventorySuppliersTable)
         .where(eq(inventorySuppliersTable.id, partyId));
