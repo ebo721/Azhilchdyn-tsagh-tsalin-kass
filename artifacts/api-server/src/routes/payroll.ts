@@ -353,8 +353,8 @@ router.get("/payroll", async (req, res, next) => {
 router.post("/payroll/:month/close", async (req, res, next): Promise<void> => {
   try {
     const session = await getStaffSession(req);
-    if (!session || !["admin", "accountant"].includes(session.role)) {
-      res.status(403).json({ error: "Сар хаах эрхгүй." }); return;
+    if (!session || session.role !== "admin") {
+      res.status(403).json({ error: "Зөвхөн админ сар хаана." }); return;
     }
     const { month } = ClosePayrollMonthParams.parse(req.params);
     res.json(await closePayrollMonth(month, session.id));

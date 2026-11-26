@@ -438,6 +438,23 @@ paths:
       responses:
         "204":
           description: Salary history entry deleted
+  /attendance/closures:
+    get:
+      operationId: listAttendanceClosures
+      tags: [Attendance]
+      parameters:
+        - in: query
+          name: month
+          required: true
+          schema: { type: string, pattern: '^[1-9][0-9]{3}-(0[1-9]|1[0-2])$' }
+      responses:
+        "200":
+          description: Closed payroll periods overlapping the attendance calendar month
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AttendanceClosure" }
   /attendance:
     get:
       operationId: listAttendance
@@ -3876,6 +3893,14 @@ components:
         joinedAt: { type: string, format: date }
         inactiveAt: { type: [string, "null"] }
         salaryEffectiveDate: { type: string, format: date }
+    AttendanceClosure:
+      type: object
+      required: [month, periodStart, periodEnd, closedAt]
+      properties:
+        month: { type: string }
+        periodStart: { type: string }
+        periodEnd: { type: string }
+        closedAt: { type: string }
     Attendance:
       type: object
       required: [id, employeeId, employeeName, date, clockIn, clockOut, hours, status]

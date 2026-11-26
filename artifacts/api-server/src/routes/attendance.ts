@@ -1,7 +1,10 @@
 import { Router, type IRouter } from "express";
+import { assertAttendanceOpen, attendanceClosures } from "../lib/attendance-closure.js";
 import { createServer } from "node:http";
 import {
   CreateAttendanceBody,
+  ListAttendanceClosuresQueryParams,
+  ListAttendanceClosuresResponse,
   CreateShiftBody,
   CreateCashTransactionBody,
   CloseCashDayBody,
@@ -160,6 +163,14 @@ import * as shared from "../lib/route-shared.js";
 import type { SalaryHistoryRow, PayrollCalculationData, Tx } from "../lib/route-shared.js";
 
 const router: IRouter = Router();
+router.get("/attendance/closures", async (req, res, next) => {
+  try {
+    const { month } = ListAttendanceClosuresQueryParams.parse(req.query);
+    const end = `${month}-${String(daysInMonth(month)).padStart(2, "0")}`;
+    const closures = await attendanceClosures(`${month}-01`, end);
+    res.json(ListAttendanceClosuresResponse.parse(closures.map(row => ({ ...row, closedAt: row.closedAt.toISOString() }))));
+  } catch (error) { next(error); }
+});
 const { dispatchApprovedDeletion, isCashDateClosed, operatingExpenseResponse, operatingExpenseAccountName, inventoryMaterialLabel, defaultChartOfAccounts, operatingExpenseAccountCodes, inventoryPurchaseAccountCodes, reservedAccountTypes, chartOfAccountResponse, ensureDefaultChartOfAccounts, inventoryPurchaseAccount, lockedExpenseAccount, fallbackExpenseAccount, today, currentMonth, money, InventoryBankPaymentConflictError, OperatingExpenseBankPaymentConflictError, calendarDateOffset, descriptionTokens, inventoryBankSuggestionScore, deletionTargetPatterns, roleCanRequestDeletion, deletionRequestResponse, monthlyIncomeTaxRelief, hoursBetween, previousMonth, nextMonth, daysInMonth, isValidCalendarDate, calendarDateText, weekdayCount, monthWeekdays, defaultPayrollSchedule, getPayrollSchedule, scheduleDate, payrollPeriod, selectPayrollScheduleVersion, scheduleVersionAffectsMonth, shiftDailyRate, weekdayDatesBetween, salaryAt, getPayrollSummary, getPayrollAdvanceSummary, calculatePayrollAdvanceLine, InventoryInsufficientStockError, planInventoryFifoConsumption, applyInventoryFifoConsumption, reverseInventoryFifoConsumption, inventoryPurchaseResponse } = shared;
 
 async function lockAttendanceEmployee(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], employeeId: number): Promise<boolean> {
@@ -284,24 +295,27 @@ router.put("/attendance/shift-plans", async (req, res, next) => {
       res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
       return;
     }
-    const existing = await db.select().from(employeeShiftPlansTable).where(and(
-      eq(employeeShiftPlansTable.employeeId, input.employeeId),
-      eq(employeeShiftPlansTable.date, input.date),
-    ));
-    if (input.shiftId === null) {
-      if (existing[0]) await db.delete(employeeShiftPlansTable).where(eq(employeeShiftPlansTable.id, existing[0].id));
-      res.json(null);
-      return;
-    }
-    const [shift] = await db.select().from(shiftTemplatesTable).where(eq(shiftTemplatesTable.id, input.shiftId));
-    const [employee] = await db.select().from(employeesTable).where(eq(employeesTable.id, input.employeeId));
-    if (!shift || !employee) {
-      res.status(404).json({ error: "Ажилтан эсвэл ээлж олдсонгүй" });
-      return;
-    }
-    const [plan] = existing[0]
-      ? await db.update(employeeShiftPlansTable).set({ shiftId: input.shiftId }).where(eq(employeeShiftPlansTable.id, existing[0].id)).returning()
-      : await db.insert(employeeShiftPlansTable).values(input as { employeeId: number; date: string; shiftId: number }).returning();
+    const result = await db.transaction(async (tx) => {
+      await assertAttendanceOpen(tx, input.date);
+      const existing = await tx.select().from(employeeShiftPlansTable).where(and(
+        eq(employeeShiftPlansTable.employeeId, input.employeeId),
+        eq(employeeShiftPlansTable.date, input.date),
+      ));
+      if (input.shiftId === null) {
+        if (existing[0]) await tx.delete(employeeShiftPlansTable).where(eq(employeeShiftPlansTable.id, existing[0].id));
+        return { kind: "cleared" as const };
+      }
+      const [shift] = await tx.select().from(shiftTemplatesTable).where(eq(shiftTemplatesTable.id, input.shiftId));
+      const [employee] = await tx.select().from(employeesTable).where(eq(employeesTable.id, input.employeeId));
+      if (!shift || !employee) return { kind: "missing" as const };
+      const [plan] = existing[0]
+        ? await tx.update(employeeShiftPlansTable).set({ shiftId: input.shiftId }).where(eq(employeeShiftPlansTable.id, existing[0].id)).returning()
+        : await tx.insert(employeeShiftPlansTable).values(input as { employeeId: number; date: string; shiftId: number }).returning();
+      return { kind: "saved" as const, plan, employee, shift };
+    });
+    if (result.kind === "cleared") { res.json(null); return; }
+    if (result.kind === "missing") { res.status(404).json({ error: "Ажилтан эсвэл ээлж олдсонгүй" }); return; }
+    const { plan, employee, shift } = result;
     res.json({
       id: plan.id,
       employeeId: plan.employeeId,
@@ -348,6 +362,7 @@ router.post("/attendance/shift-plans/copy-previous", async (req, res, next) => {
     });
 
     await db.transaction(async (tx) => {
+      await assertAttendanceOpen(tx, `${month}-01`, `${month}-${String(targetDayCount).padStart(2, "0")}`);
       for (const action of copyPlan.actions) {
         if (action.type === "update") {
           await tx.update(employeeShiftPlansTable)
@@ -403,6 +418,7 @@ router.post("/attendance", async (req, res, next) => {
   try {
     const input = CreateAttendanceBody.parse(req.body);
     const result = await db.transaction(async (tx) => {
+      await assertAttendanceOpen(tx, input.date);
       if (!await lockAttendanceEmployee(tx, input.employeeId)) return { kind: "missing-employee" as const };
       const [pending] = await tx.select({ id: officeAttendancePunchesTable.id })
         .from(officeAttendancePunchesTable)
@@ -456,6 +472,7 @@ router.put("/attendance", async (req, res, next) => {
         : "00:00"
     );
     const result = await db.transaction(async (tx) => {
+      await assertAttendanceOpen(tx, input.date);
       if (!await lockAttendanceEmployee(tx, input.employeeId)) return { kind: "missing-employee" as const };
       const [pending] = await tx.select({ id: officeAttendancePunchesTable.id })
         .from(officeAttendancePunchesTable)
@@ -521,6 +538,7 @@ router.delete("/attendance", async (req, res, next) => {
   try {
     const input = DeleteAttendanceQueryParams.parse(req.query);
     const result = await db.transaction(async (tx) => {
+      await assertAttendanceOpen(tx, input.date);
       await lockAttendanceEmployee(tx, input.employeeId);
       const [linkedPhonePunch] = await tx.select({ id: officeAttendancePunchesTable.id })
         .from(officeAttendancePunchesTable)

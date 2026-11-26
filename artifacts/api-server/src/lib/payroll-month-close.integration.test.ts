@@ -6,6 +6,7 @@ import { db, pool, usersTable } from "@workspace/db";
 import app from "../app.js";
 import { createStaffSession, hrCookie } from "./hr-session.js";
 import { rebuildPayrollBalances } from "./payroll-balance-store.js";
+import { assertAttendanceOpen, attendanceClosures } from "./attendance-closure.js";
 
 after(() => pool.end());
 
@@ -18,7 +19,8 @@ it("closed payroll is immutable, permissioned and a saved carryover boundary", a
   const server = app.listen(0);
   try {
     for (const table of ["users", "employees", "employee_salary_history", "attendance",
-      "payroll_adjustments", "payroll_advance_approvals", "payroll_schedule_settings"]) {
+      "payroll_adjustments", "payroll_advance_approvals", "payroll_schedule_settings",
+      "employee_shift_plans", "shift_templates", "office_attendance_punches"]) {
       await query(`CREATE TABLE ${schema}.${table} (LIKE public.${table} INCLUDING ALL)`);
     }
     for (const migration of ["20261008_payroll_month_balances.sql", "20261010_payroll_attendance_snapshots.sql", "20261019_payroll_month_closures.sql", "20261022_payroll_opening_selective.sql"]) {
@@ -42,8 +44,8 @@ it("closed payroll is immutable, permissioned and a saved carryover boundary", a
     const user = (await db.select().from(usersTable))[0];
     let cookie = `${hrCookie.name}=${createStaffSession(user)}`;
     const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api`;
-    const request = (path: string, body?: object) => fetch(base + path, {
-      method: body ? "POST" : "GET", headers: { Cookie: cookie, "Content-Type": "application/json" },
+    const request = (path: string, body?: object, method = body ? "POST" : "GET") => fetch(base + path, {
+      method, headers: { Cookie: cookie, "Content-Type": "application/json" },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
     const setRole = async (role: string) => {
@@ -56,7 +58,7 @@ it("closed payroll is immutable, permissioned and a saved carryover boundary", a
     };
     const attendanceReads = () => statements.filter(s => /from "attendance"/i.test(s));
     let frozen: Record<string, unknown>;
-    await t.test("missing calculation cannot be closed; accountant can close a saved calculation", async () => {
+    await t.test("missing calculation cannot be closed; only admin can close a saved calculation", async () => {
       await checkedJson(await request("/payroll/2024-01/close", {}), 409);
       await checkedJson(await request("/payroll/pull-attendance", { month: "2024-01" }));
       await setRole("hr");
@@ -64,6 +66,10 @@ it("closed payroll is immutable, permissioned and a saved carryover boundary", a
       await setRole("viewer");
       await checkedJson(await request("/payroll/2024-01/close", {}), 403);
       await setRole("accountant");
+      await checkedJson(await request("/payroll/2024-01/close", {}), 403);
+      await checkedJson(await request("/payroll/2024-01/close/", {}), 403);
+      await checkedJson(await request("/payroll/2024-01/reopen", {}), 403);
+      await setRole("admin");
       statements.length = 0;
       frozen = await checkedJson(await request("/payroll/2024-01/close", {}));
       assert.ok(frozen.closedAt);
@@ -95,6 +101,26 @@ it("closed payroll is immutable, permissioned and a saved carryover boundary", a
         await assert.rejects(query(sql), (error: { code?: string }) => error.code === "PCL01", sql);
       }
     });
+    await t.test("attendance calendar reports the closure and rejects API edits and shift copying", async () => {
+      const closures = await checkedJson(await request("/attendance/closures?month=2024-01"));
+      assert.equal(closures.length, 1);
+      assert.equal(closures[0].month, "2024-01");
+      assert.equal(closures[0].periodStart, "2024-01-01");
+      assert.equal(closures[0].periodEnd, "2024-01-31");
+      for (const method of ["POST", "PUT"]) {
+        await checkedJson(await request("/attendance", {
+          employeeId: 1, date: "2024-01-05", clockIn: "09:00", clockOut: "17:00", status: "present",
+        }, method), 409);
+      }
+      for (const shiftId of [null, 1]) {
+        await checkedJson(await request("/attendance/shift-plans", { employeeId: 1, date: "2024-01-05", shiftId }, "PUT"), 409);
+      }
+      await checkedJson(await request("/attendance/shift-plans/copy-previous", {
+        sourceMonth: "2023-12", month: "2024-01", overwrite: true,
+      }), 409);
+      assert.equal((await query("SELECT count(*) AS n FROM employee_shift_plans")).rows[0].n, "0");
+      assert.deepEqual(await checkedJson(await request("/attendance/closures?month=2024-02")), []);
+    });
     await t.test("employee edits invalidate open periods, never rewrite a closed identity or balance", async () => {
       await query("UPDATE employees SET name='Changed employee',base_salary=200 WHERE id=1");
       assert.equal((await query("SELECT dirty FROM payroll_month_balances WHERE month='2024-01'")).rows[0].dirty, false);
@@ -112,16 +138,32 @@ it("closed payroll is immutable, permissioned and a saved carryover boundary", a
       assert.ok(closedFeb.closedAt);
     });
     await t.test("only administrator reopens, and later closures must reopen newest first", async () => {
+      await setRole("accountant");
       await checkedJson(await request("/payroll/2024-02/reopen", {}), 403);
       await setRole("admin");
       await checkedJson(await request("/payroll/2024-01/reopen", {}), 409);
       const reopened = await checkedJson(await request("/payroll/2024-02/reopen", {}));
       assert.equal(reopened.closedAt, null);
       await checkedJson(await request("/payroll/2024-01/reopen", {}));
+      assert.deepEqual(await checkedJson(await request("/attendance/closures?month=2024-01")), []);
+      await checkedJson(await request("/attendance/shift-plans", { employeeId: 1, date: "2024-01-05", shiftId: null }, "PUT"));
       await query("UPDATE attendance SET hours=16 WHERE employee_id=1 AND date='2024-01-05'");
       assert.equal((await query("SELECT dirty FROM payroll_month_balances WHERE month='2024-01'")).rows[0].dirty, true);
       const pulled = await checkedJson(await request("/payroll/pull-attendance", { month: "2024-01" }));
       assert.equal(pulled.payroll.lines[0].hours, 16);
+    });
+    await t.test("attendance locks follow saved cross-month periods, including both boundary dates", async () => {
+      await query(`INSERT INTO payroll_month_balances(month,period_start,period_end,lines,dirty)
+        VALUES ('2025-03','2025-02-21','2025-03-20','[]',false)`);
+      await query(`INSERT INTO payroll_month_closures(month,payroll,advance,closed_by)
+        VALUES ('2025-03','{}','{}',1)`);
+      assert.equal((await attendanceClosures("2025-02-01", "2025-02-28"))[0].month, "2025-03");
+      for (const date of ["2025-02-21", "2025-03-20"]) {
+        await assert.rejects(db.transaction(tx => assertAttendanceOpen(tx, date)), /2025-03.*хаалттай/);
+      }
+      for (const date of ["2025-02-20", "2025-03-21"]) {
+        await db.transaction(tx => assertAttendanceOpen(tx, date));
+      }
     });
   } finally {
     t.mock.restoreAll();

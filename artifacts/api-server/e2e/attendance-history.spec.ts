@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 // UI regression fixtures only: no employee or attendance data is written.
 test.beforeEach(async ({ page }) => {
+  await page.route("**/api/attendance/closures?*", route => route.fulfill({ json: [] }));
   await page.route("**/api/auth/me", route => route.fulfill({
     json: { authenticated: true, id: 1, role: "admin", username: "fixture" },
   }));
