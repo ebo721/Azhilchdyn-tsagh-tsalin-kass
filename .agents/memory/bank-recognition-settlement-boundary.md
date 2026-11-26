@@ -20,3 +20,9 @@ For a bank expense still classified to inventory or supplies (1500/1510), keep i
 **Why:** Expense and fixed-asset link routes can settle the same bank row without a purchase record; guarding only direct journal/cash routes would leave the document requirement bypassable.
 
 **How to apply:** Keep expense/fixed-asset link guards intact. A pending inventory purchase is not a permission to settle another source document or create guessed stock lines.
+
+Банкны гүйлгээн дээр «Цалингийн зардал» сонгоогүй бол журнал бичихэд цалингийн гүйлгээнүүдийг харуулахгүй.
+
+**Why:** The user explicitly requested this visibility boundary, not merely rejection after selecting an unrelated payroll payment.
+
+**How to apply:** Gate both the direct saved-payroll picker and salary/advance cash suggestions on the selected salary-expense account. Leave non-payroll cash suggestions visible; hiding a choice must not delete any saved payment or journal.

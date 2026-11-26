@@ -1,21 +1,32 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function setup(page: Page, options: { remaining?: number; reuse?: boolean; fail?: boolean; advance?: boolean } = {}) {
+async function setup(page: Page, options: { remaining?: number; reuse?: boolean; fail?: boolean; advance?: boolean; accountCode?: string | null; suggestions?: boolean } = {}) {
   const month = new Date().toISOString().slice(0, 7);
   let remaining = options.remaining ?? 1000;
   const writes: Array<{path: string; body: any}> = [];
   let rows = (options.advance ? [300, 200, 500] : [300, 700]).map((amount, i) => ({
     id: 101 + i, bankAccountId: 1, type: "expense", amount, transactionAt: `${month}-20T10:00:00Z`,
-    description: `Цалингийн төлөлт ${i + 1}`, counterparty: "Цалин ажилтан", accountId: 6,
-    accountCode: "6000", accountName: "Цалин", cashTransactionId: null, journalEntryId: null,
+    description: `Цалингийн төлөлт ${i + 1}`, counterparty: "Цалин ажилтан",
+    accountId: options.accountCode === null ? null : options.accountCode === "6100" ? 7 : 6,
+    accountCode: options.accountCode === undefined ? "6000" : options.accountCode, accountName: "Fixture", cashTransactionId: null, journalEntryId: null,
     transferredAt: null, unclearAt: null, createdAt: `${month}-20T10:00:00Z`,
   }));
   await page.route("**/api/**", async route => {
     const request = route.request(), path = new URL(request.url()).pathname;
     if (path === "/api/auth/me") return route.fulfill({ json: { authenticated: true, id: 1, username: "fixture", role: "accountant" } });
     if (path === "/api/bank-accounts") return route.fulfill({ json: [{ id: 1, bankName: "Fixture bank", accountNumber: "1234567890" }] });
-    if (path === "/api/chart-of-accounts") return route.fulfill({ json: [{ id: 6, code: "6000", name: "Цалин", type: "expense", isActive: true }] });
+    if (path === "/api/chart-of-accounts") return route.fulfill({ json: [
+      { id: 6, code: "6000", name: "Цалингийн зардал", type: "expense", isActive: true },
+      { id: 7, code: "6100", name: "Бусад зардал", type: "expense", isActive: true },
+    ] });
     if (path === "/api/bank-transactions") return route.fulfill({ json: rows });
+    if (options.suggestions && /\/cash-suggestions$/.test(path)) return route.fulfill({ json:
+      ["manual", "payroll", "payroll_advance"].map((transactionKind, i) => ({
+        id: 201 + i, transactionKind, type: "expense", description: `Suggestion ${transactionKind}`,
+        category: "Fixture", date: `${month}-20`, amount: 300, score: 100,
+        bankTransactionId: null, journalEntryId: null, bankVerifiedAt: null,
+      })),
+    });
     if (/\/(?:payroll|advance)-targets\//.test(path)) return route.fulfill({ json: [{
       employeeId: 2, employeeName: "Цалин ажилтан", month: path.split("/").at(-1),
       payable: 1000, paidAmount: 1000 - remaining, remainingBalance: remaining,
@@ -44,6 +55,25 @@ async function setup(page: Page, options: { remaining?: number; reuse?: boolean;
 }
 
 for (const width of [1440, 402]) {
+  for (const accountCode of [null, "6100", "6000"]) {
+    test(`payroll choices require salary expense account ${accountCode}: ${width}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 960 });
+      const { writes } = await setup(page, { accountCode, suggestions: true });
+      await page.getByTestId("button-transfer-bank-transaction-101").click();
+      await expect(page.getByTestId("card-bank-cash-suggestion-201")).toBeVisible();
+      const count = accountCode === "6000" ? 1 : 0;
+      await expect(page.getByTestId("section-bank-payroll-link")).toHaveCount(count);
+      await expect(page.getByTestId("card-bank-cash-suggestion-202")).toHaveCount(count);
+      await expect(page.getByTestId("card-bank-cash-suggestion-203")).toHaveCount(count);
+      if (count) await expect(page.getByTestId("select-bank-payroll-kind")).toBeVisible();
+      expect(writes).toHaveLength(0);
+      await page.reload();
+      await page.getByTestId("button-transfer-bank-transaction-101").click();
+      await expect(page.getByTestId("card-bank-cash-suggestion-201")).toBeVisible();
+      await expect(page.getByTestId("section-bank-payroll-link")).toHaveCount(count);
+      await expect(page.getByTestId("card-bank-cash-suggestion-202")).toHaveCount(count);
+    });
+  }
   test(`approved advance can be paid with three bank transfers: ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 960 });
     const { writes, month } = await setup(page, { advance: true });

@@ -467,6 +467,7 @@ export function BankTransactions() {
   const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const transferAccount = chartAccounts.data?.find((account) => account.id === selectedBank?.accountId);
+  const payrollAccountSelected = selectedBank?.type === 'expense' && transferAccount?.code === '6000';
   const requiresPurchaseDocument = selectedBank?.type === 'expense' && ['1500', '1510'].includes(transferAccount?.code ?? '');
   const requiresFixedAssetDocument = selectedBank?.type === 'expense' && transferAccount?.code === '1800';
   const requiresBankDocumentFlow = requiresPurchaseDocument || requiresFixedAssetDocument;
@@ -474,7 +475,10 @@ export function BankTransactions() {
     selectedBank?.type === 'income' ? transferAccount.type === 'revenue'
       : transferAccount.type === 'expense' || (transferAccount.type === 'asset' && transferAccount.code === '1800')
   ));
-  const suggestions = useListBankTransactionCashSuggestions(selectedBank?.id ?? 0, { query: { queryKey: getListBankTransactionCashSuggestionsQueryKey(selectedBank?.id ?? 0), enabled: Boolean(selectedBank) } });
+  const suggestions = useListBankTransactionCashSuggestions(selectedBank?.id ?? 0, { query: {
+    queryKey: getListBankTransactionCashSuggestionsQueryKey(selectedBank?.id ?? 0), enabled: Boolean(selectedBank),
+    select: (rows) => rows.filter((row) => payrollAccountSelected || !['payroll', 'payroll_advance'].includes(row.transactionKind)),
+  } });
   const pendingJournalReviewCount = journalReview.data?.length ?? 0;
   const filteredBankTransactions = list.data?.filter((transaction) => transactionParam ? transaction.id === transactionParam : peerParam ? transaction.id === peerParam : (view === 'paired' ? Boolean(transaction.internalTransfer) : !transaction.internalTransfer) && transaction.transactionAt.slice(0, 7) === filterMonth) ?? [];
   useEffect(() => {
@@ -618,7 +622,7 @@ export function BankTransactions() {
             {suggestions.isLoading ? <><LoadingBlock className="h-24" /><LoadingBlock className="h-24" /></> : suggestions.isError ? <ErrorBlock onRetry={() => suggestions.refetch()} /> : !suggestions.data?.length ? <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground" data-testid="empty-bank-cash-suggestions">Холбох ижил төстэй кассын гүйлгээ олдсонгүй.</p> : suggestions.data.map((suggestion) => <article key={suggestion.id} className="rounded-xl border border-border bg-secondary/25 p-4" data-testid={`card-bank-cash-suggestion-${suggestion.id}`}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{suggestion.description}</p>{suggestion.transactionKind === 'payroll' && <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-800">Сүүл цалин</span>}{suggestion.transactionKind === 'payroll_advance' && <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-800">Урьдчилгаа цалин</span>}{suggestion.journalEntryId && <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-800">Одоогийн журнал #{suggestion.journalEntryId}-г солино</span>}{(suggestion.bankVerifiedAt || suggestion.bankTransactionId) && <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">Банкны хуулгаар баталгаажсан</span>}</div><p className="mt-1 text-xs text-muted-foreground">{dateLabel(suggestion.date)} · {suggestion.type === 'income' ? 'Орлого' : 'Зарлага'} · {suggestion.category}</p><p className="mt-1 text-xs text-muted-foreground">Тохирц: {suggestion.score.toFixed(2)}% ({suggestion.score >= 80 ? 'өндөр' : suggestion.score >= 50 ? 'дунд' : 'бага'})</p></div><div className="shrink-0 text-right"><p className={cn('font-mono text-sm font-bold', suggestion.type === 'income' ? 'text-primary' : 'text-orange-800')}>{suggestion.type === 'income' ? '+' : '−'}{money(suggestion.amount)}</p><Button type="button" size="sm" className="mt-2" disabled={transfer.isPending || linkToCash.isPending} onClick={() => linkCashTransaction(suggestion)} aria-label={`${suggestion.description} кассын гүйлгээтэй холбох`} data-testid={`button-link-bank-transaction-to-cash-${suggestion.id}`}>{linkToCash.isPending ? 'Холбож байна...' : 'Энэ гүйлгээтэй холбох'}</Button></div></div></article>)}
           </div>
         </section>}
-        {!requiresBankDocumentFlow && selectedBank.type === 'expense' && <BankPayrollLinkPanel key={selectedBank.id} bank={selectedBank} onLinked={() => { refreshAfterTransfer(); closeCashTransfer(); }} />}
+        {payrollAccountSelected && <BankPayrollLinkPanel key={selectedBank.id} bank={selectedBank} onLinked={() => { refreshAfterTransfer(); closeCashTransfer(); }} />}
         {!requiresBankDocumentFlow && <div className="flex items-center gap-3" aria-label="эсвэл"><div className="h-px flex-1 bg-border" /><span className="text-xs font-semibold text-muted-foreground">эсвэл</span><div className="h-px flex-1 bg-border" /></div>}
         <section aria-labelledby="create-cash-title">
           <h3 id="create-cash-title" className="text-sm font-bold">{requiresPurchaseDocument ? 'Худалдан авалтын бүртгэл' : requiresFixedAssetDocument ? 'Эд хөрөнгийн баримт шаардлагатай' : 'Касс шинээр үүсгээд журнал бичих'}</h3>
