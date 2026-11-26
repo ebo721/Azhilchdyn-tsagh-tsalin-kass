@@ -942,6 +942,13 @@ export interface EmployeeUpdate {
   salaryEffectiveDate?: string;
 }
 
+export interface AttendanceClosure {
+  month: string;
+  periodStart: string;
+  periodEnd: string;
+  closedAt: string;
+}
+
 export type AttendanceStatus = typeof AttendanceStatus[keyof typeof AttendanceStatus];
 
 
@@ -3051,6 +3058,13 @@ export type GetDashboardParams = {
  * @pattern ^[0-9]{4}-(0[1-9]|1[0-2])$
  */
 month?: string;
+};
+
+export type ListAttendanceClosuresParams = {
+/**
+ * @pattern ^[1-9][0-9]{3}-(0[1-9]|1[0-2])$
+ */
+month: string;
 };
 
 export type ListAttendanceParams = {
