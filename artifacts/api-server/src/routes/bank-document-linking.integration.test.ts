@@ -969,10 +969,11 @@ describe("bank document linking", () => {
       .where(eq(inventoryPurchasePaymentGroupsTable.bankTransactionId, bankId));
     paymentGroupIds.push(group.id);
     const purchaseList = await fetch(`${baseUrl}/api/inventory/purchases`, { headers: { cookie } });
-    const purchaseRows = await purchaseList.json() as Array<{ id: number; paymentGroupBankTransactionId: number | null; bankConnection: { id: number; kind: string; amount: number } | null }>;
+    const purchaseRows = await purchaseList.json() as Array<{ id: number; paid: boolean; paymentGroupBankTransactionId: number | null; bankConnection: { id: number; kind: string; amount: number } | null }>;
     assert.equal(purchaseRows.find((purchase) => purchase.id === first.id)?.paymentGroupBankTransactionId, bankId);
     assert.equal(purchaseRows.find((purchase) => purchase.id === second.id)?.paymentGroupBankTransactionId, bankId);
     for (const id of [first.id, second.id]) {
+      assert.equal(purchaseRows.find(p => p.id === id)?.paid, true);
       const link = purchaseRows.find(p => p.id === id)?.bankConnection;
       assert.ok(link);
       assert.equal(link.id, bankId);
@@ -1270,6 +1271,7 @@ describe("bank document linking", () => {
     }).returning();
     purchaseIds.push(first.id, second.id);
     const bankId = await bank("2099-08-11", 32_000, "racing-purchase-group");
+    const singleBankId = await bank("2099-08-11", 12_000, "racing-purchase-single");
     const headers = { cookie, "content-type": "application/json" };
     const [groupResponse, singleResponse] = await Promise.all([
       fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-purchases`, {
@@ -1280,7 +1282,7 @@ describe("bank document linking", () => {
       fetch(`${baseUrl}/api/inventory/purchases/${first.id}/payment`, {
         method: "PUT",
         headers,
-        body: JSON.stringify({ date: "2099-08-11", amount: 12_000 }),
+        body: JSON.stringify({ date: "2099-08-11", amount: 12_000, bankTransactionId: singleBankId }),
       }),
     ]);
     assert.deepEqual([groupResponse.status, singleResponse.status].sort(), [200, 409]);

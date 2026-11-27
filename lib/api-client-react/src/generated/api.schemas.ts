@@ -2427,8 +2427,8 @@ export interface InventoryPurchasePaymentInput {
   date: string;
   /** @exclusiveMinimum 0 */
   amount: number;
-  /** @nullable */
-  bankTransactionId?: number | null;
+  /** @minimum 1 */
+  bankTransactionId: number;
 }
 
 export interface InventoryPurchaseBankSuggestion {

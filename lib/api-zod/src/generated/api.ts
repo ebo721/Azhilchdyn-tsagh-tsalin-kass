@@ -4548,10 +4548,11 @@ export const confirmInventoryPurchasePaymentBodyAmountExclusiveMin = 0;
 
 
 
+
 export const ConfirmInventoryPurchasePaymentBody = zod.object({
   "date": zod.string().regex(confirmInventoryPurchasePaymentBodyDateRegExp),
   "amount": zod.number().gt(confirmInventoryPurchasePaymentBodyAmountExclusiveMin),
-  "bankTransactionId": zod.number().int().nullish()
+  "bankTransactionId": zod.number().int().min(1)
 })
 
 

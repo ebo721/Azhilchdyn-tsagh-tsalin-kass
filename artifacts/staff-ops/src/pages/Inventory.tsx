@@ -439,7 +439,8 @@ export function Inventory() {
     if (checked) {
       setSelectedPaymentBank(null);
       setPaymentPurchase(purchase);
-      paymentForm.reset({ date: today(), amount: String(purchase.totalAmount) });
+      paymentForm.reset({ date: '', amount: '' });
+      confirmPurchasePayment.reset();
       return;
     }
     if (purchase.paymentGroupBankTransactionId !== null) {
@@ -466,11 +467,11 @@ export function Inventory() {
     });
   };
   const submitPurchasePayment = (values: { date: string; amount: string }) => {
-    if (!paymentPurchase) return;
+    if (!paymentPurchase || !selectedPaymentBank) return;
     confirmPurchasePayment.mutate({ id: paymentPurchase.id, data: {
       date: values.date,
       amount: Number(values.amount),
-      bankTransactionId: selectedPaymentBank?.id ?? null,
+      bankTransactionId: selectedPaymentBank.id,
     } }, {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getListInventoryPurchasesQueryKey() });
@@ -630,7 +631,7 @@ export function Inventory() {
     {paymentPurchase && <Modal title="Худалдан авалтын төлбөр" detail={`${paymentPurchase.supplierName} · Нийт ${money(paymentPurchase.totalAmount)}`} onClose={() => { setPaymentPurchase(null); setSelectedPaymentBank(null); }}>
       <Form {...paymentForm}><form onSubmit={paymentForm.handleSubmit(submitPurchasePayment)} className="space-y-5" data-testid="form-inventory-payment">
         <section aria-labelledby="inventory-bank-suggestions-title">
-          <div className="flex items-center justify-between gap-3"><div><h3 id="inventory-bank-suggestions-title" className="text-sm font-bold">Тохирох банкны гүйлгээ</h3><p className="mt-1 text-xs text-muted-foreground">Харилцагч, огноо, дүнгээр эрэмбэлсэн холбогдоогүй зарлагууд.</p></div>{selectedPaymentBank && <Button type="button" size="sm" variant="outline" onClick={() => setSelectedPaymentBank(null)}>Сонголт арилгах</Button>}</div>
+          <div className="flex items-center justify-between gap-3"><div><h3 id="inventory-bank-suggestions-title" className="text-sm font-bold">Тохирох банкны гүйлгээ</h3><p className="mt-1 text-xs text-muted-foreground">Банкны гүйлгээ заавал сонгоно. Холбоход автоматаар төлбөр төлсөн болно.</p></div>{selectedPaymentBank && <Button type="button" size="sm" variant="outline" onClick={() => { setSelectedPaymentBank(null); paymentForm.reset({ date: '', amount: '' }); }}>Сонголт арилгах</Button>}</div>
           <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1" data-testid="inventory-payment-bank-suggestions">
             {paymentBankSuggestions.isLoading ? <><LoadingBlock className="h-20" /><LoadingBlock className="h-20" /></> : paymentBankSuggestions.isError ? <ErrorBlock onRetry={() => paymentBankSuggestions.refetch()} /> : !paymentBankSuggestions.data?.length ? <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">Тохирох банкны гүйлгээ олдсонгүй.</p> : paymentBankSuggestions.data.map((suggestion) => {
               const selected = selectedPaymentBank?.id === suggestion.id;
@@ -638,9 +639,9 @@ export function Inventory() {
             })}
           </div>
         </section>
-        <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-xs font-semibold">Төлсөн огноо<input type="date" readOnly={Boolean(selectedPaymentBank)} className={cn('h-10 w-full rounded-lg border border-input px-3 text-sm outline-none focus:border-primary', selectedPaymentBank ? 'bg-muted' : 'bg-background')} {...paymentForm.register('date', { required: true })} data-testid="input-inventory-payment-date" /></label><label className="space-y-2 text-xs font-semibold">Төлсөн дүн<input type="number" min="0.01" step="0.01" readOnly={Boolean(selectedPaymentBank)} className={cn('h-10 w-full rounded-lg border border-input px-3 font-mono text-sm outline-none focus:border-primary', selectedPaymentBank ? 'bg-muted' : 'bg-background')} {...paymentForm.register('amount', { required: true, min: 0.01 })} data-testid="input-inventory-payment-amount" /></label></div>
+        <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-xs font-semibold">Төлсөн огноо<input type="date" readOnly className="h-10 w-full rounded-lg border border-input bg-muted px-3 text-sm" {...paymentForm.register('date', { required: true })} data-testid="input-inventory-payment-date" /></label><label className="space-y-2 text-xs font-semibold">Төлсөн дүн<input type="number" min="0.01" step="0.01" readOnly className="h-10 w-full rounded-lg border border-input bg-muted px-3 font-mono text-sm" {...paymentForm.register('amount', { required: true, min: 0.01 })} data-testid="input-inventory-payment-amount" /></label></div>
         {confirmPurchasePayment.isError && <p className="text-xs font-semibold text-destructive">Төлбөрийг батлах боломжгүй байна. Сонгосон банкны гүйлгээ өөр бүртгэлтэй холбогдсон эсэх болон огноо өндөрлөсөн эсэхийг шалгана уу.</p>}
-        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => { setPaymentPurchase(null); setSelectedPaymentBank(null); }} data-testid="button-cancel-inventory-payment">Болих</Button><Button type="submit" disabled={confirmPurchasePayment.isPending} data-testid="button-confirm-inventory-payment">{confirmPurchasePayment.isPending ? 'Баталж байна...' : selectedPaymentBank ? 'Холбож батлах' : 'Банкгүйгээр батлах'}</Button></div>
+        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => { setPaymentPurchase(null); setSelectedPaymentBank(null); }} data-testid="button-cancel-inventory-payment">Болих</Button><Button type="submit" disabled={confirmPurchasePayment.isPending || !selectedPaymentBank} data-testid="button-confirm-inventory-payment">{confirmPurchasePayment.isPending ? 'Баталж байна...' : 'Холбож батлах'}</Button></div>
       </form></Form>
     </Modal>}
     {selectedPurchase && <Modal title={selectedPurchase.supplierName} detail={`${dateLabel(selectedPurchase.date)} · ${selectedPurchase.hasReceipt ? 'Баримттай' : 'Баримтгүй'} · ${money(selectedPurchase.totalAmount)}`} onClose={() => setSelectedPurchase(null)}>

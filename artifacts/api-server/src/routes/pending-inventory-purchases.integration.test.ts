@@ -129,6 +129,7 @@ describe("bank purchases awaiting item details", () => {
     assert.equal(linked.cashTransactionId, saved.cashTransactionId);
     const purchaseList = await (await call("/inventory/purchases")).json();
     const exactResult = purchaseList.find((p: any) => p.id === exact);
+    assert.equal(exactResult.paid, true);
     assert.equal(exactResult.bankConnection.id, row.id);
     assert.equal(exactResult.bankConnection.kind, "single");
     assert.equal(exactResult.bankConnection.amount, 83.45);

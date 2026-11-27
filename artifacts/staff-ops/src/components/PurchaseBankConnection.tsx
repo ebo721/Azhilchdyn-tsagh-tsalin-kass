@@ -19,6 +19,8 @@ export function PurchaseBankConnection({ purchase, detail = false }: {
       <div><dt className="text-xs text-muted-foreground">Гүйлгээний утга</dt><dd className="break-words">{link.description || '—'}</dd></div>
       <div><dt className="text-xs text-muted-foreground">Банкны данс</dt><dd className="break-words">{link.account || '—'}</dd></div>
     </dl>}
-    {detail && !link && <p className="text-xs text-muted-foreground">Төлбөр төлсөн төлөв нь банкны гүйлгээтэй холбогдсоныг илэрхийлэхгүй.</p>}
+    {detail && !link && <p className="text-xs text-muted-foreground">{purchase.paid
+      ? 'Өмнө нь банкны холбоосгүй баталсан төлбөр. Шинэ төлбөр батлахад банкны гүйлгээ заавал холбоно.'
+      : 'Төлбөр төлсөн болгохын тулд банкны гүйлгээтэй холбоно.'}</p>}
   </div>;
 }

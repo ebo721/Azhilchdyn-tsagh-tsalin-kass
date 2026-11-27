@@ -56,7 +56,7 @@ for (const width of [402, 1440]) {
     await expect(row(99202)).toBeVisible();
     await expect(page.getByTestId("value-inventory-purchase-total")).toContainText("2,200");
     await row(99202).getByRole("button", { name: /Дэлгэрэнгүй/ }).click();
-    await expect(dialog).toContainText("Төлбөр төлсөн төлөв нь банкны гүйлгээтэй холбогдсоныг илэрхийлэхгүй");
+    await expect(dialog).toContainText("Өмнө нь банкны холбоосгүй баталсан төлбөр");
     await page.keyboard.press("Escape");
     await page.getByTestId("filter-purchase-registration").selectOption("unregistered");
     await expect(filter).toBeVisible();
