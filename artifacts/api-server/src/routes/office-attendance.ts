@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { assertAttendanceOpen } from "../lib/attendance-closure.js";
 import { randomBytes, createHash } from "node:crypto";
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import {
@@ -209,6 +210,7 @@ router.post("/attendance/office-pending/:id/cancel", async (req, res): Promise<v
       .where(eq(officeAttendancePunchesTable.id, params.data.id));
     if (!initialPunch) return { kind: "not-found" as const };
     if (initialPunch.checkedOutAt || initialPunch.cancelledAt) return { kind: "already-resolved" as const };
+    await assertAttendanceOpen(tx, initialPunch.officeDate);
     if (!await lockEmployee(tx, initialPunch.employeeId)) return { kind: "not-found" as const };
     const [punch] = await tx.select().from(officeAttendancePunchesTable)
       .where(eq(officeAttendancePunchesTable.id, initialPunch.id))
@@ -481,6 +483,7 @@ router.post("/attendance/device/punch", async (req, res): Promise<void> => {
     const result = await db.transaction(async (tx) => {
       const authenticated = await authenticateDevice(tx, signedRequest, action);
       if (!authenticated) return { kind: "unauthorized" as const };
+      await assertAttendanceOpen(tx, today);
       const employeeId = authenticated.employee.id;
       if (!await lockEmployee(tx, employeeId)) return { kind: "unauthorized" as const };
 
@@ -517,6 +520,7 @@ router.post("/attendance/device/punch", async (req, res): Promise<void> => {
       if (!pending) {
         return { kind: "conflict" as const, message: "Эхлэх бүртгэлгүй үед тарах бүртгэл хийх боломжгүй" };
       }
+      await assertAttendanceOpen(tx, pending.officeDate);
       if (serverNow.getTime() <= pending.checkedInAt.getTime()) {
         return { kind: "conflict" as const, message: "Тарах цаг эхлэх цагаас хойш байх ёстой" };
       }

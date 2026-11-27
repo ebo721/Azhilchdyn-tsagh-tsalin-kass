@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { getGetPayrollPayablesQueryKey, getGetCashSummaryQueryKey, getListCashTransactionsQueryKey, getListCashClosuresQueryKey } from '@workspace/api-client-react';
+import { getGetPayrollPayablesQueryKey, getGetCashSummaryQueryKey, getListCashTransactionsQueryKey, getListCashClosuresQueryKey, getListAttendanceClosuresQueryKey } from '@workspace/api-client-react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
@@ -313,19 +313,20 @@ export function Payroll() {
   const closed = Boolean(query.data?.closedAt);
   const role = session.data?.role;
   const canEditPayroll = ['admin', 'accountant', 'hr'].includes(role ?? '');
-  const canClose = role === 'admin' || role === 'accountant';
+  const canClose = role === 'admin';
   useEffect(() => {
     if (closed) { setSelectedLine(null); setRefreshingAdvanceEmployeeId(null); setAdvanceAmounts({}); setAdvanceDates({}); }
   }, [closed]);
   const applyClosure = async (summary: PayrollSummary) => {
     await qc.cancelQueries({ queryKey: getGetPayrollQueryKey({ month: summary.month }) });
     qc.setQueryData(getGetPayrollQueryKey({ month: summary.month }), summary);
+    qc.invalidateQueries({ queryKey: getListAttendanceClosuresQueryKey() });
     qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey({ month: summary.month }) });
     qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
   };
   const closureMessage = (error: unknown) => error instanceof Error ? error.message : 'Үйлдэл амжилтгүй боллоо.';
   const closeMonth = () => {
-    if (!window.confirm(`${mongolianMonthLabel(month)}-ийг хаах уу?\n\nХаасны дараа сарын үлдэгдэл (авлага/өглөг) түгжигдэнэ, цалингийн мөр болон урьдчилгааг засах боломжгүй болно. Дараагийн сарын шилжих үлдэгдэл энэ хадгалсан үлдэгдлээс авагдана.`)) return;
+    if (!window.confirm(`${mongolianMonthLabel(month)}-ийг хаах уу?\n\nЦалинтай хамт тухайн хугацааны ирц, ээлжийн төлөвлөгөө түгжигдэнэ. Сарын үлдэгдэл (авлага/өглөг), цалингийн мөр болон урьдчилгааг засах боломжгүй болно. Зөвхөн админ сарыг дахин нээнэ.`)) return;
     const target = month;
     setClosureError(null);
     closePayroll.mutate({ month: target }, { onSuccess: applyClosure, onError: (e) => { if (selectedMonth.current === target) setClosureError(closureMessage(e)); } });

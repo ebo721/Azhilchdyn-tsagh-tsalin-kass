@@ -786,6 +786,22 @@ export const DeleteEmployeeSalaryHistoryParams = zod.object({
 export const DeleteEmployeeSalaryHistoryResponse = zod.void()
 
 
+export const listAttendanceClosuresQueryMonthRegExp = new RegExp('^[1-9][0-9]{3}-(0[1-9]|1[0-2])$');
+
+
+export const ListAttendanceClosuresQueryParams = zod.object({
+  "month": zod.coerce.string().regex(listAttendanceClosuresQueryMonthRegExp)
+})
+
+export const ListAttendanceClosuresResponseItem = zod.object({
+  "month": zod.string(),
+  "periodStart": zod.string(),
+  "periodEnd": zod.string(),
+  "closedAt": zod.string()
+})
+export const ListAttendanceClosuresResponse = zod.array(ListAttendanceClosuresResponseItem)
+
+
 /**
  * @summary List attendance records
  */

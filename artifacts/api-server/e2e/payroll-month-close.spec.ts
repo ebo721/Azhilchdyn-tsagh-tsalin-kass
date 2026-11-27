@@ -37,6 +37,9 @@ async function setup(page: Page, { role = "admin", initiallyClosed = false, fail
     }
     if (url.pathname.endsWith("/payroll-advance")) return route.fulfill({ json: {
       month: url.searchParams.get("month"), approved: false, totalAmount: 50,
+      periodStart: `${url.searchParams.get("month")}-01`,
+      advancePeriodEnd: `${url.searchParams.get("month")}-15`,
+      paymentDate: `${url.searchParams.get("month")}-20`,
       lines: [{ employeeId: 1, employeeName: "Closed payroll fixture", employeeType: "shift", baseSalary: 100,
         daysWorked: 1, dailySalary: 100, totalSalary: 100, advanceAmount: 50, paid: false, paymentDate: null }],
     } });
@@ -63,11 +66,9 @@ test("admin closes, reloads frozen state, and explicitly reopens without pulling
   expect(state.writes).toEqual([`/api/payroll/${state.month()}/close`, `/api/payroll/${state.month()}/reopen`]);
 });
 
-test("accountant can close but cannot reopen a frozen month", async ({ page }) => {
+test("accountant cannot close or reopen a month", async ({ page }) => {
   await setup(page, { role: "accountant" });
-  page.on("dialog", dialog => dialog.accept());
-  await page.getByTestId("button-close-payroll-month").click();
-  await expect(page.getByTestId("status-payroll-closed")).toBeVisible();
+  await expect(page.getByTestId("button-close-payroll-month")).toHaveCount(0);
   await expect(page.getByTestId("button-reopen-payroll-month")).toHaveCount(0);
 });
 

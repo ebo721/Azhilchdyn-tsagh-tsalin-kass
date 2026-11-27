@@ -8,6 +8,7 @@
 
 export * from './activity';
 export * from './attendance';
+export * from './attendanceClosure';
 export * from './attendanceDevice';
 export * from './attendanceDeviceEnrollment';
 export * from './attendanceDeviceEnrollmentInput';
@@ -216,6 +217,7 @@ export * from './journalTrialBalance';
 export * from './journalTrialBalanceAccount';
 export * from './journalTrialBalanceAccountNormalBalance';
 export * from './journalVoidResult';
+export * from './listAttendanceClosuresParams';
 export * from './listAttendanceParams';
 export * from './listFixedAssetBankSuggestionsParams';
 export * from './listJournalEntriesParams';
