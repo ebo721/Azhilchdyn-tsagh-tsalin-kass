@@ -13,6 +13,7 @@ import {
   ListPendingPurchaseSuggestionsParams, ListPendingPurchaseSuggestionsResponse,
 } from "@workspace/api-zod";
 import { listPendingInventoryPurchases, pendingPurchaseSuggestions } from "../lib/pending-inventory-purchases.js";
+import { inventoryPurchaseBankLinks } from "../lib/inventory-purchase-bank-links.js";
 import { linkBankPurchase } from "../lib/bank-document-linking.js";
 import { inventoryOpeningBalancesTable, inventoryOpeningConsumptionsTable } from "@workspace/db";
 import { createServer } from "node:http";
@@ -229,7 +230,7 @@ router.post("/inventory/pending-purchases/:id/register", async (req, res, next) 
 
 router.get("/inventory/purchases", async (_req, res, next) => {
   try {
-    const [purchases, items, closures, paymentGroups] = await Promise.all([
+    const [purchases, items, closures, paymentGroups, bankLinks] = await Promise.all([
       db.select({
         purchase: inventoryPurchasesTable,
         accountCode: chartOfAccountsTable.code,
@@ -248,6 +249,7 @@ router.get("/inventory/purchases", async (_req, res, next) => {
           inventoryPurchasePaymentGroupMembersTable.groupId,
         ))
         .where(eq(inventoryPurchasePaymentGroupsTable.status, "active")),
+      inventoryPurchaseBankLinks(),
     ]);
     const closedDates = new Set(closures.map((closure) => closure.date));
     const paymentGroupByPurchase = new Map(paymentGroups.map((group) => [group.purchaseId, group.bankTransactionId]));
@@ -269,6 +271,7 @@ router.get("/inventory/purchases", async (_req, res, next) => {
       paymentDate: row.purchase.paymentDate,
       paymentAmount: row.purchase.paymentAmount === null ? null : Number(row.purchase.paymentAmount),
       paymentGroupBankTransactionId: paymentGroupByPurchase.get(row.purchase.id) ?? null,
+      bankConnection: bankLinks.get(row.purchase.id) ?? null,
       createdAt: row.purchase.createdAt.toISOString(),
       editable: !closedDates.has(row.purchase.date),
       items: items

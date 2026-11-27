@@ -4326,6 +4326,14 @@ export const ListInventoryPurchasesResponseItem = zod.object({
   "paymentDate": zod.string().nullish(),
   "paymentAmount": zod.number().nullish(),
   "paymentGroupBankTransactionId": zod.number().int().min(1).nullable(),
+  "bankConnection": zod.union([zod.object({
+  "id": zod.number().int(),
+  "transactionAt": zod.string(),
+  "amount": zod.number(),
+  "description": zod.string(),
+  "account": zod.string(),
+  "kind": zod.enum(['single', 'group'])
+}),zod.null()]).optional().describe('Current reciprocal bank link, present on the purchase list response; null means no bank link, independent of paid status.'),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
   "items": zod.array(zod.object({
@@ -4397,6 +4405,14 @@ export const CreateInventoryPurchaseResponse = zod.object({
   "paymentDate": zod.string().nullish(),
   "paymentAmount": zod.number().nullish(),
   "paymentGroupBankTransactionId": zod.number().int().min(1).nullable(),
+  "bankConnection": zod.union([zod.object({
+  "id": zod.number().int(),
+  "transactionAt": zod.string(),
+  "amount": zod.number(),
+  "description": zod.string(),
+  "account": zod.string(),
+  "kind": zod.enum(['single', 'group'])
+}),zod.null()]).optional().describe('Current reciprocal bank link, present on the purchase list response; null means no bank link, independent of paid status.'),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
   "items": zod.array(zod.object({
@@ -4471,6 +4487,14 @@ export const UpdateInventoryPurchaseResponse = zod.object({
   "paymentDate": zod.string().nullish(),
   "paymentAmount": zod.number().nullish(),
   "paymentGroupBankTransactionId": zod.number().int().min(1).nullable(),
+  "bankConnection": zod.union([zod.object({
+  "id": zod.number().int(),
+  "transactionAt": zod.string(),
+  "amount": zod.number(),
+  "description": zod.string(),
+  "account": zod.string(),
+  "kind": zod.enum(['single', 'group'])
+}),zod.null()]).optional().describe('Current reciprocal bank link, present on the purchase list response; null means no bank link, independent of paid status.'),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
   "items": zod.array(zod.object({
@@ -4536,6 +4560,14 @@ export const ConfirmInventoryPurchasePaymentResponse = zod.object({
   "paymentDate": zod.string().nullish(),
   "paymentAmount": zod.number().nullish(),
   "paymentGroupBankTransactionId": zod.number().int().min(1).nullable(),
+  "bankConnection": zod.union([zod.object({
+  "id": zod.number().int(),
+  "transactionAt": zod.string(),
+  "amount": zod.number(),
+  "description": zod.string(),
+  "account": zod.string(),
+  "kind": zod.enum(['single', 'group'])
+}),zod.null()]).optional().describe('Current reciprocal bank link, present on the purchase list response; null means no bank link, independent of paid status.'),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
   "items": zod.array(zod.object({
@@ -4580,6 +4612,14 @@ export const CancelInventoryPurchasePaymentResponse = zod.object({
   "paymentDate": zod.string().nullish(),
   "paymentAmount": zod.number().nullish(),
   "paymentGroupBankTransactionId": zod.number().int().min(1).nullable(),
+  "bankConnection": zod.union([zod.object({
+  "id": zod.number().int(),
+  "transactionAt": zod.string(),
+  "amount": zod.number(),
+  "description": zod.string(),
+  "account": zod.string(),
+  "kind": zod.enum(['single', 'group'])
+}),zod.null()]).optional().describe('Current reciprocal bank link, present on the purchase list response; null means no bank link, independent of paid status.'),
   "createdAt": zod.string(),
   "editable": zod.boolean(),
   "items": zod.array(zod.object({

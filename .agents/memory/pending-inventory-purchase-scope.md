@@ -14,3 +14,9 @@ When registering a pending purchase, suggest existing purchases with the same am
 **Why:** The user requested suggestions so an existing purchase can be linked instead of registering it again.
 
 **How to apply:** Keep suggestion relevance separate from settlement eligibility: a type-only or amount-only match is not permission to violate the exact-total and matching-material rules. A cancelled link is historical evidence, not an active settlement.
+
+Purchase lists must distinguish bank-linked from unlinked purchases independently of paid/unpaid status, with a bank-link filter and transaction facts in the purchase details.
+
+**Why:** The user explicitly approved adding labels and filtering after learning that “Төлбөр төлсөн” also includes payments confirmed without a bank transaction.
+
+**How to apply:** Include both individual and grouped current bank links. Do not treat a cancelled group, a historical bank identifier, or payment confirmation alone as a current bank connection.

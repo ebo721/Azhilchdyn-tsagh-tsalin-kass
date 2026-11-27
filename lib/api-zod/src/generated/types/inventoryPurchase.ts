@@ -7,6 +7,7 @@
  */
 import type { InventoryPurchaseItem } from './inventoryPurchaseItem';
 import type { InventoryPurchaseMaterialType } from './inventoryPurchaseMaterialType';
+import type { PurchaseBankConnection } from './purchaseBankConnection';
 
 export interface InventoryPurchase {
   id: number;
@@ -35,6 +36,8 @@ export interface InventoryPurchase {
      * @nullable
      */
   paymentGroupBankTransactionId: number | null;
+  /** Current reciprocal bank link, present on the purchase list response; null means no bank link, independent of paid status. */
+  bankConnection?: PurchaseBankConnection | null;
   createdAt: string;
   editable: boolean;
   items: InventoryPurchaseItem[];

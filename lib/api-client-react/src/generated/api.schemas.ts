@@ -2313,6 +2313,23 @@ export interface InventoryCustodian {
   name: string;
 }
 
+export type PurchaseBankConnectionKind = typeof PurchaseBankConnectionKind[keyof typeof PurchaseBankConnectionKind];
+
+
+export const PurchaseBankConnectionKind = {
+  single: 'single',
+  group: 'group',
+} as const;
+
+export interface PurchaseBankConnection {
+  id: number;
+  transactionAt: string;
+  amount: number;
+  description: string;
+  account: string;
+  kind: PurchaseBankConnectionKind;
+}
+
 export type InventoryPurchaseMaterialType = typeof InventoryPurchaseMaterialType[keyof typeof InventoryPurchaseMaterialType];
 
 
@@ -2348,6 +2365,8 @@ export interface InventoryPurchase {
      * @nullable
      */
   paymentGroupBankTransactionId: number | null;
+  /** Current reciprocal bank link, present on the purchase list response; null means no bank link, independent of paid status. */
+  bankConnection?: PurchaseBankConnection | null;
   createdAt: string;
   editable: boolean;
   items: InventoryPurchaseItem[];

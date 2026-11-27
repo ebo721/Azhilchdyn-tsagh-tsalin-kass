@@ -969,9 +969,16 @@ describe("bank document linking", () => {
       .where(eq(inventoryPurchasePaymentGroupsTable.bankTransactionId, bankId));
     paymentGroupIds.push(group.id);
     const purchaseList = await fetch(`${baseUrl}/api/inventory/purchases`, { headers: { cookie } });
-    const purchaseRows = await purchaseList.json() as Array<{ id: number; paymentGroupBankTransactionId: number | null }>;
+    const purchaseRows = await purchaseList.json() as Array<{ id: number; paymentGroupBankTransactionId: number | null; bankConnection: { id: number; kind: string; amount: number } | null }>;
     assert.equal(purchaseRows.find((purchase) => purchase.id === first.id)?.paymentGroupBankTransactionId, bankId);
     assert.equal(purchaseRows.find((purchase) => purchase.id === second.id)?.paymentGroupBankTransactionId, bankId);
+    for (const id of [first.id, second.id]) {
+      const link = purchaseRows.find(p => p.id === id)?.bankConnection;
+      assert.ok(link);
+      assert.equal(link.id, bankId);
+      assert.equal(link.kind, "group");
+      assert.equal(link.amount, 60_000);
+    }
     const protectedEdit = await fetch(`${baseUrl}/api/inventory/purchases/${first.id}`, {
       method: "PUT",
       headers: { cookie, "content-type": "application/json" },
@@ -1037,6 +1044,8 @@ describe("bank document linking", () => {
     const cancelled = await cancel.json() as { inventoryPurchaseIds: number[]; cancelled: boolean };
     assert.deepEqual(cancelled.inventoryPurchaseIds, [first.id, second.id]);
     assert.equal(cancelled.cancelled, true);
+    const afterCancelRows = await (await fetch(`${baseUrl}/api/inventory/purchases`, { headers: { cookie } })).json() as Array<{ id: number; bankConnection: unknown }>;
+    for (const id of [first.id, second.id]) assert.equal(afterCancelRows.find(p => p.id === id)?.bankConnection, null);
     const [cancelledGroup] = await db.select().from(inventoryPurchasePaymentGroupsTable)
       .where(eq(inventoryPurchasePaymentGroupsTable.id, group.id));
     assert.equal(cancelledGroup.status, "cancelled");

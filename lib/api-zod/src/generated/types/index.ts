@@ -302,6 +302,8 @@ export * from './pendingInventoryPurchaseMaterialType';
 export * from './pendingPurchaseRegistration';
 export * from './pendingPurchaseSuggestion';
 export * from './pendingPurchaseSuggestionMaterialType';
+export * from './purchaseBankConnection';
+export * from './purchaseBankConnectionKind';
 export * from './readerMealCount';
 export * from './readerMealCountsExport';
 export * from './rebuildPayrollBalances200';
