@@ -2353,6 +2353,30 @@ export interface InventoryPurchase {
   items: InventoryPurchaseItem[];
 }
 
+export type PendingPurchaseRegistration = InventoryPurchaseInput | {
+  /** @minimum 1 */
+  inventoryPurchaseId: number;
+};
+
+export type PendingPurchaseSuggestionMaterialType = typeof PendingPurchaseSuggestionMaterialType[keyof typeof PendingPurchaseSuggestionMaterialType];
+
+
+export const PendingPurchaseSuggestionMaterialType = {
+  food: 'food',
+  supply: 'supply',
+} as const;
+
+export interface PendingPurchaseSuggestion {
+  id: number;
+  documentName: string;
+  date: string;
+  materialType: PendingPurchaseSuggestionMaterialType;
+  totalAmount: number;
+  sameAmount: boolean;
+  sameType: boolean;
+  linkable: boolean;
+}
+
 export type PendingInventoryPurchaseMaterialType = typeof PendingInventoryPurchaseMaterialType[keyof typeof PendingInventoryPurchaseMaterialType];
 
 

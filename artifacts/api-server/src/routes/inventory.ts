@@ -10,8 +10,9 @@ import { assertNotInternalTransfer, notInternalTransfer } from "../lib/bank-inte
 import {
   ListPendingInventoryPurchasesResponse, RegisterPendingInventoryPurchaseParams,
   RegisterPendingInventoryPurchaseBody, RegisterPendingInventoryPurchaseResponse,
+  ListPendingPurchaseSuggestionsParams, ListPendingPurchaseSuggestionsResponse,
 } from "@workspace/api-zod";
-import { listPendingInventoryPurchases } from "../lib/pending-inventory-purchases.js";
+import { listPendingInventoryPurchases, pendingPurchaseSuggestions } from "../lib/pending-inventory-purchases.js";
 import { linkBankPurchase } from "../lib/bank-document-linking.js";
 import { inventoryOpeningBalancesTable, inventoryOpeningConsumptionsTable } from "@workspace/db";
 import { createServer } from "node:http";
@@ -192,6 +193,15 @@ router.get("/inventory/pending-purchases", async (_req, res, next) => {
   } catch (error) { next(error); }
 });
 
+router.get("/inventory/pending-purchases/:id/suggestions", async (req, res, next) => {
+  try {
+    const { id } = ListPendingPurchaseSuggestionsParams.parse(req.params);
+    const rows = await pendingPurchaseSuggestions(id);
+    if (!rows) return res.status(409).json({ error: "Бүртгэлгүй худалдан авалт өөрчлөгдсөн байна. Дахин ачаална уу." });
+    return res.json(ListPendingPurchaseSuggestionsResponse.parse(rows));
+  } catch (error) { return next(error); }
+});
+
 router.post("/inventory/pending-purchases/:id/register", async (req, res, next) => {
   try {
     const session = await getStaffSession(req);
@@ -200,7 +210,7 @@ router.post("/inventory/pending-purchases/:id/register", async (req, res, next) 
     }
     const { id } = RegisterPendingInventoryPurchaseParams.parse(req.params);
     const input = RegisterPendingInventoryPurchaseBody.parse(req.body);
-    if (!isValidCalendarDate(input.date)) return res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
+    if (!("inventoryPurchaseId" in input) && !isValidCalendarDate(input.date)) return res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
     const result = await linkBankPurchase(id, input, true);
     if (typeof result === "string") {
       return res.status(result === "missing_bank" ? 404 : 409).json({ error:

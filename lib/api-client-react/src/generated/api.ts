@@ -193,6 +193,8 @@ import type {
   PayrollScheduleInput,
   PayrollSummary,
   PendingInventoryPurchase,
+  PendingPurchaseRegistration,
+  PendingPurchaseSuggestion,
   RebuildPayrollBalances200,
   RebuildPayrollBalances422,
   RebuildPayrollBalancesParams,
@@ -9595,14 +9597,14 @@ export const getRegisterPendingInventoryPurchaseUrl = (id: number,) => {
 }
 
 export const registerPendingInventoryPurchase = async (id: number,
-    inventoryPurchaseInput: InventoryPurchaseInput, options?: Parameters<typeof customFetch>[1]): Promise<BankPurchaseLinkResult> => {
+    pendingPurchaseRegistration: PendingPurchaseRegistration, options?: Parameters<typeof customFetch>[1]): Promise<BankPurchaseLinkResult> => {
 
   return customFetch<BankPurchaseLinkResult>(getRegisterPendingInventoryPurchaseUrl(id),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(inventoryPurchaseInput)
+    body: JSON.stringify(pendingPurchaseRegistration)
   }
 );}
 
@@ -9611,8 +9613,8 @@ export const registerPendingInventoryPurchase = async (id: number,
 
 
 export const getRegisterPendingInventoryPurchaseMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerPendingInventoryPurchase>>, TError,{id: number;data: BodyType<InventoryPurchaseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof registerPendingInventoryPurchase>>, TError,{id: number;data: BodyType<InventoryPurchaseInput>}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerPendingInventoryPurchase>>, TError,{id: number;data: BodyType<PendingPurchaseRegistration>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof registerPendingInventoryPurchase>>, TError,{id: number;data: BodyType<PendingPurchaseRegistration>}, TContext> => {
 
 const mutationKey = ['registerPendingInventoryPurchase'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -9624,7 +9626,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerPendingInventoryPurchase>>, {id: number;data: BodyType<InventoryPurchaseInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerPendingInventoryPurchase>>, {id: number;data: BodyType<PendingPurchaseRegistration>}> = (props) => {
           const {id,data} = props ?? {};
 
           return  registerPendingInventoryPurchase(id,data,requestOptions)
@@ -9638,19 +9640,90 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type RegisterPendingInventoryPurchaseMutationResult = NonNullable<Awaited<ReturnType<typeof registerPendingInventoryPurchase>>>
-    export type RegisterPendingInventoryPurchaseMutationBody = BodyType<InventoryPurchaseInput>
+    export type RegisterPendingInventoryPurchaseMutationBody = BodyType<PendingPurchaseRegistration>
     export type RegisterPendingInventoryPurchaseMutationError = ErrorType<unknown>
 
     export const useRegisterPendingInventoryPurchase = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerPendingInventoryPurchase>>, TError,{id: number;data: BodyType<InventoryPurchaseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerPendingInventoryPurchase>>, TError,{id: number;data: BodyType<PendingPurchaseRegistration>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof registerPendingInventoryPurchase>>,
         TError,
-        {id: number;data: BodyType<InventoryPurchaseInput>},
+        {id: number;data: BodyType<PendingPurchaseRegistration>},
         TContext
       > => {
       return useMutation(getRegisterPendingInventoryPurchaseMutationOptions(options));
     }
+
+export const getListPendingPurchaseSuggestionsUrl = (id: number,) => {
+
+
+
+
+  return `/api/inventory/pending-purchases/${id}/suggestions`
+}
+
+export const listPendingPurchaseSuggestions = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<PendingPurchaseSuggestion[]> => {
+
+  return customFetch<PendingPurchaseSuggestion[]>(getListPendingPurchaseSuggestionsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPendingPurchaseSuggestionsQueryKey = (id: number,) => {
+    return [
+    `/api/inventory/pending-purchases/${id}/suggestions`
+    ] as const;
+    }
+
+
+export const getListPendingPurchaseSuggestionsQueryOptions = <TData = Awaited<ReturnType<typeof listPendingPurchaseSuggestions>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPendingPurchaseSuggestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPendingPurchaseSuggestionsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPendingPurchaseSuggestions>>> = ({ signal }) => listPendingPurchaseSuggestions(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPendingPurchaseSuggestions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPendingPurchaseSuggestionsQueryResult = NonNullable<Awaited<ReturnType<typeof listPendingPurchaseSuggestions>>>
+export type ListPendingPurchaseSuggestionsQueryError = ErrorType<unknown>
+
+
+
+export function useListPendingPurchaseSuggestions<TData = Awaited<ReturnType<typeof listPendingPurchaseSuggestions>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPendingPurchaseSuggestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPendingPurchaseSuggestionsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListInventoryPurchasesUrl = () => {
 

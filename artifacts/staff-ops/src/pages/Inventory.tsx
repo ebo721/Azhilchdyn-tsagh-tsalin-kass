@@ -4,6 +4,7 @@ import { useFieldArray, useForm } from 'react-hook-form';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { PendingInventoryPurchases } from '@/components/PendingInventoryPurchases';
+import { PendingPurchaseSuggestions } from '@/components/PendingPurchaseSuggestions';
 import { useRegisterPendingInventoryPurchase, getListPendingInventoryPurchasesQueryKey, type PendingInventoryPurchase } from '@workspace/api-client-react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
@@ -242,6 +243,7 @@ export function Inventory() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [pendingPurchase, setPendingPurchase] = useState<PendingInventoryPurchase | null>(null);
+  const [linkingPendingPurchase, setLinkingPendingPurchase] = useState(false);
   const [registrationFilter, setRegistrationFilter] = useState('all');
   const registerPending = useRegisterPendingInventoryPurchase();
   const [editing, setEditing] = useState<InventoryPurchase | null>(null);
@@ -355,6 +357,7 @@ export function Inventory() {
     setOpen(true);
   };
   const submit = (values: InventoryForm) => {
+    if (linkingPendingPurchase) return;
     if (!editing && !values.responsibleEmployeeId) return;
     if (pendingPurchase && Math.round(grandTotal * 100) !== Math.round(pendingPurchase.amount * 100)) return;
     const data = {
@@ -727,13 +730,14 @@ export function Inventory() {
         <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={() => setIssueOpen(false)}>Болих</Button><Button type="submit" disabled={createIssue.isPending || updateIssue.isPending || (!editingIssue && !issueForm.watch('responsibleEmployeeId'))} data-testid="button-save-inventory-issue">{createIssue.isPending || updateIssue.isPending ? 'Хадгалж байна...' : editingIssue ? 'Засварыг хадгалах' : 'Зарлага хадгалах'}</Button></div>
       </form></Form>
     </Modal>}
-    {open && <Modal wide fullScreen title={pendingPurchase ? 'Бүртгэлгүй худалдан авалтыг бүртгэх' : editing ? 'Худалдан авалт засах' : 'Бараа материалын худалдан авалт'} detail="Сангаас хайж сонгох эсвэл шинэ бараа бүртгэнэ." onClose={() => { if (!registerPending.isPending) setOpen(false); }}>
+    {open && <Modal wide fullScreen title={pendingPurchase ? 'Бүртгэлгүй худалдан авалтыг бүртгэх' : editing ? 'Худалдан авалт засах' : 'Бараа материалын худалдан авалт'} detail="Сангаас хайж сонгох эсвэл шинэ бараа бүртгэнэ." onClose={() => { if (!registerPending.isPending && !linkingPendingPurchase) setOpen(false); }}>
       {pendingPurchase && <div className="mb-3 space-y-1 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950" data-testid="pending-purchase-facts">
         <p>{dateLabel(pendingPurchase.date)} · {pendingPurchase.accountCode} {pendingPurchase.accountName}</p>
         <p>{pendingPurchase.description}</p>
         <p>Банкны дүн: {new Intl.NumberFormat('mn-MN', { maximumFractionDigits: 2 }).format(pendingPurchase.amount)} ₮. Нийлбэр яг таарах ёстой. Касс, журнал дахин бичигдэхгүй.</p>
         {Math.round(grandTotal * 100) !== Math.round(pendingPurchase.amount * 100) && <p role="alert" data-testid="pending-purchase-mismatch">Дүнгийн зөрүү: {new Intl.NumberFormat('mn-MN', { maximumFractionDigits: 2 }).format(pendingPurchase.amount - grandTotal)} ₮</p>}
       </div>}
+      {pendingPurchase && <PendingPurchaseSuggestions key={pendingPurchase.id} pending={pendingPurchase} disabled={registerPending.isPending} onBusyChange={setLinkingPendingPurchase} onLinked={() => { setOpen(false); setPendingPurchase(null); }} />}
       {editing && <div className="mb-3 rounded-xl border border-border bg-secondary/35 px-4 py-3"><AccountLabel code={editing.accountCode} name={editing.accountName} /></div>}
       <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-3">
         <label className="block space-y-2 text-xs font-semibold">Бараа материалын төрөл<select className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('materialType', { required: true })} data-testid="select-inventory-material-type">{inventoryMaterialTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label>
@@ -763,7 +767,7 @@ export function Inventory() {
         <Button type="button" variant="outline" className="w-full" onClick={() => rows.append({ name: '', category: '', unit: 'ширхэг', quantity: '1', unitPrice: '' })} data-testid="button-add-inventory-row"><Plus className="size-4" />Бараа нэмэх</Button>
         <div className="flex items-center justify-between rounded-xl bg-primary/10 px-4 py-3"><span className="text-sm font-bold">Нийт дүн</span><strong className="font-mono text-lg text-primary">{money(grandTotal)}</strong></div>
         {registerPending.isError && <p role="alert" className="text-xs text-destructive" data-testid="pending-purchase-error">{(registerPending.error as { data?: { error?: string } })?.data?.error ?? 'Бүртгэж чадсангүй. Оруулсан мэдээлэл хэвээр байна, дахин оролдоно уу.'}</p>}
-        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" disabled={registerPending.isPending} onClick={() => setOpen(false)}>Болих</Button><Button type="submit" disabled={create.isPending || update.isPending || registerPending.isPending || (!editing && !form.watch('responsibleEmployeeId')) || Boolean(pendingPurchase && Math.round(grandTotal * 100) !== Math.round(pendingPurchase.amount * 100))} data-testid="button-save-inventory-purchase">{create.isPending || update.isPending || registerPending.isPending ? 'Хадгалж байна...' : editing ? 'Засварыг хадгалах' : 'Бүртгэх'}</Button></div>
+        <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" disabled={registerPending.isPending || linkingPendingPurchase} onClick={() => setOpen(false)}>Болих</Button><Button type="submit" disabled={linkingPendingPurchase || create.isPending || update.isPending || registerPending.isPending || (!editing && !form.watch('responsibleEmployeeId')) || Boolean(pendingPurchase && Math.round(grandTotal * 100) !== Math.round(pendingPurchase.amount * 100))} data-testid="button-save-inventory-purchase">{create.isPending || update.isPending || registerPending.isPending ? 'Хадгалж байна...' : editing ? 'Засварыг хадгалах' : 'Бүртгэх'}</Button></div>
       </form></Form>
     </Modal>}
   </div>;

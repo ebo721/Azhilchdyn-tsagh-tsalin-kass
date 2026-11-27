@@ -288,16 +288,17 @@ export async function linkBankPurchase(id: number, input: PurchaseInput, complet
       // A lost success response can be retried without creating stock a second time.
       if (pendingCash?.sourceType === "inventory_purchase" && pendingCash.sourceKey?.startsWith("purchase:")
         && pendingCash.bankTransactionId === id && pendingCash.journalEntryId) {
+        if ("inventoryPurchaseId" in input && Number(pendingCash.sourceKey.slice(9)) !== input.inventoryPurchaseId) return "purchase_conflict";
         return { bankTransactionId: id, inventoryPurchaseId: Number(pendingCash.sourceKey.slice(9)), cashTransactionId: pendingCash.id, journalEntryId: pendingCash.journalEntryId };
       }
-      if ("inventoryPurchaseId" in input || !pendingCash || bank.type !== "expense"
+      if (!pendingCash || bank.type !== "expense"
         || bank.unclearAt || !bank.transferredAt || !pendingCash.bankVerifiedAt
         || pendingCash.bankTransactionId !== id || pendingCash.sourceType !== "bank_transaction"
         || pendingCash.sourceKey !== pendingPurchaseKey(id)
         || !bank.journalEntryId || bank.journalEntryId !== pendingCash.journalEntryId
         || pendingCash.accountId !== bank.accountId || cents(Number(pendingCash.amount)) !== cents(Number(bank.amount))
         || pendingCash.date !== bank.transactionAt.toISOString().slice(0, 10)) return "bank_resolved";
-      const account = await inventoryPurchaseAccount(tx, input.materialType);
+      const account = await inventoryPurchaseAccount(tx, "materialType" in input ? input.materialType : purchase.materialType);
       if (account.id !== bank.accountId) return "purchase_conflict";
       const [journal] = await tx.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, bank.journalEntryId)).for("update");
       if (!journal || journal.status !== "posted" || journal.sourceType !== "bank_transaction" || journal.sourceId !== id) return "bank_resolved";
@@ -312,6 +313,15 @@ export async function linkBankPurchase(id: number, input: PurchaseInput, complet
     const date = bank.transactionAt.toISOString().slice(0, 10);
     if ("inventoryPurchaseId" in input) {
       if (purchase.paymentDate !== null || purchase.date > date || money(Number(purchase.totalAmount)) !== money(Number(bank.amount))) return "purchase_conflict";
+      const [cashLink] = await tx.select({ id: cashTransactionsTable.id }).from(cashTransactionsTable)
+        .where(and(eq(cashTransactionsTable.sourceType, "inventory_purchase"), eq(cashTransactionsTable.sourceKey, `purchase:${purchase.id}`)));
+      const [groupLink] = await tx.select({ purchaseId: inventoryPurchasePaymentGroupMembersTable.purchaseId })
+        .from(inventoryPurchasePaymentGroupMembersTable)
+        .innerJoin(inventoryPurchasePaymentGroupsTable, eq(inventoryPurchasePaymentGroupsTable.id, inventoryPurchasePaymentGroupMembersTable.groupId))
+        .where(and(eq(inventoryPurchasePaymentGroupMembersTable.purchaseId, purchase.id), eq(inventoryPurchasePaymentGroupsTable.status, "active")));
+      if (cashLink || groupLink) return "purchase_conflict";
+      const account = await inventoryPurchaseAccount(tx, purchase.materialType);
+      if (purchase.accountId !== account.id || (completePending && account.id !== bank.accountId)) return "purchase_conflict";
     } else {
       const supplier = input.supplierName.normalize("NFKC").trim().replace(/\s+/g, " ");
       const items = input.items.map((item) => ({ ...item, name: item.name.trim(), category: item.category.trim(), totalAmount: money(item.quantity * item.unitPrice) }));
