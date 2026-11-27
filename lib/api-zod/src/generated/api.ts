@@ -4253,32 +4253,35 @@ export const RegisterPendingInventoryPurchaseParams = zod.object({
 
 
 
-export const registerPendingInventoryPurchaseBodyDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
+export const registerPendingInventoryPurchaseBodyOneDateRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$');
 
 
-export const registerPendingInventoryPurchaseBodyItemsItemQuantityExclusiveMin = 0;
+export const registerPendingInventoryPurchaseBodyOneItemsItemQuantityExclusiveMin = 0;
 
-export const registerPendingInventoryPurchaseBodyItemsItemUnitPriceMin = 0;
-
-
+export const registerPendingInventoryPurchaseBodyOneItemsItemUnitPriceMin = 0;
 
 
-export const RegisterPendingInventoryPurchaseBody = zod.object({
+
+
+
+export const RegisterPendingInventoryPurchaseBody = zod.union([zod.object({
   "materialType": zod.enum(['food', 'supply']),
   "supplierName": zod.string().min(1),
   "responsibleUserId": zod.number().int().min(1).nullish(),
   "responsibleEmployeeId": zod.number().int().min(1).nullish(),
   "hasReceipt": zod.boolean(),
-  "date": zod.string().regex(registerPendingInventoryPurchaseBodyDateRegExp),
+  "date": zod.string().regex(registerPendingInventoryPurchaseBodyOneDateRegExp),
   "items": zod.array(zod.object({
   "inventoryItemId": zod.number().int().optional(),
   "name": zod.string().min(1),
   "category": zod.string().min(1),
   "unit": zod.enum(['ширхэг', 'кг', 'грамм', 'литр', 'мл', 'метр', 'багц', 'хайрцаг']),
-  "quantity": zod.number().gt(registerPendingInventoryPurchaseBodyItemsItemQuantityExclusiveMin),
-  "unitPrice": zod.number().min(registerPendingInventoryPurchaseBodyItemsItemUnitPriceMin)
+  "quantity": zod.number().gt(registerPendingInventoryPurchaseBodyOneItemsItemQuantityExclusiveMin),
+  "unitPrice": zod.number().min(registerPendingInventoryPurchaseBodyOneItemsItemUnitPriceMin)
 })).min(1)
-})
+}),zod.object({
+  "inventoryPurchaseId": zod.number().int().min(1)
+})])
 
 
 
@@ -4292,6 +4295,26 @@ export const RegisterPendingInventoryPurchaseResponse = zod.object({
   "cashTransactionId": zod.number().int().min(1),
   "journalEntryId": zod.number().int().min(1)
 })
+
+
+
+
+
+export const ListPendingPurchaseSuggestionsParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const ListPendingPurchaseSuggestionsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "documentName": zod.string(),
+  "date": zod.string(),
+  "materialType": zod.enum(['food', 'supply']),
+  "totalAmount": zod.number(),
+  "sameAmount": zod.boolean(),
+  "sameType": zod.boolean(),
+  "linkable": zod.boolean()
+})
+export const ListPendingPurchaseSuggestionsResponse = zod.array(ListPendingPurchaseSuggestionsResponseItem)
 
 
 /**

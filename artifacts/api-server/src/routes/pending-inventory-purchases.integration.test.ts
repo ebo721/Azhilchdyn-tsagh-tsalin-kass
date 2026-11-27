@@ -8,6 +8,7 @@ import {
   db, pool, usersTable, bankTransactionsTable, cashTransactionsTable, cashClosuresTable,
   chartOfAccountsTable, inventoryItemsTable, inventoryPurchasesTable, inventorySuppliersTable,
   journalEntriesTable, journalLinesTable, operatingExpensesTable,
+  inventoryPurchasePaymentGroupsTable, inventoryPurchasePaymentGroupMembersTable,
 } from "@workspace/db";
 import app from "../app";
 import { createStaffSession, hrCookie } from "../lib/hr-session";
@@ -16,6 +17,7 @@ describe("bank purchases awaiting item details", () => {
   const prefix = `pending-purchase-test-${randomUUID()}`;
   const banks: number[] = [], users: number[] = [], journalIds: number[] = [], cashIds: number[] = [], purchases: number[] = [];
   const accounts: Record<string, number> = {};
+  const groups: number[] = [];
   const cookies: Record<string, string> = {};
   let server: Server, base: string;
   const call = (path: string, method = "GET", data?: unknown, role = "admin") => fetch(`${base}/api${path}`, {
@@ -55,6 +57,7 @@ describe("bank purchases awaiting item details", () => {
     purchases.push(...(await db.select().from(inventoryPurchasesTable).where(like(inventoryPurchasesTable.documentName, `${prefix}%`))).map(row => row.id));
     const journals = await db.select().from(journalEntriesTable).where(like(journalEntriesTable.description, `%${prefix}%`));
     journalIds.push(...journals.map(row => row.id));
+    if (groups.length) await db.delete(inventoryPurchasePaymentGroupsTable).where(inArray(inventoryPurchasePaymentGroupsTable.id, groups));
     if (banks.length) await db.delete(bankTransactionsTable).where(inArray(bankTransactionsTable.id, banks));
     if (cashIds.length) await db.delete(cashTransactionsTable).where(inArray(cashTransactionsTable.id, cashIds));
     if (purchases.length) await db.delete(inventoryPurchasesTable).where(inArray(inventoryPurchasesTable.id, purchases));
@@ -64,6 +67,77 @@ describe("bank purchases awaiting item details", () => {
     await db.delete(usersTable).where(inArray(usersTable.id, users));
     await new Promise<void>(resolve => server.close(() => resolve()));
     await pool.end();
+  });
+
+  it("suggests unlinked matching amounts or types and reuses accounting when linking an existing purchase", async () => {
+    const row = await bank();
+    const postedResponse = await call(`/bank-transactions/${row.id}/post-journal`, "POST", { accountId: accounts["1500"] });
+    assert.equal(postedResponse.status, 200);
+    const posted = await postedResponse.json();
+    journalIds.push(posted.journalEntryId);
+    const [saved] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, row.id));
+    cashIds.push(saved.cashTransactionId!);
+    const fixture = async (materialType = "food", totalAmount = 83.45, paymentDate: string | null = null, date = "2098-06-14") => {
+      const [purchase] = await db.insert(inventoryPurchasesTable).values({
+        materialType, totalAmount, paymentDate, date, documentName: prefix,
+        accountId: accounts[materialType === "food" ? "1500" : "1510"],
+      }).returning();
+      purchases.push(purchase.id);
+      return purchase.id;
+    };
+    const exact = await fixture();
+    const sameType = await fixture("food", 25);
+    const sameAmount = await fixture("supply");
+    const neither = await fixture("supply", 25);
+    const paid = await fixture("food", 83.45, "2098-06-14");
+    const future = await fixture("food", 83.45, null, "2098-06-16");
+    const cashLinked = await fixture();
+    const [cash] = await db.insert(cashTransactionsTable).values({
+      type: "expense", category: "Бараа материал", description: prefix,
+      date: "2098-06-14", amount: 83.45, sourceType: "inventory_purchase", sourceKey: `purchase:${cashLinked}`,
+    }).returning();
+    cashIds.push(cash.id);
+    const grouped = await fixture();
+    const cancelledGroupPurchase = await fixture();
+    for (const status of ["active", "cancelled"]) {
+      const [group] = await db.insert(inventoryPurchasePaymentGroupsTable).values({
+        bankTransactionId: row.id, journalEntryId: posted.journalEntryId, status,
+        cancelledAt: status === "cancelled" ? new Date() : null,
+      }).returning();
+      groups.push(group.id);
+      await db.insert(inventoryPurchasePaymentGroupMembersTable).values({
+        groupId: group.id, purchaseId: status === "active" ? grouped : cancelledGroupPurchase, amount: 83.45,
+      });
+    }
+    const list = await call(`/inventory/pending-purchases/${row.id}/suggestions`, "GET", undefined, "warehouse");
+    assert.equal(list.status, 200);
+    const suggestions = await list.json();
+    assert.ok(suggestions.some((p: any) => p.id === exact && p.linkable));
+    assert.ok(suggestions.some((p: any) => p.id === sameType && p.sameType && !p.linkable));
+    assert.ok(suggestions.some((p: any) => p.id === sameAmount && p.sameAmount && !p.linkable));
+    assert.ok(suggestions.some((p: any) => p.id === cancelledGroupPurchase && p.linkable));
+    for (const id of [neither, paid, future, cashLinked, grouped]) assert.ok(!suggestions.some((p: any) => p.id === id));
+    for (const id of [sameType, sameAmount, paid, future, cashLinked, grouped]) {
+      assert.equal((await call(`/inventory/pending-purchases/${row.id}/register`, "POST", { inventoryPurchaseId: id }, "warehouse")).status, 409);
+    }
+    assert.equal((await call(`/inventory/pending-purchases/${row.id}/register`, "POST", { inventoryPurchaseId: exact }, "viewer")).status, 403);
+    const results = await Promise.all([1, 2].map(() => call(`/inventory/pending-purchases/${row.id}/register`, "POST", { inventoryPurchaseId: exact }, "warehouse")));
+    assert.deepEqual(results.map(r => r.status), [200, 200]);
+    const linked = await results[0].json();
+    assert.equal(linked.inventoryPurchaseId, exact);
+    assert.equal(linked.journalEntryId, posted.journalEntryId);
+    assert.equal(linked.cashTransactionId, saved.cashTransactionId);
+    const [purchase] = await db.select().from(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, exact));
+    assert.equal(purchase.date, "2098-06-14");
+    assert.equal(purchase.paymentDate, "2098-06-15");
+    const second = await bank();
+    const posted2 = await (await call(`/bank-transactions/${second.id}/post-journal`, "POST", { accountId: accounts["1500"] })).json();
+    journalIds.push(posted2.journalEntryId);
+    const [saved2] = await db.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, second.id));
+    cashIds.push(saved2.cashTransactionId!);
+    const remaining = await (await call(`/inventory/pending-purchases/${second.id}/suggestions`)).json();
+    assert.ok(!remaining.some((p: any) => p.id === exact));
+    assert.equal((await call(`/inventory/pending-purchases/${second.id}/register`, "POST", { inventoryPurchaseId: exact }, "warehouse")).status, 409);
   });
 
   for (const [code, type] of [["1500", "food"], ["1510", "supply"]]) {

@@ -2255,7 +2255,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/InventoryPurchaseInput"
+              $ref: "#/components/schemas/PendingPurchaseRegistration"
       responses:
         "200":
           description: Completed without another cash or journal posting
@@ -2263,6 +2263,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BankPurchaseLinkResult"
+  /inventory/pending-purchases/{id}/suggestions:
+    get:
+      operationId: listPendingPurchaseSuggestions
+      tags: [Inventory]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: Unlinked purchases with matching amount or material type
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PendingPurchaseSuggestion"
   /inventory/purchases:
     get:
       operationId: listInventoryPurchases
@@ -4890,6 +4905,25 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/InventoryPurchaseItem"
+    PendingPurchaseRegistration:
+      oneOf:
+        - $ref: "#/components/schemas/InventoryPurchaseInput"
+        - type: object
+          required: [inventoryPurchaseId]
+          properties:
+            inventoryPurchaseId: { type: integer, minimum: 1 }
+    PendingPurchaseSuggestion:
+      type: object
+      required: [id, documentName, date, materialType, totalAmount, sameAmount, sameType, linkable]
+      properties:
+        id: { type: integer }
+        documentName: { type: string }
+        date: { type: string }
+        materialType: { type: string, enum: [food, supply] }
+        totalAmount: { type: number }
+        sameAmount: { type: boolean }
+        sameType: { type: boolean }
+        linkable: { type: boolean }
     PendingInventoryPurchase:
       type: object
       required: [id, date, amount, description, bankAccount, accountCode, accountName, materialType]
