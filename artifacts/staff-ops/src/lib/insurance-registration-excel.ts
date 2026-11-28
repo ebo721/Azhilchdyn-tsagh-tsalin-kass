@@ -2,10 +2,11 @@ import ExcelJS from 'exceljs';
 import type { Employee } from '@workspace/api-client-react';
 
 function registrationRows(employees: Employee[]) {
-  const activeEmployees = employees.filter(employee => employee.status === 'active');
-  if (!activeEmployees.length) throw new Error('НДШ-д бүртгэх идэвхтэй ажилтан алга.');
+  const insuredEmployees = employees.filter(employee =>
+    employee.status === 'active' && !employee.payrollTaxExempt && employee.socialInsuranceSalary > 0);
+  if (!insuredEmployees.length) throw new Error('НДШ төлөх идэвхтэй ажилтан алга.');
 
-  const missing = activeEmployees.flatMap(employee => {
+  const missing = insuredEmployees.flatMap(employee => {
     const profile = employee.socialInsuranceProfile;
     const fields = [
       !profile?.registrationNumber?.trim() && 'регистрийн дугаар',
@@ -21,7 +22,7 @@ function registrationRows(employees: Employee[]) {
     throw new Error(`НДШ Excel бэлтгэхэд шаардлагатай мэдээлэл дутуу байна:\n${sample}${remaining}`);
   }
 
-  return activeEmployees.map(employee => ({
+  return insuredEmployees.map(employee => ({
     registrationNumber: employee.socialInsuranceProfile!.registrationNumber.trim(),
     givenName: employee.socialInsuranceProfile!.givenName!.trim(),
     parentName: employee.socialInsuranceProfile!.parentName.trim(),
