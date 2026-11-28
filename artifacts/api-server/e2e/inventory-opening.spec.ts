@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { test, expect } from "@playwright/test";
+import { selectInventorySection } from "./inventory-navigation";
 import { eq } from "drizzle-orm";
 import { db, inventoryItemsTable, inventoryOpeningBalancesTable, usersTable } from "@workspace/db";
 import { createStaffSession, hrCookie } from "../src/lib/hr-session.js";
@@ -33,7 +34,7 @@ test("opening stock form saves and issue options omit zero stock", async ({ page
     await expect(page.getByTestId(`row-inventory-stock-${itemId}`)).toContainText("3,000");
     await page.reload();
     await expect(page.getByTestId(`row-inventory-stock-${itemId}`)).toBeVisible();
-    await page.getByTestId("tab-inventory-issues").click();
+    await selectInventorySection(page, "issues");
     await page.getByTestId("button-add-inventory-issue").click();
     await expect(page.getByTestId("select-inventory-issue-item").locator(`option[value="${itemId}"]`)).toHaveCount(1);
     const options = await page.getByTestId("select-inventory-issue-item").locator("option:not([value=''])").allTextContents();

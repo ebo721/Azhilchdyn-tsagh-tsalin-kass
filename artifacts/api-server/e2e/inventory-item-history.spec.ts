@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { selectInventorySection } from "./inventory-navigation";
 import type { InventoryItem, InventoryOpeningBalance, InventoryPurchase } from "@workspace/api-zod";
 
 const items: InventoryItem[] = [95001, 95002, 95003].map(id => ({
@@ -40,16 +41,16 @@ async function mockApi(page: Page, failOpening?: () => boolean) {
       : path === "/api/inventory/opening-balances" ? openings : [] });
   });
   await page.goto("/inventory");
-  await page.getByTestId("tab-inventory-stock").click();
+  await selectInventorySection(page, "stock");
   await page.getByTestId("tab-inventory-material-food").click();
 }
 
 test("item history ignores purchase month, type and pagination; shows distinct opening entries", async ({ page }) => {
   await mockApi(page);
-  await page.getByTestId("tab-inventory-purchases").click();
+  await selectInventorySection(page, "purchases");
   await page.getByTestId("input-inventory-purchase-month").fill("2099-01");
   await expect(page.getByTestId("text-inventory-purchase-document-96000")).toHaveText("2099/01/02/001");
-  await page.getByTestId("tab-inventory-stock").click();
+  await selectInventorySection(page, "stock");
   await page.getByTestId("row-inventory-stock-95001").click();
   const history = page.getByTestId("inventory-item-history");
   await expect(history.locator('[data-testid^="row-inventory-item-purchase-"]')).toHaveCount(17);
@@ -76,7 +77,7 @@ test("opening-only item on phone shows opening provenance without another item's
   await expect(history.getByTestId("inventory-item-history-purchase")).toContainText("Худалдан авалт бүртгэгдээгүй.");
   await expect(history).toContainText("Эхний үлдэгдэл нь худалдан авалт биш.");
   await page.getByTestId("button-close-modal").click();
-  await page.getByTestId("tab-inventory-purchases").click();
+  await selectInventorySection(page, "purchases");
   await page.getByTestId("input-inventory-purchase-month").fill("2099-01");
   await expect(page.getByTestId("text-inventory-purchase-mobile-document-96000")).toHaveText("2099/01/02/001");
 });

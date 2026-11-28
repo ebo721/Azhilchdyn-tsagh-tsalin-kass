@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { selectInventorySection } from "./inventory-navigation";
 
 test("stock list hides empty items without removing them from purchase choices", async ({ page }) => {
   const items = [
@@ -17,7 +18,7 @@ test("stock list hides empty items without removing them from purchase choices",
     });
   });
   await page.goto("/inventory");
-  await page.getByTestId("tab-inventory-stock").click();
+  await selectInventorySection(page, "stock");
   await page.getByTestId("tab-inventory-material-food").click();
   await expect(page.getByTestId("row-inventory-stock-91001")).toBeVisible();
   await expect(page.getByTestId("row-inventory-stock-91002")).toHaveCount(0);
@@ -29,7 +30,7 @@ test("stock list hides empty items without removing them from purchase choices",
   await page.getByTestId("tab-inventory-material-supply").click();
   await expect(page.getByTestId("row-inventory-stock-91004")).toBeVisible();
   await expect(page.getByTestId("row-inventory-stock-91005")).toHaveCount(0);
-  await page.getByTestId("tab-inventory-purchases").click();
+  await selectInventorySection(page, "purchases");
   await page.getByTestId("button-add-inventory-purchase").click();
   await expect(page.locator("#inventory-catalog-options option[value='Худалдан аваагүй материал']")).toHaveCount(1);
 });

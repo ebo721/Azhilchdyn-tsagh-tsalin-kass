@@ -29,10 +29,10 @@ for (const width of [402, 1440]) {
         ] : [],
       });
     });
-    await page.goto("/inventory");
-    await page.getByTestId("tab-inventory-purchases").click();
+    await page.goto("/inventory?section=purchases");
     await page.getByTestId("tab-inventory-material-food").click();
     await page.getByTestId("input-inventory-purchase-month").fill("2098-06");
+    await page.getByTestId("button-open-pending-purchases").click();
     await page.getByTestId(`register-pending-purchase-${pending.id}`).click();
     const section = page.getByRole("region", { name: "Холбох худалдан авалтын санал" });
     await expect(section).toBeVisible();
@@ -47,6 +47,10 @@ for (const width of [402, 1440]) {
     await button.click();
     await expect(section).toHaveCount(0);
     await expect(page.getByTestId(`pending-purchase-${pending.id}`)).toHaveCount(0);
+    await expect(page.getByTestId("pending-inventory-purchases")).toBeVisible();
+    await expect(page.getByTestId("pending-purchases-empty")).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(1);
+    await expect(page.getByTestId("value-pending-purchases-count")).toHaveText("0");
     expect(requests).toBe(2);
   });
 }

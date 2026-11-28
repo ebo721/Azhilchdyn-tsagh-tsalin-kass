@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { test, expect } from "@playwright/test";
+import { selectInventorySection } from "./inventory-navigation";
 import { eq, inArray } from "drizzle-orm";
 import {
   db, usersTable, employeesTable, inventoryCustodianEmployeesTable, inventoryItemsTable,
@@ -35,7 +36,7 @@ test("count entry, phone fast reopen, surplus warning and shortage confirmation"
     const [admin] = await db.select().from(usersTable).where(eq(usersTable.id, userIds[0]));
     await context.addCookies([{ name: hrCookie.name, value: createStaffSession({ ...admin, role: "admin" }), url: baseURL! }]);
     await page.goto("/inventory");
-    await page.getByTestId("tab-inventory-stock").click();
+    await selectInventorySection(page, "stock");
     await page.getByTestId("tab-inventory-material-supply").click();
     await page.getByTestId("button-inventory-closing").click();
     await page.getByTestId("input-closing-date").fill("2099-01-02");
@@ -77,7 +78,7 @@ test("count entry, phone fast reopen, surplus warning and shortage confirmation"
     await page.screenshot({ path: "test-results/inventory-closing-mobile.png" });
     await page.getByRole("button", { name: "Болих", exact: true }).click();
 
-    await page.getByTestId("tab-inventory-issues").click();
+    await selectInventorySection(page, "issues");
     await expect(page.getByTestId(`text-inventory-issue-status-${count.issueId}`)).toHaveText("Баталгаажаагүй");
     const stockBefore = await page.request.get("/api/inventory/items");
     expect((await stockBefore.json() as Array<{ id: number; quantity: number }>).find(row => row.id === itemId)!.quantity).toBe(10);
@@ -86,7 +87,7 @@ test("count entry, phone fast reopen, surplus warning and shortage confirmation"
     await expect(page.getByTestId(`text-inventory-issue-status-${count.issueId}`)).toHaveText("Баталгаажсан");
     const stockAfter = await page.request.get("/api/inventory/items");
     expect((await stockAfter.json() as Array<{ id: number; quantity: number }>).find(row => row.id === itemId)!.quantity).toBe(6);
-    await page.getByTestId("tab-inventory-stock").click();
+    await selectInventorySection(page, "stock");
     await expect(page.getByTestId(`row-inventory-closing-${count.id}`)).toContainText("Баталгаажсан");
     await expect(page.getByTestId(`button-edit-closing-${count.id}`)).toHaveCount(0);
   } finally {
