@@ -18,6 +18,15 @@ export interface PayrollAdvanceLine {
   dailySalary: number;
   totalSalary: number;
   advanceAmount: number;
+  /** @nullable */
+  receivableId?: number | null;
+  /** @minimum 0 */
+  receivableDeduction?: number;
+  /** @nullable */
+  receivableDate?: string | null;
+  /** @nullable */
+  receivableJournalEntryId?: number | null;
+  netAdvanceAmount?: number;
   paid: boolean;
   /** @nullable */
   paymentDate?: string | null;

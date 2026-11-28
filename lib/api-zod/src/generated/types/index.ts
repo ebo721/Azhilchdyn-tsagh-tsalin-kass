@@ -285,6 +285,7 @@ export * from './payrollAdvanceInstallment';
 export * from './payrollAdvanceLine';
 export * from './payrollAdvanceLineEmployeeType';
 export * from './payrollAdvancePaymentInput';
+export * from './payrollAdvanceReceivableInput';
 export * from './payrollAdvanceSummary';
 export * from './payrollAttendancePullInput';
 export * from './payrollAttendancePullResult';

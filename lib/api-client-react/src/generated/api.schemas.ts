@@ -1371,6 +1371,15 @@ export interface PayrollAdvanceLine {
   dailySalary: number;
   totalSalary: number;
   advanceAmount: number;
+  /** @nullable */
+  receivableId?: number | null;
+  /** @minimum 0 */
+  receivableDeduction?: number;
+  /** @nullable */
+  receivableDate?: string | null;
+  /** @nullable */
+  receivableJournalEntryId?: number | null;
+  netAdvanceAmount?: number;
   paid: boolean;
   /** @nullable */
   paymentDate?: string | null;
@@ -1423,6 +1432,22 @@ export interface PayrollAdvanceApprovalInput {
   /** @pattern ^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$ */
   approvalDate: string;
   lines: PayrollAdvanceApprovalLineInput[];
+}
+
+export interface PayrollAdvanceReceivableInput {
+  /** @pattern ^\d{4}-(0[1-9]|1[0-2])$ */
+  month: string;
+  /** @minimum 1 */
+  employeeId: number;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  receivableId: number | null;
+  /** @minimum 0 */
+  amount: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  date: string;
 }
 
 export interface PayrollAdvancePaymentInput {

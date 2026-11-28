@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { bankTransactionsTable, cashTransactionsTable, chartOfAccountsTable, db, payrollAdjustmentsTable, payrollAdvanceApprovalsTable, payrollMonthClosuresTable } from "@workspace/db";
-import { advanceFinancials, advancePayments } from "./payroll-advance-installments.js";
+import { advanceFinancials, advancePayments, advanceNetAmount } from "./payroll-advance-installments.js";
 import { GetPayrollAdvanceResponse } from "@workspace/api-zod";
 import { readSavedPayroll } from "./payroll-attendance-snapshot.js";
 import { attachBankCash } from "./bank-cash-lifecycle.js";
@@ -34,7 +34,7 @@ async function savedTargets(tx: Tx, bank: Bank, month: string, kind: PaymentKind
         && money(Number(cash.amount)) === money(Number(bank.amount))
         && Math.abs(Date.parse(String(cash.date)) - Date.parse(bank.transactionAt.toISOString().slice(0, 10))) <= 7 * 86400000);
       return { employeeId: line.employeeId, employeeName: line.employeeName, month,
-        payable: line.advanceAmount, paidAmount: financials.paidAmount,
+        payable: advanceNetAmount(line), paidAmount: financials.paidAmount,
         remainingBalance: financials.remainingBalance, existingCashId: existing?.id ?? null };
     }).filter(line => line.remainingBalance > 0 || line.existingCashId !== null);
   }
@@ -148,7 +148,7 @@ export async function linkBankPayroll(bankId: number, employeeId: number, month:
         const amount = money(Number(bank.amount));
         const updated = { ...line, payments: [...payments, { sequence, amount, date }],
           nextPaymentSequence: sequence + 1,
-          paid: money(target.paidAmount + amount) >= money(line.advanceAmount),
+          paid: money(target.paidAmount + amount) >= advanceNetAmount(line),
           paymentDate: line.paymentDate ?? date };
         await tx.update(payrollAdvanceApprovalsTable).set({
           lines: lines.map(row => row.employeeId === employeeId ? updated : row),

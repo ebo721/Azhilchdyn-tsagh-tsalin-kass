@@ -1,4 +1,7 @@
 import { Router, type IRouter } from "express";
+import { UpdatePayrollAdvanceReceivableBody } from "@workspace/api-zod";
+import { updateAdvanceReceivable } from "../lib/payroll-advance-receivable.js";
+import { advanceNetAmount, advanceSettledAmount } from "../lib/payroll-advance-installments.js";
 import { payrollPayments, payrollPaymentSourceKey } from "../lib/payroll-payments.js";
 import { ensurePayrollReceivableJournal } from "../lib/payroll-receivable-posting.js";
 import { DownloadPayrollWorkbookQueryParams, DownloadSocialInsuranceReportQueryParams } from "@workspace/api-zod";
@@ -798,7 +801,7 @@ router.delete("/payroll-advance/approval", async (req, res, next) => {
         .where(eq(payrollAdvanceApprovalsTable.month, month)).for("update");
       if (!approval) return { status: 404, error: "Батлагдсан урьдчилгаа цалин олдсонгүй" } as const;
       const lines = GetPayrollAdvanceResponse.shape.lines.parse(approval.lines);
-      if (lines.some((line) => advancePaidAmount(line) > 0)) return { status: 409, error: "Эхлээд олгосон урьдчилгаа цалингийн мөрүүдийг Олгоогүй болгоно уу" } as const;
+      if (lines.some((line) => advanceSettledAmount(line) > 0)) return { status: 409, error: "Эхлээд урьдчилгааны олголт болон авлагын суутгалыг буцаана уу" } as const;
       // Validate the saved draft before deletion so failure cannot leave a half-completed reversal.
       const draft = await getPayrollAdvanceSummary(month, tx, { savedOnly: true, ignoreApproval: true });
       await tx.delete(payrollAdvanceApprovalsTable).where(eq(payrollAdvanceApprovalsTable.id, approval.id));
@@ -837,13 +840,25 @@ router.delete("/payroll-advance/:month/:employeeId/transactions/:sequence", asyn
       if (cash?.journalEntryId) await voidJournalEntry(tx, { journalEntryId: cash.journalEntryId, voidedBy: null });
       if (cash) await tx.delete(cashTransactionsTable).where(eq(cashTransactionsTable.id, cash.id));
       const remaining = payments.filter(row => row.sequence !== sequence);
-      const updated = { ...line, payments: remaining, paid: advancePaidAmount({ payments: remaining }) >= line.advanceAmount,
+      const updated = { ...line, payments: remaining, paid: advancePaidAmount({ payments: remaining }) >= advanceNetAmount(line),
         paymentDate: remaining[0]?.date ?? null,
         nextPaymentSequence: Math.max(line.nextPaymentSequence ?? 1, ...payments.map(p => p.sequence + 1)) };
       await tx.update(payrollAdvanceApprovalsTable).set({ lines: lines.map(row => row.employeeId === employeeId ? updated : row) })
         .where(eq(payrollAdvanceApprovalsTable.id, approval.id));
     });
     res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(month, db, { savedOnly: true })));
+  } catch (error) {
+    if (error instanceof Error && "status" in error && typeof error.status === "number") {
+      res.status(error.status).json({ error: error.message });
+    } else next(error);
+  }
+});
+
+router.put("/payroll-advance/receivable", async (req, res, next) => {
+  try {
+    const input = UpdatePayrollAdvanceReceivableBody.parse(req.body);
+    await updateAdvanceReceivable(input);
+    res.json(GetPayrollAdvanceResponse.parse(await getPayrollAdvanceSummary(input.month, db, { savedOnly: true })));
   } catch (error) {
     if (error instanceof Error && "status" in error && typeof error.status === "number") {
       res.status(error.status).json({ error: error.message });
@@ -879,6 +894,12 @@ router.put("/payroll-advance/payment", async (req, res, next) => {
         return "line_not_found" as const;
       }
       const previousLine = sourceLines.find((line) => Number(line.employeeId) === input.employeeId);
+      if (Number(previousLine?.receivableDeduction ?? 0) > 0 && advanceNetAmount(previousLine!) === 0) {
+        throw Object.assign(new Error("Урьдчилгаа авлагын суутгалаар бүрэн хаагдсан. Эхлээд суутгалыг засна уу."), { status: 409 });
+      }
+      if (input.advanceAmount < Number(previousLine?.receivableDeduction ?? 0)) {
+        throw Object.assign(new Error("Урьдчилгааны дүн суутгасан авлагаас бага байж болохгүй"), { status: 400 });
+      }
       if (Array.isArray(previousLine?.payments)) {
         throw Object.assign(new Error("Хэсэгчилсэн урьдчилгааг нэг төлөлтөөр дарж засах эсвэл буцаах боломжгүй. Банкны холбоос болон олголт тус бүрийг шалгана уу."), { status: 409 });
       }

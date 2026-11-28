@@ -1620,6 +1620,8 @@ export const pullPayrollAttendanceResponseAdvanceScheduleAdvancePayDayMax = 31;
 
 export const pullPayrollAttendanceResponseAdvanceScheduleFinalPayDayMax = 31;
 
+export const pullPayrollAttendanceResponseAdvanceLinesItemReceivableDeductionMin = 0;
+
 export const pullPayrollAttendanceResponseAdvanceLinesItemNextPaymentSequenceMax = 10001;
 
 export const pullPayrollAttendanceResponseAdvanceLinesItemPaymentsItemSequenceMax = 10000;
@@ -1727,6 +1729,11 @@ export const PullPayrollAttendanceResponse = zod.object({
   "dailySalary": zod.number(),
   "totalSalary": zod.number(),
   "advanceAmount": zod.number(),
+  "receivableId": zod.number().int().nullish(),
+  "receivableDeduction": zod.number().min(pullPayrollAttendanceResponseAdvanceLinesItemReceivableDeductionMin).optional(),
+  "receivableDate": zod.string().nullish(),
+  "receivableJournalEntryId": zod.number().int().nullish(),
+  "netAdvanceAmount": zod.number().optional(),
   "paid": zod.boolean(),
   "paymentDate": zod.string().nullish(),
   "paidAmount": zod.number().optional(),
@@ -1792,6 +1799,8 @@ export const refreshEmployeePayrollResponseAdvanceSchedulePeriodEndDayMax = 31;
 export const refreshEmployeePayrollResponseAdvanceScheduleAdvancePayDayMax = 31;
 
 export const refreshEmployeePayrollResponseAdvanceScheduleFinalPayDayMax = 31;
+
+export const refreshEmployeePayrollResponseAdvanceLinesItemReceivableDeductionMin = 0;
 
 export const refreshEmployeePayrollResponseAdvanceLinesItemNextPaymentSequenceMax = 10001;
 
@@ -1900,6 +1909,11 @@ export const RefreshEmployeePayrollResponse = zod.object({
   "dailySalary": zod.number(),
   "totalSalary": zod.number(),
   "advanceAmount": zod.number(),
+  "receivableId": zod.number().int().nullish(),
+  "receivableDeduction": zod.number().min(refreshEmployeePayrollResponseAdvanceLinesItemReceivableDeductionMin).optional(),
+  "receivableDate": zod.string().nullish(),
+  "receivableJournalEntryId": zod.number().int().nullish(),
+  "netAdvanceAmount": zod.number().optional(),
   "paid": zod.boolean(),
   "paymentDate": zod.string().nullish(),
   "paidAmount": zod.number().optional(),
@@ -2212,6 +2226,8 @@ export const getPayrollAdvanceResponseScheduleAdvancePayDayMax = 31;
 
 export const getPayrollAdvanceResponseScheduleFinalPayDayMax = 31;
 
+export const getPayrollAdvanceResponseLinesItemReceivableDeductionMin = 0;
+
 export const getPayrollAdvanceResponseLinesItemNextPaymentSequenceMax = 10001;
 
 export const getPayrollAdvanceResponseLinesItemPaymentsItemSequenceMax = 10000;
@@ -2252,6 +2268,11 @@ export const GetPayrollAdvanceResponse = zod.object({
   "dailySalary": zod.number(),
   "totalSalary": zod.number(),
   "advanceAmount": zod.number(),
+  "receivableId": zod.number().int().nullish(),
+  "receivableDeduction": zod.number().min(getPayrollAdvanceResponseLinesItemReceivableDeductionMin).optional(),
+  "receivableDate": zod.string().nullish(),
+  "receivableJournalEntryId": zod.number().int().nullish(),
+  "netAdvanceAmount": zod.number().optional(),
   "paid": zod.boolean(),
   "paymentDate": zod.string().nullish(),
   "paidAmount": zod.number().optional(),
@@ -2300,6 +2321,8 @@ export const approvePayrollAdvanceResponseScheduleAdvancePayDayMax = 31;
 
 export const approvePayrollAdvanceResponseScheduleFinalPayDayMax = 31;
 
+export const approvePayrollAdvanceResponseLinesItemReceivableDeductionMin = 0;
+
 export const approvePayrollAdvanceResponseLinesItemNextPaymentSequenceMax = 10001;
 
 export const approvePayrollAdvanceResponseLinesItemPaymentsItemSequenceMax = 10000;
@@ -2340,6 +2363,11 @@ export const ApprovePayrollAdvanceResponse = zod.object({
   "dailySalary": zod.number(),
   "totalSalary": zod.number(),
   "advanceAmount": zod.number(),
+  "receivableId": zod.number().int().nullish(),
+  "receivableDeduction": zod.number().min(approvePayrollAdvanceResponseLinesItemReceivableDeductionMin).optional(),
+  "receivableDate": zod.string().nullish(),
+  "receivableJournalEntryId": zod.number().int().nullish(),
+  "netAdvanceAmount": zod.number().optional(),
   "paid": zod.boolean(),
   "paymentDate": zod.string().nullish(),
   "paidAmount": zod.number().optional(),
@@ -2379,6 +2407,8 @@ export const revertPayrollAdvanceApprovalResponseSchedulePeriodEndDayMax = 31;
 export const revertPayrollAdvanceApprovalResponseScheduleAdvancePayDayMax = 31;
 
 export const revertPayrollAdvanceApprovalResponseScheduleFinalPayDayMax = 31;
+
+export const revertPayrollAdvanceApprovalResponseLinesItemReceivableDeductionMin = 0;
 
 export const revertPayrollAdvanceApprovalResponseLinesItemNextPaymentSequenceMax = 10001;
 
@@ -2420,6 +2450,11 @@ export const RevertPayrollAdvanceApprovalResponse = zod.object({
   "dailySalary": zod.number(),
   "totalSalary": zod.number(),
   "advanceAmount": zod.number(),
+  "receivableId": zod.number().int().nullish(),
+  "receivableDeduction": zod.number().min(revertPayrollAdvanceApprovalResponseLinesItemReceivableDeductionMin).optional(),
+  "receivableDate": zod.string().nullish(),
+  "receivableJournalEntryId": zod.number().int().nullish(),
+  "netAdvanceAmount": zod.number().optional(),
   "paid": zod.boolean(),
   "paymentDate": zod.string().nullish(),
   "paidAmount": zod.number().optional(),
@@ -2429,6 +2464,102 @@ export const RevertPayrollAdvanceApprovalResponse = zod.object({
   "sequence": zod.number().int().min(1).max(revertPayrollAdvanceApprovalResponseLinesItemPaymentsItemSequenceMax),
   "amount": zod.number().min(revertPayrollAdvanceApprovalResponseLinesItemPaymentsItemAmountMin),
   "date": zod.string().regex(revertPayrollAdvanceApprovalResponseLinesItemPaymentsItemDateRegExp)
+})).optional()
+}))
+})
+
+
+/**
+ * @summary Set or reverse an employee receivable deduction before advance payment
+ */
+export const updatePayrollAdvanceReceivableBodyMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+
+
+export const updatePayrollAdvanceReceivableBodyAmountMin = 0;
+
+export const updatePayrollAdvanceReceivableBodyDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const UpdatePayrollAdvanceReceivableBody = zod.object({
+  "month": zod.string().regex(updatePayrollAdvanceReceivableBodyMonthRegExp),
+  "employeeId": zod.number().int().min(1),
+  "receivableId": zod.number().int().min(1).nullable(),
+  "amount": zod.number().min(updatePayrollAdvanceReceivableBodyAmountMin),
+  "date": zod.string().regex(updatePayrollAdvanceReceivableBodyDateRegExp)
+})
+
+export const updatePayrollAdvanceReceivableResponsePeriodStartRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const updatePayrollAdvanceReceivableResponseAdvancePeriodEndRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const updatePayrollAdvanceReceivableResponsePeriodEndRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const updatePayrollAdvanceReceivableResponseAdvancePaymentDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const updatePayrollAdvanceReceivableResponseFinalPaymentDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const updatePayrollAdvanceReceivableResponseScheduleEffectiveFromMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+export const updatePayrollAdvanceReceivableResponseSchedulePeriodStartDayMax = 31;
+
+export const updatePayrollAdvanceReceivableResponseScheduleAdvanceCutoffDayMax = 31;
+
+export const updatePayrollAdvanceReceivableResponseSchedulePeriodEndDayMax = 31;
+
+export const updatePayrollAdvanceReceivableResponseScheduleAdvancePayDayMax = 31;
+
+export const updatePayrollAdvanceReceivableResponseScheduleFinalPayDayMax = 31;
+
+export const updatePayrollAdvanceReceivableResponseLinesItemReceivableDeductionMin = 0;
+
+export const updatePayrollAdvanceReceivableResponseLinesItemNextPaymentSequenceMax = 10001;
+
+export const updatePayrollAdvanceReceivableResponseLinesItemPaymentsItemSequenceMax = 10000;
+
+export const updatePayrollAdvanceReceivableResponseLinesItemPaymentsItemAmountMin = 0.01;
+
+export const updatePayrollAdvanceReceivableResponseLinesItemPaymentsItemDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const UpdatePayrollAdvanceReceivableResponse = zod.object({
+  "attendancePulledAt": zod.string().optional(),
+  "month": zod.string(),
+  "periodStart": zod.string().regex(updatePayrollAdvanceReceivableResponsePeriodStartRegExp),
+  "advancePeriodEnd": zod.string().regex(updatePayrollAdvanceReceivableResponseAdvancePeriodEndRegExp),
+  "periodEnd": zod.string().regex(updatePayrollAdvanceReceivableResponsePeriodEndRegExp),
+  "advancePaymentDate": zod.string().regex(updatePayrollAdvanceReceivableResponseAdvancePaymentDateRegExp),
+  "finalPaymentDate": zod.string().regex(updatePayrollAdvanceReceivableResponseFinalPaymentDateRegExp),
+  "schedule": zod.object({
+  "id": zod.number().int(),
+  "effectiveFromMonth": zod.string().regex(updatePayrollAdvanceReceivableResponseScheduleEffectiveFromMonthRegExp),
+  "periodStartDay": zod.number().int().min(1).max(updatePayrollAdvanceReceivableResponseSchedulePeriodStartDayMax),
+  "advanceCutoffDay": zod.number().int().min(1).max(updatePayrollAdvanceReceivableResponseScheduleAdvanceCutoffDayMax),
+  "periodEndDay": zod.number().int().min(1).max(updatePayrollAdvanceReceivableResponseSchedulePeriodEndDayMax),
+  "advancePayDay": zod.number().int().min(1).max(updatePayrollAdvanceReceivableResponseScheduleAdvancePayDayMax),
+  "finalPayDay": zod.number().int().min(1).max(updatePayrollAdvanceReceivableResponseScheduleFinalPayDayMax)
+}),
+  "approved": zod.boolean(),
+  "approvalDate": zod.string().nullable(),
+  "approvedAt": zod.string().optional(),
+  "totalAmount": zod.number(),
+  "lines": zod.array(zod.object({
+  "employeeId": zod.number().int(),
+  "employeeName": zod.string(),
+  "bankAccountNumber": zod.string().optional(),
+  "employeeType": zod.enum(['shift', 'office']),
+  "baseSalary": zod.number(),
+  "daysWorked": zod.number(),
+  "dailySalary": zod.number(),
+  "totalSalary": zod.number(),
+  "advanceAmount": zod.number(),
+  "receivableId": zod.number().int().nullish(),
+  "receivableDeduction": zod.number().min(updatePayrollAdvanceReceivableResponseLinesItemReceivableDeductionMin).optional(),
+  "receivableDate": zod.string().nullish(),
+  "receivableJournalEntryId": zod.number().int().nullish(),
+  "netAdvanceAmount": zod.number().optional(),
+  "paid": zod.boolean(),
+  "paymentDate": zod.string().nullish(),
+  "paidAmount": zod.number().optional(),
+  "remainingBalance": zod.number().optional(),
+  "nextPaymentSequence": zod.number().int().min(1).max(updatePayrollAdvanceReceivableResponseLinesItemNextPaymentSequenceMax).optional(),
+  "payments": zod.array(zod.object({
+  "sequence": zod.number().int().min(1).max(updatePayrollAdvanceReceivableResponseLinesItemPaymentsItemSequenceMax),
+  "amount": zod.number().min(updatePayrollAdvanceReceivableResponseLinesItemPaymentsItemAmountMin),
+  "date": zod.string().regex(updatePayrollAdvanceReceivableResponseLinesItemPaymentsItemDateRegExp)
 })).optional()
 }))
 })
@@ -2465,6 +2596,8 @@ export const updatePayrollAdvancePaymentResponseSchedulePeriodEndDayMax = 31;
 export const updatePayrollAdvancePaymentResponseScheduleAdvancePayDayMax = 31;
 
 export const updatePayrollAdvancePaymentResponseScheduleFinalPayDayMax = 31;
+
+export const updatePayrollAdvancePaymentResponseLinesItemReceivableDeductionMin = 0;
 
 export const updatePayrollAdvancePaymentResponseLinesItemNextPaymentSequenceMax = 10001;
 
@@ -2506,6 +2639,11 @@ export const UpdatePayrollAdvancePaymentResponse = zod.object({
   "dailySalary": zod.number(),
   "totalSalary": zod.number(),
   "advanceAmount": zod.number(),
+  "receivableId": zod.number().int().nullish(),
+  "receivableDeduction": zod.number().min(updatePayrollAdvancePaymentResponseLinesItemReceivableDeductionMin).optional(),
+  "receivableDate": zod.string().nullish(),
+  "receivableJournalEntryId": zod.number().int().nullish(),
+  "netAdvanceAmount": zod.number().optional(),
   "paid": zod.boolean(),
   "paymentDate": zod.string().nullish(),
   "paidAmount": zod.number().optional(),
@@ -2551,6 +2689,8 @@ export const deletePayrollAdvanceInstallmentResponseScheduleAdvancePayDayMax = 3
 
 export const deletePayrollAdvanceInstallmentResponseScheduleFinalPayDayMax = 31;
 
+export const deletePayrollAdvanceInstallmentResponseLinesItemReceivableDeductionMin = 0;
+
 export const deletePayrollAdvanceInstallmentResponseLinesItemNextPaymentSequenceMax = 10001;
 
 export const deletePayrollAdvanceInstallmentResponseLinesItemPaymentsItemSequenceMax = 10000;
@@ -2591,6 +2731,11 @@ export const DeletePayrollAdvanceInstallmentResponse = zod.object({
   "dailySalary": zod.number(),
   "totalSalary": zod.number(),
   "advanceAmount": zod.number(),
+  "receivableId": zod.number().int().nullish(),
+  "receivableDeduction": zod.number().min(deletePayrollAdvanceInstallmentResponseLinesItemReceivableDeductionMin).optional(),
+  "receivableDate": zod.string().nullish(),
+  "receivableJournalEntryId": zod.number().int().nullish(),
+  "netAdvanceAmount": zod.number().optional(),
   "paid": zod.boolean(),
   "paymentDate": zod.string().nullish(),
   "paidAmount": zod.number().optional(),

@@ -6,6 +6,7 @@ import type { Tx } from "./route-shared.js";
 export async function ensurePayrollReceivableJournal(tx: Tx, input: {
   employeeId: number; employeeName: string; month: string; amount: number;
   receivableId: number; date: string | null; adjustmentId: number | null; journalEntryId: number | null;
+  advance?: boolean;
 }) {
   const fail = (message: string, status = 409) => Object.assign(new Error(message), { status });
   if (input.amount <= 0) throw fail("Авлагаас суутгах дүн 0-ээс их байх ёстой", 400);
@@ -18,8 +19,8 @@ export async function ensurePayrollReceivableJournal(tx: Tx, input: {
   const payrollPayableAccountId = accounts.find(account => account.code === "2100")?.id;
   if (!receivableAccountId || !payrollPayableAccountId) throw fail("1200 болон 2100 данс идэвхтэй байх шаардлагатай");
   const posting = await postJournalEntry(tx, {
-    date: input.date, description: `${input.employeeName} · ${input.month} сарын цалингаас авлага суутгав`,
-    sourceType: "payroll_receivable", sourceId: input.adjustmentId, createdBy: null,
+    date: input.date, description: `${input.employeeName} · ${input.month} сарын ${input.advance ? "урьдчилгаанаас" : "цалингаас"} авлага суутгав`,
+    sourceType: input.advance ? "payroll_advance_receivable" : "payroll_receivable", sourceId: input.adjustmentId, createdBy: null,
     lines: [
       { accountId: payrollPayableAccountId, debit: input.amount, credit: 0 },
       { accountId: receivableAccountId, debit: 0, credit: input.amount, allocation: { kind: "settle", receivableId: input.receivableId } },

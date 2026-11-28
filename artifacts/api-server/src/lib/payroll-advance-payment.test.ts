@@ -8,6 +8,22 @@ const sourceLines = [
 ];
 
 describe("planPayrollAdvancePayment", () => {
+  it("pays only the net amount and keeps the receivable settlement when cash is cancelled", () => {
+    const source = [{ employeeId: 11, advanceAmount: 500000, paid: false, receivableDeduction: 100000 }];
+    const plan = planPayrollAdvancePayment(source, {
+      month: "2026-11", employeeId: 11, advanceAmount: 500000, paid: true, paymentDate: "2026-11-15",
+    });
+    assert.equal(plan.cashTransaction?.amount, 400000);
+    assert.equal(plan.selectedLine?.receivableDeduction, 100000);
+    const reverted = planPayrollAdvancePayment(plan.lines, {
+      month: "2026-11", employeeId: 11, advanceAmount: 500000, paid: false,
+    });
+    assert.equal(reverted.cashTransaction, null);
+    assert.equal(reverted.selectedLine?.receivableDeduction, 100000);
+    assert.equal(planPayrollAdvancePayment([{ ...source[0], receivableDeduction: 500000 }], {
+      month: "2026-11", employeeId: 11, advanceAmount: 500000, paid: true, paymentDate: "2026-11-15",
+    }).cashTransaction, null);
+  });
   it("keeps the approved line, approval total, and cash expense on the edited amount", () => {
     const plan = planPayrollAdvancePayment(sourceLines, {
       month: "2026-09",

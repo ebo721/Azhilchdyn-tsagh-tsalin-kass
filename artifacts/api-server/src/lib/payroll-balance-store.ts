@@ -1,4 +1,4 @@
-import { advancePaidAmount } from "./payroll-advance-installments.js";
+import { advanceSettledAmount } from "./payroll-advance-installments.js";
 import { and, asc, eq, gt, lt, lte, sql } from "drizzle-orm";
 import {
   db, employeesTable, employeeSalaryHistoryTable, attendanceTable, payrollAdjustmentsTable,
@@ -76,7 +76,7 @@ async function saveMonth(tx: Tx, month: string, loaded: Awaited<ReturnType<typeo
       ?.find(l => l.employeeId === employeeId);
     summary.lines.push({ ...emptyPayrollEarnings(employee),
       ...applyPayrollFinancials({ gross: 0, socialInsurance: 0, incomeTax: 0 }, adjustment,
-        advance ? advancePaidAmount(advance) : 0, opening.find(l => l.employeeId === employeeId)?.balanceAmount ?? 0) });
+        advance ? advanceSettledAmount(advance) : 0, opening.find(l => l.employeeId === employeeId)?.balanceAmount ?? 0) });
   }
   const lines = summary.lines.map(line => ({
     employeeId: line.employeeId,
