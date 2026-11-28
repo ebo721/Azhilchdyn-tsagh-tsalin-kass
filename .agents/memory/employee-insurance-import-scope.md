@@ -20,3 +20,9 @@ Keep the official given name separate from an employee's existing initial-prefix
 **Why:** The report needs an unabridged name, while silently replacing display names can alter established directory labels and consumers of employee identity.
 
 **How to apply:** Use the reporting given name in official exports; do not treat an identity import as permission to rewrite historical document names.
+
+For the insurance-system employee registration template, the column “Овог” maps to the saved parent-name field (`parentName`), not the clan-name field.
+
+**Why:** The user clarified that this is how their insurance system labels the employee's parent name.
+
+**How to apply:** Populate the registration template's “Овог” column from `parentName`; keep `clanName` separate.

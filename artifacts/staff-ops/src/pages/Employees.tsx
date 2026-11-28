@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,7 @@ import { currentMonth, dateLabel, money, today } from '@/lib/app-shared';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
 import { EmployeeInsuranceImport } from '@/components/EmployeeInsuranceImport';
 import type { EmployeeInsuranceImportResult } from '@workspace/api-client-react';
+import { useLocation, useSearch } from 'wouter';
 type EmployeeForm = { name: string; role: string; phone: string; bankAccountNumber: string; employeeType: 'shift' | 'office'; salaryType: 'daily' | 'monthly'; payFrequency: 'once' | 'twice'; baseSalary: string; socialInsuranceSalary: string; payrollTaxExempt: boolean; fullSalaryRegardlessAttendance: boolean; monthlyExpectedWorkDays: string; joinedAt: string; status?: 'active' | 'inactive'; inactiveAt: string; salaryEffectiveDate: string; socialInsuranceProfile: SocialInsuranceProfile };
 const normalizeBankAccount = (value: string) => value.replace(/\s/g, '').toUpperCase();
 
@@ -257,11 +258,29 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
 
 export function Employees() {
   const query = useListEmployees();
+  const routeSearch = useSearch();
+  const [, setLocation] = useLocation();
+  const handledRegistrationExport = useRef(false);
   const shifts = useListShifts();
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
+  const [insuranceExporting, setInsuranceExporting] = useState(false);
+  const [insuranceExportError, setInsuranceExportError] = useState('');
   const [shiftMonth, setShiftMonth] = useState(currentMonth());
   const shiftPlans = useListShiftPlans({ month: shiftMonth });
+  const downloadInsuranceRegistration = async () => {
+    if (!query.data) return;
+    setInsuranceExporting(true);
+    setInsuranceExportError('');
+    try {
+      const { downloadInsuranceRegistrationExcel } = await import('@/lib/insurance-registration-excel');
+      await downloadInsuranceRegistrationExcel(query.data);
+    } catch (error) {
+      setInsuranceExportError(error instanceof Error ? error.message : 'НДШ Excel бэлтгэж чадсангүй. Дахин оролдоно уу.');
+    } finally {
+      setInsuranceExporting(false);
+    }
+  };
   const downloadExcel = async () => {
     if (!query.data || !shifts.data || !shiftPlans.data) return;
     setExporting(true);
@@ -279,6 +298,29 @@ export function Employees() {
   const qc = useQueryClient();
   const session = useGetAuthSession();
   const canImportInsurance = session.data?.authenticated === true && (session.data.role === 'admin' || session.data.role === 'hr' || session.data.role === 'accountant');
+  useEffect(() => {
+    const requested = new URLSearchParams(routeSearch).get('insuranceRegistration') === '1';
+    if (!requested) {
+      handledRegistrationExport.current = false;
+      return;
+    }
+    if (handledRegistrationExport.current) return;
+    if (!canImportInsurance) {
+      handledRegistrationExport.current = true;
+      setLocation('/employees', { replace: true });
+      return;
+    }
+    if (query.isError) {
+      handledRegistrationExport.current = true;
+      setInsuranceExportError('Ажилтны жагсаалтыг уншиж чадсангүй. Дахин ачаалаад оролдоно уу.');
+      setLocation('/employees', { replace: true });
+      return;
+    }
+    if (!query.data) return;
+    handledRegistrationExport.current = true;
+    setLocation('/employees', { replace: true });
+    void downloadInsuranceRegistration();
+  }, [routeSearch, canImportInsurance, query.data, query.isError, setLocation]);
   const [importOpen, setImportOpen] = useState(false);
   const [importResult, setImportResult] = useState<EmployeeInsuranceImportResult | null>(null);
   const [modal, setModal] = useState<{ open: boolean; employee?: Employee }>({ open: false });
@@ -319,6 +361,12 @@ export function Employees() {
   );
   return <div className="page-enter space-y-5">
     <div className="flex flex-wrap justify-end gap-2">
+      {canImportInsurance && <Button variant="outline" onClick={downloadInsuranceRegistration}
+        disabled={insuranceExporting || query.isFetching || query.isError || !query.data?.length}
+        title="Идэвхтэй ажилтнуудын мэдээллийг НДШ системийн ажилтан бүртгэх Excel загварт гаргана."
+        data-testid="button-export-insurance-registration">
+        <Download className="size-4" />{insuranceExporting ? 'НДШ Excel бэлтгэж байна…' : 'НДШ-д бүртгэх Excel'}
+      </Button>}
       <Button variant="outline" onClick={downloadExcel}
         disabled={exporting || query.isFetching || shifts.isFetching || shiftPlans.isFetching || query.isError || shifts.isError || shiftPlans.isError || !query.data?.length || !shifts.data || !shiftPlans.data}
         title="Идэвхтэй, идэвхгүй бүх ажилтныг татна. Ээлжийн мэдээлэл сонгосон сарын хуваариас орно."
@@ -330,6 +378,7 @@ export function Employees() {
     </div>
     {canImportInsurance && importResult && <p role="status" className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-2 text-sm" data-testid="status-employee-insurance-last-result">НДШ Excel: {importResult.updated} шинэчилсэн, {importResult.skipped} алгассан, {importResult.unchanged} өөрчлөлтгүй.</p>}
     {exportError && <p role="alert" className="text-sm text-destructive" data-testid="error-export-employees">{exportError}</p>}
+    {canImportInsurance && insuranceExportError && <p role="alert" className="whitespace-pre-line text-sm text-destructive" data-testid="error-export-insurance-registration">{insuranceExportError}</p>}
     <section className="rounded-2xl border border-border bg-card p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
         <div className="flex flex-wrap gap-2">

@@ -53,7 +53,7 @@ test("persists reporting metadata and expected days, downloads the selected mont
     expect(employee.socialInsuranceProfile.email).toBe("fixture@example.com");
 
     // Isolate the download UI from unrelated real payroll history. Workbook generation uses the real exporter.
-    const workbook = await buildInsuranceWorkbook([{ employeeId: employeeId!, socialInsuranceSalary: 800_000 }], [employee]);
+    const workbook = await buildInsuranceWorkbook([{ employeeId: employeeId!, daysWorked: 1, socialInsuranceSalary: 800_000 }], [employee]);
     await page.route(/\/api\/payroll\?/, route => {
       const month = new URL(route.request().url()).searchParams.get("month")!;
       return route.fulfill({ json: { month, lines: [], totalGross: 0, totalDeductions: 0, totalNet: 0,
