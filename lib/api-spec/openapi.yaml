@@ -4095,6 +4095,7 @@ components:
         advanceAmount: { type: number }
         manualDeduction: { type: number }
         receivableId: { type: ["integer", "null"] }
+        receivableDeduction: { type: number, minimum: 0 }
         deductions: { type: number }
         carryoverAmount: { type: number }
         payable: { type: number }
@@ -4133,6 +4134,7 @@ components:
         month: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
         manualDeduction: { type: number, minimum: 0 }
         receivableId: { type: ["integer", "null"] }
+        settleReceivables: { type: boolean }
         paidAmount: { type: number, minimum: 0 }
         paymentDate: { type: ["string", "null"] }
         secondPaidAmount: { type: number, minimum: 0 }
@@ -4306,7 +4308,7 @@ components:
         advanceAmount: { type: number, minimum: 0 }
     PayrollAdvanceReceivableInput:
       type: object
-      required: [month, employeeId, receivableId, amount, date]
+      required: [month, employeeId, amount, date]
       properties:
         month: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
         employeeId: { type: integer, minimum: 1 }

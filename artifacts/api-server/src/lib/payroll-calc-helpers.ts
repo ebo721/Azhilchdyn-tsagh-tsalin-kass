@@ -120,7 +120,8 @@ export function applyPayrollFinancials(
   const rawBalanceAmount = payableBeforePayment - paidAmount;
   const balanceAmount = money(Math.abs(rawBalanceAmount) <= 1 ? 0 : rawBalanceAmount);
   return {
-    advanceAmount, manualDeduction, receivableId: adjustment?.receivableId ?? null, deductions,
+    advanceAmount, manualDeduction, receivableId: adjustment?.receivableId ?? null,
+    receivableDeduction: adjustment?.journalEntryId ? manualDeduction : 0, deductions,
     carryoverAmount, payable, paidAmount, paymentDate: adjustment?.paymentDate ?? null,
     secondPaidAmount, secondPaymentDate: adjustment?.secondPaymentDate ?? null,
     additionalPayments,

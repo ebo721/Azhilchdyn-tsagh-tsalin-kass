@@ -59,7 +59,8 @@ vm.runInNewContext(compiled.outputText + '\nexports.AdjustmentFixture = PayrollA
       get: (object, key) => key in object ? object[key] : mutation,
     });
     if (id === '@tanstack/react-query') return { useQueryClient: () => ({ invalidateQueries() {} }) };
-    if (id === 'react-hook-form') return { useForm: () => ({ handleSubmit: (handler) => handler, register: () => ({}) }) };
+    if (id === 'react-hook-form') return { useForm: () => ({ handleSubmit: (handler) => handler, register: () => ({}), watch: () => 0 }) };
+    if (id === '@/lib/payroll-receivable-balance') return { payrollReceivableBalance: () => ({ open: 0, available: 0 }) };
     if (id === '@/lib/utils') return { cn: (...args) => args.filter(Boolean).join(' ') };
     if (id === '@/lib/app-shared') return {
       money, currentMonth: () => '2026-09', today: () => '2026-09-30', dateLabel: (date) => date,

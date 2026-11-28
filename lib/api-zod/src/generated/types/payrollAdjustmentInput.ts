@@ -15,6 +15,7 @@ export interface PayrollAdjustmentInput {
   manualDeduction: number;
   /** @nullable */
   receivableId?: number | null;
+  settleReceivables?: boolean;
   /** @minimum 0 */
   paidAmount: number;
   /** @nullable */

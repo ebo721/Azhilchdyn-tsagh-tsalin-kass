@@ -6,12 +6,12 @@ import { getGetPayrollAdvanceQueryKey, getGetPayrollQueryKey, getGetPayrollPayab
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui-primitives';
 import { money, today, dateLabel } from '@/lib/app-shared';
+import { payrollReceivableBalance } from '@/lib/payroll-receivable-balance';
 
 export function AdvanceReceivableDeduction({ line, month, closed, readOnly }: {
   line: PayrollAdvanceLine; month: string; closed: boolean; readOnly: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [receivableId, setReceivableId] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(today());
   const qc = useQueryClient();
@@ -21,13 +21,11 @@ export function AdvanceReceivableDeduction({ line, month, closed, readOnly }: {
   } });
   const deduction = line.receivableDeduction ?? 0;
   const paid = line.paidAmount ?? (line.paid ? line.advanceAmount - deduction : 0);
-  const rows = (receivables.data ?? []).filter(r => r.partyType === 'employee' && r.partyId === line.employeeId
-    && (r.status === 'open' || r.id === line.receivableId));
-  const selected = rows.find(r => String(r.id) === receivableId);
-  const limit = Math.min(line.advanceAmount, (selected?.openAmount ?? 0) + (selected?.id === line.receivableId ? deduction : 0));
-  const valid = Number.isFinite(Number(amount)) && Number(amount) > 0 && Number(amount) <= limit && Boolean(receivableId) && Boolean(date);
+  const balance = payrollReceivableBalance(receivables.data ?? [], line.employeeId, deduction);
+  const limit = Math.min(line.advanceAmount, balance.available);
+  const valid = Number.isFinite(Number(amount)) && Number(amount) > 0 && Number(amount) <= limit && Boolean(date);
   const save = (remove = false) => {
-    mutation.mutate({ data: { month, employeeId: line.employeeId, receivableId: remove ? null : Number(receivableId),
+    mutation.mutate({ data: { month, employeeId: line.employeeId,
       amount: remove ? 0 : Number(amount), date } }, {
       onSuccess: async () => {
         await Promise.all([
@@ -50,7 +48,6 @@ export function AdvanceReceivableDeduction({ line, month, closed, readOnly }: {
       title={paid > 0 ? 'Суутгалыг өөрчлөхийн өмнө олголтыг буцаана уу' : undefined}
       data-testid={`button-advance-receivable-${line.employeeId}`}
       onClick={() => {
-        setReceivableId(line.receivableId ? String(line.receivableId) : '');
         setAmount(deduction ? String(deduction) : '');
         setDate(line.receivableDate ?? today());
         mutation.reset();
@@ -61,20 +58,19 @@ export function AdvanceReceivableDeduction({ line, month, closed, readOnly }: {
       onClose={() => { if (!mutation.isPending) setOpen(false); }}>
       <form className="space-y-4" onSubmit={e => { e.preventDefault(); if (valid) save(); }}>
         <p className="text-sm">Батлагдсан урьдчилгаа: <strong>{money(line.advanceAmount)}</strong></p>
-        <label className="block space-y-1 text-sm">Ажилтны авлага
-          <select className="h-10 w-full rounded-lg border border-input bg-background px-3" value={receivableId}
-            onChange={e => setReceivableId(e.target.value)} disabled={mutation.isPending} data-testid="select-advance-receivable">
-            <option value="">Авлага сонгоно уу</option>
-            {rows.map(r => <option key={r.id} value={r.id}>#{r.id} · Үлдэгдэл {money(r.openAmount)}</option>)}
-          </select>
-        </label>
+        <div className="rounded-lg bg-secondary p-3 text-sm" data-testid="advance-total-receivable">
+          Нийт авлагын үлдэгдэл: <strong>{money(balance.open)}</strong>
+          {deduction > 0 && <p className="mt-1 text-xs text-muted-foreground">Одоогийн суутгалыг оролцуулж засах боломжтой: {money(balance.available)}</p>}
+        </div>
         {receivables.isLoading && <p className="text-sm">Авлага ачаалж байна...</p>}
         {receivables.isError && <p className="text-sm text-destructive">Авлага татахад алдаа гарлаа. <button type="button" className="underline" onClick={() => void receivables.refetch()}>Дахин оролдох</button></p>}
-        {!receivables.isLoading && !receivables.isError && !rows.length && <p className="text-sm text-muted-foreground">Энэ ажилтны нээлттэй авлага алга.</p>}
+        {!receivables.isLoading && !receivables.isError && balance.available === 0 && <p className="text-sm text-muted-foreground">Энэ ажилтны нээлттэй авлага алга.</p>}
         <label className="block space-y-1 text-sm">Суутгах дүн
           <input type="number" min="0.01" max={limit} step="0.01" value={amount} disabled={mutation.isPending}
             onChange={e => setAmount(e.target.value)} className="h-10 w-full rounded-lg border border-input bg-background px-3" data-testid="input-advance-receivable-amount" />
         </label>
+        {Number(amount) > limit && <p role="alert" className="text-sm text-destructive">Суутгал нийт авлага болон урьдчилгааны дүнгээс хэтрэхгүй байна.</p>}
+        <p className="text-xs text-muted-foreground">Хэсэгчлэн суутгаж болно. Хуучин авлагаас эхлэн автоматаар хуваарилна.</p>
         <label className="block space-y-1 text-sm">Суутгалын огноо
           <input type="date" value={date} disabled={mutation.isPending} onChange={e => setDate(e.target.value)}
             className="h-10 w-full rounded-lg border border-input bg-background px-3" data-testid="input-advance-receivable-date" />

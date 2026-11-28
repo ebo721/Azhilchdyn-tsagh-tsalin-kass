@@ -31,6 +31,8 @@ export interface PayrollLine {
   manualDeduction: number;
   /** @nullable */
   receivableId: number | null;
+  /** @minimum 0 */
+  receivableDeduction?: number;
   deductions: number;
   carryoverAmount: number;
   payable: number;

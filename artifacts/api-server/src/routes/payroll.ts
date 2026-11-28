@@ -3,7 +3,7 @@ import { UpdatePayrollAdvanceReceivableBody } from "@workspace/api-zod";
 import { updateAdvanceReceivable } from "../lib/payroll-advance-receivable.js";
 import { advanceNetAmount, advanceSettledAmount } from "../lib/payroll-advance-installments.js";
 import { payrollPayments, payrollPaymentSourceKey } from "../lib/payroll-payments.js";
-import { ensurePayrollReceivableJournal } from "../lib/payroll-receivable-posting.js";
+import { settlePayrollReceivables } from "../lib/payroll-receivable-posting.js";
 import { DownloadPayrollWorkbookQueryParams, DownloadSocialInsuranceReportQueryParams } from "@workspace/api-zod";
 import { buildInsuranceWorkbook, InsuranceReportValidationError } from "../lib/social-insurance-report.js";
 import { buildPayrollWorkbook, PayrollWorkbookError } from "../lib/payroll-workbook.js";
@@ -463,13 +463,15 @@ router.put("/payroll-adjustments", async (req, res, next) => {
       return;
     }
     const sourceType = "payroll";
-    const selectedReceivableId = input.receivableId ?? null;
     const adjustment = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(20260919)`);
       const [existingAdjustment] = await tx.select().from(payrollAdjustmentsTable).where(and(
         eq(payrollAdjustmentsTable.employeeId, input.employeeId),
         eq(payrollAdjustmentsTable.month, input.month),
       )).for("update");
+      let selectedReceivableId = input.receivableId ?? null;
+      const automaticSettlement = input.settleReceivables === true && input.manualDeduction > 0;
+      if (automaticSettlement) selectedReceivableId = existingAdjustment?.receivableId ?? null;
       // Old callers omitting the new field must not erase saved payments.
       const additionalPayments = extraPayments ?? existingAdjustment?.additionalPayments ?? [];
       const oldPayments = payrollPayments(existingAdjustment);
@@ -525,23 +527,41 @@ router.put("/payroll-adjustments", async (req, res, next) => {
           throw Object.assign(new Error("Банкны хуулгаар баталгаажсан цалингийн гүйлгээний дүн, огноог өөрчлөх боломжгүй"), { status: 409 });
         }
       }
-      const settlementDate = nextPayments.find(payment => payment.amount > 0)?.date ?? null;
-      const postingChanged = existingAdjustment?.receivableId !== selectedReceivableId
+      const [oldSettlement] = existingAdjustment?.journalEntryId
+        ? await tx.select({ date: journalEntriesTable.date }).from(journalEntriesTable)
+          .where(eq(journalEntriesTable.id, existingAdjustment.journalEntryId)) : [];
+      const settlementDate = nextPayments.find(payment => payment.amount > 0)?.date
+        ?? (automaticSettlement ? oldSettlement?.date ?? today() : null);
+      const postingChanged = (!automaticSettlement && existingAdjustment?.receivableId !== selectedReceivableId)
         || Number(existingAdjustment?.manualDeduction ?? 0) !== input.manualDeduction
-        || (oldPayments.find(payment => payment.amount > 0)?.date ?? null) !== settlementDate;
+        || (oldSettlement?.date ?? oldPayments.find(payment => payment.amount > 0)?.date ?? null) !== settlementDate;
       let journalEntryId = existingAdjustment?.journalEntryId ?? null;
 
+      if ((postingChanged && journalEntryId) || ((!journalEntryId) && (automaticSettlement || selectedReceivableId !== null))) {
+        for (const date of [...new Set([oldSettlement?.date, settlementDate].filter((d): d is string => Boolean(d)))].sort()) {
+          await lockCashDate(tx, date);
+          if ((await tx.select().from(cashClosuresTable).where(eq(cashClosuresTable.date, date))).length) {
+            throw Object.assign(new Error("Касс өндөрлөсөн өдрийн авлагын суутгалыг өөрчлөх боломжгүй"), { status: 409 });
+          }
+        }
+      }
       if (journalEntryId && postingChanged) {
         await voidJournalEntry(tx, { journalEntryId, voidedBy: null });
         journalEntryId = null;
       }
 
-      if (selectedReceivableId !== null) {
-        journalEntryId = await ensurePayrollReceivableJournal(tx, {
+      if (automaticSettlement || selectedReceivableId !== null) {
+        const settlement = await settlePayrollReceivables(tx, {
           employeeId: input.employeeId, employeeName: employee.name, month: input.month,
-          amount: input.manualDeduction, receivableId: selectedReceivableId, date: settlementDate ?? null,
+          amount: input.manualDeduction, receivableId: automaticSettlement ? undefined : selectedReceivableId!,
+          date: settlementDate,
           adjustmentId: existingAdjustment?.id ?? null, journalEntryId,
         });
+        journalEntryId = settlement.journalEntryId;
+        // The anchor preserves compatibility with old saved payrolls. The journal
+        // owns the complete list of allocations, including fully settled debts.
+        selectedReceivableId = selectedReceivableId && !postingChanged && journalEntryId
+          ? selectedReceivableId : settlement.receivableId;
       } else if (journalEntryId) {
         await voidJournalEntry(tx, { journalEntryId, voidedBy: null });
         journalEntryId = null;
@@ -549,7 +569,12 @@ router.put("/payroll-adjustments", async (req, res, next) => {
 
       const [savedAdjustment] = await tx
         .insert(payrollAdjustmentsTable)
-        .values({ ...input, additionalPayments, receivableId: selectedReceivableId, journalEntryId })
+        .values({
+          employeeId: input.employeeId, month: input.month, manualDeduction: input.manualDeduction,
+          paidAmount: input.paidAmount, paymentDate: input.paymentDate,
+          secondPaidAmount: input.secondPaidAmount, secondPaymentDate: input.secondPaymentDate,
+          additionalPayments, receivableId: selectedReceivableId, journalEntryId,
+        })
         .onConflictDoUpdate({
           target: [payrollAdjustmentsTable.employeeId, payrollAdjustmentsTable.month],
           set: {

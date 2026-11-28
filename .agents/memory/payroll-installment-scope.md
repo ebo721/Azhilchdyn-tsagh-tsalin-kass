@@ -27,6 +27,12 @@ description: Business expectations for salary paid in smaller amounts across thr
 
 **How to apply:** Separate non-cash receivable settlement from actual cash transfers. For a 500,000₮ advance with a 100,000₮ settlement, cash totals 400,000₮ and final payroll accounts for 500,000₮ once, not a second manual deduction. Reversal restores receivable debt without inventing cash.
 
+Урьдчилгаа болон сүүл цалинд авлага нэг бүрчлэн сонгохгүй. Ажилтны нийт нээлттэй авлагыг харуулж дүнгээр суутгана; нийт авлагаас их дүнг хориглож, бага дүнгээр суутгахыг зөвшөөрнө.
+
+**Why:** The user explicitly requested amount-only deductions against total registered receivables and confirmed that this applies to both advance and final salary.
+
+**How to apply:** Allocate automatically from oldest originating document date, preserving per-document allocations for accounting and reversal. Do not turn unrelated manual deductions or payroll overpayment carryforwards into registered-receivable settlements.
+
 Урьдчилгаа цалингийн нээлттэй хүснэгтэд идэвхгүй болон тухайн урьдчилгааны хугацаанд огт ажиллаагүй ажилтан харагдахгүй. Ажилтны дансны дугаарыг тусдаа баганад харуулна.
 
 **Why:** The user explicitly reported inactive and unworked staff appearing in advances and requested an account-number column.
