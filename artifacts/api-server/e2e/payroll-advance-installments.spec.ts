@@ -37,7 +37,8 @@ for (const width of [1440, 402]) {
       return route.fulfill({ json: [] });
     });
     await page.goto(`/payroll?month=${month}`);
-    await page.getByTestId("button-payroll-advance").click();
+    await page.goto("/payroll?month=" + month + "&section=advance");
+    await page.getByTestId("row-advance-2").getByRole("button").first().click();
     const history = page.getByTestId("advance-history-2");
     await expect(history).toContainText("Олгосон: 500 ₮");
     await expect(history).toContainText("Үлдэгдэл: 500 ₮");
@@ -46,7 +47,8 @@ for (const width of [1440, 402]) {
     await expect(page.getByTestId("button-advance-paid-2")).toBeDisabled();
     await expect(page.getByTestId("input-advance-amount-2")).toBeDisabled();
     await page.reload();
-    await page.getByTestId("button-payroll-advance").click();
+    await page.goto("/payroll?month=" + month + "&section=advance");
+    await page.getByTestId("row-advance-2").getByRole("button").first().click();
     await expect(history).toContainText("Олгосон: 500 ₮");
     page.on("dialog", dialog => dialog.accept());
     await page.getByTestId("delete-advance-2-3").click();

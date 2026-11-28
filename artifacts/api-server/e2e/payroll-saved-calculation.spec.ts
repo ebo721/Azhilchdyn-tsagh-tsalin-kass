@@ -34,18 +34,18 @@ async function fixture(page: Page, options: { missing?: boolean; role?: string; 
       secondPaid = body.secondPaidAmount;
       return route.fulfill({ json: body });
     }
-    if (path.endsWith("/payroll/pull-attendance")) {
+    if (/\/payroll\/\d{4}-\d{2}\/employees\/1\/refresh$/.test(path)) {
       pulls++;
       saved = true;
       await new Promise((resolve) => setTimeout(resolve, 250));
-      const { month } = route.request().postDataJSON() as { month: string };
+      const month = path.match(/\/payroll\/(\d{4}-\d{2})\//)![1];
       const payroll = summary(month);
       return route.fulfill({ json: { payroll, advance: { ...payroll, approved: false, approvalDate: null, totalAmount: 0, lines: [] } } });
     }
     if (path.endsWith("/payroll")) {
       await new Promise((resolve) => setTimeout(resolve, 120));
-      return saved ? route.fulfill({ json: summary(url.searchParams.get("month")!) })
-        : route.fulfill({ status: 409, json: { error: "Хадгалсан цалингийн тооцоо алга. «Цаг татах» товчийг дарна уу." } });
+      const data = summary(url.searchParams.get("month")!);
+      return route.fulfill({ json: { ...data, lines: data.lines.map(line => ({ ...line, calculationReady: saved })) } });
     }
     if (path.endsWith("/payroll-advance")) return route.fulfill({ json: { lines: [], approved: false } });
     return route.fulfill({ json: [] });
@@ -70,8 +70,9 @@ test("opening, refreshing and a fresh login use saved calculations; only the but
   await page.goto("/payroll");
   await expect(page.getByTestId("row-payroll-1")).toBeVisible();
   expect(state.pulls()).toBe(0);
+  await page.getByLabel("Ирц шинэчлэх сонголт").click();
   await page.getByTestId("button-pull-payroll-attendance").click();
-  await expect(page.getByTestId("button-pull-payroll-attendance")).toHaveText("Татаж байна...");
+  await expect(page.getByTestId("button-pull-payroll-attendance")).toHaveText("Шинэчилж байна...");
   await expect(page.getByTestId("button-pull-payroll-attendance")).toHaveText("Цаг татах");
   expect(state.pulls()).toBe(1);
   await expect(page.getByTestId("value-payroll-remaining-1")).toContainText("150");
@@ -83,12 +84,13 @@ test("opening, refreshing and a fresh login use saved calculations; only the but
 test("missing snapshot is not confused with historical balance repair and is created only by the button", async ({ page }) => {
   const state = await fixture(page, { missing: true });
   await page.goto("/payroll");
-  await expect(page.getByText(/Хадгалсан цалингийн тооцоо алга/)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByTestId("status-payroll-uncomputed-1")).toBeVisible();
   await expect(page.getByTestId("payroll-balances-required")).toHaveCount(0);
   expect(state.pulls()).toBe(0);
+  await page.getByLabel("Ирц шинэчлэх сонголт").click();
   await page.getByTestId("button-pull-payroll-attendance").click();
   await expect(page.getByTestId("row-payroll-1")).toBeVisible();
-  await expect(page.getByTestId("payroll-attendance-status")).toContainText("Хадгалсан тооцоог харуулж байна");
+  await expect(page.getByTestId("status-payroll-uncomputed-1")).toHaveCount(0);
   expect(state.pulls()).toBe(1);
 });
 

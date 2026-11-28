@@ -1,0 +1,32 @@
+.payroll-proposal {
+  --proposal-ink: hsl(var(--foreground));
+  --proposal-line: hsl(var(--border));
+}
+.payroll-proposal button,
+.payroll-proposal input,
+.payroll-proposal select { font: inherit; }
+.payroll-proposal button:focus-visible,
+.payroll-proposal input:focus-visible,
+.payroll-proposal select:focus-visible {
+  outline: 3px solid hsl(var(--ring) / .48);
+  outline-offset: 2px;
+}
+.payroll-proposal .payroll-row { transition: background-color .16s ease, box-shadow .16s ease; }
+.payroll-proposal .payroll-row:hover { background: hsl(var(--secondary) / .52); }
+.payroll-proposal .payroll-row:focus-within { box-shadow: inset 3px 0 hsl(var(--primary)); }
+.payroll-proposal .nav-child { position: relative; }
+.payroll-proposal .nav-child::before {
+  content: '';
+  position: absolute;
+  left: -13px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: hsl(var(--sidebar-border));
+}
+.payroll-proposal .nav-child[data-active='true']::before { width: 2px; background: hsl(var(--sidebar-primary)); }
+.payroll-proposal .details-row { animation: payroll-reveal .18s ease-out both; }
+@keyframes payroll-reveal { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .payroll-proposal *, .payroll-proposal *::before, .payroll-proposal *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

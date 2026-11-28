@@ -74,12 +74,14 @@ test("accountant cannot close or reopen a month", async ({ page }) => {
 
 test("closed month disables advance editing and clears line edit dialogs", async ({ page }) => {
   await setup(page, { initiallyClosed: true });
-  await page.getByTestId("button-payroll-advance").click();
+  await page.getByTestId("link-nav-payroll-advance").click();
+  await page.getByTestId("row-advance-1").getByRole("button").first().click();
   await expect(page.getByTestId("input-advance-amount-1")).toBeDisabled();
   await expect(page.getByTestId("input-advance-payment-date-1")).toBeDisabled();
   await expect(page.getByTestId("button-refresh-advance-employee-1")).toBeDisabled();
   await expect(page.getByTestId("button-approve-payroll-advance")).toBeDisabled();
-  await expect(page.getByTestId("button-payroll-adjustment-1")).toBeDisabled();
+  await expect(page.getByTestId("button-payroll-adjustment-1")).toHaveCount(0);
+  await expect(page.getByTestId("button-reopen-payroll-month")).toHaveCount(0);
 });
 
 test("viewer cannot close/reopen and closure errors keep the month open", async ({ page }) => {

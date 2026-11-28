@@ -14,7 +14,7 @@ let advanceFilter = 'all';
 let advanceShiftFilter = 'all';
 let shiftPlans = [];
 let renderAdvanceSection = false;
-let stateIndex = 0;
+let filterIndex = 0;
 const baseLine = {
   employeeId: 1, employeeName: 'Fixture', role: 'Test', daysWorked: 20,
   gross: 1000, deductions: 100, paidAmount: 900, carryoverAmount: 0,
@@ -25,7 +25,7 @@ const money = (value = 0) => `${new Intl.NumberFormat('mn-MN', { maximumFraction
 const query = (data) => ({ data, isLoading: false, isError: false });
 const mutation = () => ({ isPending: false, mutate() {} });
 const api = {
-  useGetPayroll: () => query({ month: '2026-09', lines }),
+  useGetPayroll: () => query({ month: '2026-09', periodStart: '2026-09-01', periodEnd: '2026-09-30', lines }),
   useGetPayrollAdvance: () => query({ lines: advanceLines, approved: false, periodStart: '2026-09-01', advancePeriodEnd: '2026-09-15' }),
   useListShifts: () => query([{ id: 1, name: 'Нэгдүгээр ээлж' }, { id: 2, name: 'Хоёрдугаар ээлж' }]),
   useListShiftPlans: ({ month }) => query(shiftPlans.filter(plan => plan.date.startsWith(month))),
@@ -44,13 +44,39 @@ vm.runInNewContext(compiled.outputText + '\nexports.AdjustmentFixture = PayrollA
   module: pageModule, exports: pageModule.exports, console,
   URLSearchParams, window: { location: { search: '' } },
   require(id) {
+    if (id === 'wouter') return { useSearch: () => renderAdvanceSection ? 'section=advance' : '', useLocation: () => ['/payroll', () => {}] };
+    if (id === '@/lib/payroll-sections') return {
+      parsePayrollSection: (search) => new URLSearchParams(search).get('section') === 'advance' ? 'advance' : 'final',
+      payrollMonth: (_search, fallback) => fallback,
+    };
+    if (id === '@/components/PayrollRegister') {
+      // The page owns amounts and actions; browser specs exercise the real
+      // register's collapsed/expanded interaction and seven-column layout.
+      const component = { exports: {} };
+      const js = ts.transpileModule(fs.readFileSync(path.join(__dirname, '../components/PayrollRegister.tsx'), 'utf8'), {
+        compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+      }).outputText;
+      vm.runInNewContext(js, { exports: component.exports, require(name) {
+        if (name === '@/lib/utils') return { cn: (...values) => values.filter(Boolean).join(' ') };
+        if (name === 'lucide-react') return { ChevronRight: () => null };
+        return require(name);
+      } });
+      return { ...component.exports, PayrollRegister: ({ lines, renderRow }) => React.createElement('table', null,
+        React.createElement('tbody', null, lines.map(line => {
+          const row = renderRow(line, true, () => {});
+          return React.createElement(React.Fragment, { key: line.employeeId },
+            React.createElement('tr', null, row.cells),
+            React.createElement('tr', null, React.createElement('td', { colSpan: 7 }, row.details)));
+        }))) };
+    }
     if (id === 'react') return {
       ...React, useEffect() {}, useRef: (value) => ({ current: value }),
       useState: (value) => {
-        stateIndex += 1;
-        if (stateIndex === 13 && renderAdvanceSection) return [true, () => {}];
-        if (stateIndex === 19) return [advanceFilter, () => {}];
-        if (stateIndex === 20) return [advanceShiftFilter, () => {}];
+        if (value === 'all') {
+          filterIndex += 1;
+          if (filterIndex === 1) return [advanceFilter, () => {}];
+          if (filterIndex === 2) return [advanceShiftFilter, () => {}];
+        }
         return [typeof value === 'function' ? value() : value, () => {}];
       },
     };
@@ -70,23 +96,22 @@ vm.runInNewContext(compiled.outputText + '\nexports.AdjustmentFixture = PayrollA
   },
 });
 const render = (fixtures) => {
-  stateIndex = 0;
+  filterIndex = 0;
   lines = fixtures.map((line, index) => ({ ...baseLine, employeeId: index + 1, ...line }));
   return renderToStaticMarkup(React.createElement(pageModule.exports.Payroll));
 };
-const remainingCell = (html, testId = 'value-payroll-total-remaining') =>
-  html.match(new RegExp(`<td[^>]*data-testid="${testId}"[^>]*>([^<]*)</td>`))[1];
+const remainingCell = (html, testId = 'value-payroll-remaining-1') =>
+  html.match(new RegExp(`<(?:td|span)[^>]*data-testid="${testId}"[^>]*>([^<]*)</(?:td|span)>`))[1];
 
-test('footer adds signed row balances including carryover without changing other totals', () => {
+test('compact rows preserve signed balances and positive and negative carryforwards', () => {
   const html = render([
     { paidAmount: 800 }, { paidAmount: 950 },
     { carryoverAmount: 30 }, { carryoverAmount: -20 },
   ]);
-  assert.equal(remainingCell(html), money(60));
   assert.equal(remainingCell(html, 'value-payroll-remaining-1'), money(100));
   assert.equal(remainingCell(html, 'value-payroll-remaining-2'), `(${money(50)})`);
-  assert.equal(remainingCell(html, 'value-payroll-total-payable'), money(3600));
-  assert.equal(remainingCell(html, 'value-payroll-total-paid'), money(3550));
+  assert.equal(remainingCell(html, 'value-payroll-remaining-3'), money(30));
+  assert.equal(remainingCell(html, 'value-payroll-remaining-4'), `(${money(20)})`);
 });
 
 test('zeroes each row within one tugrik before summing', () => {
@@ -110,15 +135,8 @@ test('updated data replaces the total and negative totals retain row formatting'
   assert.equal(remainingCell(render([{ paidAmount: 900 }])), money(0));
 });
 
-test('remaining total occupies column 16 in the 17-column footer; empty data has no stale total', () => {
-  const html = render([{}]);
-  const footer = html.match(/<tfoot[\s\S]*?<\/tfoot>/)[0];
-  let column = 1;
-  for (const cell of footer.matchAll(/<td([^>]*)>[\s\S]*?<\/td>/g)) {
-    if (cell[1].includes('value-payroll-total-remaining')) assert.equal(column, 16);
-    column += Number(cell[1].match(/colSpan="(\d+)"/i)?.[1] ?? 1);
-  }
-  assert.equal(column, 18);
+test('removed dashboard totals do not reappear for empty or populated payroll', () => {
+  assert.doesNotMatch(render([{}]), /<tfoot|value-payroll-total/);
   assert.doesNotMatch(render([]), /value-payroll-total-remaining/);
 });
 
@@ -128,15 +146,14 @@ test('shows the saved insurance salary separately from gross and deductions, inc
     { socialInsuranceSalary: 0 },
     { socialInsuranceSalary: 999999, calculationReady: false },
   ]);
-  assert.match(html, /<th[^>]*>НДШ бодох цалин<\/th>/);
+  assert.match(html, /НДШ бодох цалин/);
   assert.equal(remainingCell(html, 'value-payroll-insurance-salary-1'), money(1200000));
   assert.equal(remainingCell(html, 'value-payroll-insurance-salary-2'), money(0));
   assert.equal(remainingCell(html, 'value-payroll-insurance-salary-3'), '—');
-  assert.equal(remainingCell(html, 'value-payroll-total-insurance-salary'), money(1200000));
   assert.doesNotMatch(render([]), /value-payroll-total-insurance-salary/);
 });
 
-test('advance employee filter shows the selected type and sums only visible advances', () => {
+test('advance employee filter shows only the selected employee type', () => {
   renderAdvanceSection = true;
   advanceFilter = 'shift';
   advanceLines = [
@@ -148,7 +165,7 @@ test('advance employee filter shows the selected type and sums only visible adva
   assert.match(html, /<option value="shift"[^>]*>Ээлжийн<\/option>/);
   assert.match(html, /Shift fixture/);
   assert.doesNotMatch(html, /Office fixture/);
-  assert.equal(remainingCell(html, 'value-total-payroll-advance'), money(400));
+  assert.match(html, new RegExp(money(400)));
 
   const filter = pageModule.exports.filterPayrollAdvanceLines;
   assert.deepEqual(filter(advanceLines, 'all').map((line) => line.employeeType), ['shift', 'office']);
@@ -180,7 +197,7 @@ test('advance shift filter uses plans in the advance period and totals only matc
     assert.match(html, /Нэгдүгээр ээлж/);
     assert.match(html, /Early shift/);
     assert.doesNotMatch(html, /Other shift|Later assignment/);
-    assert.match(html, new RegExp(`data-testid="value-total-payroll-advance"[^>]*>${money(250000)}`));
+    assert.match(html, new RegExp(money(250000)));
     advanceShiftFilter = '2';
     const second = render([]);
     assert.match(second, /Other shift/);
@@ -210,7 +227,7 @@ test('advance shift filtering handles cross-month periods, boundaries and combin
   assert.equal(filter(fixtures, 'all', '99', plans).length, 0);
 });
 
-test('advance account column shows full saved numbers and missing accounts with correct footer alignment', () => {
+test('advance details retain full saved numbers and missing accounts', () => {
   renderAdvanceSection = true;
   advanceLines = [
     { employeeId: 1, employeeName: 'Account fixture', employeeType: 'office', bankAccountNumber: 'MN000000000000000002', advanceAmount: 100 },
@@ -218,10 +235,10 @@ test('advance account column shows full saved numbers and missing accounts with 
   ];
   try {
     const html = render([]);
-    assert.match(html, /<th[^>]*>Дансны дугаар<\/th>/);
+    assert.match(html, /Дансны дугаар/);
     assert.equal(remainingCell(html, 'value-advance-bank-account-1'), 'MN000000000000000002');
     assert.equal(remainingCell(html, 'value-advance-bank-account-2'), 'Бүртгээгүй');
-    assert.match(html, /colSpan="6"[^>]*>Нийт олгох урьдчилгаа/);
+    assert.doesNotMatch(html, /Нийт олгох урьдчилгаа/);
   } finally {
     renderAdvanceSection = false;
     advanceLines = [];

@@ -1,0 +1,672 @@
+// @ts-nocheck
+// Extracted from artifacts/staff-ops/src/pages/Payroll.tsx; services replaced with local demo boundaries.
+import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from './_api';
+import { getGetPayrollPayablesQueryKey, getGetCashSummaryQueryKey, getListCashTransactionsQueryKey, getListCashClosuresQueryKey, getListAttendanceClosuresQueryKey } from './_api';
+import { useForm } from 'react-hook-form';
+import { payrollReceivableBalance } from './_receivable-balance';
+import { Button } from './_Button';
+import { Form } from '@/components/ui/form';
+import { cn } from '@/lib/utils';
+import { CalendarDays, Banknote, Check, Coins, Download, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { downloadPayrollWorkbook, downloadSocialInsuranceReport, useRefreshEmployeePayroll } from './_api';
+import { getGetDashboardQueryKey, getGetPayrollAdvanceQueryKey, getGetPayrollQueryKey, getGetPayrollScheduleQueryKey, getListJournalReceivablesQueryKey, useApprovePayrollAdvance, useClosePayrollMonth, useReopenPayrollMonth, useGetAuthSession, useGetPayroll, useGetPayrollAdvance, useGetPayrollSchedule, useListCashClosures, useListJournalReceivables, useUpdatePayrollAdvancePayment, useUpdatePayrollSchedule, useUpsertPayrollAdjustment, type PayrollLine, type PayrollScheduleInput, type PayrollSummary } from './_api';
+import { EmptyState, ErrorBlock, LoadingBlock, Modal } from './_primitives';
+import { MonthNavigator } from './_MonthNavigator';
+import { dateLabel, currentMonth, money, today } from './_app-shared';
+import { useQueueDeletion } from './_boundaries';
+import { PayrollOpeningBalances } from './_boundaries';
+import { AdvancePaymentHistory } from './_AdvancePaymentHistory';
+import { AdvanceReceivableDeduction } from './_AdvanceReceivableDeduction';
+import { rebuildPayrollBalances } from './_api';
+import { getListJournalEntriesQueryKey, getGetJournalTrialBalanceQueryKey } from './_api';
+import { getListShiftsQueryKey, getListShiftPlansQueryKey, useListShifts, useListShiftPlans } from './_api';
+
+const mongolianMonthLabel = (value: string) => {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value);
+  return match ? `${match[1]} он ${Number(match[2])} сар` : value;
+};
+const cm = (line: PayrollLine, amount: number) => (line.calculationReady === false ? '—' : money(amount));
+const payrollRemaining = (line: PayrollLine) => {
+  const amount = Math.max(0, line.gross - line.deductions) - line.paidAmount + line.carryoverAmount;
+  return Math.abs(amount) <= 1 ? 0 : amount;
+};
+const remainingLabel = (amount: number) =>
+  Math.abs(amount) <= 1 ? money(0) : amount > 0 ? money(amount) : `(${money(Math.abs(amount))})`;
+type PayrollAdjustmentForm = {
+  manualDeduction: string;
+  settleReceivables: boolean;
+  paidAmount: string;
+  paymentDate: string;
+  secondPaidAmount: string;
+  secondPaymentDate: string;
+};
+type ExtraRow = { sequence: number; amount: string; date: string; saved: boolean };
+type AdvanceEmployeeFilter = 'all' | 'shift' | 'office';
+const round2 = (n: number) => Number(n.toFixed(2));
+const filterPayrollAdvanceLines = <T extends { employeeId: number; employeeType: string }>(
+  lines: T[], filter: AdvanceEmployeeFilter, shiftFilter = 'all',
+  plans: Array<{ employeeId: number; shiftId: number; date: string }> = [],
+  periodStart?: string, periodEnd?: string,
+) => {
+  const assigned = new Set(plans.filter(plan => String(plan.shiftId) === shiftFilter
+    && (!periodStart || plan.date >= periodStart) && (!periodEnd || plan.date <= periodEnd))
+    .map(plan => plan.employeeId));
+  return lines.filter(line => (filter === 'all' || line.employeeType === filter)
+    && (shiftFilter === 'all' || assigned.has(line.employeeId)));
+};
+
+function PayrollAdjustmentModal({ line, month, onClose }: { line: PayrollLine; month: string; onClose: () => void }) {
+  const save = useUpsertPayrollAdjustment();
+  const deletion = useQueueDeletion();
+  const receivables = useListJournalReceivables({ status: 'all' });
+  const qc = useQueryClient();
+  const savedExtras = line.additionalPayments ?? [];
+  const extraSum = savedExtras.reduce((t, p) => t + p.amount, 0);
+  const [extras, setExtras] = useState<ExtraRow[]>(() => savedExtras.map((p) => ({ sequence: p.sequence, amount: String(p.amount), date: p.date, saved: true })));
+  const [extraError, setExtraError] = useState<string | null>(null);
+  const addExtra = () => setExtras((rows) => [...rows, { sequence: Math.max(2, ...savedExtras.map((p) => p.sequence), ...rows.map((r) => r.sequence)) + 1, amount: '', date: today(), saved: false }]);
+  const patchExtra = (sequence: number, patch: Partial<ExtraRow>) => setExtras((rows) => rows.map((r) => r.sequence === sequence ? { ...r, ...patch } : r));
+  const form = useForm<PayrollAdjustmentForm>({
+    defaultValues: {
+      manualDeduction: String(line.manualDeduction),
+      settleReceivables: line.receivableId !== null || line.manualDeduction === 0,
+      paidAmount: String(round2(line.paidAmount - line.secondPaidAmount - extraSum)),
+      paymentDate: line.paymentDate ?? today(),
+      secondPaidAmount: String(line.secondPaidAmount),
+      secondPaymentDate: line.secondPaymentDate ?? today(),
+    },
+  });
+  const submit = (values: PayrollAdjustmentForm) => {
+    setExtraError(null);
+    const additionalPayments: { sequence: number; amount: number; date: string }[] = [];
+    for (const row of extras) {
+      const raw = row.amount.trim();
+      if (!row.saved && raw === '') continue;
+      const amount = Number(raw);
+      if (raw === '' || !Number.isFinite(amount) || amount <= 0) { setExtraError(`${row.sequence}-р гүйлгээний дүн 0-ээс их байх ёстой.`); return; }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(row.date)) { setExtraError(`${row.sequence}-р гүйлгээний огноог сонгоно уу.`); return; }
+      additionalPayments.push({ sequence: row.sequence, amount, date: row.date });
+    }
+    if (additionalPayments.length > 1000) { setExtraError('Нэмэлт гүйлгээ 1000-аас хэтрэхгүй.'); return; }
+    save.mutate({
+      data: {
+        employeeId: line.employeeId,
+        month,
+        manualDeduction: Number(values.manualDeduction),
+        receivableId: null,
+        settleReceivables: values.settleReceivables,
+        paidAmount: Number(values.paidAmount),
+        paymentDate: Number(values.paidAmount) > 0 ? values.paymentDate : null,
+        secondPaidAmount: Number(values.secondPaidAmount),
+        secondPaymentDate: Number(values.secondPaidAmount) > 0 ? values.secondPaymentDate : null,
+        additionalPayments,
+      },
+    }, {
+      onSuccess: async () => {
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: getGetPayrollQueryKey({ month }) }),
+          qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() }),
+          qc.invalidateQueries({ queryKey: getListJournalReceivablesQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetCashSummaryQueryKey() }),
+          qc.invalidateQueries({ queryKey: getListCashTransactionsQueryKey() }),
+          qc.invalidateQueries({ queryKey: getListCashClosuresQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetPayrollPayablesQueryKey() }),
+          qc.invalidateQueries({ queryKey: getListJournalEntriesQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetJournalTrialBalanceQueryKey() }),
+        ]);
+        onClose();
+      },
+    });
+  };
+  const balance = payrollReceivableBalance(receivables.data ?? [], line.employeeId, line.receivableDeduction ?? 0);
+  const settling = form.watch('settleReceivables');
+  const deduction = Number(form.watch('manualDeduction'));
+  const receivableInvalid = settling && deduction > 0
+    && (receivables.isLoading || receivables.isError || deduction > balance.available);
+  const removePayment = async (sequence: number) => {
+    if (!window.confirm(`${line.employeeName}-ийн ${sequence}-р цалингийн гүйлгээг устгах уу?`)) return;
+    await deletion.request(
+      `/payroll-adjustments/${month}/${line.employeeId}/transactions/${sequence}`,
+      `${line.employeeName} · ${month} · ${sequence}-р цалингийн гүйлгээ`,
+    );
+    onClose();
+  };
+  return <Modal title={`${line.employeeName} · Цалингийн тохируулга`} detail={`${month.replace('-', ' оны ')} сарын урьдчилгаа, хөнгөлөлт, суутгал болон шилжүүлсэн дүнг оруулна.`} onClose={onClose}>
+    <div className="mb-5 rounded-xl border border-primary/20 bg-primary/5 p-4">
+      <p className="text-xs font-semibold text-muted-foreground">Цалин хүлээн авах банкны данс</p>
+      <p className="mt-2 break-all font-mono text-base font-semibold select-all" data-testid="value-payroll-bank-account">{line.bankAccountNumber || 'Бүртгээгүй'}</p>
+      {!line.bankAccountNumber && <p className="mt-1 text-xs text-muted-foreground">Ажилтны бүртгэлийн «Засах» хэсэгт дансыг оруулна уу.</p>}
+    </div>
+    <Form {...form}><form onSubmit={form.handleSubmit(submit)} className="space-y-5" data-testid="form-payroll-adjustment">
+      <div className="rounded-xl border border-border bg-secondary/40 p-4 text-xs text-muted-foreground">
+        <div className="flex justify-between">
+          <span>Гарт олгох цалин</span>
+          <strong className="font-mono text-foreground">{money(Math.max(0, line.gross - line.deductions))}</strong>
+        </div>
+        <div className="mt-2 flex justify-between">
+          <span>Олгосон цалин (−)</span>
+          <strong className="font-mono text-foreground">{money(line.paidAmount)}</strong>
+        </div>
+        <div className="mt-2 flex justify-between">
+          <span>Цалингийн өглөг (+)</span>
+          <strong className="font-mono text-orange-800">{money(Math.max(0, line.carryoverAmount))}</strong>
+        </div>
+        <div className="mt-2 flex justify-between">
+          <span>Цалингийн авлага (−)</span>
+          <strong className="font-mono text-sky-700">{money(Math.max(0, -line.carryoverAmount))}</strong>
+        </div>
+        <div className="mt-3 flex justify-between border-t border-border pt-3 text-sm">
+          <span className="font-bold text-foreground">Олговол зохих цалин</span>
+          <strong className="font-mono text-primary">{money(line.balanceAmount)}</strong>
+        </div>
+      </div>
+      <div className="rounded-xl border border-accent/50 bg-accent/15 p-4"><div className="flex items-center justify-between"><span className="text-xs font-semibold">{line.employeeType === 'shift' ? 'Урьдчилгаа цалин' : 'Урьдчилгаа цалин · 50%'}</span><strong className="font-mono text-sm">{money(line.advanceAmount)}</strong></div></div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2 text-xs font-semibold"><span>ХХОАТ хөнгөлөлт</span><div className="mt-1 flex h-10 w-full items-center rounded-lg border border-input bg-secondary/40 px-3 font-mono text-sm">{money(line.taxRelief)}</div><p className="text-[11px] font-normal text-muted-foreground">НДШ тооцох цалингийн шатлалаар автоматаар тооцно.</p></div>
+        <label className="space-y-2 text-xs font-semibold">Гараар оруулах суутгал<input type="number" min="0" step="0.01" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('manualDeduction', { required: true, min: 0 })} data-testid="input-payroll-manual-deduction" /></label>
+        <div className="space-y-2 text-xs sm:col-span-2">
+          <p className="rounded-lg bg-secondary p-3" data-testid="payroll-total-receivable">Нийт авлагын үлдэгдэл: <strong>{money(balance.open)}</strong></p>
+          <label className="flex items-center gap-2 font-semibold">
+            <input type="checkbox" {...form.register('settleReceivables')} data-testid="checkbox-payroll-settle-receivables" />
+            Суутгалыг ажилтны нийт авлагаас хасах
+          </label>
+          {settling && <p className="text-muted-foreground">Хэсэгчлэн суутгаж болно. Хуучин авлагаас эхлэн автоматаар хуваарилна.
+            {(line.receivableDeduction ?? 0) > 0 && <> Одоогийн суутгалыг оролцуулж засах боломжтой: {money(balance.available)}.</>}
+          </p>}
+          {receivables.isLoading && <p>Авлага ачаалж байна...</p>}
+          {receivables.isError && <p role="alert" className="text-destructive">Авлага татахад алдаа гарлаа. <button type="button" className="underline" onClick={() => void receivables.refetch()}>Дахин оролдох</button></p>}
+          {settling && deduction > balance.available && !receivables.isLoading && !receivables.isError
+            && <p role="alert" className="text-destructive">Суутгах дүн нийт авлагын үлдэгдлээс их байна.</p>}
+        </div>
+        <div className="grid gap-3 rounded-xl border border-border p-3 sm:col-span-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end"><label className="space-y-2 text-xs font-semibold">1-р гүйлгээний дүн<input type="number" min="0" step="0.01" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('paidAmount', { required: true, min: 0 })} data-testid="input-payroll-paid-amount" /></label><label className="space-y-2 text-xs font-semibold">1-р гүйлгээний огноо<input type="date" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('paymentDate')} data-testid="input-payroll-payment-date" /></label><Button type="button" size="icon" variant="outline" className="size-10 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={line.paidAmount - line.secondPaidAmount - extraSum <= 0 || deletion.isPending} onClick={() => removePayment(1)} aria-label="1-р гүйлгээг устгах" title="1-р гүйлгээг устгах" data-testid="button-delete-payroll-payment-1"><Trash2 className="size-4" /></Button></div>
+        <div className="grid gap-3 rounded-xl border border-border p-3 sm:col-span-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end"><label className="space-y-2 text-xs font-semibold">2-р гүйлгээний дүн<input type="number" min="0" step="0.01" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('secondPaidAmount', { required: true, min: 0 })} data-testid="input-payroll-second-paid-amount" /></label><label className="space-y-2 text-xs font-semibold">2-р гүйлгээний огноо<input type="date" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" {...form.register('secondPaymentDate')} data-testid="input-payroll-second-payment-date" /></label><Button type="button" size="icon" variant="outline" className="size-10 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={line.secondPaidAmount <= 0 || deletion.isPending} onClick={() => removePayment(2)} aria-label="2-р гүйлгээг устгах" title="2-р гүйлгээг устгах" data-testid="button-delete-payroll-payment-2"><Trash2 className="size-4" /></Button></div>
+      <div className="space-y-3 sm:col-span-2">{extras.map((row) => <div key={row.sequence} className="grid gap-3 rounded-xl border border-border p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end" data-testid={`row-payroll-extra-${row.sequence}`}><label className="space-y-2 text-xs font-semibold">{row.sequence}-р гүйлгээний дүн<input type="number" min="0" step="0.01" value={row.amount} onChange={(e) => patchExtra(row.sequence, { amount: e.target.value })} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" data-testid={`input-payroll-extra-amount-${row.sequence}`} /></label><label className="space-y-2 text-xs font-semibold">{row.sequence}-р гүйлгээний огноо<input type="date" value={row.date} onChange={(e) => patchExtra(row.sequence, { date: e.target.value })} className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid={`input-payroll-extra-date-${row.sequence}`} /></label><Button type="button" size="icon" variant="outline" className="size-10 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={deletion.isPending} onClick={() => row.saved ? removePayment(row.sequence) : setExtras((rows) => rows.filter((r) => r.sequence !== row.sequence))} aria-label={`${row.sequence}-р гүйлгээг устгах`} title={`${row.sequence}-р гүйлгээг устгах`} data-testid={`button-delete-payroll-payment-${row.sequence}`}><Trash2 className="size-4" /></Button></div>)}<Button type="button" variant="outline" onClick={addExtra} disabled={save.isPending} data-testid="button-add-payroll-payment">Гүйлгээ нэмэх</Button></div>
+      </div>
+      {extraError && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" data-testid="error-payroll-extra">{extraError}</p>}
+      {save.isError && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" data-testid="error-payroll-adjustment">{save.error instanceof Error ? save.error.message : 'Цалингийн тохируулга хадгалж чадсангүй.'}</p>}
+      <div className="flex justify-end gap-2 border-t border-border pt-5"><Button type="button" variant="outline" onClick={onClose}>Болих</Button><Button type="submit" disabled={save.isPending || receivableInvalid} data-testid="button-save-payroll-adjustment">{save.isPending ? 'Хадгалж байна...' : 'Тохируулга хадгалах'}</Button></div>
+    </form></Form>
+  </Modal>;
+}
+
+function PayrollScheduleSettingsModal({ onClose }: { onClose: () => void }) {
+  const query = useGetPayrollSchedule();
+  const update = useUpdatePayrollSchedule();
+  const qc = useQueryClient();
+  const form = useForm<PayrollScheduleInput>({ defaultValues: { periodStartDay: 26, advanceCutoffDay: 10, periodEndDay: 25, advancePayDay: 10, finalPayDay: 25 } });
+
+  const initRef = useRef(false);
+  useEffect(() => {
+    if (query.data && !initRef.current) {
+      initRef.current = true;
+      form.reset({
+        periodStartDay: query.data.periodStartDay,
+        advanceCutoffDay: query.data.advanceCutoffDay,
+        periodEndDay: query.data.periodEndDay,
+        advancePayDay: query.data.advancePayDay,
+        finalPayDay: query.data.finalPayDay,
+      });
+    }
+  }, [query.data, form]);
+
+  const submit = (data: PayrollScheduleInput) => {
+    update.mutate({ data }, {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetPayrollScheduleQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetPayrollQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey() });
+        onClose();
+      }
+    });
+  };
+
+  const periodStartDay = form.watch('periodStartDay');
+  const periodEndDay = form.watch('periodEndDay');
+  const advancePayDay = form.watch('advancePayDay');
+  const finalPayDay = form.watch('finalPayDay');
+
+  return (
+    <Modal title="Цалингийн хуваарь" detail="Цалингийн мөчлөг болон олгох өдрүүдийг тохируулна. (31 = сарын сүүлийн өдөр)" onClose={onClose}>
+      {query.isLoading ? <LoadingBlock className="h-40" /> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : (
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(submit)} className="space-y-4" data-testid="form-payroll-schedule">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="space-y-1.5 text-xs font-semibold">Мөчлөг эхлэх өдөр<input type="number" min="1" max="31" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('periodStartDay', { valueAsNumber: true, required: true, min: 1, max: 31 })} data-testid="input-schedule-period-start" /></label>
+              <label className="space-y-1.5 text-xs font-semibold">Мөчлөг дуусах өдөр<input type="number" min="1" max="31" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('periodEndDay', { valueAsNumber: true, required: true, min: 1, max: 31 })} data-testid="input-schedule-period-end" /></label>
+              <label className="space-y-1.5 text-xs font-semibold">Урьдчилгаа таслах өдөр<input type="number" min="1" max="31" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('advanceCutoffDay', { valueAsNumber: true, required: true, min: 1, max: 31 })} data-testid="input-schedule-advance-cutoff" /></label>
+              <label className="space-y-1.5 text-xs font-semibold">Урьдчилгаа олгох өдөр<input type="number" min="1" max="31" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('advancePayDay', { valueAsNumber: true, required: true, min: 1, max: 31 })} data-testid="input-schedule-advance-pay" /></label>
+              <label className="space-y-1.5 text-xs font-semibold">Сүүл цалин олгох өдөр<input type="number" min="1" max="31" className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 font-mono text-sm outline-none focus:border-primary" {...form.register('finalPayDay', { valueAsNumber: true, required: true, min: 1, max: 31 })} data-testid="input-schedule-final-pay" /></label>
+            </div>
+            {Number(periodStartDay) > Number(periodEndDay) && (
+              <div className="rounded-xl border border-primary/25 bg-primary/5 p-3 text-xs text-muted-foreground">
+                Мөчлөг эхлэх өдөр нь дуусах өдрөөс хойно байгаа тул цалингийн мөчлөг өмнөх сараас эхэлж тухайн сард дуусна гэж тооцогдоно.
+              </div>
+            )}
+            {Number(finalPayDay) < Number(advancePayDay) && (
+              <div className="rounded-xl border border-primary/25 bg-primary/5 p-3 text-xs text-muted-foreground">
+                Сүүл цалин олгох өдөр нь урьдчилгаа олгох өдрөөс өмнө байгаа тул сүүл цалинг дараа сарын {Number(finalPayDay)}-нд олгоно гэж тооцогдоно.
+              </div>
+            )}
+            <div className="flex justify-end gap-2 border-t border-border pt-4">
+              <Button type="button" variant="outline" onClick={onClose} data-testid="button-cancel-schedule">Болих</Button>
+              <Button type="submit" disabled={update.isPending} data-testid="button-save-schedule">{update.isPending ? 'Хадгалж байна...' : 'Хадгалах'}</Button>
+            </div>
+          </form>
+        </Form>
+      )}
+    </Modal>
+  );
+}
+
+export function Payroll() {
+  const [preparingBalances, setPreparingBalances] = useState(false);
+  const [balanceProgress, setBalanceProgress] = useState('');
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+  const balancesAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => balancesAbort.current?.abort(), []);
+  const [downloadingReport, setDownloadingReport] = useState<'payroll' | 'insurance' | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [month, setMonth] = useState(() => {
+    const requested = new URLSearchParams(window.location.search).get('month') ?? '';
+    return /^\d{4}-(0[1-9]|1[0-2])$/.test(requested) ? requested : currentMonth();
+  });
+  const selectedMonth = useRef(month);
+  selectedMonth.current = month;
+  const refreshEmployee = useRefreshEmployeePayroll();
+  const [refreshingIds, setRefreshingIds] = useState<number[]>([]);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [refreshFailures, setRefreshFailures] = useState<Record<number, string>>({});
+  const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
+  const [attendanceError, setAttendanceError] = useState<string | null>(null);
+  const [selectedLine, setSelectedLine] = useState<PayrollLine | null>(null);
+  const [showAdvance, setShowAdvance] = useState(true);
+  const [showScheduleSettings, setShowScheduleSettings] = useState(false);
+  const [refreshingAdvanceEmployeeId, setRefreshingAdvanceEmployeeId] = useState<number | null>(null);
+  const [advanceApprovalDate, setAdvanceApprovalDate] = useState(today());
+  const [advanceDates, setAdvanceDates] = useState<Record<number, string>>({});
+  const [advanceAmounts, setAdvanceAmounts] = useState<Record<number, string>>({});
+  const [advanceEmployeeFilter, setAdvanceEmployeeFilter] = useState<AdvanceEmployeeFilter>('all');
+  const [advanceShiftFilter, setAdvanceShiftFilter] = useState('all');
+  const query = useGetPayroll({ month });
+  const advanceQuery = useGetPayrollAdvance({ month }, { query: { queryKey: getGetPayrollAdvanceQueryKey({ month }), enabled: showAdvance } });
+  const advanceShifts = useListShifts({ query: { queryKey: getListShiftsQueryKey(), enabled: showAdvance } });
+  const advanceStartMonth = advanceQuery.data?.periodStart.slice(0, 7) ?? month;
+  const advanceEndMonth = advanceQuery.data?.advancePeriodEnd.slice(0, 7) ?? month;
+  const needsShiftPlans = showAdvance && advanceShiftFilter !== 'all';
+  const advanceStartPlans = useListShiftPlans({ month: advanceStartMonth }, {
+    query: { queryKey: getListShiftPlansQueryKey({ month: advanceStartMonth }), enabled: needsShiftPlans },
+  });
+  const advanceEndPlans = useListShiftPlans({ month: advanceEndMonth }, {
+    query: { queryKey: getListShiftPlansQueryKey({ month: advanceEndMonth }), enabled: needsShiftPlans && advanceEndMonth !== advanceStartMonth },
+  });
+  const advanceShiftLoading = needsShiftPlans && (advanceStartPlans.isLoading
+    || (advanceEndMonth !== advanceStartMonth && advanceEndPlans.isLoading));
+  const advanceShiftError = needsShiftPlans && (advanceStartPlans.isError
+    || (advanceEndMonth !== advanceStartMonth && advanceEndPlans.isError));
+  const cashClosures = useListCashClosures();
+  const closedCashDates = new Set(cashClosures.data?.map((closure) => closure.date) ?? []);
+  const session = useGetAuthSession();
+  const qc = useQueryClient();
+  const approveAdvance = useApprovePayrollAdvance();
+  useEffect(() => {
+    void qc.invalidateQueries({ queryKey: getGetPayrollPayablesQueryKey(), refetchType: 'none' });
+  }, [qc, query.data, advanceQuery.data]);
+  const deletion = useQueueDeletion();
+  const revertAdvanceApproval = deletion;
+  const updateAdvancePayment = useUpdatePayrollAdvancePayment();
+  const closePayroll = useClosePayrollMonth();
+  const reopenPayroll = useReopenPayrollMonth();
+  const [closureError, setClosureError] = useState<string | null>(null);
+  const closed = Boolean(query.data?.closedAt);
+  const role = session.data?.role;
+  const canEditPayroll = ['admin', 'accountant', 'hr'].includes(role ?? '');
+  const canClose = role === 'admin';
+  useEffect(() => {
+    if (closed) { setSelectedLine(null); setRefreshingAdvanceEmployeeId(null); setAdvanceAmounts({}); setAdvanceDates({}); }
+  }, [closed]);
+  const applyClosure = async (summary: PayrollSummary) => {
+    await qc.cancelQueries({ queryKey: getGetPayrollQueryKey({ month: summary.month }) });
+    qc.setQueryData(getGetPayrollQueryKey({ month: summary.month }), summary);
+    qc.invalidateQueries({ queryKey: getListAttendanceClosuresQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey({ month: summary.month }) });
+    qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+  };
+  const closureMessage = (error: unknown) => error instanceof Error ? error.message : 'Үйлдэл амжилтгүй боллоо.';
+  const closeMonth = () => {
+    if (!window.confirm(`${mongolianMonthLabel(month)}-ийг хаах уу?\n\nЦалинтай хамт тухайн хугацааны ирц, ээлжийн төлөвлөгөө түгжигдэнэ. Сарын үлдэгдэл (авлага/өглөг), цалингийн мөр болон урьдчилгааг засах боломжгүй болно. Зөвхөн админ сарыг дахин нээнэ.`)) return;
+    const target = month;
+    setClosureError(null);
+    closePayroll.mutate({ month: target }, { onSuccess: applyClosure, onError: (e) => { if (selectedMonth.current === target) setClosureError(closureMessage(e)); } });
+  };
+  const reopenMonth = () => {
+    if (!window.confirm(`${mongolianMonthLabel(month)}-ийг дахин нээх үү?\n\nАнхааруулга: хойно хаагдсан сарууд байвал эхлээд тэдгээрийг дахин нээсэн байх шаардлагатай.`)) return;
+    const target = month;
+    setClosureError(null);
+    reopenPayroll.mutate({ month: target }, { onSuccess: applyClosure, onError: (e) => { if (selectedMonth.current === target) setClosureError(closureMessage(e)); } });
+  };
+  useEffect(() => {
+    setSelectedLine(null);
+    setRefreshingAdvanceEmployeeId(null);
+    setClosureError(null);
+    setReportError(null);
+    setAdvanceAmounts({});
+    setAdvanceDates({});
+    setAttendanceError(null);
+    setRefreshFailures({});
+    setRefreshNotice(null);
+  }, [month]);
+  const payrollTotals = (query.data?.lines ?? []).filter((line) => line.calculationReady !== false).reduce(
+    (totals, line) => ({
+      gross: totals.gross + Number(line.gross),
+      socialInsuranceSalary: totals.socialInsuranceSalary + Number(line.socialInsuranceSalary),
+      advanceAmount: totals.advanceAmount + Number(line.advanceAmount),
+      payable: totals.payable + Math.max(0, Number(line.gross) - Number(line.deductions)),
+      paidAmount: totals.paidAmount + Number(line.paidAmount),
+      remaining: totals.remaining + payrollRemaining(line),
+    }),
+    { gross: 0, socialInsuranceSalary: 0, advanceAmount: 0, payable: 0, paidAmount: 0, remaining: 0 },
+  );
+  const partial = !closed && (query.data?.lines ?? []).some((line) => line.calculationReady === false || line.attendanceNeedsRefresh || line.openingBalanceReviewRequired);
+  const filteredAdvanceLines = filterPayrollAdvanceLines(advanceQuery.data?.lines ?? [], advanceEmployeeFilter,
+    advanceShiftFilter, [...(advanceStartPlans.data ?? []),
+      ...(advanceEndMonth !== advanceStartMonth ? advanceEndPlans.data ?? [] : [])],
+    advanceQuery.data?.periodStart, advanceQuery.data?.advancePeriodEnd);
+  const displayedAdvanceTotal = filteredAdvanceLines.reduce((total, line) => {
+    const amount = Number(advanceAmounts[line.employeeId] ?? line.advanceAmount);
+    return total + (Number.isFinite(amount) ? amount : 0);
+  }, 0);
+  const refreshOne = async (employeeId: number, resetDraft = true): Promise<boolean> => {
+    if (closed) return false;
+    const requestedMonth = month;
+    setRefreshingIds((ids) => [...ids, employeeId]);
+    setRefreshFailures((f) => { const next = { ...f }; delete next[employeeId]; return next; });
+    try {
+      const result = await refreshEmployee.mutateAsync({ month: requestedMonth, employeeId });
+      qc.setQueryData(getGetPayrollQueryKey({ month: requestedMonth }), result.payroll);
+      await qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey({ month: requestedMonth }) });
+      void qc.invalidateQueries({ queryKey: getGetPayrollPayablesQueryKey() });
+      void qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+      if (selectedMonth.current === requestedMonth && resetDraft && !result.advance.approved) {
+        setAdvanceAmounts((amounts) => { const next = { ...amounts }; delete next[employeeId]; return next; });
+      }
+      return true;
+    } catch (error) {
+      if (selectedMonth.current === requestedMonth) setRefreshFailures((f) => ({ ...f, [employeeId]: error instanceof Error ? error.message : 'Шинэчилж чадсангүй.' }));
+      return false;
+    } finally {
+      setRefreshingIds((ids) => { const i = ids.indexOf(employeeId); return i < 0 ? ids : [...ids.slice(0, i), ...ids.slice(i + 1)]; });
+    }
+  };
+  const refreshAdvanceEmployee = async (employeeId: number) => {
+    setRefreshingAdvanceEmployeeId(employeeId);
+    try { await refreshOne(employeeId, true); } finally { setRefreshingAdvanceEmployeeId(null); }
+  };
+  const needsRefresh = (line: PayrollLine) => line.calculationReady === false || line.attendanceNeedsRefresh === true;
+  const pullableLines = (query.data?.lines ?? []).filter((line) => !line.openingBalanceReviewRequired);
+  const refreshableLines = pullableLines.filter(needsRefresh);
+  const reviewBlockedCount = (query.data?.lines ?? []).filter((line) => line.openingBalanceReviewRequired).length;
+  const refreshLines = async (targetLines: PayrollLine[]) => {
+    if (closed || bulkRunning || refreshingIds.length > 0 || !targetLines.length) return;
+    const targetMonth = month;
+    const ids = targetLines.map((line) => line.employeeId);
+    setBulkRunning(true);
+    setRefreshNotice(null);
+    let ok = 0;
+    for (const id of ids) {
+      if (selectedMonth.current !== targetMonth) break;
+      if (await refreshOne(id, true)) ok += 1;
+    }
+    setBulkRunning(false);
+    if (selectedMonth.current === targetMonth) setRefreshNotice(`${ok}/${ids.length} ажилтан шинэчлэгдлээ.${ok < ids.length ? ' Алдаатай мөрүүдийг доороос харна уу.' : ''}`);
+  };
+  const approve = () => {
+    if (closed) return;
+    if (!advanceApprovalDate) {
+      window.alert('Батлах огноог сонгоно уу.');
+      return;
+    }
+    const lines = (advanceQuery.data?.lines ?? []).map((line) => ({
+      employeeId: line.employeeId,
+      advanceAmount: Number(advanceAmounts[line.employeeId] ?? line.advanceAmount),
+    }));
+    if (lines.some((line) => !Number.isFinite(line.advanceAmount) || line.advanceAmount < 0)) {
+      window.alert('Олгох урьдчилгааны дүнгүүдийг зөв оруулна уу.');
+      return;
+    }
+    if (!window.confirm(`${month} сарын урьдчилгаа цалинг зассан дүнгээр ${advanceApprovalDate} огноогоор батлах уу? Баталсны дараа энэ жагсаалтын дүн өөрчлөгдөхгүй.`)) return;
+    approveAdvance.mutate({ data: { month, approvalDate: advanceApprovalDate, lines } }, {
+      onSuccess: () => {
+        setAdvanceAmounts({});
+        qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey({ month }) });
+      },
+    });
+  };
+  const downloadReport = async (kind: 'payroll' | 'insurance') => {
+    setDownloadingReport(kind);
+    setReportError(null);
+    const targetMonth = month;
+    try {
+      const download = kind === 'payroll' ? downloadPayrollWorkbook : downloadSocialInsuranceReport;
+      const workbook = await download({ month: targetMonth }, { responseType: 'blob' });
+      const url = URL.createObjectURL(workbook);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${kind === 'payroll' ? 'Payroll' : 'NDSH'}-${targetMonth}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      if (selectedMonth.current === targetMonth) setReportError(error instanceof Error ? error.message : 'Excel тайлан татаж чадсангүй.');
+    } finally {
+      setDownloadingReport(null);
+    }
+  };
+  const prepareBalances = async () => {
+    if (closed) return;
+    const targetMonth = month;
+    const controller = new AbortController();
+    balancesAbort.current = controller;
+    setPreparingBalances(true);
+    setBalanceError(null);
+    setBalanceProgress('Өмнөх сарын авлага/өглөгийг бэлтгэж байна…');
+    let lastNextMonth = '';
+    let count = 0;
+    try {
+      while (true) {
+        const result = await rebuildPayrollBalances({ month: targetMonth }, { signal: controller.signal });
+        count += result.processedMonths.length;
+        setBalanceProgress(`${count} сарын үлдэгдэл шинэчлэгдлээ.`);
+        if (result.complete) break;
+        if (!result.nextMonth || result.nextMonth <= lastNextMonth) {
+          throw new Error('Бүртгэл зэрэг өөрчлөгдсөн тул үлдэгдэл шинэчлэх ажиллагааг дахин эхлүүлнэ үү.');
+        }
+        lastNextMonth = result.nextMonth;
+      }
+      await qc.invalidateQueries({ queryKey: getGetPayrollQueryKey() });
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setBalanceError(error instanceof Error ? error.message : 'Өмнөх үлдэгдэл бэлтгэж чадсангүй.');
+      }
+    } finally {
+      setPreparingBalances(false);
+    }
+  };
+  const revertApproval = () => {
+    if (closed) return;
+    if (!window.confirm(`${month} сарын урьдчилгаа цалингийн батлалтыг устгах уу?`)) return;
+    deletion.request(`/payroll-advance/approval?month=${month}`, `${month} сарын урьдчилгаа цалингийн батлалт`);
+  };
+  const setAdvancePaid = (employeeId: number, paid: boolean, existingAmount: number, existingDate?: string | null) => {
+    if (closed) return;
+    const paymentDate = paid ? (advanceDates[employeeId] || existingDate || advanceQuery.data?.approvalDate || today()) : null;
+    const advanceAmount = Number(advanceAmounts[employeeId] ?? existingAmount);
+    if (!Number.isFinite(advanceAmount) || advanceAmount < 0) {
+      window.alert('Олгох урьдчилгааны дүнг зөв оруулна уу.');
+      return;
+    }
+    updateAdvancePayment.mutate({ data: { month, employeeId, advanceAmount, paid, paymentDate } }, {
+      onSuccess: () => {
+        if (!paid) {
+          setAdvanceAmounts((amounts) => {
+            const next = { ...amounts };
+            delete next[employeeId];
+            return next;
+          });
+          setAdvanceDates((dates) => {
+            const next = { ...dates };
+            delete next[employeeId];
+            return next;
+          });
+        }
+        qc.invalidateQueries({ queryKey: getGetPayrollAdvanceQueryKey({ month }) });
+        qc.invalidateQueries({ queryKey: getGetPayrollQueryKey({ month }) });
+      },
+    });
+  };
+  return <div className="page-enter">
+    <div className="mb-6 flex flex-wrap items-center justify-end gap-2">
+      {(session.data?.role === 'admin' || session.data?.role === 'accountant') && <>
+        <Button onClick={() => void downloadReport('payroll')} variant="outline" disabled={downloadingReport !== null || query.isFetching || query.isError || !month} data-testid="button-download-payroll-workbook"><Download className="size-4" />{downloadingReport === 'payroll' ? 'Хүснэгт бэлдэж байна...' : 'Цалингийн хүснэгт · Excel'}</Button>
+        <Button onClick={() => void downloadReport('insurance')} variant="outline" disabled={downloadingReport !== null || query.isFetching || query.isError || !month} data-testid="button-download-insurance-report"><Download className="size-4" />{downloadingReport === 'insurance' ? 'Тайлан бэлдэж байна...' : 'НДШ тайлан · Excel'}</Button>
+      </>}
+      <Button onClick={() => setShowScheduleSettings(true)} variant="outline" data-testid="button-payroll-schedule-settings"><CalendarDays className="size-4" />Цалингийн хуваарь</Button>
+      {canEditPayroll && <>
+        <Button onClick={() => void refreshLines(pullableLines)} variant="outline" disabled={bulkRunning || refreshingIds.length > 0 || closed || query.isFetching || query.isError || pullableLines.length === 0} title={closed ? 'Сар хаагдсан. Админ дахин нээсний дараа цаг татна.' : 'Сонгосон сарын бүх ажилтны ирц, цалинг дахин бодно. Бүртгэсэн олголт хэвээр үлдэнэ.'} data-testid="button-pull-payroll-attendance"><RefreshCw className={cn('size-4', bulkRunning && 'animate-spin')} />{bulkRunning ? 'Шинэчилж байна...' : 'Цаг татах'}</Button>
+        <Button onClick={() => void refreshLines(refreshableLines)} variant="outline" disabled={bulkRunning || refreshingIds.length > 0 || closed || refreshableLines.length === 0} title={closed ? 'Сар хаагдсан' : refreshableLines.length === 0 ? 'Шинэчлэх ажилтан алга' : undefined} data-testid="button-refresh-changed-payroll"><RefreshCw className={cn('size-4', bulkRunning && 'animate-spin')} />{bulkRunning ? 'Шинэчилж байна...' : `Өөрчлөгдсөнийг шинэчлэх (${refreshableLines.length})`}</Button>
+      </>}
+      <Button onClick={() => setShowAdvance((value) => !value)} variant={showAdvance ? 'default' : 'outline'} data-testid="button-payroll-advance"><Coins className="size-4" />Урьдчилгаа цалин</Button>
+      <MonthNavigator month={month} onChange={setMonth} prefix="payroll" ariaLabel="Цалингийн сар сонгох" />
+    </div>
+    {query.data && !query.isError && (closed ? <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4" data-testid="status-payroll-closed"><p className="text-sm"><strong>Сар хаагдсан</strong> · {new Date(query.data.closedAt as string).toLocaleString('mn-MN')}. Үлдэгдэл түгжигдсэн, засвар хийх боломжгүй.</p>{role === 'admin' && <Button variant="outline" onClick={reopenMonth} disabled={reopenPayroll.isPending} data-testid="button-reopen-payroll-month">{reopenPayroll.isPending ? 'Нээж байна...' : 'Дахин нээх'}</Button>}</div> : canClose && <div className="mb-5 flex justify-end"><Button onClick={closeMonth} disabled={closePayroll.isPending} data-testid="button-close-payroll-month">{closePayroll.isPending ? 'Хааж байна...' : 'Сар хаах'}</Button></div>)}
+    {closureError && <p role="alert" className="mb-5 whitespace-pre-line text-sm text-destructive" data-testid="payroll-closure-error">{closureError}</p>}
+
+    {!query.data?.openingBalanceMonth && ((query.isError && query.error instanceof Error && query.error.message.includes('өмнөх сарын')) || attendanceError?.includes('өмнөх сарын')) && <div className="mb-5 space-y-3 rounded-xl border border-border bg-card p-4" data-testid="payroll-balances-required">
+      <p className="text-xs font-semibold text-muted-foreground">Нарийвчилсан сонголт (эхний үлдэгдэл байхгүй үед)</p>
+      <p className="text-sm">Өмнөх сарын хадгалсан авлага/өглөгийг нэг удаа бэлтгэх, эсвэл хуучин сарын засварыг тусгах шаардлагатай. Ердийн цалин бодолт зөвхөн сонгосон цалингийн хугацааны ирцийг уншина.</p>
+      {(session.data?.role === 'admin' || session.data?.role === 'accountant') && <Button onClick={prepareBalances} disabled={preparingBalances || closed} data-testid="button-prepare-payroll-balances">{preparingBalances ? 'Шинэчилж байна…' : 'Өмнөх үлдэгдэл шинэчлэх'}</Button>}
+      {balanceProgress && <p aria-live="polite" className="text-sm text-muted-foreground" data-testid="payroll-balances-progress">{balanceProgress}</p>}
+      {balanceError && <p role="alert" className="whitespace-pre-line text-sm text-destructive" data-testid="payroll-balances-error">{balanceError}</p>}
+    </div>}
+    {canEditPayroll && <PayrollOpeningBalances month={month} role={role} closed={closed} openingBalanceMonth={query.data?.openingBalanceMonth} reviewRequiredCount={reviewBlockedCount} legacyAvailable={!query.data?.openingBalanceMonth} />}
+    {refreshNotice && <p role="status" className="mb-4 text-sm font-medium text-primary" data-testid="payroll-refresh-notice">{refreshNotice}</p>}
+    {Object.keys(refreshFailures).length > 0 && <div role="alert" className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" data-testid="payroll-refresh-failures"><p className="font-semibold">Шинэчлэхэд алдаа гарсан ажилтнууд:</p><ul className="mt-1 list-disc pl-5">{Object.entries(refreshFailures).map(([id, message]) => <li key={id}>{query.data?.lines.find((l) => l.employeeId === Number(id))?.employeeName ?? `#${id}`}: {message}</li>)}</ul></div>}
+    {attendanceError && <p role="alert" className="mb-5 whitespace-pre-line text-sm text-destructive" data-testid="payroll-attendance-error">{attendanceError}</p>}
+    {query.data?.attendancePulledAt && <p className="mb-4 text-sm text-muted-foreground" data-testid="payroll-attendance-status">Сүүлд цаг татсан: {new Date(query.data.attendancePulledAt).toLocaleString('mn-MN')}. {query.data.attendanceNeedsRefresh ? 'Эх бүртгэл өөрчлөгдсөн. Хадгалсан тооцоог харуулж байна; Өөрчлөгдсөн ажилтныг «Шинэчлэх» үйлдлээр шинэчилнэ үү.' : 'Хадгалсан тооцоог харуулж байна.'}</p>}
+    {reportError && <div role="alert" className="mb-5 whitespace-pre-line rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" data-testid="error-insurance-report">{reportError}</div>}
+    {query.isError && query.error instanceof Error && <p role="alert" className="mb-5 whitespace-pre-line text-sm text-destructive">{query.error.message}</p>}
+    {!query.isLoading && !query.isError && query.data && (
+      <div className="mb-6 rounded-2xl border border-border bg-card p-4 shadow-sm" data-testid="panel-payroll-schedule-info">
+        <h3 className="mb-3 text-sm font-bold">Цалингийн мөчлөг ({month})</h3>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Бүтэн мөчлөг</p><p className="mt-1 font-mono text-xs">{query.data.periodStart} — {query.data.periodEnd}</p></div>
+          <div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Урьдчилгаа хүртэлх</p><p className="mt-1 font-mono text-xs">{query.data.periodStart} — {query.data.advancePeriodEnd}</p></div>
+          <div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Урьдчилгаа олгох</p><p className="mt-1 font-mono text-xs">{query.data.advancePaymentDate}</p></div>
+          <div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Сүүл цалин олгох</p><p className="mt-1 font-mono text-xs">{query.data.finalPaymentDate}</p></div>
+        </div>
+      </div>
+    )}
+
+    {showAdvance && <section className="mb-6 overflow-hidden rounded-2xl border border-accent/60 bg-card shadow-sm" data-testid="section-payroll-advance">
+      <div className="flex flex-col justify-between gap-4 border-b border-border bg-accent/10 px-5 py-4 sm:flex-row sm:items-center">
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-lg font-bold">{month.replace('-', ' оны ')} сарын урьдчилгаа цалин</h2>
+          <label className="flex items-center gap-2 text-xs font-semibold">Ажилтны төрөл
+            <select value={advanceEmployeeFilter} onChange={(event) => setAdvanceEmployeeFilter(event.target.value as AdvanceEmployeeFilter)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="select-payroll-advance-employee-filter">
+              <option value="all">Бүх ажилтан</option>
+              <option value="shift">Ээлжийн</option>
+              <option value="office">Оффис</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-xs font-semibold">Ээлж
+            <select value={advanceShiftFilter} onChange={(event) => setAdvanceShiftFilter(event.target.value)}
+              disabled={advanceShifts.isLoading || advanceShifts.isError}
+              className="h-9 max-w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary"
+              aria-label="Урьдчилгаа цалинг ээлжээр шүүх" data-testid="select-payroll-advance-shift-filter">
+              <option value="all">Бүх ээлж</option>
+              {(advanceShifts.data ?? []).map(shift => <option key={shift.id} value={shift.id}>{shift.name}</option>)}
+            </select>
+          </label>
+          {advanceShifts.isError && <button type="button" onClick={() => void advanceShifts.refetch()} className="text-xs text-destructive" role="alert">Ээлж ачаалсангүй. Дахин оролдох</button>}
+        </div>
+        {advanceQuery.data?.approved ? <div className="flex flex-wrap items-center gap-2"><div className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground" data-testid="status-advance-approved"><Check className="mr-2 inline size-4" />Батлагдсан · {advanceQuery.data.approvalDate ? dateLabel(advanceQuery.data.approvalDate) : ''}</div><Button variant="outline" onClick={revertApproval} disabled={revertAdvanceApproval.isPending || closed} data-testid="button-revert-payroll-advance">{revertAdvanceApproval.isPending ? 'Хүсэлт илгээж байна...' : 'Батлалт устгах хүсэлт'}</Button></div> : <div className="flex flex-wrap items-end gap-2"><label className="space-y-1 text-xs font-semibold">Батлах огноо<input type="date" value={advanceApprovalDate} onChange={(event) => setAdvanceApprovalDate(event.target.value)} className="block h-10 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="input-payroll-advance-approval-date" /></label><Button onClick={approve} disabled={approveAdvance.isPending || advanceQuery.isLoading || closed} data-testid="button-approve-payroll-advance"><Check className="size-4" />{approveAdvance.isPending ? 'Баталж байна...' : 'Урьдчилгаа батлах'}</Button></div>}
+      </div>
+      {advanceQuery.isLoading || advanceShiftLoading ? <div className="p-5"><LoadingBlock className="h-36" /></div> : advanceQuery.isError || advanceShiftError ? <div className="p-5"><ErrorBlock onRetry={() => { void advanceQuery.refetch(); if (needsShiftPlans) { void advanceStartPlans.refetch(); if (advanceEndMonth !== advanceStartMonth) void advanceEndPlans.refetch(); } }} /></div> : <div className="overflow-x-auto">
+        <table className="w-full min-w-[1580px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Ажилтан</th><th className="px-5 py-3">Дансны дугаар</th><th className="px-5 py-3 text-right">Үндсэн цалин</th><th className="px-5 py-3 text-right">Ажилласан хоног</th><th className="px-5 py-3 text-right">Өдрийн цалин</th><th className="px-5 py-3 text-right">Нийт олгох цалин</th><th className="px-5 py-3 text-right">Олгох урьдчилгаа</th><th className="px-5 py-3 text-center">Гүйлгээний огноо</th><th className="px-5 py-3 text-center">Төлөв</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead>
+          <tbody className="divide-y divide-border">{filteredAdvanceLines.length === 0 ? <tr><td colSpan={10} className="px-5 py-8 text-center text-sm text-muted-foreground" data-testid="empty-payroll-advance-filter">Шүүлтүүрт тохирох ажилтан алга.</td></tr> : filteredAdvanceLines.map((line) => {
+            const selectedDate = advanceDates[line.employeeId] ?? line.paymentDate ?? advanceQuery.data?.approvalDate ?? today();
+            const cashClosed = closedCashDates.has(selectedDate) || Boolean(line.paymentDate && closedCashDates.has(line.paymentDate));
+            // Both installment history and a fully non-cash settlement lock the single-payment action.
+            const installments = Boolean(line.payments) || (line.advanceAmount > 0 && (line.receivableDeduction ?? 0) >= line.advanceAmount);
+            const isRefreshing = refreshingAdvanceEmployeeId === line.employeeId;
+            return <tr key={line.employeeId}>
+              <td className="px-5 py-4"><p className="text-sm font-semibold">{line.employeeName}</p><p className="text-xs text-muted-foreground">{line.employeeType === 'shift' ? 'Ээлжийн ажилтан' : 'Оффис ажилтан'}</p></td>
+              <td className="min-w-48 px-5 py-4 font-mono text-xs break-all" data-testid={`value-advance-bank-account-${line.employeeId}`}>{line.bankAccountNumber || 'Бүртгээгүй'}</td>
+              <td className="px-5 py-4 text-right font-mono text-sm">{line.employeeType === 'office' ? money(line.baseSalary) : '—'}</td>
+              <td className="px-5 py-4 text-right font-mono text-sm">{line.daysWorked}</td>
+              <td className="px-5 py-4 text-right font-mono text-sm">{line.employeeType === 'shift' ? money(line.dailySalary) : '—'}</td>
+              <td className="px-5 py-4 text-right font-mono text-sm">{money(line.totalSalary)}</td>
+              <td className="px-5 py-4 text-right"><input type="number" min="0" step="1000" value={advanceAmounts[line.employeeId] ?? String(line.advanceAmount)} disabled={closed || installments || Boolean(advanceQuery.data?.approved && (line.paid || cashClosed))} onChange={(event) => setAdvanceAmounts((amounts) => ({ ...amounts, [line.employeeId]: event.target.value }))} className="h-8 w-32 rounded-lg border border-input bg-background px-2 text-right font-mono text-sm font-bold text-primary outline-none focus:border-primary" data-testid={`input-advance-amount-${line.employeeId}`} /></td>
+              <td className="px-5 py-4 text-center"><input type="date" value={selectedDate} disabled={closed || installments || !advanceQuery.data?.approved || line.paid} onChange={(event) => setAdvanceDates((dates) => ({ ...dates, [line.employeeId]: event.target.value }))} className="h-8 rounded-lg border border-input bg-background px-2 text-xs outline-none focus:border-primary" data-testid={`input-advance-payment-date-${line.employeeId}`} /></td>
+              <td className="px-5 py-4 text-center">{advanceQuery.data?.approved ? <>
+                <Button size="sm" variant={line.paid ? 'default' : 'outline'} disabled={updateAdvancePayment.isPending || cashClosed || closed || installments} onClick={() => setAdvancePaid(line.employeeId, !line.paid, line.advanceAmount, line.paymentDate)} title={cashClosed ? 'Энэ өдрийн касс өндөрлөсөн' : undefined} data-testid={`button-advance-paid-${line.employeeId}`}>{line.paid ? <><Check className="size-3.5" />Олгосон</> : (line.paidAmount ?? 0) > 0 ? 'Хэсэгчлэн олгосон' : 'Олгоогүй'}</Button>
+                <AdvancePaymentHistory line={line} month={month} closed={closed} />
+                <AdvanceReceivableDeduction line={line} month={month} closed={closed} readOnly={!canEditPayroll} />
+              </> : <span className="text-xs text-muted-foreground">Батлаагүй</span>}</td>
+              <td className="px-5 py-4 text-right"><Button size="sm" variant="outline" disabled={closed || Boolean(advanceQuery.data?.approved) || advanceQuery.isFetching} onClick={() => refreshAdvanceEmployee(line.employeeId)} title={advanceQuery.data?.approved ? 'Батлагдсан урьдчилгааны мэдээлэл өөрчлөгдөхгүй' : 'Цалин болон ажилласан хоногийн мэдээллийг шинэчлэх'} data-testid={`button-refresh-advance-employee-${line.employeeId}`}><RefreshCw className={cn('size-3.5', isRefreshing && 'animate-spin')} />{isRefreshing ? 'Шинэчилж байна...' : 'Шинэчлэх'}</Button></td>
+            </tr>;
+          })}</tbody>
+          <tfoot className="border-t-2 border-border bg-secondary/35"><tr><td colSpan={6} className="px-5 py-4 text-right text-sm font-bold">Нийт олгох урьдчилгаа</td><td className="px-5 py-4 text-right font-mono text-base font-bold text-primary" data-testid="value-total-payroll-advance">{money(displayedAdvanceTotal)}</td><td colSpan={3} /></tr></tfoot>
+        </table>
+      </div>}
+      {revertAdvanceApproval.isError && <p className="border-t border-border bg-destructive/5 px-5 py-3 text-xs font-medium text-destructive">Устгах хүсэлт үүсгэхэд алдаа гарлаа.</p>}
+    </section>}
+    {query.isLoading ? <div className="space-y-3 rounded-2xl border border-border bg-card p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : <>
+      <section className="overflow-hidden rounded-2xl border border-border bg-card" data-testid="payroll-table">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4"><h2 className="text-base font-bold">{month.replace('-', ' оны ')} сарын задаргаа</h2><span className="flex items-center gap-2">{partial && <span className="rounded-full bg-primary/10 px-3 py-1 text-[10px] font-bold text-primary" data-testid="badge-payroll-partial">Дутуу / төсөөлөл — эцсийн дүн биш</span>}<span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{query.data?.lines?.length ?? 0} мөр</span></span></div>
+        {!query.data?.lines?.length ? <EmptyState title="Энэ сард цалин тооцоолоогүй" detail="Ажилласан ирцтэй эсвэл ирцээс үл хамааран цалин авах ажилтнууд энд харагдана." icon={Banknote} /> : <div className="overflow-x-auto"><table className="w-full min-w-[2400px] text-left">
+          <thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr>
+            <th className="px-5 py-3">Ажилтан</th><th className="px-5 py-3">Ажилласан</th><th className="px-5 py-3 text-right">Үндсэн цалин</th>
+            <th className="px-5 py-3 text-right">НДШ бодох цалин</th>
+            <th className="px-5 py-3 text-right">НДШ</th><th className="px-5 py-3 text-right">ХХОАТ</th><th className="px-5 py-3 text-right">Хөнгөлөлт</th><th className="px-5 py-3 text-right">Урьдчилгаа цалин</th><th className="px-5 py-3 text-right">Бусад суутгал</th><th className="px-5 py-3 text-right">Гарт олгох</th><th className="px-5 py-3 text-right">Олгосон дүн</th><th className="px-5 py-3 text-center">Гүйлгээний огноо</th><th className="px-5 py-3 text-center">Төлөв</th><th className="px-5 py-3 text-right">Цалингийн авлага</th><th className="px-5 py-3 text-right">Цалингийн өглөг</th><th className="px-5 py-3 text-right">Үлдэгдэл</th><th className="px-5 py-3 text-right">Үйлдэл</th>
+          </tr></thead>
+          <tbody className="divide-y divide-border">{query.data.lines.map((line) => {
+            const cashClosed = Boolean((line.paymentDate && closedCashDates.has(line.paymentDate)) || (line.secondPaymentDate && closedCashDates.has(line.secondPaymentDate)) || (line.additionalPayments ?? []).some((p) => closedCashDates.has(p.date)));
+            const currentDifference = payrollRemaining(line);
+            return <tr key={line.employeeId} className="hover:bg-secondary/35" data-testid={`row-payroll-${line.employeeId}`}>
+              <td className="px-5 py-4"><p className="text-sm font-semibold">{line.employeeName}</p><p className="text-xs text-muted-foreground">{line.role}</p>{line.calculationReady === false && <p className="mt-1 text-[11px] font-semibold text-muted-foreground" data-testid={`status-payroll-uncomputed-${line.employeeId}`}>Тооцоолоогүй</p>}{line.openingBalanceReviewRequired ? <p className="mt-1 max-w-[16rem] text-[11px] font-semibold text-primary" data-testid={`status-payroll-baseline-review-${line.employeeId}`}>Эхний үлдэгдэл хянагдаагүй тул татах боломжгүй. Админ баталгаажуулна.</p> : needsRefresh(line) && <div className="mt-1 flex flex-wrap items-center gap-2">{line.attendanceNeedsRefresh && <span className="text-[11px] font-semibold text-orange-800">Ирц өөрчлөгдсөн{line.refreshMonths?.length ? `: ${line.refreshMonths.join(', ')}` : ''}</span>}{line.calculationReady === false && line.refreshMonths?.length ? <span className="text-[11px] text-muted-foreground">Сар: {line.refreshMonths.join(', ')}</span> : null}{canEditPayroll && <Button size="sm" variant="outline" className="h-7 px-2 text-[11px]" disabled={closed || bulkRunning || refreshingIds.includes(line.employeeId)} onClick={() => void refreshOne(line.employeeId)} aria-label={`${line.employeeName} шинэчлэх`} data-testid={`button-refresh-payroll-employee-${line.employeeId}`}><RefreshCw className={cn('size-3', refreshingIds.includes(line.employeeId) && 'animate-spin')} />{refreshingIds.includes(line.employeeId) ? 'Шинэчилж байна...' : 'Шинэчлэх'}</Button>}</div>}</td>
+              <td className="px-5 py-4 font-mono text-xs text-muted-foreground">{line.daysWorked} өдөр</td>
+              <td className="px-5 py-4 text-right font-mono text-sm">{cm(line, line.gross)}</td>
+              <td className="px-5 py-4 text-right font-mono text-sm" data-testid={`value-payroll-insurance-salary-${line.employeeId}`}>{cm(line, line.socialInsuranceSalary)}</td>
+              <td className="px-5 py-4 text-right font-mono text-sm text-muted-foreground">{cm(line, line.socialInsurance)}</td>
+              <td className="px-5 py-4 text-right font-mono text-sm text-muted-foreground">{cm(line, line.incomeTax)}</td>
+              <td className="px-5 py-4 text-right font-mono text-sm text-sky-700">{cm(line, line.taxRelief)}</td>
+              <td className="px-5 py-4 text-right font-mono text-sm">{cm(line, line.advanceAmount)}</td>
+              <td className="px-5 py-4 text-right font-mono text-sm">{cm(line, line.manualDeduction)}</td>
+              <td className="px-5 py-4 text-right font-mono text-sm font-bold text-primary">{cm(line, Math.max(0, line.gross - line.deductions))}</td>
+              <td className="px-5 py-4 text-right font-mono text-sm">{cm(line, line.paidAmount)}</td>
+              <td className="px-5 py-4 text-center font-mono text-xs text-muted-foreground">{line.paymentDate ?? '—'}</td>
+              <td className="px-5 py-4 text-center"><span className={cn('inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold', line.paidAmount > 0 ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground')} data-testid={`status-payroll-paid-${line.employeeId}`}>{line.paidAmount > 0 ? 'Олгосон' : 'Олгоогүй'}</span></td>
+              <td className="px-5 py-4 text-right font-mono text-sm font-bold text-sky-700" data-testid={`value-payroll-receivable-${line.employeeId}`}>{cm(line, Math.max(0, -line.carryoverAmount))}</td>
+              <td className="px-5 py-4 text-right font-mono text-sm font-bold text-orange-800" data-testid={`value-payroll-payable-${line.employeeId}`}>{cm(line, Math.max(0, line.carryoverAmount))}</td>
+              <td className={cn('px-5 py-4 text-right font-mono text-sm font-bold', currentDifference < -1 ? 'text-sky-700' : currentDifference > 1 ? 'text-orange-800' : 'text-muted-foreground')} data-testid={`value-payroll-remaining-${line.employeeId}`}>{line.calculationReady === false ? '—' : remainingLabel(currentDifference)}</td>
+              <td className="px-5 py-4 text-right"><Button size="icon" variant="outline" disabled={cashClosed || closed} title={cashClosed ? 'Гүйлгээний өдрийн касс өндөрлөсөн' : undefined} onClick={() => setSelectedLine(line)} aria-label={`${line.employeeName} цалингийн мэдээлэл оруулах`} data-testid={`button-payroll-adjustment-${line.employeeId}`}><Pencil className="size-3.5" /></Button></td>
+            </tr>;
+          })}</tbody>
+          <tfoot className="border-t-2 border-border bg-secondary/35"><tr>
+            <td colSpan={2} className="px-5 py-4 text-right text-sm font-bold">Нийт</td>
+            <td className="px-5 py-4 text-right font-mono text-sm font-bold" data-testid="value-payroll-total-gross">{money(payrollTotals.gross)}</td>
+            <td className="px-5 py-4 text-right font-mono text-sm font-bold" data-testid="value-payroll-total-insurance-salary">{money(payrollTotals.socialInsuranceSalary)}</td>
+            <td colSpan={3} /><td className="px-5 py-4 text-right font-mono text-sm font-bold" data-testid="value-payroll-total-advance">{money(payrollTotals.advanceAmount)}</td><td />
+            <td className="px-5 py-4 text-right font-mono text-sm font-bold text-primary" data-testid="value-payroll-total-payable">{money(payrollTotals.payable)}</td>
+            <td className="px-5 py-4 text-right font-mono text-sm font-bold" data-testid="value-payroll-total-paid">{money(payrollTotals.paidAmount)}</td><td colSpan={4} />
+            <td className={cn('px-5 py-4 text-right font-mono text-sm font-bold', payrollTotals.remaining < -1 ? 'text-sky-700' : payrollTotals.remaining > 1 ? 'text-orange-800' : 'text-muted-foreground')} data-testid="value-payroll-total-remaining">{remainingLabel(payrollTotals.remaining)}</td><td />
+          </tr></tfoot>
+        </table></div>}
+      </section>
+    </>}
+    {selectedLine && !closed && <PayrollAdjustmentModal line={selectedLine} month={month} onClose={() => setSelectedLine(null)} />}
+    {showScheduleSettings && <PayrollScheduleSettingsModal onClose={() => setShowScheduleSettings(false)} />}
+  </div>;
+}

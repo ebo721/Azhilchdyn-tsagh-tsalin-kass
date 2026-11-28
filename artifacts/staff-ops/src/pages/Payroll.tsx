@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation, useSearch } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
 import { getGetPayrollPayablesQueryKey, getGetCashSummaryQueryKey, getListCashTransactionsQueryKey, getListCashClosuresQueryKey, getListAttendanceClosuresQueryKey } from '@workspace/api-client-react';
 import { useForm } from 'react-hook-form';
 import { payrollReceivableBalance } from '@/lib/payroll-receivable-balance';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
-import { cn } from '@/lib/utils';
-import { CalendarDays, Banknote, Check, Coins, Download, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { CalendarDays, Check, Download, RefreshCw, Trash2, Search, LockKeyhole } from 'lucide-react';
+import { PayrollRegister, PayrollEmployee, PayrollValue, PayrollDetail } from '@/components/PayrollRegister';
+import { parsePayrollSection, payrollMonth } from '@/lib/payroll-sections';
 import { downloadPayrollWorkbook, downloadSocialInsuranceReport, useRefreshEmployeePayroll } from '@workspace/api-client-react';
 import { getGetDashboardQueryKey, getGetPayrollAdvanceQueryKey, getGetPayrollQueryKey, getGetPayrollScheduleQueryKey, getListJournalReceivablesQueryKey, useApprovePayrollAdvance, useClosePayrollMonth, useReopenPayrollMonth, useGetAuthSession, useGetPayroll, useGetPayrollAdvance, useGetPayrollSchedule, useListCashClosures, useListJournalReceivables, useUpdatePayrollAdvancePayment, useUpdatePayrollSchedule, useUpsertPayrollAdjustment, type PayrollLine, type PayrollScheduleInput, type PayrollSummary } from '@workspace/api-client-react';
-import { EmptyState, ErrorBlock, LoadingBlock, Modal } from '@/components/ui-primitives';
+import { ErrorBlock, LoadingBlock, Modal } from '@/components/ui-primitives';
 import { MonthNavigator } from '@/components/MonthNavigator';
 import { dateLabel, currentMonth, money, today } from '@/lib/app-shared';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
@@ -18,7 +20,7 @@ import { AdvancePaymentHistory } from '@/components/AdvancePaymentHistory';
 import { AdvanceReceivableDeduction } from '@/components/AdvanceReceivableDeduction';
 import { rebuildPayrollBalances } from '@workspace/api-client-react';
 import { getListJournalEntriesQueryKey, getGetJournalTrialBalanceQueryKey } from '@workspace/api-client-react';
-import { getListShiftsQueryKey, getListShiftPlansQueryKey, useListShifts, useListShiftPlans } from '@workspace/api-client-react';
+import { getListShiftPlansQueryKey, useListShifts, useListShiftPlans } from '@workspace/api-client-react';
 
 const mongolianMonthLabel = (value: string) => {
   const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value);
@@ -258,6 +260,10 @@ function PayrollScheduleSettingsModal({ onClose }: { onClose: () => void }) {
 }
 
 export function Payroll() {
+  const search = useSearch();
+  const [, navigate] = useLocation();
+  const section = parsePayrollSection(search);
+  const showAdvance = section === 'advance';
   const [preparingBalances, setPreparingBalances] = useState(false);
   const [balanceProgress, setBalanceProgress] = useState('');
   const [balanceError, setBalanceError] = useState<string | null>(null);
@@ -265,10 +271,12 @@ export function Payroll() {
   useEffect(() => () => balancesAbort.current?.abort(), []);
   const [downloadingReport, setDownloadingReport] = useState<'payroll' | 'insurance' | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
-  const [month, setMonth] = useState(() => {
-    const requested = new URLSearchParams(window.location.search).get('month') ?? '';
-    return /^\d{4}-(0[1-9]|1[0-2])$/.test(requested) ? requested : currentMonth();
-  });
+  const month = payrollMonth(search, currentMonth());
+  const setMonth = (next: string) => {
+    const params = new URLSearchParams(search);
+    params.set('month', next);
+    navigate(`/payroll?${params}`);
+  };
   const selectedMonth = useRef(month);
   selectedMonth.current = month;
   const refreshEmployee = useRefreshEmployeePayroll();
@@ -278,7 +286,6 @@ export function Payroll() {
   const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
   const [selectedLine, setSelectedLine] = useState<PayrollLine | null>(null);
-  const [showAdvance, setShowAdvance] = useState(false);
   const [showScheduleSettings, setShowScheduleSettings] = useState(false);
   const [refreshingAdvanceEmployeeId, setRefreshingAdvanceEmployeeId] = useState<number | null>(null);
   const [advanceApprovalDate, setAdvanceApprovalDate] = useState(today());
@@ -286,12 +293,15 @@ export function Payroll() {
   const [advanceAmounts, setAdvanceAmounts] = useState<Record<number, string>>({});
   const [advanceEmployeeFilter, setAdvanceEmployeeFilter] = useState<AdvanceEmployeeFilter>('all');
   const [advanceShiftFilter, setAdvanceShiftFilter] = useState('all');
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const query = useGetPayroll({ month });
   const advanceQuery = useGetPayrollAdvance({ month }, { query: { queryKey: getGetPayrollAdvanceQueryKey({ month }), enabled: showAdvance } });
-  const advanceShifts = useListShifts({ query: { queryKey: getListShiftsQueryKey(), enabled: showAdvance } });
-  const advanceStartMonth = advanceQuery.data?.periodStart.slice(0, 7) ?? month;
-  const advanceEndMonth = advanceQuery.data?.advancePeriodEnd.slice(0, 7) ?? month;
-  const needsShiftPlans = showAdvance && advanceShiftFilter !== 'all';
+  const advanceShifts = useListShifts();
+  const filterPeriod = showAdvance ? advanceQuery.data : query.data;
+  const advanceStartMonth = filterPeriod?.periodStart.slice(0, 7) ?? month;
+  const advanceEndMonth = (showAdvance ? advanceQuery.data?.advancePeriodEnd : query.data?.periodEnd)?.slice(0, 7) ?? month;
+  const needsShiftPlans = advanceShiftFilter !== 'all';
   const advanceStartPlans = useListShiftPlans({ month: advanceStartMonth }, {
     query: { queryKey: getListShiftPlansQueryKey({ month: advanceStartMonth }), enabled: needsShiftPlans },
   });
@@ -319,7 +329,7 @@ export function Payroll() {
   const closed = Boolean(query.data?.closedAt);
   const role = session.data?.role;
   const canEditPayroll = ['admin', 'accountant', 'hr'].includes(role ?? '');
-  const canClose = role === 'admin';
+  const canClose = role === 'admin' && !showAdvance;
   useEffect(() => {
     if (closed) { setSelectedLine(null); setRefreshingAdvanceEmployeeId(null); setAdvanceAmounts({}); setAdvanceDates({}); }
   }, [closed]);
@@ -332,12 +342,14 @@ export function Payroll() {
   };
   const closureMessage = (error: unknown) => error instanceof Error ? error.message : 'Үйлдэл амжилтгүй боллоо.';
   const closeMonth = () => {
+    if (!canClose) return;
     if (!window.confirm(`${mongolianMonthLabel(month)}-ийг хаах уу?\n\nЦалинтай хамт тухайн хугацааны ирц, ээлжийн төлөвлөгөө түгжигдэнэ. Сарын үлдэгдэл (авлага/өглөг), цалингийн мөр болон урьдчилгааг засах боломжгүй болно. Зөвхөн админ сарыг дахин нээнэ.`)) return;
     const target = month;
     setClosureError(null);
     closePayroll.mutate({ month: target }, { onSuccess: applyClosure, onError: (e) => { if (selectedMonth.current === target) setClosureError(closureMessage(e)); } });
   };
   const reopenMonth = () => {
+    if (!canClose) return;
     if (!window.confirm(`${mongolianMonthLabel(month)}-ийг дахин нээх үү?\n\nАнхааруулга: хойно хаагдсан сарууд байвал эхлээд тэдгээрийг дахин нээсэн байх шаардлагатай.`)) return;
     const target = month;
     setClosureError(null);
@@ -353,27 +365,22 @@ export function Payroll() {
     setAttendanceError(null);
     setRefreshFailures({});
     setRefreshNotice(null);
-  }, [month]);
-  const payrollTotals = (query.data?.lines ?? []).filter((line) => line.calculationReady !== false).reduce(
-    (totals, line) => ({
-      gross: totals.gross + Number(line.gross),
-      socialInsuranceSalary: totals.socialInsuranceSalary + Number(line.socialInsuranceSalary),
-      advanceAmount: totals.advanceAmount + Number(line.advanceAmount),
-      payable: totals.payable + Math.max(0, Number(line.gross) - Number(line.deductions)),
-      paidAmount: totals.paidAmount + Number(line.paidAmount),
-      remaining: totals.remaining + payrollRemaining(line),
-    }),
-    { gross: 0, socialInsuranceSalary: 0, advanceAmount: 0, payable: 0, paidAmount: 0, remaining: 0 },
-  );
+  }, [month, section]);
   const partial = !closed && (query.data?.lines ?? []).some((line) => line.calculationReady === false || line.attendanceNeedsRefresh || line.openingBalanceReviewRequired);
+  const matches = (name: string, remaining: number, ready = true) =>
+    name.toLocaleLowerCase('mn').includes(employeeSearch.trim().toLocaleLowerCase('mn'))
+    && (statusFilter === 'all' || (ready && (statusFilter === 'paid' ? remaining <= 1 : remaining > 1)));
+  const advancePaid = (line: NonNullable<typeof advanceQuery.data>['lines'][number]) =>
+    line.paidAmount ?? (line.paid ? Math.max(0, line.advanceAmount - (line.receivableDeduction ?? 0)) : 0);
+  const advanceRemaining = (line: NonNullable<typeof advanceQuery.data>['lines'][number]) =>
+    line.remainingBalance ?? Math.max(0, line.advanceAmount - (line.receivableDeduction ?? 0) - advancePaid(line));
   const filteredAdvanceLines = filterPayrollAdvanceLines(advanceQuery.data?.lines ?? [], advanceEmployeeFilter,
     advanceShiftFilter, [...(advanceStartPlans.data ?? []),
       ...(advanceEndMonth !== advanceStartMonth ? advanceEndPlans.data ?? [] : [])],
-    advanceQuery.data?.periodStart, advanceQuery.data?.advancePeriodEnd);
-  const displayedAdvanceTotal = filteredAdvanceLines.reduce((total, line) => {
-    const amount = Number(advanceAmounts[line.employeeId] ?? line.advanceAmount);
-    return total + (Number.isFinite(amount) ? amount : 0);
-  }, 0);
+    advanceQuery.data?.periodStart, advanceQuery.data?.advancePeriodEnd).filter(line => matches(line.employeeName, advanceRemaining(line)));
+  const filteredFinalLines = filterPayrollAdvanceLines(query.data?.lines ?? [], advanceEmployeeFilter,
+    advanceShiftFilter, [...(advanceStartPlans.data ?? []), ...(advanceEndMonth !== advanceStartMonth ? advanceEndPlans.data ?? [] : [])],
+    query.data?.periodStart, query.data?.periodEnd).filter(line => matches(line.employeeName, payrollRemaining(line), line.calculationReady !== false));
   const refreshOne = async (employeeId: number, resetDraft = true): Promise<boolean> => {
     if (closed) return false;
     const requestedMonth = month;
@@ -523,148 +530,67 @@ export function Payroll() {
       },
     });
   };
+  const activePeriod = query.data;
+  const headerPeriodEnd = showAdvance ? activePeriod?.advancePeriodEnd : activePeriod?.periodEnd;
+  const paymentDay = showAdvance ? activePeriod?.advancePaymentDate : activePeriod?.finalPaymentDate;
   return <div className="page-enter">
-    <div className="mb-6 flex flex-wrap items-center justify-end gap-2">
-      {(session.data?.role === 'admin' || session.data?.role === 'accountant') && <>
-        <Button onClick={() => void downloadReport('payroll')} variant="outline" disabled={downloadingReport !== null || query.isFetching || query.isError || !month} data-testid="button-download-payroll-workbook"><Download className="size-4" />{downloadingReport === 'payroll' ? 'Хүснэгт бэлдэж байна...' : 'Цалингийн хүснэгт · Excel'}</Button>
-        <Button onClick={() => void downloadReport('insurance')} variant="outline" disabled={downloadingReport !== null || query.isFetching || query.isError || !month} data-testid="button-download-insurance-report"><Download className="size-4" />{downloadingReport === 'insurance' ? 'Тайлан бэлдэж байна...' : 'НДШ тайлан · Excel'}</Button>
-      </>}
-      <Button onClick={() => setShowScheduleSettings(true)} variant="outline" data-testid="button-payroll-schedule-settings"><CalendarDays className="size-4" />Цалингийн хуваарь</Button>
-      {canEditPayroll && <>
-        <Button onClick={() => void refreshLines(pullableLines)} variant="outline" disabled={bulkRunning || refreshingIds.length > 0 || closed || query.isFetching || query.isError || pullableLines.length === 0} title={closed ? 'Сар хаагдсан. Админ дахин нээсний дараа цаг татна.' : 'Сонгосон сарын бүх ажилтны ирц, цалинг дахин бодно. Бүртгэсэн олголт хэвээр үлдэнэ.'} data-testid="button-pull-payroll-attendance"><RefreshCw className={cn('size-4', bulkRunning && 'animate-spin')} />{bulkRunning ? 'Шинэчилж байна...' : 'Цаг татах'}</Button>
-        <Button onClick={() => void refreshLines(refreshableLines)} variant="outline" disabled={bulkRunning || refreshingIds.length > 0 || closed || refreshableLines.length === 0} title={closed ? 'Сар хаагдсан' : refreshableLines.length === 0 ? 'Шинэчлэх ажилтан алга' : undefined} data-testid="button-refresh-changed-payroll"><RefreshCw className={cn('size-4', bulkRunning && 'animate-spin')} />{bulkRunning ? 'Шинэчилж байна...' : `Өөрчлөгдсөнийг шинэчлэх (${refreshableLines.length})`}</Button>
-      </>}
-      <Button onClick={() => setShowAdvance((value) => !value)} variant={showAdvance ? 'default' : 'outline'} data-testid="button-payroll-advance"><Coins className="size-4" />Урьдчилгаа цалин</Button>
-      <MonthNavigator month={month} onChange={setMonth} prefix="payroll" ariaLabel="Цалингийн сар сонгох" />
+    <div className="mb-3 flex flex-wrap items-center gap-3">
+      <h1 className="text-2xl font-bold tracking-tight">{showAdvance ? 'Урьдчилгаа цалин' : 'Сүүл цалин'}</h1>
+      {query.data && <><span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary" data-testid={closed ? 'status-payroll-closed' : 'status-payroll-open'}>{closed ? 'ХААЛТТАЙ' : 'НЭЭЛТТЭЙ'}</span><span className="font-mono text-xs text-muted-foreground">{activePeriod?.periodStart} — {headerPeriodEnd} · {paymentDay}</span></>}
+      {showAdvance && advanceQuery.data?.approved && <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary" data-testid="status-advance-approved">Батлагдсан · {advanceQuery.data.approvalDate ? dateLabel(advanceQuery.data.approvalDate) : ''}</span>}
     </div>
-    {query.data && !query.isError && (closed ? <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4" data-testid="status-payroll-closed"><p className="text-sm"><strong>Сар хаагдсан</strong> · {new Date(query.data.closedAt as string).toLocaleString('mn-MN')}. Үлдэгдэл түгжигдсэн, засвар хийх боломжгүй.</p>{role === 'admin' && <Button variant="outline" onClick={reopenMonth} disabled={reopenPayroll.isPending} data-testid="button-reopen-payroll-month">{reopenPayroll.isPending ? 'Нээж байна...' : 'Дахин нээх'}</Button>}</div> : canClose && <div className="mb-5 flex justify-end"><Button onClick={closeMonth} disabled={closePayroll.isPending} data-testid="button-close-payroll-month">{closePayroll.isPending ? 'Хааж байна...' : 'Сар хаах'}</Button></div>)}
-    {closureError && <p role="alert" className="mb-5 whitespace-pre-line text-sm text-destructive" data-testid="payroll-closure-error">{closureError}</p>}
-
-    {!query.data?.openingBalanceMonth && ((query.isError && query.error instanceof Error && query.error.message.includes('өмнөх сарын')) || attendanceError?.includes('өмнөх сарын')) && <div className="mb-5 space-y-3 rounded-xl border border-border bg-card p-4" data-testid="payroll-balances-required">
-      <p className="text-xs font-semibold text-muted-foreground">Нарийвчилсан сонголт (эхний үлдэгдэл байхгүй үед)</p>
-      <p className="text-sm">Өмнөх сарын хадгалсан авлага/өглөгийг нэг удаа бэлтгэх, эсвэл хуучин сарын засварыг тусгах шаардлагатай. Ердийн цалин бодолт зөвхөн сонгосон цалингийн хугацааны ирцийг уншина.</p>
-      {(session.data?.role === 'admin' || session.data?.role === 'accountant') && <Button onClick={prepareBalances} disabled={preparingBalances || closed} data-testid="button-prepare-payroll-balances">{preparingBalances ? 'Шинэчилж байна…' : 'Өмнөх үлдэгдэл шинэчлэх'}</Button>}
-      {balanceProgress && <p aria-live="polite" className="text-sm text-muted-foreground" data-testid="payroll-balances-progress">{balanceProgress}</p>}
-      {balanceError && <p role="alert" className="whitespace-pre-line text-sm text-destructive" data-testid="payroll-balances-error">{balanceError}</p>}
+    <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-2 xl:flex-nowrap" data-testid="payroll-toolbar">
+      <div className="shrink-0"><MonthNavigator month={month} onChange={setMonth} prefix="payroll" ariaLabel="Цалингийн сар сонгох" /></div>
+      {canEditPayroll && <details className="relative shrink-0"><summary className="grid size-9 cursor-pointer list-none place-items-center rounded-lg border border-border" aria-label="Ирц шинэчлэх сонголт"><RefreshCw className="size-4" /></summary><div className="absolute left-0 top-11 z-30 grid w-64 gap-2 rounded-xl border border-border bg-card p-3 shadow-lg">
+        <Button onClick={() => void refreshLines(pullableLines)} variant="outline" disabled={bulkRunning || refreshingIds.length > 0 || closed || query.isFetching || query.isError || pullableLines.length === 0} data-testid="button-pull-payroll-attendance">{bulkRunning ? 'Шинэчилж байна...' : 'Цаг татах'}</Button>
+        <Button onClick={() => void refreshLines(refreshableLines)} variant="outline" disabled={bulkRunning || refreshingIds.length > 0 || closed || refreshableLines.length === 0} data-testid="button-refresh-changed-payroll">{'Өөрчлөгдсөнийг шинэчлэх (' + refreshableLines.length + ')'}</Button>
+      </div></details>}
+      {showAdvance && canEditPayroll && <details className="relative shrink-0"><summary className="grid size-9 cursor-pointer list-none place-items-center rounded-lg border border-border" aria-label="Урьдчилгаа батлах сонголт" title="Урьдчилгаа батлах сонголт"><Check className="size-4" /></summary><div className="absolute left-0 top-11 z-30 grid w-64 gap-2 rounded-xl border border-border bg-card p-3 shadow-lg">
+        {advanceQuery.data?.approved ? <Button size="sm" variant="outline" onClick={revertApproval} disabled={revertAdvanceApproval.isPending || closed} data-testid="button-revert-payroll-advance">Батлалт устгах хүсэлт</Button> : <><input aria-label="Батлах огноо" type="date" value={advanceApprovalDate} onChange={e => setAdvanceApprovalDate(e.target.value)} className="h-9 rounded-lg border border-input bg-card px-2 text-xs" data-testid="input-payroll-advance-approval-date" /><Button size="sm" onClick={approve} disabled={approveAdvance.isPending || advanceQuery.isLoading || advanceQuery.isError || closed} data-testid="button-approve-payroll-advance">Урьдчилгаа батлах</Button></>}
+      </div></details>}
+      {canClose && query.data && !query.isError && <Button size="icon" title={closed ? 'Сар нээх' : 'Сар хаах'} aria-label={closed ? 'Сар нээх' : 'Сар хаах'} onClick={closed ? reopenMonth : closeMonth} disabled={closePayroll.isPending || reopenPayroll.isPending} data-testid={closed ? 'button-reopen-payroll-month' : 'button-close-payroll-month'}><LockKeyhole className="size-4" /></Button>}
+      {(role === 'admin' || role === 'accountant') && <details className="relative shrink-0"><summary className="grid size-9 cursor-pointer list-none place-items-center rounded-lg border border-border" aria-label="Цалингийн тайлан экспортлох"><Download className="size-4" /></summary><div className="absolute left-0 top-11 z-30 grid w-64 gap-2 rounded-xl border border-border bg-card p-3 shadow-lg">
+        <Button onClick={() => void downloadReport('payroll')} variant="outline" disabled={downloadingReport !== null || query.isFetching || query.isError} data-testid="button-download-payroll-workbook">Цалингийн хүснэгт · Excel</Button>
+        <Button onClick={() => void downloadReport('insurance')} variant="outline" disabled={downloadingReport !== null || query.isFetching || query.isError} data-testid="button-download-insurance-report">НДШ тайлан · Excel</Button>
+      </div></details>}
+      {canEditPayroll && <Button size="icon" variant="outline" onClick={() => setShowScheduleSettings(true)} title="Цалингийн хуваарь" aria-label="Цалингийн хуваарь" data-testid="button-payroll-schedule-settings"><CalendarDays className="size-4" /></Button>}
+      {canEditPayroll && <PayrollOpeningBalances compact month={month} role={role} closed={closed} openingBalanceMonth={query.data?.openingBalanceMonth} reviewRequiredCount={reviewBlockedCount} legacyAvailable={!query.data?.openingBalanceMonth} />}
+      <label className="relative min-w-28 flex-1"><Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" /><input aria-label="Ажилтан хайх" placeholder="Ажилтан хайх" value={employeeSearch} onChange={e => setEmployeeSearch(e.target.value)} className="h-9 w-full rounded-lg border border-input bg-background pl-8 pr-2 text-xs" /></label>
+      <select aria-label="Ажилтны төрөл" value={advanceEmployeeFilter} onChange={e => setAdvanceEmployeeFilter(e.target.value as AdvanceEmployeeFilter)} className="h-9 w-28 shrink-0 rounded-lg border border-input bg-background px-2 text-xs" data-testid="select-payroll-advance-employee-filter"><option value="all">Бүх ажилтан</option><option value="shift">Ээлжийн</option><option value="office">Оффис</option></select>
+      <select aria-label="Цалинг ээлжээр шүүх" value={advanceShiftFilter} onChange={e => setAdvanceShiftFilter(e.target.value)} disabled={advanceShifts.isLoading || advanceShifts.isError} className="h-9 w-24 shrink-0 rounded-lg border border-input bg-background px-2 text-xs" data-testid="select-payroll-advance-shift-filter"><option value="all">Бүх ээлж</option>{(advanceShifts.data ?? []).map(shift => <option key={shift.id} value={shift.id}>{shift.name}</option>)}</select>
+      <select aria-label="Төлөвөөр шүүх" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="h-9 w-28 shrink-0 rounded-lg border border-input bg-background px-2 text-xs"><option value="all">Бүх төлөв</option><option value="pending">Үлдэгдэлтэй</option><option value="paid">Бүрэн олгосон</option></select>
+    </div>
+    {closureError && <p role="alert" className="mb-4 text-sm text-destructive" data-testid="payroll-closure-error">{closureError}</p>}
+    {advanceShifts.isError && <button onClick={() => void advanceShifts.refetch()} className="mb-3 text-xs text-destructive">Ээлж ачаалсангүй. Дахин оролдох</button>}
+    {!query.data?.openingBalanceMonth && ((query.isError && query.error instanceof Error && query.error.message.includes('өмнөх сарын')) || attendanceError?.includes('өмнөх сарын')) && <div className="mb-4 rounded-xl border border-border bg-card p-4" data-testid="payroll-balances-required">
+      {(role === 'admin' || role === 'accountant') && <Button onClick={prepareBalances} disabled={preparingBalances || closed} data-testid="button-prepare-payroll-balances">Өмнөх үлдэгдэл шинэчлэх</Button>}
+      {balanceProgress && <p role="status">{balanceProgress}</p>}{balanceError && <p role="alert">{balanceError}</p>}
     </div>}
-    {canEditPayroll && <PayrollOpeningBalances month={month} role={role} closed={closed} openingBalanceMonth={query.data?.openingBalanceMonth} reviewRequiredCount={reviewBlockedCount} legacyAvailable={!query.data?.openingBalanceMonth} />}
-    {refreshNotice && <p role="status" className="mb-4 text-sm font-medium text-primary" data-testid="payroll-refresh-notice">{refreshNotice}</p>}
-    {Object.keys(refreshFailures).length > 0 && <div role="alert" className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" data-testid="payroll-refresh-failures"><p className="font-semibold">Шинэчлэхэд алдаа гарсан ажилтнууд:</p><ul className="mt-1 list-disc pl-5">{Object.entries(refreshFailures).map(([id, message]) => <li key={id}>{query.data?.lines.find((l) => l.employeeId === Number(id))?.employeeName ?? `#${id}`}: {message}</li>)}</ul></div>}
-    {attendanceError && <p role="alert" className="mb-5 whitespace-pre-line text-sm text-destructive" data-testid="payroll-attendance-error">{attendanceError}</p>}
-    {query.data?.attendancePulledAt && <p className="mb-4 text-sm text-muted-foreground" data-testid="payroll-attendance-status">Сүүлд цаг татсан: {new Date(query.data.attendancePulledAt).toLocaleString('mn-MN')}. {query.data.attendanceNeedsRefresh ? 'Эх бүртгэл өөрчлөгдсөн. Хадгалсан тооцоог харуулж байна; Өөрчлөгдсөн ажилтныг «Шинэчлэх» үйлдлээр шинэчилнэ үү.' : 'Хадгалсан тооцоог харуулж байна.'}</p>}
-    {reportError && <div role="alert" className="mb-5 whitespace-pre-line rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" data-testid="error-insurance-report">{reportError}</div>}
-    {query.isError && query.error instanceof Error && <p role="alert" className="mb-5 whitespace-pre-line text-sm text-destructive">{query.error.message}</p>}
-    {!query.isLoading && !query.isError && query.data && (
-      <div className="mb-6 rounded-2xl border border-border bg-card p-4 shadow-sm" data-testid="panel-payroll-schedule-info">
-        <h3 className="mb-3 text-sm font-bold">Цалингийн мөчлөг ({month})</h3>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Бүтэн мөчлөг</p><p className="mt-1 font-mono text-xs">{query.data.periodStart} — {query.data.periodEnd}</p></div>
-          <div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Урьдчилгаа хүртэлх</p><p className="mt-1 font-mono text-xs">{query.data.periodStart} — {query.data.advancePeriodEnd}</p></div>
-          <div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Урьдчилгаа олгох</p><p className="mt-1 font-mono text-xs">{query.data.advancePaymentDate}</p></div>
-          <div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Сүүл цалин олгох</p><p className="mt-1 font-mono text-xs">{query.data.finalPaymentDate}</p></div>
-        </div>
-      </div>
-    )}
-
-    {showAdvance && <section className="mb-6 overflow-hidden rounded-2xl border border-accent/60 bg-card shadow-sm" data-testid="section-payroll-advance">
-      <div className="flex flex-col justify-between gap-4 border-b border-border bg-accent/10 px-5 py-4 sm:flex-row sm:items-center">
-        <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-lg font-bold">{month.replace('-', ' оны ')} сарын урьдчилгаа цалин</h2>
-          <label className="flex items-center gap-2 text-xs font-semibold">Ажилтны төрөл
-            <select value={advanceEmployeeFilter} onChange={(event) => setAdvanceEmployeeFilter(event.target.value as AdvanceEmployeeFilter)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="select-payroll-advance-employee-filter">
-              <option value="all">Бүх ажилтан</option>
-              <option value="shift">Ээлжийн</option>
-              <option value="office">Оффис</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-2 text-xs font-semibold">Ээлж
-            <select value={advanceShiftFilter} onChange={(event) => setAdvanceShiftFilter(event.target.value)}
-              disabled={advanceShifts.isLoading || advanceShifts.isError}
-              className="h-9 max-w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary"
-              aria-label="Урьдчилгаа цалинг ээлжээр шүүх" data-testid="select-payroll-advance-shift-filter">
-              <option value="all">Бүх ээлж</option>
-              {(advanceShifts.data ?? []).map(shift => <option key={shift.id} value={shift.id}>{shift.name}</option>)}
-            </select>
-          </label>
-          {advanceShifts.isError && <button type="button" onClick={() => void advanceShifts.refetch()} className="text-xs text-destructive" role="alert">Ээлж ачаалсангүй. Дахин оролдох</button>}
-        </div>
-        {advanceQuery.data?.approved ? <div className="flex flex-wrap items-center gap-2"><div className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground" data-testid="status-advance-approved"><Check className="mr-2 inline size-4" />Батлагдсан · {advanceQuery.data.approvalDate ? dateLabel(advanceQuery.data.approvalDate) : ''}</div><Button variant="outline" onClick={revertApproval} disabled={revertAdvanceApproval.isPending || closed} data-testid="button-revert-payroll-advance">{revertAdvanceApproval.isPending ? 'Хүсэлт илгээж байна...' : 'Батлалт устгах хүсэлт'}</Button></div> : <div className="flex flex-wrap items-end gap-2"><label className="space-y-1 text-xs font-semibold">Батлах огноо<input type="date" value={advanceApprovalDate} onChange={(event) => setAdvanceApprovalDate(event.target.value)} className="block h-10 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary" data-testid="input-payroll-advance-approval-date" /></label><Button onClick={approve} disabled={approveAdvance.isPending || advanceQuery.isLoading || closed} data-testid="button-approve-payroll-advance"><Check className="size-4" />{approveAdvance.isPending ? 'Баталж байна...' : 'Урьдчилгаа батлах'}</Button></div>}
-      </div>
-      {advanceQuery.isLoading || advanceShiftLoading ? <div className="p-5"><LoadingBlock className="h-36" /></div> : advanceQuery.isError || advanceShiftError ? <div className="p-5"><ErrorBlock onRetry={() => { void advanceQuery.refetch(); if (needsShiftPlans) { void advanceStartPlans.refetch(); if (advanceEndMonth !== advanceStartMonth) void advanceEndPlans.refetch(); } }} /></div> : <div className="overflow-x-auto">
-        <table className="w-full min-w-[1580px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Ажилтан</th><th className="px-5 py-3">Дансны дугаар</th><th className="px-5 py-3 text-right">Үндсэн цалин</th><th className="px-5 py-3 text-right">Ажилласан хоног</th><th className="px-5 py-3 text-right">Өдрийн цалин</th><th className="px-5 py-3 text-right">Нийт олгох цалин</th><th className="px-5 py-3 text-right">Олгох урьдчилгаа</th><th className="px-5 py-3 text-center">Гүйлгээний огноо</th><th className="px-5 py-3 text-center">Төлөв</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead>
-          <tbody className="divide-y divide-border">{filteredAdvanceLines.length === 0 ? <tr><td colSpan={10} className="px-5 py-8 text-center text-sm text-muted-foreground" data-testid="empty-payroll-advance-filter">Шүүлтүүрт тохирох ажилтан алга.</td></tr> : filteredAdvanceLines.map((line) => {
-            const selectedDate = advanceDates[line.employeeId] ?? line.paymentDate ?? advanceQuery.data?.approvalDate ?? today();
-            const cashClosed = closedCashDates.has(selectedDate) || Boolean(line.paymentDate && closedCashDates.has(line.paymentDate));
-            // Both installment history and a fully non-cash settlement lock the single-payment action.
-            const installments = Boolean(line.payments) || (line.advanceAmount > 0 && (line.receivableDeduction ?? 0) >= line.advanceAmount);
-            const isRefreshing = refreshingAdvanceEmployeeId === line.employeeId;
-            return <tr key={line.employeeId}>
-              <td className="px-5 py-4"><p className="text-sm font-semibold">{line.employeeName}</p><p className="text-xs text-muted-foreground">{line.employeeType === 'shift' ? 'Ээлжийн ажилтан' : 'Оффис ажилтан'}</p></td>
-              <td className="min-w-48 px-5 py-4 font-mono text-xs break-all" data-testid={`value-advance-bank-account-${line.employeeId}`}>{line.bankAccountNumber || 'Бүртгээгүй'}</td>
-              <td className="px-5 py-4 text-right font-mono text-sm">{line.employeeType === 'office' ? money(line.baseSalary) : '—'}</td>
-              <td className="px-5 py-4 text-right font-mono text-sm">{line.daysWorked}</td>
-              <td className="px-5 py-4 text-right font-mono text-sm">{line.employeeType === 'shift' ? money(line.dailySalary) : '—'}</td>
-              <td className="px-5 py-4 text-right font-mono text-sm">{money(line.totalSalary)}</td>
-              <td className="px-5 py-4 text-right"><input type="number" min="0" step="1000" value={advanceAmounts[line.employeeId] ?? String(line.advanceAmount)} disabled={closed || installments || Boolean(advanceQuery.data?.approved && (line.paid || cashClosed))} onChange={(event) => setAdvanceAmounts((amounts) => ({ ...amounts, [line.employeeId]: event.target.value }))} className="h-8 w-32 rounded-lg border border-input bg-background px-2 text-right font-mono text-sm font-bold text-primary outline-none focus:border-primary" data-testid={`input-advance-amount-${line.employeeId}`} /></td>
-              <td className="px-5 py-4 text-center"><input type="date" value={selectedDate} disabled={closed || installments || !advanceQuery.data?.approved || line.paid} onChange={(event) => setAdvanceDates((dates) => ({ ...dates, [line.employeeId]: event.target.value }))} className="h-8 rounded-lg border border-input bg-background px-2 text-xs outline-none focus:border-primary" data-testid={`input-advance-payment-date-${line.employeeId}`} /></td>
-              <td className="px-5 py-4 text-center">{advanceQuery.data?.approved ? <>
-                <Button size="sm" variant={line.paid ? 'default' : 'outline'} disabled={updateAdvancePayment.isPending || cashClosed || closed || installments} onClick={() => setAdvancePaid(line.employeeId, !line.paid, line.advanceAmount, line.paymentDate)} title={cashClosed ? 'Энэ өдрийн касс өндөрлөсөн' : undefined} data-testid={`button-advance-paid-${line.employeeId}`}>{line.paid ? <><Check className="size-3.5" />Олгосон</> : (line.paidAmount ?? 0) > 0 ? 'Хэсэгчлэн олгосон' : 'Олгоогүй'}</Button>
-                <AdvancePaymentHistory line={line} month={month} closed={closed} />
-                <AdvanceReceivableDeduction line={line} month={month} closed={closed} readOnly={!canEditPayroll} />
-              </> : <span className="text-xs text-muted-foreground">Батлаагүй</span>}</td>
-              <td className="px-5 py-4 text-right"><Button size="sm" variant="outline" disabled={closed || Boolean(advanceQuery.data?.approved) || advanceQuery.isFetching} onClick={() => refreshAdvanceEmployee(line.employeeId)} title={advanceQuery.data?.approved ? 'Батлагдсан урьдчилгааны мэдээлэл өөрчлөгдөхгүй' : 'Цалин болон ажилласан хоногийн мэдээллийг шинэчлэх'} data-testid={`button-refresh-advance-employee-${line.employeeId}`}><RefreshCw className={cn('size-3.5', isRefreshing && 'animate-spin')} />{isRefreshing ? 'Шинэчилж байна...' : 'Шинэчлэх'}</Button></td>
-            </tr>;
-          })}</tbody>
-          <tfoot className="border-t-2 border-border bg-secondary/35"><tr><td colSpan={6} className="px-5 py-4 text-right text-sm font-bold">Нийт олгох урьдчилгаа</td><td className="px-5 py-4 text-right font-mono text-base font-bold text-primary" data-testid="value-total-payroll-advance">{money(displayedAdvanceTotal)}</td><td colSpan={3} /></tr></tfoot>
-        </table>
-      </div>}
-      {revertAdvanceApproval.isError && <p className="border-t border-border bg-destructive/5 px-5 py-3 text-xs font-medium text-destructive">Устгах хүсэлт үүсгэхэд алдаа гарлаа.</p>}
-    </section>}
-    {query.isLoading ? <div className="space-y-3 rounded-2xl border border-border bg-card p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : <>
-      <section className="overflow-hidden rounded-2xl border border-border bg-card" data-testid="payroll-table">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4"><h2 className="text-base font-bold">{month.replace('-', ' оны ')} сарын задаргаа</h2><span className="flex items-center gap-2">{partial && <span className="rounded-full bg-primary/10 px-3 py-1 text-[10px] font-bold text-primary" data-testid="badge-payroll-partial">Дутуу / төсөөлөл — эцсийн дүн биш</span>}<span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{query.data?.lines?.length ?? 0} мөр</span></span></div>
-        {!query.data?.lines?.length ? <EmptyState title="Энэ сард цалин тооцоолоогүй" detail="Ажилласан ирцтэй эсвэл ирцээс үл хамааран цалин авах ажилтнууд энд харагдана." icon={Banknote} /> : <div className="overflow-x-auto"><table className="w-full min-w-[2400px] text-left">
-          <thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr>
-            <th className="px-5 py-3">Ажилтан</th><th className="px-5 py-3">Ажилласан</th><th className="px-5 py-3 text-right">Үндсэн цалин</th>
-            <th className="px-5 py-3 text-right">НДШ бодох цалин</th>
-            <th className="px-5 py-3 text-right">НДШ</th><th className="px-5 py-3 text-right">ХХОАТ</th><th className="px-5 py-3 text-right">Хөнгөлөлт</th><th className="px-5 py-3 text-right">Урьдчилгаа цалин</th><th className="px-5 py-3 text-right">Бусад суутгал</th><th className="px-5 py-3 text-right">Гарт олгох</th><th className="px-5 py-3 text-right">Олгосон дүн</th><th className="px-5 py-3 text-center">Гүйлгээний огноо</th><th className="px-5 py-3 text-center">Төлөв</th><th className="px-5 py-3 text-right">Цалингийн авлага</th><th className="px-5 py-3 text-right">Цалингийн өглөг</th><th className="px-5 py-3 text-right">Үлдэгдэл</th><th className="px-5 py-3 text-right">Үйлдэл</th>
-          </tr></thead>
-          <tbody className="divide-y divide-border">{query.data.lines.map((line) => {
-            const cashClosed = Boolean((line.paymentDate && closedCashDates.has(line.paymentDate)) || (line.secondPaymentDate && closedCashDates.has(line.secondPaymentDate)) || (line.additionalPayments ?? []).some((p) => closedCashDates.has(p.date)));
-            const currentDifference = payrollRemaining(line);
-            return <tr key={line.employeeId} className="hover:bg-secondary/35" data-testid={`row-payroll-${line.employeeId}`}>
-              <td className="px-5 py-4"><p className="text-sm font-semibold">{line.employeeName}</p><p className="text-xs text-muted-foreground">{line.role}</p>{line.calculationReady === false && <p className="mt-1 text-[11px] font-semibold text-muted-foreground" data-testid={`status-payroll-uncomputed-${line.employeeId}`}>Тооцоолоогүй</p>}{line.openingBalanceReviewRequired ? <p className="mt-1 max-w-[16rem] text-[11px] font-semibold text-primary" data-testid={`status-payroll-baseline-review-${line.employeeId}`}>Эхний үлдэгдэл хянагдаагүй тул татах боломжгүй. Админ баталгаажуулна.</p> : needsRefresh(line) && <div className="mt-1 flex flex-wrap items-center gap-2">{line.attendanceNeedsRefresh && <span className="text-[11px] font-semibold text-orange-800">Ирц өөрчлөгдсөн{line.refreshMonths?.length ? `: ${line.refreshMonths.join(', ')}` : ''}</span>}{line.calculationReady === false && line.refreshMonths?.length ? <span className="text-[11px] text-muted-foreground">Сар: {line.refreshMonths.join(', ')}</span> : null}{canEditPayroll && <Button size="sm" variant="outline" className="h-7 px-2 text-[11px]" disabled={closed || bulkRunning || refreshingIds.includes(line.employeeId)} onClick={() => void refreshOne(line.employeeId)} aria-label={`${line.employeeName} шинэчлэх`} data-testid={`button-refresh-payroll-employee-${line.employeeId}`}><RefreshCw className={cn('size-3', refreshingIds.includes(line.employeeId) && 'animate-spin')} />{refreshingIds.includes(line.employeeId) ? 'Шинэчилж байна...' : 'Шинэчлэх'}</Button>}</div>}</td>
-              <td className="px-5 py-4 font-mono text-xs text-muted-foreground">{line.daysWorked} өдөр</td>
-              <td className="px-5 py-4 text-right font-mono text-sm">{cm(line, line.gross)}</td>
-              <td className="px-5 py-4 text-right font-mono text-sm" data-testid={`value-payroll-insurance-salary-${line.employeeId}`}>{cm(line, line.socialInsuranceSalary)}</td>
-              <td className="px-5 py-4 text-right font-mono text-sm text-muted-foreground">{cm(line, line.socialInsurance)}</td>
-              <td className="px-5 py-4 text-right font-mono text-sm text-muted-foreground">{cm(line, line.incomeTax)}</td>
-              <td className="px-5 py-4 text-right font-mono text-sm text-sky-700">{cm(line, line.taxRelief)}</td>
-              <td className="px-5 py-4 text-right font-mono text-sm">{cm(line, line.advanceAmount)}</td>
-              <td className="px-5 py-4 text-right font-mono text-sm">{cm(line, line.manualDeduction)}</td>
-              <td className="px-5 py-4 text-right font-mono text-sm font-bold text-primary">{cm(line, Math.max(0, line.gross - line.deductions))}</td>
-              <td className="px-5 py-4 text-right font-mono text-sm">{cm(line, line.paidAmount)}</td>
-              <td className="px-5 py-4 text-center font-mono text-xs text-muted-foreground">{line.paymentDate ?? '—'}</td>
-              <td className="px-5 py-4 text-center"><span className={cn('inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold', line.paidAmount > 0 ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground')} data-testid={`status-payroll-paid-${line.employeeId}`}>{line.paidAmount > 0 ? 'Олгосон' : 'Олгоогүй'}</span></td>
-              <td className="px-5 py-4 text-right font-mono text-sm font-bold text-sky-700" data-testid={`value-payroll-receivable-${line.employeeId}`}>{cm(line, Math.max(0, -line.carryoverAmount))}</td>
-              <td className="px-5 py-4 text-right font-mono text-sm font-bold text-orange-800" data-testid={`value-payroll-payable-${line.employeeId}`}>{cm(line, Math.max(0, line.carryoverAmount))}</td>
-              <td className={cn('px-5 py-4 text-right font-mono text-sm font-bold', currentDifference < -1 ? 'text-sky-700' : currentDifference > 1 ? 'text-orange-800' : 'text-muted-foreground')} data-testid={`value-payroll-remaining-${line.employeeId}`}>{line.calculationReady === false ? '—' : remainingLabel(currentDifference)}</td>
-              <td className="px-5 py-4 text-right"><Button size="icon" variant="outline" disabled={cashClosed || closed} title={cashClosed ? 'Гүйлгээний өдрийн касс өндөрлөсөн' : undefined} onClick={() => setSelectedLine(line)} aria-label={`${line.employeeName} цалингийн мэдээлэл оруулах`} data-testid={`button-payroll-adjustment-${line.employeeId}`}><Pencil className="size-3.5" /></Button></td>
-            </tr>;
-          })}</tbody>
-          <tfoot className="border-t-2 border-border bg-secondary/35"><tr>
-            <td colSpan={2} className="px-5 py-4 text-right text-sm font-bold">Нийт</td>
-            <td className="px-5 py-4 text-right font-mono text-sm font-bold" data-testid="value-payroll-total-gross">{money(payrollTotals.gross)}</td>
-            <td className="px-5 py-4 text-right font-mono text-sm font-bold" data-testid="value-payroll-total-insurance-salary">{money(payrollTotals.socialInsuranceSalary)}</td>
-            <td colSpan={3} /><td className="px-5 py-4 text-right font-mono text-sm font-bold" data-testid="value-payroll-total-advance">{money(payrollTotals.advanceAmount)}</td><td />
-            <td className="px-5 py-4 text-right font-mono text-sm font-bold text-primary" data-testid="value-payroll-total-payable">{money(payrollTotals.payable)}</td>
-            <td className="px-5 py-4 text-right font-mono text-sm font-bold" data-testid="value-payroll-total-paid">{money(payrollTotals.paidAmount)}</td><td colSpan={4} />
-            <td className={cn('px-5 py-4 text-right font-mono text-sm font-bold', payrollTotals.remaining < -1 ? 'text-sky-700' : payrollTotals.remaining > 1 ? 'text-orange-800' : 'text-muted-foreground')} data-testid="value-payroll-total-remaining">{remainingLabel(payrollTotals.remaining)}</td><td />
-          </tr></tfoot>
-        </table></div>}
-      </section>
-    </>}
-    {selectedLine && !closed && <PayrollAdjustmentModal line={selectedLine} month={month} onClose={() => setSelectedLine(null)} />}
-    {showScheduleSettings && <PayrollScheduleSettingsModal onClose={() => setShowScheduleSettings(false)} />}
+    {refreshNotice && <p role="status" className="mb-3 text-sm text-primary">{refreshNotice}</p>}
+    {Object.keys(refreshFailures).length > 0 && <ul role="alert" className="mb-3 text-sm text-destructive">{Object.entries(refreshFailures).map(([id, message]) => <li key={id}>{query.data?.lines.find(line => line.employeeId === Number(id))?.employeeName}: {message}</li>)}</ul>}
+    {attendanceError && <p role="alert" className="mb-3 text-sm text-destructive">{attendanceError}</p>}
+    {reportError && <p role="alert" className="mb-3 text-sm text-destructive" data-testid="error-insurance-report">{reportError}</p>}
+    {query.isError && query.error instanceof Error && <p role="alert" className="mb-3 text-sm text-destructive">{query.error.message}</p>}
+    {query.isLoading ? <LoadingBlock className="h-48" /> : query.isError ? <ErrorBlock onRetry={() => void query.refetch()} /> : showAdvance ? <>
+      {advanceQuery.isLoading || advanceShiftLoading ? <LoadingBlock className="h-48" /> : advanceQuery.isError || advanceShiftError ? <ErrorBlock onRetry={() => { void advanceQuery.refetch(); void advanceStartPlans.refetch(); void advanceEndPlans.refetch(); }} /> : <PayrollRegister key={'advance-' + month} advance lines={filteredAdvanceLines} renderRow={(line, expanded, toggle) => {
+        const id = line.employeeId;
+        const selectedDate = advanceDates[id] ?? line.paymentDate ?? advanceQuery.data?.approvalDate ?? today();
+        const cashClosed = closedCashDates.has(selectedDate) || Boolean(line.paymentDate && closedCashDates.has(line.paymentDate));
+        const installments = Boolean(line.payments) || (line.advanceAmount > 0 && (line.receivableDeduction ?? 0) >= line.advanceAmount);
+        const paid = advancePaid(line);
+        const remainder = advanceRemaining(line);
+        const details = <div className="grid gap-5 lg:grid-cols-3"><div><PayrollDetail label="Дансны дугаар" value={line.bankAccountNumber || 'Бүртгээгүй'} testId={'value-advance-bank-account-' + id} /><PayrollDetail label="Үндсэн цалин" value={money(line.baseSalary)} /><PayrollDetail label="Ажилласан хоног" value={line.daysWorked} /><PayrollDetail label="Өдрийн цалин" value={money(line.dailySalary)} /><PayrollDetail label="Нийт олгох цалин" value={money(line.totalSalary)} /></div><div className="space-y-3"><AdvancePaymentHistory line={line} month={month} closed={closed || !canEditPayroll} />{advanceQuery.data?.approved && <AdvanceReceivableDeduction line={line} month={month} closed={closed} readOnly={!canEditPayroll} />}</div><div className="space-y-3">{canEditPayroll && <><label className="block text-xs">Олгох урьдчилгаа<input aria-label={line.employeeName + ' урьдчилгааны дүн'} type="number" min="0" step="1000" value={advanceAmounts[id] ?? String(line.advanceAmount)} disabled={closed || installments || Boolean(advanceQuery.data?.approved && (line.paid || cashClosed))} onChange={e => setAdvanceAmounts(amounts => ({ ...amounts, [id]: e.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-2 font-mono" data-testid={'input-advance-amount-' + id} /></label><input aria-label={line.employeeName + ' олгох огноо'} type="date" value={selectedDate} disabled={closed || installments || Boolean(advanceQuery.data?.approved && line.paid)} onChange={e => setAdvanceDates(dates => ({ ...dates, [id]: e.target.value }))} className="h-9 rounded-lg border border-input bg-background px-2 text-xs" data-testid={'input-advance-payment-date-' + id} /><Button size="sm" variant="outline" disabled={closed || Boolean(advanceQuery.data?.approved) || advanceQuery.isFetching || refreshingAdvanceEmployeeId === id} onClick={() => void refreshAdvanceEmployee(id)} data-testid={'button-refresh-advance-employee-' + id}>Шинэчлэх</Button></>}</div></div>;
+        return { details, cells: <><PayrollEmployee name={line.employeeName} role={line.employeeType === 'office' ? 'Оффис' : 'Ээлжийн'} expanded={expanded} onToggle={toggle} /><PayrollValue>{money(Number(advanceAmounts[id] ?? line.advanceAmount))}</PayrollValue><PayrollValue>{money(line.receivableDeduction ?? 0)}</PayrollValue><PayrollValue primary>{money(Math.max(0, Number(advanceAmounts[id] ?? line.advanceAmount) - (line.receivableDeduction ?? 0)))}</PayrollValue><PayrollValue>{money(paid)}</PayrollValue><PayrollValue primary>{remainingLabel(remainder)}</PayrollValue><td className="px-4 py-3.5 text-right">{canEditPayroll && <Button size="sm" variant={line.paid ? 'outline' : 'default'} disabled={!advanceQuery.data?.approved || updateAdvancePayment.isPending || cashClosed || closed || installments} onClick={() => setAdvancePaid(id, !line.paid, line.advanceAmount, line.paymentDate)} data-testid={'button-advance-paid-' + id}>{line.paid ? 'Олгосон' : paid > 0 ? 'Хэсэгчлэн олгосон' : 'Шилжүүлэх'}</Button>}</td></> };
+      }} />}
+      {revertAdvanceApproval.isError && <p role="alert" className="text-sm text-destructive">Устгах хүсэлт үүсгэхэд алдаа гарлаа.</p>}
+    </> : advanceShiftLoading ? <LoadingBlock className="h-48" /> : advanceShiftError ? <ErrorBlock onRetry={() => { void advanceStartPlans.refetch(); void advanceEndPlans.refetch(); }} /> : <PayrollRegister key={'final-' + month} lines={filteredFinalLines} summary={partial && <span className="text-[10px] text-orange-800" data-testid="badge-payroll-partial">Дутуу / төсөөлөл</span>} renderRow={(line, expanded, toggle) => {
+      const id = line.employeeId;
+      const cashClosed = Boolean((line.paymentDate && closedCashDates.has(line.paymentDate)) || (line.secondPaymentDate && closedCashDates.has(line.secondPaymentDate)) || (line.additionalPayments ?? []).some(payment => closedCashDates.has(payment.date)));
+      const remainder = payrollRemaining(line);
+      const details = <div className="grid gap-5 lg:grid-cols-3"><div><PayrollDetail label="Ажилласан" value={line.daysWorked + ' өдөр'} /><PayrollDetail label="НДШ бодох цалин" value={cm(line, line.socialInsuranceSalary)} testId={'value-payroll-insurance-salary-' + id} /><PayrollDetail label="НДШ" value={cm(line, line.socialInsurance)} /><PayrollDetail label="ХХОАТ" value={cm(line, line.incomeTax)} /><PayrollDetail label="Хөнгөлөлт" value={cm(line, line.taxRelief)} /></div><div><PayrollDetail label="Урьдчилгаа цалин" value={cm(line, line.advanceAmount)} /><PayrollDetail label="Бусад суутгал" value={cm(line, line.manualDeduction)} /><PayrollDetail label="Цалингийн авлага" value={cm(line, Math.max(0, -line.carryoverAmount))} testId={'value-payroll-receivable-' + id} /><PayrollDetail label="Цалингийн өглөг" value={cm(line, Math.max(0, line.carryoverAmount))} testId={'value-payroll-payable-' + id} /></div><div><PayrollDetail label="Дансны дугаар" value={line.bankAccountNumber || 'Бүртгээгүй'} /><PayrollDetail label="1-р гүйлгээ" value={line.paymentDate ? line.paymentDate + ' · ' + money(line.paidAmount - (line.secondPaidAmount ?? 0) - (line.additionalPayments ?? []).reduce((sum, p) => sum + p.amount, 0)) : '—'} /><PayrollDetail label="2-р гүйлгээ" value={line.secondPaymentDate ? line.secondPaymentDate + ' · ' + money(line.secondPaidAmount) : '—'} />{(line.additionalPayments ?? []).map(payment => <PayrollDetail key={payment.sequence} label={payment.sequence + '-р гүйлгээ'} value={payment.date + ' · ' + money(payment.amount)} />)}</div></div>;
+      return { details, cells: <><PayrollEmployee name={line.employeeName} role={line.role} expanded={expanded} onToggle={toggle}>{line.calculationReady === false && <span className="text-[11px] text-orange-800" data-testid={'status-payroll-uncomputed-' + id}>Тооцоолоогүй</span>}{line.openingBalanceReviewRequired && <p className="text-[11px] text-orange-800" data-testid={'status-payroll-baseline-review-' + id}>Эхний үлдэгдэл хянагдаагүй</p>}{needsRefresh(line) && canEditPayroll && !line.openingBalanceReviewRequired && <Button size="sm" variant="outline" disabled={closed || bulkRunning || refreshingIds.includes(id)} onClick={() => void refreshOne(id)} data-testid={'button-refresh-payroll-employee-' + id}>Шинэчлэх</Button>}</PayrollEmployee><PayrollValue>{cm(line, line.gross)}</PayrollValue><PayrollValue>{cm(line, line.deductions)}</PayrollValue><PayrollValue primary>{cm(line, Math.max(0, line.gross - line.deductions))}</PayrollValue><PayrollValue>{cm(line, line.paidAmount)}</PayrollValue><PayrollValue primary testId={'value-payroll-remaining-' + id}>{line.calculationReady === false ? '—' : remainingLabel(remainder)}</PayrollValue><td className="px-4 py-3.5 text-right">{canEditPayroll && <Button size="sm" disabled={closed || cashClosed} onClick={() => setSelectedLine(line)} aria-label={line.employeeName + ' цалингийн мэдээлэл оруулах'} data-testid={'button-payroll-adjustment-' + id}>Олголт</Button>}</td></> };
+    }} />}
+    {selectedLine && !closed && canEditPayroll && <PayrollAdjustmentModal line={selectedLine} month={month} onClose={() => setSelectedLine(null)} />}
+    {showScheduleSettings && canEditPayroll && <PayrollScheduleSettingsModal onClose={() => setShowScheduleSettings(false)} />}
   </div>;
 }
