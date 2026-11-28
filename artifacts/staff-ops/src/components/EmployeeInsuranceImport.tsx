@@ -144,7 +144,7 @@ export function EmployeeInsuranceImport({ roster, onClose, onApplied }: { roster
       setResult(res); onApplied(res); reset();
     } catch (e) {
       const msg = errText(e, 'Хадгалж чадсангүй.');
-      setError(`${msg} Урьдчилсан харагдац хуучирсан эсвэл ажилтны мэдээлэл өөрчлөгдсөн бол файлаа дахин уншуулж шалгана уу.`);
+      setError(msg);
     }
   };
 
