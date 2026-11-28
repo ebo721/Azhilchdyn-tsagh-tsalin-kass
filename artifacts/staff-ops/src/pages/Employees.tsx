@@ -260,8 +260,23 @@ export function Employees() {
   const shifts = useListShifts();
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
+  const [insuranceExporting, setInsuranceExporting] = useState(false);
+  const [insuranceExportError, setInsuranceExportError] = useState('');
   const [shiftMonth, setShiftMonth] = useState(currentMonth());
   const shiftPlans = useListShiftPlans({ month: shiftMonth });
+  const downloadInsuranceRegistration = async () => {
+    if (!query.data) return;
+    setInsuranceExporting(true);
+    setInsuranceExportError('');
+    try {
+      const { downloadInsuranceRegistrationExcel } = await import('@/lib/insurance-registration-excel');
+      await downloadInsuranceRegistrationExcel(query.data);
+    } catch (error) {
+      setInsuranceExportError(error instanceof Error ? error.message : 'НДШ Excel бэлтгэж чадсангүй. Дахин оролдоно уу.');
+    } finally {
+      setInsuranceExporting(false);
+    }
+  };
   const downloadExcel = async () => {
     if (!query.data || !shifts.data || !shiftPlans.data) return;
     setExporting(true);
@@ -319,6 +334,12 @@ export function Employees() {
   );
   return <div className="page-enter space-y-5">
     <div className="flex flex-wrap justify-end gap-2">
+      {canImportInsurance && <Button variant="outline" onClick={downloadInsuranceRegistration}
+        disabled={insuranceExporting || query.isFetching || query.isError || !query.data?.length}
+        title="Идэвхтэй ажилтнуудын мэдээллийг НДШ системийн ажилтан бүртгэх Excel загварт гаргана."
+        data-testid="button-export-insurance-registration">
+        <Download className="size-4" />{insuranceExporting ? 'НДШ Excel бэлтгэж байна…' : 'НДШ-д бүртгэх Excel'}
+      </Button>}
       <Button variant="outline" onClick={downloadExcel}
         disabled={exporting || query.isFetching || shifts.isFetching || shiftPlans.isFetching || query.isError || shifts.isError || shiftPlans.isError || !query.data?.length || !shifts.data || !shiftPlans.data}
         title="Идэвхтэй, идэвхгүй бүх ажилтныг татна. Ээлжийн мэдээлэл сонгосон сарын хуваариас орно."
@@ -330,6 +351,7 @@ export function Employees() {
     </div>
     {canImportInsurance && importResult && <p role="status" className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-2 text-sm" data-testid="status-employee-insurance-last-result">НДШ Excel: {importResult.updated} шинэчилсэн, {importResult.skipped} алгассан, {importResult.unchanged} өөрчлөлтгүй.</p>}
     {exportError && <p role="alert" className="text-sm text-destructive" data-testid="error-export-employees">{exportError}</p>}
+    {canImportInsurance && insuranceExportError && <p role="alert" className="whitespace-pre-line text-sm text-destructive" data-testid="error-export-insurance-registration">{insuranceExportError}</p>}
     <section className="rounded-2xl border border-border bg-card p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
         <div className="flex flex-wrap gap-2">
