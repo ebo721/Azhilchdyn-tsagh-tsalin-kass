@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from 'react';
-import { BriefcaseBusiness, ChevronRight, LogOut, Menu, X } from 'lucide-react';
+import { BriefcaseBusiness, ChevronRight, FileSpreadsheet, LogOut, Menu, X } from 'lucide-react';
 import { Link, useLocation, useSearch } from 'wouter';
 import { inventorySectionHref, inventorySections, parseInventorySection } from '@/lib/inventory-sections';
 import { payrollSectionHref, payrollSections, parsePayrollSection } from '@/lib/payroll-sections';
@@ -23,9 +23,11 @@ export function AppShell({ children, role, menuPaths, onLogout }: { children: Re
   const search = useSearch();
   const [inventoryExpanded, setInventoryExpanded] = useState(location === '/inventory');
   const [payrollExpanded, setPayrollExpanded] = useState(location === '/payroll');
+  const [employeesExpanded, setEmployeesExpanded] = useState(location === '/employees');
   const payrollSection = location === '/payroll' ? parsePayrollSection(search) : null;
   const inventorySection = location === '/inventory' ? parseInventorySection(search) : null;
   const selected = visibleMenuPaths(role, menuPaths);
+  const canExportInsuranceRegistration = role === 'admin' || role === 'hr' || role === 'accountant';
   const visibleNav = nav.filter(item => selected.includes(item.href as typeof selected[number]));
   const active = (visibleNav.find((item) => item.href === location) ?? visibleNav.find((item) => item.href !== '/' && location.startsWith(`${item.href}/`)))?.label ?? 'Статистик';
   return (
@@ -40,9 +42,20 @@ export function AppShell({ children, role, menuPaths, onLogout }: { children: Re
         </div>
         <nav className="mt-10 min-h-0 flex-1 space-y-1 overflow-y-auto pb-4" data-testid="navigation-main">
           {visibleNav.map(({ href, label, icon: Icon }) => {
-            const link = <Link key={href} href={href} onClick={() => setMobileOpen(false)} className={cn('group flex flex-1 items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-colors', location === href ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground')} data-testid={`link-nav-${label}`}>
-              <Icon className="size-[17px]" /><span>{label}</span>{location === href && href !== '/inventory' && <ChevronRight className="ml-auto size-4 opacity-60" />}
+            const link = <Link key={href} href={href} onClick={() => { setMobileOpen(false); if (href === '/employees' && canExportInsuranceRegistration) setEmployeesExpanded(true); }} className={cn('group flex flex-1 items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-colors', location === href ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground')} data-testid={`link-nav-${label}`}>
+              <Icon className="size-[17px]" /><span>{label}</span>{location === href && href !== '/inventory' && href !== '/employees' && <ChevronRight className="ml-auto size-4 opacity-60" />}
             </Link>;
+            if (href === '/employees') return <div key={href}>
+              <div className="flex items-center gap-1">
+                {link}
+                {canExportInsuranceRegistration && <button type="button" onClick={() => setEmployeesExpanded(value => !value)} aria-expanded={employeesExpanded} aria-controls="nav-employees-children" aria-label="Ажилчдын дэд цэс нээх" className={cn('grid size-10 shrink-0 place-items-center rounded-xl text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground', location === href && 'bg-sidebar-primary/15 text-sidebar-primary')} data-testid="button-toggle-nav-employees">
+                  <ChevronRight className={cn('size-4 transition-transform', employeesExpanded && 'rotate-90')} />
+                </button>}
+              </div>
+              {canExportInsuranceRegistration && employeesExpanded && <ul id="nav-employees-children" className="ml-[22px] mt-1 space-y-0.5 border-l border-sidebar-border pl-3" data-testid="nav-employees-children">
+                <li><Link href="/employees?insuranceRegistration=1" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" data-testid="link-nav-employees-insurance-registration"><FileSpreadsheet className="size-3.5" />НДШ-д бүртгэх Excel</Link></li>
+              </ul>}
+            </div>;
             if (href === '/payroll') return <div key={href}>
               <button type="button" onClick={() => setPayrollExpanded(value => !value)} aria-expanded={payrollExpanded} aria-controls="nav-payroll-children" className={cn('flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition-colors', location === href ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent')} data-testid="button-toggle-nav-payroll">
                 <Icon className="size-[17px]" /><span>{label}</span><ChevronRight className={cn('ml-auto size-4 transition-transform', payrollExpanded && 'rotate-90')} />

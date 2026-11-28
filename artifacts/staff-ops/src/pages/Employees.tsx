@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,7 @@ import { currentMonth, dateLabel, money, today } from '@/lib/app-shared';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
 import { EmployeeInsuranceImport } from '@/components/EmployeeInsuranceImport';
 import type { EmployeeInsuranceImportResult } from '@workspace/api-client-react';
+import { useLocation, useSearch } from 'wouter';
 type EmployeeForm = { name: string; role: string; phone: string; bankAccountNumber: string; employeeType: 'shift' | 'office'; salaryType: 'daily' | 'monthly'; payFrequency: 'once' | 'twice'; baseSalary: string; socialInsuranceSalary: string; payrollTaxExempt: boolean; fullSalaryRegardlessAttendance: boolean; monthlyExpectedWorkDays: string; joinedAt: string; status?: 'active' | 'inactive'; inactiveAt: string; salaryEffectiveDate: string; socialInsuranceProfile: SocialInsuranceProfile };
 const normalizeBankAccount = (value: string) => value.replace(/\s/g, '').toUpperCase();
 
@@ -257,6 +258,9 @@ function EmployeeModal({ employee, onClose }: { employee?: Employee; onClose: ()
 
 export function Employees() {
   const query = useListEmployees();
+  const routeSearch = useSearch();
+  const [, setLocation] = useLocation();
+  const handledRegistrationExport = useRef(false);
   const shifts = useListShifts();
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
@@ -294,6 +298,29 @@ export function Employees() {
   const qc = useQueryClient();
   const session = useGetAuthSession();
   const canImportInsurance = session.data?.authenticated === true && (session.data.role === 'admin' || session.data.role === 'hr' || session.data.role === 'accountant');
+  useEffect(() => {
+    const requested = new URLSearchParams(routeSearch).get('insuranceRegistration') === '1';
+    if (!requested) {
+      handledRegistrationExport.current = false;
+      return;
+    }
+    if (handledRegistrationExport.current) return;
+    if (!canImportInsurance) {
+      handledRegistrationExport.current = true;
+      setLocation('/employees', { replace: true });
+      return;
+    }
+    if (query.isError) {
+      handledRegistrationExport.current = true;
+      setInsuranceExportError('Ажилтны жагсаалтыг уншиж чадсангүй. Дахин ачаалаад оролдоно уу.');
+      setLocation('/employees', { replace: true });
+      return;
+    }
+    if (!query.data) return;
+    handledRegistrationExport.current = true;
+    setLocation('/employees', { replace: true });
+    void downloadInsuranceRegistration();
+  }, [routeSearch, canImportInsurance, query.data, query.isError, setLocation]);
   const [importOpen, setImportOpen] = useState(false);
   const [importResult, setImportResult] = useState<EmployeeInsuranceImportResult | null>(null);
   const [modal, setModal] = useState<{ open: boolean; employee?: Employee }>({ open: false });
