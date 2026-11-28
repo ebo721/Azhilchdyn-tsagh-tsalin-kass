@@ -86,6 +86,7 @@ export function planEmployeeInsuranceUpdates(rows: InsuranceImportSource[], sele
     throw new EmployeeImportError("Мөр бүрт ажилтан сонгох эсвэл алгасах шийдвэр оруулна уу.", 409);
   }
   const selectedIds = new Set<number>();
+  const selectedRows = new Map<number, InsuranceImportSource>();
   const updates: Array<{ employeeId: number; phone: string; socialInsuranceProfile: SocialInsuranceProfile }> = [];
   let skipped = 0, unchanged = 0;
   const finalProfiles = new Map(employees.map(e => [e.id, e.socialInsuranceProfile]));
@@ -97,6 +98,7 @@ export function planEmployeeInsuranceUpdates(rows: InsuranceImportSource[], sele
     selectedIds.add(choice.employeeId);
     const employee = employees.find(e => e.id === choice.employeeId);
     if (!employee) throw new EmployeeImportError("Сонгосон ажилтан байхгүй болсон. Файлыг дахин уншуулна уу.", 409);
+    selectedRows.set(employee.id, row);
     const profile = { ...profileDefaults, ...employee.socialInsuranceProfile };
     for (const key of Object.keys(profileDefaults) as Array<keyof SocialInsuranceProfile>) {
       const value = row.profile[key]?.trim();
@@ -109,8 +111,12 @@ export function planEmployeeInsuranceUpdates(rows: InsuranceImportSource[], sele
   }
   for (const id of selectedIds) {
     const reg = registration(finalProfiles.get(id)?.registrationNumber);
-    if (reg && [...finalProfiles].some(([otherId, profile]) => otherId !== id && registration(profile?.registrationNumber) === reg)) {
-      throw new EmployeeImportError("Регистр өөр ажилтанд давхардаж байна. Сонгосон ажилтнуудыг нягтална уу.", 409);
+    const conflict = reg && [...finalProfiles].find(([otherId, profile]) =>
+      otherId !== id && registration(profile?.registrationNumber) === reg);
+    if (conflict) {
+      const row = selectedRows.get(id);
+      const ownerName = employees.find(employee => employee.id === conflict[0])?.name ?? "өөр ажилтан";
+      throw new EmployeeImportError(`${row?.rowNumber}-р мөрийн регистр «${ownerName}» ажилтанд аль хэдийн бүртгэлтэй байна. Excel мөрийн сонголт эсвэл ажилтны регистрийг шалгана уу.`, 409);
     }
   }
   return { updates, skipped, unchanged };
