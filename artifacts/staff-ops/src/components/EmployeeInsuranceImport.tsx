@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, FileSpreadsheet, RotateCcw, Upload } from 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingBlock, Modal } from '@/components/ui-primitives';
+import { getEmployeeInsuranceRowPresentation } from '@/lib/employee-insurance-import-view';
 import {
   getListEmployeesQueryKey,
   useApplyEmployeeInsuranceImport,
@@ -16,13 +17,6 @@ import {
 } from '@workspace/api-client-react';
 
 const MAX_BYTES = 1024 * 1024;
-const statusLabels: Record<EmployeeInsuranceImportRow['status'], { label: string; cls: string }> = {
-  matched: { label: 'Таарсан', cls: 'bg-primary/10 text-primary' },
-  ambiguous: { label: 'Олон нэр төстэй', cls: 'bg-accent/35 text-foreground' },
-  unmatched: { label: 'Олдсонгүй', cls: 'bg-sky-100 text-sky-800' },
-  conflict: { label: 'Зөрчилтэй', cls: 'bg-orange-100 text-orange-800' },
-  invalid: { label: 'Буруу мөр', cls: 'bg-destructive/10 text-destructive' },
-};
 const profileLabels: [keyof SocialInsuranceProfile, string][] = [
   ['givenName', 'Нэр (НДШ)'], ['parentName', 'Эцэг/эхийн нэр'], ['clanName', 'Ургийн овог'], ['registrationNumber', 'Регистр'],
   ['insuranceTypeCode', 'Даатгуулагчийн төрөл'], ['occupationCode', 'Мэргэжлийн код'], ['citizenship', 'Иргэншил'], ['email', 'Цахим шуудан'],
@@ -55,7 +49,7 @@ function RowCard({ row, roster, choice, duplicate, disabled, onChoose }: { row: 
   const match = (e: Employee) => !q || `${e.name} ${e.socialInsuranceProfile?.parentName ?? ''} ${e.socialInsuranceProfile?.givenName ?? ''} ${e.socialInsuranceProfile?.registrationNumber ?? ''} ${e.role}`.toLowerCase().includes(q.toLowerCase());
   const others = roster.filter((e) => !candidateIds.has(e.id) && match(e));
   const target = typeof choice === 'number' ? byId.get(choice) : undefined;
-  const st = statusLabels[row.status];
+  const presentation = getEmployeeInsuranceRowPresentation(row.status, row.issues, choice);
   const invalid = row.status === 'invalid';
   const reviewWarn = target && identityConflict(row, target);
   return <fieldset className="min-w-0" disabled={disabled}><article className={`min-w-0 rounded-xl border p-4 ${choice === undefined ? 'border-accent bg-accent/5' : duplicate ? 'border-destructive bg-destructive/5' : 'border-border bg-card'}`} data-testid={`employee-insurance-row-${row.rowNumber}`}>
@@ -65,9 +59,9 @@ function RowCard({ row, roster, choice, duplicate, disabled, onChoose }: { row: 
         <p className="text-sm font-bold">{[row.profile.parentName, row.profile.givenName || row.name].filter(Boolean).join(' ') || '—'}</p>
         <p className="text-xs text-muted-foreground">Регистр: <span className="font-mono">{row.profile.registrationNumber || '—'}</span>{row.profile.clanName && <> · Овог: {row.profile.clanName}</>}{row.phone && <> · Утас: {row.phone}</>}</p>
       </div>
-      <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${st.cls}`} data-testid={`status-import-row-${row.rowNumber}`}>{st.label}</span>
+      <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${presentation.cls}`} data-testid={`status-import-row-${row.rowNumber}`}>{presentation.label}</span>
     </div>
-    {row.issues.length > 0 && <ul className="mt-2 space-y-0.5 text-[11px] text-destructive">{row.issues.map((i) => <li key={i} className="flex gap-1"><AlertTriangle className="mt-0.5 size-3 shrink-0" />{i}</li>)}</ul>}
+    {presentation.issues.length > 0 && <ul className="mt-2 space-y-0.5 text-[11px] text-destructive">{presentation.issues.map((i) => <li key={i} className="flex gap-1"><AlertTriangle className="mt-0.5 size-3 shrink-0" />{i}</li>)}</ul>}
     <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1.4fr_auto] sm:items-end">
       {!invalid && <label className="text-[11px] font-semibold">Хайх<Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Нэр, эцэг/эхийн нэр, регистр" className="mt-1 h-9" data-testid={`input-search-import-employee-${row.rowNumber}`} /></label>}
       {!invalid && <label className="text-[11px] font-semibold">Ажилтан сонгох<select value={typeof choice === 'number' ? String(choice) : ''} onChange={(e) => onChoose(e.target.value ? Number(e.target.value) : undefined)} className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-2 text-sm" data-testid={`select-import-employee-${row.rowNumber}`}>
