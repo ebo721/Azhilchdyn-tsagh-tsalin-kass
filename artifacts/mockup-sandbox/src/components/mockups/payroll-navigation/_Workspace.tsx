@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Banknote, BriefcaseBusiness, CalendarClock, CalendarDays, Check, ChevronDown,
-  ChevronRight, CircleHelp, Clock3, Download, FileSpreadsheet, Filter, LockKeyhole, Menu,
+  ChevronRight, Clock3, Download, Filter, LockKeyhole, Menu,
   Search, Settings2, ShieldCheck, SlidersHorizontal, WalletCards, X,
 } from 'lucide-react';
 import { demoEmployees, demoPeriod } from './_fixtures';
@@ -50,14 +50,6 @@ export function Workspace({ initialMode }: { initialMode: Mode }) {
     return matchesSearch && matchesFilter;
   }), [mode, paidOverrides, search, filter]);
 
-  const total = useMemo(() => rows.reduce((sum, row) => ({
-    approved: sum.approved + (mode === 'advance' ? row.person.advance : row.person.gross),
-    deduction: sum.deduction + (mode === 'advance' ? row.person.advanceDeduction : row.person.deductions),
-    amount: sum.amount + row.amount,
-    paid: sum.paid + row.paid,
-    remaining: sum.remaining + row.remaining,
-  }), { approved: 0, deduction: 0, amount: 0, paid: 0, remaining: 0 }), [rows, mode]);
-
   const showNotice = (message: string) => {
     setNotice(message);
     window.setTimeout(() => setNotice(''), 3200);
@@ -102,6 +94,7 @@ export function Workspace({ initialMode }: { initialMode: Mode }) {
     showNotice(`${person.name} · ${formatMoney(installment)}-ийн жишээ гүйлгээ бүртгэв. Бодит хадгалалт хийгдээгүй.`);
   };
   const confirmClose = () => {
+    if (mode === 'advance') return;
     const accepted = window.confirm(`${monthText(month)}-ийг жишээ горимд ${closed ? 'дахин нээх' : 'хаах'} уу?\n\nЗөвхөн админ сарын хаалт удирдана. Үйлдвэрлэлийн үед цалин, тухайн үеийн ирцийн бүртгэл хамт түгжигдэнэ.\n\nЭнэ бол DEMO — бодит хадгалалт хийгдэхгүй.`);
     if (!accepted) return;
     setClosed((value) => !value);
@@ -117,7 +110,6 @@ export function Workspace({ initialMode }: { initialMode: Mode }) {
           <span className="text-sm font-bold tracking-tight">САМАСАА</span>
           <button onClick={() => setMobileNav(false)} className="ml-auto grid size-8 place-items-center rounded-lg hover:bg-sidebar-accent lg:hidden" aria-label="Цэс хаах"><X className="size-4" /></button>
         </div>
-        <div className="mt-8 flex items-center gap-2 px-3 text-[10px] font-bold uppercase tracking-[.16em] text-sidebar-foreground/45"><span className="size-1.5 rounded-full bg-sidebar-primary" />Ажилтны үйл ажиллагаа</div>
         <nav className="mt-3 flex-1 space-y-1 overflow-y-auto" aria-label="Үндсэн цэс">
           <div className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-sidebar-foreground/60"><CalendarDays className="size-[17px]" />Ирц</div>
           <div className="rounded-xl bg-sidebar-accent/65 p-2">
@@ -133,7 +125,6 @@ export function Workspace({ initialMode }: { initialMode: Mode }) {
         </nav>
         <div className="rounded-xl border border-sidebar-border bg-sidebar-accent/45 p-3">
           <div className="flex items-center gap-2 text-xs font-semibold"><ShieldCheck className="size-4 text-sidebar-primary" />Ерөнхий админ</div>
-          <p className="mt-1 pl-6 text-[11px] text-sidebar-foreground/55">Жишээ орчин · 2026</p>
         </div>
       </aside>
       {mobileNav && <button className="fixed inset-0 z-30 bg-foreground/25 lg:hidden" onClick={() => setMobileNav(false)} aria-label="Цэс хаах" />}
@@ -142,80 +133,43 @@ export function Workspace({ initialMode }: { initialMode: Mode }) {
         <header className="sticky top-0 z-20 flex h-[64px] items-center justify-between border-b border-border/75 bg-background/90 px-4 backdrop-blur-md sm:px-7">
           <div className="flex items-center gap-3">
             <button className="grid size-9 place-items-center rounded-xl border border-border bg-card lg:hidden" onClick={() => setMobileNav(true)} aria-label="Цэс нээх"><Menu className="size-4" /></button>
-            <div className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex"><span>Үйл ажиллагаа</span><ChevronRight className="size-3" /><span className="font-semibold text-foreground">Цалин</span><ChevronRight className="size-3" /><span>{title}</span></div>
-            <span className="text-sm font-semibold sm:hidden">{title}</span>
+            <span className="text-sm font-semibold">{title}</span>
           </div>
           <div className="flex items-center gap-3">
             <span className="hidden items-center gap-2 text-xs font-medium text-muted-foreground sm:flex"><span className="size-2 rounded-full bg-primary" />Ерөнхий админ</span>
-            <button onClick={() => showNotice('Цалингийн бүртгэлийн тусламж · Жишээ орчин')} className="grid size-9 place-items-center rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label="Тусламж"><CircleHelp className="size-[17px]" /></button>
             <span className="grid size-9 place-items-center rounded-xl bg-primary text-xs font-bold text-primary-foreground">АД</span>
           </div>
         </header>
         <div className="mx-auto max-w-[1480px] px-4 pb-10 pt-5 sm:px-7 sm:pt-7">
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-accent/45 bg-accent/20 px-3.5 py-2.5 text-xs text-foreground/80">
-            <span><strong className="font-semibold">Жишээ өгөгдөл</strong><span className="ml-2 text-muted-foreground">Бүх ажилтан, дүн нь зөвхөн дэлгэцийн демо.</span></span>
-            <span className="font-mono text-[10px] tracking-wide text-muted-foreground">DEMO · БОДИТ ХАДГАЛАЛТГҮЙ</span>
+          <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm">
+            <h1 className="text-xl font-bold tracking-[-.035em] sm:text-2xl" data-testid="heading-page">{title}</h1>
+            <span className="rounded-md bg-accent/35 px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-wide text-foreground/70">DEMO</span>
+            <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${closed ? 'bg-muted text-muted-foreground' : 'bg-primary/10 text-primary'}`}>{closed ? 'ХААЛТТАЙ' : 'НЭЭЛТТЭЙ'}</span>
+            <span className="text-muted-foreground"><span className="font-mono text-foreground/80">{periodDates(month, mode)}</span><span className="mx-1.5 text-border">·</span>Олгох өдөр {mode === 'advance' ? demoPeriod.advancePayDay : demoPeriod.finalPayDay}{mode === 'final' ? ' · дараа сарын' : ''}</span>
           </div>
 
-          <div className="mb-6 flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
-            <div>
-              <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.16em] text-primary"><Banknote className="size-3.5" />Цалингийн мөчлөг</div>
-              <h1 className="text-[27px] font-bold tracking-[-.045em] sm:text-[34px]" data-testid="heading-page">{title}</h1>
-              <p className="mt-1.5 max-w-xl text-[13px] text-muted-foreground">
-                {mode === 'advance' ? 'Сарын эхний хагасын баталсан урьдчилгаа, авлагын суутгал ба шилжүүлгийг хянана.' : 'Сарын эцсийн цалин, суутгал болон үлдэгдэл төлбөрийг хянана.'}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <MonthNavigator month={month} onChange={(next) => { setMonth(next); setExpandedId(null); setPaidOverrides({}); setLocalInstallments({}); setClosed(false); setAttendanceSynced(false); }} prefix="proposal-payroll" ariaLabel="Цалингийн сар сонгох" />
-              <button type="button" onClick={exportExample} className="flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3.5 text-xs font-semibold text-foreground transition-colors hover:bg-secondary"><Download className="size-3.5" /><span className="hidden sm:inline">Жишээ экспорт</span></button>
-              <button type="button" onClick={() => showNotice('Цалингийн хуваарь: урьдчилгаа 20, сүүл цалин дараа сарын 5-нд. Жишээ мэдээлэл.')} className="grid size-10 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Цалингийн тохиргоо"><Settings2 className="size-4" /></button>
-            </div>
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-2 xl:flex-nowrap" data-testid="payroll-toolbar">
+            <MonthNavigator month={month} onChange={(next) => { setMonth(next); setExpandedId(null); setPaidOverrides({}); setLocalInstallments({}); setClosed(false); setAttendanceSynced(false); }} prefix="proposal-payroll" ariaLabel="Цалингийн сар сонгох" />
+            <button type="button" disabled={closed} onClick={() => { setAttendanceSynced(true); showNotice('Ирц шинэчиллээ. Демо горим.'); }} className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[11px] font-semibold hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"><Clock3 className="size-3.5" />{attendanceSynced ? 'Ирц шинэчилсэн' : 'Ирц шинэчлэх'}</button>
+            {mode === 'final' && <button type="button" onClick={confirmClose} className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-primary px-2.5 text-[11px] font-semibold text-primary-foreground transition-opacity hover:opacity-90"><LockKeyhole className="size-3.5" />{closed ? 'Сар нээх' : 'Сар хаах'}</button>}
+            <button type="button" onClick={exportExample} className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-secondary" aria-label="Жишээ экспорт"><Download className="size-3.5" /><span className="hidden 2xl:inline">Экспорт</span></button>
+            <button type="button" onClick={() => showNotice('Цалингийн хуваарь: урьдчилгаа 20, сүүл цалин дараа сарын 5.')} className="grid size-9 shrink-0 place-items-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Цалингийн тохиргоо"><CalendarClock className="size-4" /></button>
+            <label className="relative min-w-[130px] flex-1 xl:min-w-0">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ажилтан хайх" className="h-9 w-full rounded-lg border border-input bg-background pl-8 pr-2 text-xs outline-none focus:border-primary" aria-label="Ажилтан хайх" />
+            </label>
+            <label className="relative shrink-0">
+              <Filter className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <select value={filter} onChange={(event) => setFilter(event.target.value as typeof filter)} className="h-9 w-[120px] appearance-none rounded-lg border border-input bg-background py-0 pl-8 pr-7 text-xs font-semibold outline-none focus:border-primary" aria-label="Төлөвөөр шүүх">
+                <option value="all">Бүх төлөв</option><option value="pending">Үлдэгдэлтэй</option><option value="paid">Бүрэн олгосон</option>
+              </select><ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            </label>
           </div>
-
-          <section className="mb-5 grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5">
-            <div className="flex items-start gap-3">
-              <span className={`mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl ${closed ? 'bg-muted text-muted-foreground' : 'bg-primary/10 text-primary'}`}>{closed ? <LockKeyhole className="size-[17px]" /> : <CalendarClock className="size-[17px]" />}</span>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-sm font-bold">{monthText(month)} · {mode === 'advance' ? 'Урьдчилгаа үе' : 'Сарын эцсийн үе'}</h2>
-                  <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${closed ? 'bg-muted text-muted-foreground' : 'bg-primary/10 text-primary'}`}>{closed ? 'ХААЛТТАЙ · DEMO' : 'НЭЭЛТТЭЙ'}</span>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">Тооцох хугацаа: <span className="font-mono text-foreground/80">{periodDates(month, mode)}</span><span className="mx-2 text-border">·</span>Олгох өдөр: <span className="font-mono text-foreground/80">{mode === 'advance' ? demoPeriod.advancePayDay : demoPeriod.finalPayDay}{mode === 'final' ? ' · дараа сарын' : ''}</span></p>
-                <p className="mt-1 text-[11px] text-muted-foreground">Ирцийг гараар татаж шинэчилнэ · Сарын хаалт ирц болон цалинг хамтад нь түгжинэ.</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-              <button type="button" disabled={closed} onClick={() => { setAttendanceSynced(true); showNotice('Ирцийн жишээ мэдээлэл шинэчлэгдлээ. Автомат шинэчлэлт хийгдээгүй.'); }} className="flex h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-semibold hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"><Clock3 className="size-3.5" />{attendanceSynced ? 'Ирц шинэчилсэн' : 'Ирц шинэчлэх'}</button>
-              <button type="button" onClick={confirmClose} className="flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"><LockKeyhole className="size-3.5" />{closed ? 'Сар нээх' : 'Сар хаах'}</button>
-            </div>
-          </section>
-
-          <section className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-            <SummaryBlock label={mode === 'advance' ? 'Баталсан дүн' : 'Нийт цалин'} value={formatMoney(total.approved)} meta={`${rows.length} ажилтан · жишээ`} />
-            <SummaryBlock label={mode === 'advance' ? 'Авлагын суутгал' : 'Нийт суутгал'} value={formatMoney(total.deduction)} meta={mode === 'advance' ? 'Баталсан дүнгээс хасна' : 'НДШ, ХХОАТ болон бусад'} />
-            <SummaryBlock label={mode === 'advance' ? 'Шилжүүлэх дүн' : 'Олговол зохих'} value={formatMoney(total.amount)} meta={mode === 'advance' ? 'Урьдчилгаа − авлага' : 'Нийт цалин − суутгал'} emphasis />
-            <SummaryBlock label="Үлдэгдэл" value={formatMoney(total.remaining)} meta={`Олгосон ${formatMoney(total.paid)}`} />
-          </section>
 
           <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_2px_8px_hsl(var(--foreground)/.025)]" data-testid="payroll-table">
-            <div className="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-              <div className="flex items-center gap-2.5">
-                <h2 className="text-sm font-bold">Ажилтны задаргаа</h2>
-                <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[10px] font-bold text-muted-foreground">{rows.length}</span>
-                <span className="hidden text-[11px] text-muted-foreground sm:inline">Мөрийг сонгож татвар, авлага, гүйлгээг харна</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="relative min-w-[180px] flex-1 sm:flex-none">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ажилтан хайх" className="h-9 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-xs outline-none focus:border-primary sm:w-[190px]" aria-label="Ажилтан хайх" />
-                </label>
-                <label className="relative">
-                  <Filter className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <select value={filter} onChange={(event) => setFilter(event.target.value as typeof filter)} className="h-9 appearance-none rounded-lg border border-input bg-background py-0 pl-8 pr-8 text-xs font-semibold outline-none focus:border-primary" aria-label="Төлөвөөр шүүх">
-                    <option value="all">Бүх төлөв</option><option value="pending">Үлдэгдэлтэй</option><option value="paid">Бүрэн олгосон</option>
-                  </select><ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                </label>
-              </div>
+            <div className="flex items-center gap-2 border-b border-border px-4 py-3 sm:px-5">
+              <h2 className="text-sm font-bold">Ажилтан</h2>
+              <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[10px] font-bold text-muted-foreground">{rows.length}</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[950px] border-collapse text-left">
@@ -239,40 +193,14 @@ export function Workspace({ initialMode }: { initialMode: Mode }) {
                   })}
                   {rows.length === 0 && <tr><td colSpan={7} className="px-6 py-14 text-center"><div className="mx-auto grid size-10 place-items-center rounded-xl bg-secondary text-muted-foreground"><SlidersHorizontal className="size-4" /></div><p className="mt-3 text-sm font-semibold">Тохирох ажилтан олдсонгүй</p><p className="mt-1 text-xs text-muted-foreground">Хайлтын үг эсвэл төлөвийн шүүлтээ өөрчилнө үү.</p></td></tr>}
                 </tbody>
-                {rows.length > 0 && <tfoot className="border-t border-border bg-secondary/30">
-                  <tr className="text-xs font-bold">
-                    <td className="px-5 py-3.5 text-foreground">Нийт <span className="font-normal text-muted-foreground">· {rows.length} ажилтан</span></td>
-                    <td className="px-3 py-3.5 text-right font-mono">{formatMoney(total.approved)}</td>
-                    <td className="px-3 py-3.5 text-right font-mono">{formatMoney(total.deduction)}</td>
-                    <td className="px-3 py-3.5 text-right font-mono text-primary">{formatMoney(total.amount)}</td>
-                    <td className="px-3 py-3.5 text-right font-mono">{formatMoney(total.paid)}</td>
-                    <td className="px-3 py-3.5 text-right font-mono">{formatMoney(total.remaining)}</td><td />
-                  </tr>
-                </tfoot>}
               </table>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3 text-[11px] text-muted-foreground sm:px-5">
-              <span>Мөр сонгоход дэлгэрэнгүй задаргаа нээгдэнэ.</span>
-              <span className="inline-flex items-center gap-1.5"><FileSpreadsheet className="size-3.5" />Дүнгүүд төгрөгөөр · Жишээ өгөгдөл</span>
-            </div>
           </section>
-          <div className="mt-4 flex items-start gap-2 rounded-xl border border-border/70 bg-muted/40 px-4 py-3 text-[11px] leading-relaxed text-muted-foreground">
-            <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-primary" />
-            <p><strong className="text-foreground/80">Сарын хаалт зөвхөн админд.</strong> Хаахад цалин болон тухайн хугацааны ирц, ээлжийн төлөвлөгөө хамт түгжинэ. Урьдчилгаа болон сүүл цалинг тусад нь олгож, нэг ажилтанд хэд хэдэн гүйлгээ бүртгэх боломжтой. Энэ дэлгэцэнд үйлдлүүд зөвхөн локал демо.</p>
-          </div>
         </div>
       </main>
       {notice && <div role="status" className="fixed bottom-5 right-5 z-50 max-w-sm rounded-xl border border-primary/20 bg-card px-4 py-3 text-xs font-semibold text-foreground shadow-lg">{notice}</div>}
     </div>
   );
-}
-
-function SummaryBlock({ label, value, meta, emphasis = false }: { label: string; value: string; meta: string; emphasis?: boolean }) {
-  return <div className={`rounded-2xl border p-4 sm:p-5 ${emphasis ? 'border-primary/25 bg-primary/[.055]' : 'border-border bg-card'}`}>
-    <div className="flex items-center justify-between gap-2"><p className="text-[11px] font-bold uppercase tracking-[.09em] text-muted-foreground">{label}</p>{emphasis && <span className="size-1.5 rounded-full bg-primary" />}</div>
-    <p className={`mt-3 font-mono text-[clamp(1.05rem,2vw,1.4rem)] font-bold tracking-tight ${emphasis ? 'text-primary' : 'text-foreground'}`}>{value}</p>
-    <p className="mt-1 text-[11px] text-muted-foreground">{meta}</p>
-  </div>;
 }
 
 function PayrollPersonRow({ person, mode, paid, amount, remaining, deduction, fullAmount, addedInstallments, expanded, onToggle, onPay, disabled }: {
@@ -325,7 +253,6 @@ function PayrollPersonRow({ person, mode, paid, amount, remaining, deduction, fu
           <DetailLine label="Цалингийн авлага / өглөг" value="0 ₮" />
           <DetailLine label="Гүйлгээний түүх" value={paymentHistory.length > 0 ? `${paymentHistory.length} жишээ гүйлгээ` : 'Бүртгэлгүй'} />
           {paymentHistory.length > 0 && <div className="mt-1 space-y-1 border-t border-border pt-2">{paymentHistory.map((item) => <div key={item.sequence} className="flex items-center justify-between gap-3 text-[10px]"><span className="text-muted-foreground">{item.sequence}-р гүйлгээ · {item.date}</span><span className="font-mono font-semibold">{formatMoney(item.amount)}</span></div>)}</div>}
-          <p className="mt-3 border-t border-border pt-3 text-[10px] leading-relaxed text-muted-foreground">Дэлгэрэнгүй суутгал, өмнөх сарын шилжүүлэг болон бүх хэсэгчилсэн олголтын түүхийг ажилтны мөрөөс үзнэ.</p>
         </div>
       </div>
     </td></tr>}
