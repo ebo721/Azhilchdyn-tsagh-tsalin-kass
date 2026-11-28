@@ -84,7 +84,8 @@ test("every row requires a decision; invalid rows must be skipped and a person c
 });
 test("a manual unmatched choice is allowed but cannot steal another employee's registration", () => {
   const roster = [employee(1), employee(2, { socialInsuranceProfile: { ...sourceProfile, givenName: "ӨӨР" } })];
-  assert.throws(() => planEmployeeInsuranceUpdates([source], [{ rowNumber: 2, employeeId: 1 }], roster), /Регистр өөр ажилтанд/);
+  assert.throws(() => planEmployeeInsuranceUpdates([source], [{ rowNumber: 2, employeeId: 1 }], roster),
+    /2-р мөрийн регистр «Э\.Тест» ажилтанд аль хэдийн бүртгэлтэй/);
   assert.equal(planEmployeeInsuranceUpdates([source], [{ rowNumber: 2, employeeId: 2 }], roster).updates.length, 1);
 });
 test("preview tokens are bound to actor, expire, reject tampering, and hash metadata not salary", t => {
