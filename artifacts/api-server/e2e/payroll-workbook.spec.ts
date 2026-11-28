@@ -49,12 +49,12 @@ test("downloads selected-month payroll Excel, shows server errors, and fits the 
   });
   await page.goto("/payroll?month=2026-10");
   const insuranceSalary = `${new Intl.NumberFormat("mn-MN", { maximumFractionDigits: 0 }).format(1200000)} ₮`;
-  await expect(page.getByRole("columnheader", { name: "НДШ бодох цалин", exact: true })).toBeVisible();
+  await page.getByTestId("row-payroll-1").getByRole("button").first().click();
   await expect(page.getByTestId("value-payroll-insurance-salary-1")).toHaveText(insuranceSalary);
-  await expect(page.getByTestId("value-payroll-total-insurance-salary")).toHaveText(insuranceSalary);
   const pull = page.getByTestId("button-pull-payroll-attendance");
   await expect(pull).toBeEnabled();
   await expect(page.getByTestId("button-refresh-changed-payroll")).toBeDisabled();
+  await page.getByLabel("Ирц шинэчлэх сонголт").click();
   await pull.click();
   await expect(page.getByText("1/1 ажилтан шинэчлэгдлээ.", { exact: true })).toBeVisible();
   expect(refreshRequests).toEqual(["POST"]);
@@ -67,8 +67,9 @@ test("downloads selected-month payroll Excel, shows server errors, and fits the 
   await expect(pull).toBeEnabled();
   const button = page.getByTestId("button-download-payroll-workbook");
   await expect(button).toBeEnabled();
-  await expect(page.getByTestId("button-download-insurance-report")).toBeVisible();
+  await expect(page.getByTestId("button-download-insurance-report")).toBeAttached();
   const downloaded = page.waitForEvent("download");
+  await page.getByLabel("Цалингийн тайлан экспортлох").click();
   await button.click();
   const download = await downloaded;
   expect(requestedMonth).toBe("2026-10");

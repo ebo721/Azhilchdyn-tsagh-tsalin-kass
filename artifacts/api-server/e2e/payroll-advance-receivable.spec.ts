@@ -37,8 +37,8 @@ for (const width of [1440, 402]) {
       }
       return route.fulfill({ json: [] });
     });
-    await page.goto(`/payroll?month=${month}`);
-    await page.getByTestId("button-payroll-advance").click();
+    await page.goto(`/payroll?month=${month}&section=advance`);
+    await page.getByTestId("row-advance-2").getByRole("button", { name: /Урьдчилгаа ажилтан/ }).click();
     await page.getByTestId("button-advance-receivable-2").click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
@@ -55,7 +55,7 @@ for (const width of [1440, 402]) {
     await expect(page.getByTestId("advance-history-2")).toContainText("Олгосон: 0");
     await expect(page.getByTestId("advance-history-2")).toContainText("Үлдэгдэл: 400,000");
     await page.reload();
-    await page.getByTestId("button-payroll-advance").click();
+    await page.getByTestId("row-advance-2").getByRole("button", { name: /Урьдчилгаа ажилтан/ }).click();
     await expect(page.getByTestId("advance-receivable-deduction-2")).toContainText("100,000");
     await page.getByTestId("button-advance-receivable-2").click();
     await expect(page.getByTestId("input-advance-receivable-amount")).toHaveValue("100000");

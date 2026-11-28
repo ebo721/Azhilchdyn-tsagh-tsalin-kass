@@ -50,3 +50,4 @@
 - [Employee insurance import](employee-insurance-import-scope.md) — Duplicate names require a choice; report amounts are not salary settings, and full reporting names do not replace display names.
 - [Payroll register scope](payroll-register-scope.md) — Show earned or guaranteed monthly salary, not debt-only staff; retain complete financial carryforwards separately.
 - [Payroll and attendance closure](payroll-attendance-closure-scope.md) — Payroll closes attendance for the same effective period; only administrators may close or reopen.
+- [Payroll navigation design](payroll-navigation-design.md) — Two compact submenus; no dashboards or explanatory panels; controls share one desktop toolbar.

@@ -2,6 +2,7 @@ import { type ReactNode, useState } from 'react';
 import { BriefcaseBusiness, ChevronRight, LogOut, Menu, X } from 'lucide-react';
 import { Link, useLocation, useSearch } from 'wouter';
 import { inventorySectionHref, inventorySections, parseInventorySection } from '@/lib/inventory-sections';
+import { payrollSectionHref, payrollSections, parsePayrollSection } from '@/lib/payroll-sections';
 import { cn } from '@/lib/utils';
 import { STAFF_MENUS, visibleMenuPaths, type StaffMenuPath } from '@workspace/api-zod/staff-menu-policy';
 import { Banknote, Clock3, Landmark, LayoutDashboard, MonitorSmartphone, PackageOpen, Receipt, ShieldCheck, Timer, UserRound, UsersRound, WalletCards, Library, Utensils, CalendarDays, ClipboardList, ArrowLeftRight } from 'lucide-react';
@@ -21,6 +22,8 @@ export function AppShell({ children, role, menuPaths, onLogout }: { children: Re
   const [mobileOpen, setMobileOpen] = useState(false);
   const search = useSearch();
   const [inventoryExpanded, setInventoryExpanded] = useState(location === '/inventory');
+  const [payrollExpanded, setPayrollExpanded] = useState(location === '/payroll');
+  const payrollSection = location === '/payroll' ? parsePayrollSection(search) : null;
   const inventorySection = location === '/inventory' ? parseInventorySection(search) : null;
   const selected = visibleMenuPaths(role, menuPaths);
   const visibleNav = nav.filter(item => selected.includes(item.href as typeof selected[number]));
@@ -40,6 +43,14 @@ export function AppShell({ children, role, menuPaths, onLogout }: { children: Re
             const link = <Link key={href} href={href} onClick={() => setMobileOpen(false)} className={cn('group flex flex-1 items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-colors', location === href ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground')} data-testid={`link-nav-${label}`}>
               <Icon className="size-[17px]" /><span>{label}</span>{location === href && href !== '/inventory' && <ChevronRight className="ml-auto size-4 opacity-60" />}
             </Link>;
+            if (href === '/payroll') return <div key={href}>
+              <button type="button" onClick={() => setPayrollExpanded(value => !value)} aria-expanded={payrollExpanded} aria-controls="nav-payroll-children" className={cn('flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition-colors', location === href ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent')} data-testid="button-toggle-nav-payroll">
+                <Icon className="size-[17px]" /><span>{label}</span><ChevronRight className={cn('ml-auto size-4 transition-transform', payrollExpanded && 'rotate-90')} />
+              </button>
+              {payrollExpanded && <ul id="nav-payroll-children" className="ml-[22px] mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
+                {payrollSections.map(section => <li key={section.value}><Link href={payrollSectionHref(section.value, location === '/payroll' ? search : '')} onClick={() => setMobileOpen(false)} aria-current={payrollSection === section.value ? 'page' : undefined} className={cn('block rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors', payrollSection === section.value ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground')} data-testid={`link-nav-payroll-${section.value}`}>{section.label}</Link></li>)}
+              </ul>}
+            </div>;
             if (href !== '/inventory') return link;
             return <div key={href}>
               <button type="button" onClick={() => setInventoryExpanded((v) => !v)} aria-expanded={inventoryExpanded} aria-controls="nav-inventory-children" className={cn('flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition-colors', location === href ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground')} data-testid="button-toggle-nav-inventory">

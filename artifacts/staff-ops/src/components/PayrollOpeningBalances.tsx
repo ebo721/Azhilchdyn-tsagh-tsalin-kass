@@ -192,14 +192,14 @@ function OpeningDialog({ payrollMonth, knownConfirmedMonth, canConfirm, onClose,
   </Modal>;
 }
 
-export function PayrollOpeningBalances({ month, role, closed, openingBalanceMonth, reviewRequiredCount, legacyAvailable }: { month: string; role?: string | null; closed: boolean; openingBalanceMonth?: string | null; reviewRequiredCount: number; legacyAvailable: boolean }) {
+export function PayrollOpeningBalances({ month, role, closed, openingBalanceMonth, reviewRequiredCount, legacyAvailable, compact = false }: { month: string; role?: string | null; closed: boolean; openingBalanceMonth?: string | null; reviewRequiredCount: number; legacyAvailable: boolean; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const canPreview = role === 'admin' || role === 'accountant';
   useEffect(() => { setSuccess(null); setOpen(false); }, [month]);
   if (!canPreview && !openingBalanceMonth && reviewRequiredCount === 0) return null;
-  return <section className="mb-5 rounded-xl border border-border bg-card p-4" aria-labelledby="opening-heading" data-testid="panel-opening-balances">
-    <div className="flex flex-wrap items-center justify-between gap-3">
+  return <section className={compact ? 'contents' : 'mb-5 rounded-xl border border-border bg-card p-4'} aria-label="Цалингийн эхний үлдэгдэл" data-testid="panel-opening-balances">
+    {compact ? canPreview && <Button size="icon" variant={reviewRequiredCount > 0 ? 'default' : 'outline'} onClick={() => setOpen(true)} title="Цалингийн эхний үлдэгдэл" aria-label="Цалингийн эхний үлдэгдэл" data-testid="button-open-opening-balances"><Landmark className="size-4" /></Button> : <><div className="flex flex-wrap items-center justify-between gap-3">
       <div className="min-w-0">
         <h2 id="opening-heading" className="flex items-center gap-2 text-sm font-bold"><Landmark className="size-4" />Цалингийн эхний үлдэгдэл</h2>
         <p className="mt-1 text-xs text-muted-foreground" data-testid="text-opening-status">
@@ -211,7 +211,7 @@ export function PayrollOpeningBalances({ month, role, closed, openingBalanceMont
     </div>
     {reviewRequiredCount > 0 && <p className="mt-2 text-xs" data-testid="text-opening-review-hint">Хянах шаардлагатай мөрүүдэд татах үйлдэл идэвхгүй. Админ эхний үлдэгдлийг баталгаажуулна уу.{role !== 'admin' && ' Та админд хандана уу.'}</p>}
     {success && <p role="status" className="mt-2 text-sm font-medium text-primary" data-testid="text-opening-success">{success}</p>}
-    {legacyAvailable && !closed && <p className="mt-2 text-[11px] text-muted-foreground">Эхний үлдэгдэл байхгүй үед доорх нарийвчилсан сонголтоор өмнөх үлдэгдлийг гараар бэлтгэж болно.</p>}
+    {legacyAvailable && !closed && <p className="mt-2 text-[11px] text-muted-foreground">Эхний үлдэгдэл байхгүй үед доорх нарийвчилсан сонголтоор өмнөх үлдэгдлийг гараар бэлтгэж болно.</p>}</>}
     {open && <OpeningDialog payrollMonth={month} knownConfirmedMonth={openingBalanceMonth} canConfirm={role === 'admin' && !closed} onClose={() => setOpen(false)} onConfirmed={setSuccess} />}
   </section>;
 }
