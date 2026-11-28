@@ -1288,6 +1288,8 @@ export const getPayrollResponseScheduleAdvancePayDayMax = 31;
 
 export const getPayrollResponseScheduleFinalPayDayMax = 31;
 
+export const getPayrollResponseLinesItemReceivableDeductionMin = 0;
+
 export const getPayrollResponseLinesItemAdditionalPaymentsItemSequenceMin = 3;
 export const getPayrollResponseLinesItemAdditionalPaymentsItemSequenceMax = 10000;
 
@@ -1345,6 +1347,7 @@ export const GetPayrollResponse = zod.object({
   "advanceAmount": zod.number(),
   "manualDeduction": zod.number(),
   "receivableId": zod.number().int().nullable(),
+  "receivableDeduction": zod.number().min(getPayrollResponseLinesItemReceivableDeductionMin).optional(),
   "deductions": zod.number(),
   "carryoverAmount": zod.number(),
   "payable": zod.number(),
@@ -1390,6 +1393,8 @@ export const closePayrollMonthResponseSchedulePeriodEndDayMax = 31;
 export const closePayrollMonthResponseScheduleAdvancePayDayMax = 31;
 
 export const closePayrollMonthResponseScheduleFinalPayDayMax = 31;
+
+export const closePayrollMonthResponseLinesItemReceivableDeductionMin = 0;
 
 export const closePayrollMonthResponseLinesItemAdditionalPaymentsItemSequenceMin = 3;
 export const closePayrollMonthResponseLinesItemAdditionalPaymentsItemSequenceMax = 10000;
@@ -1448,6 +1453,7 @@ export const ClosePayrollMonthResponse = zod.object({
   "advanceAmount": zod.number(),
   "manualDeduction": zod.number(),
   "receivableId": zod.number().int().nullable(),
+  "receivableDeduction": zod.number().min(closePayrollMonthResponseLinesItemReceivableDeductionMin).optional(),
   "deductions": zod.number(),
   "carryoverAmount": zod.number(),
   "payable": zod.number(),
@@ -1493,6 +1499,8 @@ export const reopenPayrollMonthResponseSchedulePeriodEndDayMax = 31;
 export const reopenPayrollMonthResponseScheduleAdvancePayDayMax = 31;
 
 export const reopenPayrollMonthResponseScheduleFinalPayDayMax = 31;
+
+export const reopenPayrollMonthResponseLinesItemReceivableDeductionMin = 0;
 
 export const reopenPayrollMonthResponseLinesItemAdditionalPaymentsItemSequenceMin = 3;
 export const reopenPayrollMonthResponseLinesItemAdditionalPaymentsItemSequenceMax = 10000;
@@ -1551,6 +1559,7 @@ export const ReopenPayrollMonthResponse = zod.object({
   "advanceAmount": zod.number(),
   "manualDeduction": zod.number(),
   "receivableId": zod.number().int().nullable(),
+  "receivableDeduction": zod.number().min(reopenPayrollMonthResponseLinesItemReceivableDeductionMin).optional(),
   "deductions": zod.number(),
   "carryoverAmount": zod.number(),
   "payable": zod.number(),
@@ -1596,6 +1605,8 @@ export const pullPayrollAttendanceResponsePayrollSchedulePeriodEndDayMax = 31;
 export const pullPayrollAttendanceResponsePayrollScheduleAdvancePayDayMax = 31;
 
 export const pullPayrollAttendanceResponsePayrollScheduleFinalPayDayMax = 31;
+
+export const pullPayrollAttendanceResponsePayrollLinesItemReceivableDeductionMin = 0;
 
 export const pullPayrollAttendanceResponsePayrollLinesItemAdditionalPaymentsItemSequenceMin = 3;
 export const pullPayrollAttendanceResponsePayrollLinesItemAdditionalPaymentsItemSequenceMax = 10000;
@@ -1680,6 +1691,7 @@ export const PullPayrollAttendanceResponse = zod.object({
   "advanceAmount": zod.number(),
   "manualDeduction": zod.number(),
   "receivableId": zod.number().int().nullable(),
+  "receivableDeduction": zod.number().min(pullPayrollAttendanceResponsePayrollLinesItemReceivableDeductionMin).optional(),
   "deductions": zod.number(),
   "carryoverAmount": zod.number(),
   "payable": zod.number(),
@@ -1777,6 +1789,8 @@ export const refreshEmployeePayrollResponsePayrollScheduleAdvancePayDayMax = 31;
 
 export const refreshEmployeePayrollResponsePayrollScheduleFinalPayDayMax = 31;
 
+export const refreshEmployeePayrollResponsePayrollLinesItemReceivableDeductionMin = 0;
+
 export const refreshEmployeePayrollResponsePayrollLinesItemAdditionalPaymentsItemSequenceMin = 3;
 export const refreshEmployeePayrollResponsePayrollLinesItemAdditionalPaymentsItemSequenceMax = 10000;
 
@@ -1860,6 +1874,7 @@ export const RefreshEmployeePayrollResponse = zod.object({
   "advanceAmount": zod.number(),
   "manualDeduction": zod.number(),
   "receivableId": zod.number().int().nullable(),
+  "receivableDeduction": zod.number().min(refreshEmployeePayrollResponsePayrollLinesItemReceivableDeductionMin).optional(),
   "deductions": zod.number(),
   "carryoverAmount": zod.number(),
   "payable": zod.number(),
@@ -2145,6 +2160,7 @@ export const UpsertPayrollAdjustmentBody = zod.object({
   "month": zod.string().regex(upsertPayrollAdjustmentBodyMonthRegExp),
   "manualDeduction": zod.number().min(upsertPayrollAdjustmentBodyManualDeductionMin),
   "receivableId": zod.number().int().nullish(),
+  "settleReceivables": zod.boolean().optional(),
   "paidAmount": zod.number().min(upsertPayrollAdjustmentBodyPaidAmountMin),
   "paymentDate": zod.string().nullish(),
   "secondPaidAmount": zod.number().min(upsertPayrollAdjustmentBodySecondPaidAmountMin),
@@ -2483,7 +2499,7 @@ export const updatePayrollAdvanceReceivableBodyDateRegExp = new RegExp('^\\d{4}-
 export const UpdatePayrollAdvanceReceivableBody = zod.object({
   "month": zod.string().regex(updatePayrollAdvanceReceivableBodyMonthRegExp),
   "employeeId": zod.number().int().min(1),
-  "receivableId": zod.number().int().min(1).nullable(),
+  "receivableId": zod.number().int().min(1).nullish(),
   "amount": zod.number().min(updatePayrollAdvanceReceivableBodyAmountMin),
   "date": zod.string().regex(updatePayrollAdvanceReceivableBodyDateRegExp)
 })

@@ -124,6 +124,74 @@ it("advance receivable API settles once, protects ownership/closures and pays on
     assert.equal(advanceSettledAmount(await current()), 500000);
     assert.equal(Number((await query("SELECT sum(amount) amount FROM cash_transactions WHERE source_type='payroll_advance'")).rows[0].amount), 400000);
     assert.equal((await call("/bank-transactions/3/link-payroll", { month: "2026-11", employeeId: 1, paymentKind: "advance" }, "POST")).status, 409);
+
+    // Insert the newer debt first: FIFO must use the document date, not its ID.
+    for (const [date, amount] of [["2026-11-10", 150000], ["2026-11-01", 250000]] as const) {
+      await db.transaction(tx => postJournalEntry(tx, {
+        date, description: "Aggregate fixture debt", sourceType: "test", sourceId: null, createdBy: null,
+        lines: [{ accountId: account("1200"), debit: amount, credit: 0,
+          allocation: { kind: "create", partyType: "employee", employeeId: 2 } },
+        { accountId: account("1000"), debit: 0, credit: amount }],
+      }));
+    }
+    const balances = async () => (await query("SELECT open_amount::numeric::float8 amount FROM receivables WHERE employee_id=2 ORDER BY original_amount DESC")).rows.map(row => row.amount);
+    const monthly = (manualDeduction: number, settleReceivables = true) => call("/payroll-adjustments", {
+      month: "2026-12", employeeId: 2, manualDeduction, settleReceivables, receivableId: null,
+      paidAmount: 0, secondPaidAmount: 0, paymentDate: null, secondPaymentDate: null,
+    });
+    const adjustment = async () => (await query("SELECT * FROM payroll_adjustments WHERE employee_id=2 AND month='2026-12'")).rows[0];
+    let settled = await monthly(300000);
+    assert.equal(settled.status, 200, await settled.clone().text());
+    assert.deepEqual(await balances(), [0, 100000], "Aggregate salary settles oldest then partially newer debt");
+    const monthlyJournal = (await adjustment()).journal_entry_id;
+    assert.equal((await monthly(300000)).status, 200);
+    assert.equal((await adjustment()).journal_entry_id, monthlyJournal, "Retry must preserve all allocations, including fully settled oldest debt");
+    const settlementDate = (await query("SELECT date::text date FROM journal_entries WHERE id=$1", [monthlyJournal])).rows[0].date;
+    await query("INSERT INTO cash_closures(date) VALUES ($1)", [settlementDate]);
+    assert.equal((await monthly(200000)).status, 409, "Noncash deductions respect cash-date closure too");
+    await query("DELETE FROM cash_closures");
+    assert.equal((await monthly(450000)).status, 409);
+    assert.deepEqual(await balances(), [0, 100000], "Rejected salary edit rolls back every allocation");
+    assert.equal((await adjustment()).journal_entry_id, monthlyJournal);
+    assert.equal((await monthly(200000)).status, 200);
+    assert.deepEqual(await balances(), [50000, 150000], "Smaller deduction restores both debts before allocating");
+    assert.equal((await monthly(0)).status, 200);
+    assert.deepEqual(await balances(), [250000, 150000], "Zero salary deduction restores the whole settlement");
+    assert.equal((await monthly(400000)).status, 200);
+    assert.deepEqual(await balances(), [0, 0], "Entire balance may be settled without a cash payout");
+    assert.equal((await monthly(0, false)).status, 200);
+    assert.deepEqual(await balances(), [250000, 150000]);
+    assert.equal((await monthly(12345, false)).status, 200);
+    assert.deepEqual(await balances(), [250000, 150000], "Ordinary manual deductions must remain distinct from registered debt");
+
+    await query("INSERT INTO payroll_advance_approvals(month,approval_date,lines,total_amount) VALUES ('2026-12','2026-12-15',$1,500000)", [JSON.stringify([{ ...line, employeeId: 2 }])]);
+    const automaticAdvance = (amount: number) => call("/payroll-advance/receivable", {
+      month: "2026-12", employeeId: 2, amount, date: "2026-12-15",
+    });
+    const aggregateLine = async () => (await query("SELECT lines FROM payroll_advance_approvals WHERE month='2026-12'")).rows[0].lines[0];
+    settled = await automaticAdvance(300000);
+    assert.equal(settled.status, 200, await settled.clone().text());
+    assert.deepEqual(await balances(), [0, 100000]);
+    const advanceJournal = (await aggregateLine()).receivableJournalEntryId;
+    assert.equal((await automaticAdvance(300000)).status, 200);
+    assert.equal((await aggregateLine()).receivableJournalEntryId, advanceJournal);
+    await query("INSERT INTO cash_closures(date) VALUES ('2026-12-15')");
+    assert.equal((await automaticAdvance(200000)).status, 409);
+    await query("DELETE FROM cash_closures");
+    assert.equal((await automaticAdvance(400001)).status, 409);
+    assert.deepEqual(await balances(), [0, 100000]);
+    assert.equal((await aggregateLine()).receivableJournalEntryId, advanceJournal);
+    assert.equal((await automaticAdvance(200000)).status, 200);
+    assert.deepEqual(await balances(), [50000, 150000]);
+    assert.equal((await automaticAdvance(0)).status, 200);
+    assert.deepEqual(await balances(), [250000, 150000]);
+    assert.equal((await automaticAdvance(400000)).status, 200);
+    assert.deepEqual(await balances(), [0, 0]);
+    assert.equal(advanceFinancials(await aggregateLine()).remainingBalance, 100000);
+    assert.equal((await automaticAdvance(0)).status, 200);
+    assert.deepEqual(await balances(), [250000, 150000]);
+    assert.equal((await query("SELECT count(*)::int n FROM cash_transactions WHERE source_key='2026-12:2' OR source_key LIKE '2026-12:2:%'")).rows[0].n, 0,
+      "Noncash settlements never create fictitious cash payments");
   } finally {
     await new Promise<void>(resolve => server.close(() => resolve()));
     t.mock.restoreAll();

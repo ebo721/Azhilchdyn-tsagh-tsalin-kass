@@ -1155,6 +1155,8 @@ export interface PayrollLine {
   manualDeduction: number;
   /** @nullable */
   receivableId: number | null;
+  /** @minimum 0 */
+  receivableDeduction?: number;
   deductions: number;
   carryoverAmount: number;
   payable: number;
@@ -1195,6 +1197,7 @@ export interface PayrollAdjustmentInput {
   manualDeduction: number;
   /** @nullable */
   receivableId?: number | null;
+  settleReceivables?: boolean;
   /** @minimum 0 */
   paidAmount: number;
   /** @nullable */
@@ -1443,7 +1446,7 @@ export interface PayrollAdvanceReceivableInput {
      * @minimum 1
      * @nullable
      */
-  receivableId: number | null;
+  receivableId?: number | null;
   /** @minimum 0 */
   amount: number;
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */

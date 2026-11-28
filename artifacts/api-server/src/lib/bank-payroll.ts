@@ -8,7 +8,7 @@ import { checkBankLinkEligibility } from "./bank-link-eligibility.js";
 import { assertNotInternalTransfer } from "./bank-internal-transfer.js";
 import { lockCashDate } from "./cash-date-lock.js";
 import { payrollPayments, payrollPaymentSourceKey } from "./payroll-payments.js";
-import { ensurePayrollReceivableJournal } from "./payroll-receivable-posting.js";
+import { settlePayrollReceivables } from "./payroll-receivable-posting.js";
 import { money } from "./date-utils.js";
 import type { Tx } from "./route-shared.js";
 
@@ -174,11 +174,13 @@ export async function linkBankPayroll(bankId: number, employeeId: number, month:
         .onConflictDoUpdate({ target: [payrollAdjustmentsTable.employeeId, payrollAdjustmentsTable.month],
           set: { ...paymentFields, updatedAt: new Date() } }).returning();
       if (adjustment.receivableId !== null && adjustment.journalEntryId === null) {
-        const journalEntryId = await ensurePayrollReceivableJournal(tx, {
+        const settlement = await settlePayrollReceivables(tx, {
           employeeId, employeeName: target.employeeName, month, amount: Number(adjustment.manualDeduction),
-          receivableId: adjustment.receivableId, date, adjustmentId: adjustment.id, journalEntryId: null,
+          date, adjustmentId: adjustment.id, journalEntryId: null,
         });
-        await tx.update(payrollAdjustmentsTable).set({ journalEntryId }).where(eq(payrollAdjustmentsTable.id, adjustment.id));
+        await tx.update(payrollAdjustmentsTable).set({
+          journalEntryId: settlement.journalEntryId, receivableId: settlement.receivableId,
+        }).where(eq(payrollAdjustmentsTable.id, adjustment.id));
       }
       [cash] = await tx.insert(cashTransactionsTable).values({
         type: "expense", category: "Цалин", accountId: account.id, amount, date,
