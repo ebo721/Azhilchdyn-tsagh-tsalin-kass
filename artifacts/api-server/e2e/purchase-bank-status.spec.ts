@@ -24,25 +24,26 @@ for (const width of [402, 1440]) {
         path === "/api/inventory/purchases" ? purchases : [],
       });
     });
-    await page.goto("/inventory");
-    await page.getByTestId("tab-inventory-purchases").click();
+    await page.goto("/inventory?section=purchases");
     await page.getByTestId("tab-inventory-material-food").click();
     await page.getByTestId("input-inventory-purchase-month").fill("2098-06");
     const row = (id: number) => page.getByTestId(`inventory-purchase-${width < 768 ? "mobile-" : ""}${id}`);
     await expect(row(99200)).toContainText("Банктай холбогдсон");
     await expect(row(99201)).toContainText("Багц төлбөр");
     await expect(row(99202)).toContainText("Банктай холбогдоогүй");
-    await expect(row(99202).getByRole("checkbox")).toBeChecked();
+    await expect(row(99202).getByTestId("status-inventory-payment-99202")).toHaveText("Төлсөн");
     await page.getByTestId("button-inventory-purchases-next").click();
     await expect(page.getByText("2 / 2", { exact: true })).toBeVisible();
     const filter = page.getByTestId("filter-purchase-bank-link");
+    await page.getByTestId("button-inventory-purchase-filters").click();
     await filter.selectOption("linked");
     await expect(page.getByText("1 / 1", { exact: true })).toBeVisible();
     await expect(row(99200)).toBeVisible();
     await expect(row(99201)).toBeVisible();
     await expect(row(99202)).toHaveCount(0);
     await expect(page.getByTestId("value-inventory-purchase-total")).toContainText("200");
-    await row(99201).getByRole("button", { name: /Дэлгэрэнгүй/ }).click();
+    await row(99201).getByTestId("button-actions-inventory-99201").click();
+    await page.getByTestId("button-view-inventory-99201").click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toContainText("Банк #99101");
     await expect(dialog).toContainText("Банкны нийт дүн");
@@ -55,11 +56,12 @@ for (const width of [402, 1440]) {
     await expect(row(99201)).toHaveCount(0);
     await expect(row(99202)).toBeVisible();
     await expect(page.getByTestId("value-inventory-purchase-total")).toContainText("2,200");
-    await row(99202).getByRole("button", { name: /Дэлгэрэнгүй/ }).click();
+    await row(99202).getByTestId("button-actions-inventory-99202").click();
+    await page.getByTestId("button-view-inventory-99202").click();
     await expect(dialog).toContainText("Өмнө нь банкны холбоосгүй баталсан төлбөр");
     await page.keyboard.press("Escape");
-    await page.getByTestId("filter-purchase-registration").selectOption("unregistered");
-    await expect(filter).toBeVisible();
-    await expect(page.getByText("Бүртгэлгүй худалдан авалтууд банктай холбогдсон тул энэ шүүлтэд харагдахгүй.")).toBeVisible();
+    // Pending registrations remain available independently of the main list filter.
+    await page.getByTestId("button-open-pending-purchases").click();
+    await expect(page.getByTestId("pending-purchases-empty")).toBeVisible();
   });
 }

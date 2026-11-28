@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { test, expect } from "@playwright/test";
+import { selectInventorySection } from "./inventory-navigation";
 import { eq, inArray } from "drizzle-orm";
 import { db, usersTable, employeesTable, inventoryItemsTable, inventoryIssuesTable, inventoryOpeningBalancesTable,
   inventoryOpeningConsumptionsTable, inventoryIssueConsumptionsTable, inventoryPurchasesTable,
@@ -59,7 +60,7 @@ test("search/select multiple employee custodians in settings, choose independent
     itemId = (await opening.json()).inventoryItemId;
     await signIn(ids[1]);
     await page.goto("/inventory");
-    await page.getByTestId("tab-inventory-purchases").click();
+    await selectInventorySection(page, "purchases");
     await page.getByTestId("button-add-inventory-purchase").click();
     await expect(page.getByTestId("select-inventory-purchase-custodian")).toHaveValue("");
     await page.getByTestId("select-inventory-purchase-custodian-search").fill(fullName);
@@ -75,7 +76,7 @@ test("search/select multiple employee custodians in settings, choose independent
     expect(purchaseResponse.status()).toBe(201);
     purchaseId = (await purchaseResponse.json()).id;
     await expect(page.getByTestId(`text-purchase-custodian-${purchaseId}`)).toContainText(fullName);
-    await page.getByTestId("tab-inventory-issues").click();
+    await selectInventorySection(page, "issues");
     await page.getByTestId("button-add-inventory-issue").click();
     await expect(page.getByTestId("select-inventory-issue-custodian")).toHaveValue("");
     await page.getByTestId("select-inventory-issue-custodian-search").fill(secondName);
@@ -90,7 +91,7 @@ test("search/select multiple employee custodians in settings, choose independent
     issueId = (await issueResponse.json()).id;
     await expect(page.getByTestId(`text-issue-custodian-${issueId}`)).toHaveText(secondName);
     await page.reload();
-    await page.getByTestId("tab-inventory-issues").click();
+    await selectInventorySection(page, "issues");
     await expect(page.getByTestId(`text-issue-custodian-${issueId}`)).toHaveText(secondName);
     await page.getByTestId(`button-edit-inventory-issue-${issueId}`).click();
     await expect(page.getByTestId("select-inventory-issue-custodian")).toHaveValue(String(employeeIds[1]));

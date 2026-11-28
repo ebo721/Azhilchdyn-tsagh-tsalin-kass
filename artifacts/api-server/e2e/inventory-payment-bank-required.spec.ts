@@ -30,12 +30,11 @@ for (const width of [402, 1440]) {
         path.endsWith("/payment-bank-suggestions") ? [bank] : [],
       });
     });
-    await page.goto("/inventory");
-    await page.getByTestId("tab-inventory-purchases").click();
+    await page.goto("/inventory?section=purchases");
     await page.getByTestId("tab-inventory-material-food").click();
     await page.getByTestId("input-inventory-purchase-month").fill("2098-06");
     const row = page.getByTestId(`inventory-purchase-${width < 768 ? "mobile-" : ""}${purchase.id}`);
-    await row.getByRole("checkbox").click();
+    await row.getByTestId(`checkbox-inventory-payment-${purchase.id}`).click();
     const dialog = page.getByRole("dialog");
     const confirm = dialog.getByTestId("button-confirm-inventory-payment");
     await expect(confirm).toBeDisabled();
@@ -53,7 +52,7 @@ for (const width of [402, 1440]) {
     await dialog.getByTestId(`button-select-inventory-bank-${bank.id}`).click();
     await confirm.click();
     await expect(dialog).toHaveCount(0);
-    await expect(row.getByRole("checkbox")).toBeChecked();
+    await expect(row.getByTestId(`status-inventory-payment-${purchase.id}`)).toHaveText("Төлсөн");
     await expect(row).toContainText("Банктай холбогдсон");
     expect(requests).toBe(1);
   });

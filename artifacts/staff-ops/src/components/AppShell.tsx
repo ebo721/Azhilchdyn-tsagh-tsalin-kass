@@ -1,6 +1,7 @@
 import { type ReactNode, useState } from 'react';
 import { BriefcaseBusiness, ChevronRight, LogOut, Menu, X } from 'lucide-react';
-import { Link, useLocation } from 'wouter';
+import { Link, useLocation, useSearch } from 'wouter';
+import { inventorySectionHref, inventorySections, parseInventorySection } from '@/lib/inventory-sections';
 import { cn } from '@/lib/utils';
 import { STAFF_MENUS, visibleMenuPaths, type StaffMenuPath } from '@workspace/api-zod/staff-menu-policy';
 import { Banknote, Clock3, Landmark, LayoutDashboard, MonitorSmartphone, PackageOpen, Receipt, ShieldCheck, Timer, UserRound, UsersRound, WalletCards, Library, Utensils, CalendarDays, ClipboardList, ArrowLeftRight } from 'lucide-react';
@@ -18,6 +19,9 @@ export const nav = STAFF_MENUS.map(menu => ({ href: menu.path, label: menu.label
 export function AppShell({ children, role, menuPaths, onLogout }: { children: ReactNode; role: 'admin' | 'hr' | 'accountant' | 'warehouse' | 'viewer' | 'technologist'; menuPaths?: string[] | null; onLogout: () => void }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const search = useSearch();
+  const [inventoryExpanded, setInventoryExpanded] = useState(location === '/inventory');
+  const inventorySection = location === '/inventory' ? parseInventorySection(search) : null;
   const selected = visibleMenuPaths(role, menuPaths);
   const visibleNav = nav.filter(item => selected.includes(item.href as typeof selected[number]));
   const active = (visibleNav.find((item) => item.href === location) ?? visibleNav.find((item) => item.href !== '/' && location.startsWith(`${item.href}/`)))?.label ?? 'Статистик';
@@ -32,11 +36,20 @@ export function AppShell({ children, role, menuPaths, onLogout }: { children: Re
           <button className="grid size-8 place-items-center rounded-lg hover:bg-sidebar-accent lg:hidden" onClick={() => setMobileOpen(false)} data-testid="button-close-navigation"><X className="size-4" /></button>
         </div>
         <nav className="mt-10 min-h-0 flex-1 space-y-1 overflow-y-auto pb-4" data-testid="navigation-main">
-          {visibleNav.map(({ href, label, icon: Icon }) => (
-            <Link key={href} href={href} onClick={() => setMobileOpen(false)} className={cn('group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-colors', location === href ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground')} data-testid={`link-nav-${label}`}>
-              <Icon className="size-[17px]" /><span>{label}</span>{location === href && <ChevronRight className="ml-auto size-4 opacity-60" />}
-            </Link>
-          ))}
+          {visibleNav.map(({ href, label, icon: Icon }) => {
+            const link = <Link key={href} href={href} onClick={() => setMobileOpen(false)} className={cn('group flex flex-1 items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-colors', location === href ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground')} data-testid={`link-nav-${label}`}>
+              <Icon className="size-[17px]" /><span>{label}</span>{location === href && href !== '/inventory' && <ChevronRight className="ml-auto size-4 opacity-60" />}
+            </Link>;
+            if (href !== '/inventory') return link;
+            return <div key={href}>
+              <button type="button" onClick={() => setInventoryExpanded((v) => !v)} aria-expanded={inventoryExpanded} aria-controls="nav-inventory-children" className={cn('flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition-colors', location === href ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground')} data-testid="button-toggle-nav-inventory">
+                <Icon className="size-[17px]" /><span>{label}</span><ChevronRight className={cn('ml-auto size-4 transition-transform', inventoryExpanded && 'rotate-90')} />
+              </button>
+              {inventoryExpanded && <ul id="nav-inventory-children" className="ml-[22px] mt-1 space-y-0.5 border-l border-sidebar-border pl-3" data-testid="nav-inventory-children">
+                {inventorySections.map((section) => <li key={section.value}><Link href={inventorySectionHref(section.value)} onClick={() => setMobileOpen(false)} aria-current={inventorySection === section.value ? 'page' : undefined} className={cn('block rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors', inventorySection === section.value ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground')} data-testid={`link-nav-inventory-${section.value}`}>{section.label}</Link></li>)}
+              </ul>}
+            </div>;
+          })}
         </nav>
       </aside>
       {mobileOpen && <button className="fixed inset-0 z-30 bg-foreground/25 lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Цэс хаах" data-testid="button-navigation-overlay" />}

@@ -3,7 +3,11 @@ import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/reac
 import { useFieldArray, useForm } from 'react-hook-form';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
-import { PendingInventoryPurchases } from '@/components/PendingInventoryPurchases';
+import { PendingInventoryPurchasesDrawer, PendingPurchasesLauncher } from '@/components/PendingInventoryPurchases';
+import { InventoryPurchaseToolbar, defaultPurchaseFilters, type PurchaseFilters } from '@/components/InventoryPurchaseToolbar';
+import { InventoryPurchaseList } from '@/components/InventoryPurchaseList';
+import { InventorySectionSelect } from '@/components/InventorySectionSelect';
+import { inventorySectionHref, inventorySections, parseInventorySection, type InventorySection } from '@/lib/inventory-sections';
 import { PendingPurchaseSuggestions } from '@/components/PendingPurchaseSuggestions';
 import { PurchaseBankConnection } from '@/components/PurchaseBankConnection';
 import { useRegisterPendingInventoryPurchase, getListPendingInventoryPurchasesQueryKey, type PendingInventoryPurchase } from '@workspace/api-client-react';
@@ -181,7 +185,7 @@ import {
   type OperatingExpense,
   type OperatingExpenseBankSuggestion,
 } from '@workspace/api-client-react';
-import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
+import { Link, Route, Switch, useLocation, useSearch, Router as WouterRouter } from 'wouter';
 import NotFound from '@/pages/not-found';
 import { EmptyState, ErrorBlock, LoadingBlock, Modal, PageHeading, StatCard, StatusPill } from '@/components/ui-primitives';
 import { AppShell } from '@/components/AppShell';
@@ -245,8 +249,9 @@ export function Inventory() {
   const [open, setOpen] = useState(false);
   const [pendingPurchase, setPendingPurchase] = useState<PendingInventoryPurchase | null>(null);
   const [linkingPendingPurchase, setLinkingPendingPurchase] = useState(false);
-  const [registrationFilter, setRegistrationFilter] = useState('all');
-  const [bankLinkFilter, setBankLinkFilter] = useState('all');
+  const [purchaseFilters, setPurchaseFilters] = useState<PurchaseFilters>(defaultPurchaseFilters);
+  const [pendingDrawerOpen, setPendingDrawerOpen] = useState(false);
+  const returnToPendingDrawer = useRef(false);
   const registerPending = useRegisterPendingInventoryPurchase();
   const [editing, setEditing] = useState<InventoryPurchase | null>(null);
   const [selectedPurchase, setSelectedPurchase] = useState<InventoryPurchase | null>(null);
@@ -256,7 +261,10 @@ export function Inventory() {
   const [editingSupplier, setEditingSupplier] = useState<InventorySupplier | null>(null);
   const [stockSearch, setStockSearch] = useState('');
   const [materialTypeTab, setMaterialTypeTab] = useState<InventoryMaterialType>('food');
-  const [inventoryTab, setInventoryTab] = useState<'stock' | 'purchases' | 'suppliers' | 'issues' | 'requests'>('stock');
+  const search = useSearch();
+  const [, navigate] = useLocation();
+  const inventoryTab = parseInventorySection(search);
+  const setInventoryTab = (section: InventorySection) => navigate(inventorySectionHref(section));
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [categoryItem, setCategoryItem] = useState<InventoryItem | null>(null);
   const [openingSignal, setOpeningSignal] = useState(0);
@@ -298,33 +306,34 @@ export function Inventory() {
   });
   const watchedItems = form.watch('items');
   const grandTotal = watchedItems.reduce((total, item) => total + Math.round((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0) * 100), 0) / 100;
-  const filteredPurchases = purchasesQuery.data?.filter((purchase) =>
-    purchase.materialType === materialTypeTab && purchase.date.startsWith(purchaseMonth)
-      && (bankLinkFilter === 'all' || (bankLinkFilter === 'linked' ? Boolean(purchase.bankConnection) : !purchase.bankConnection))
-  ) ?? [];
+  const purchaseSearch = purchaseFilters.search.trim().toLocaleLowerCase('mn-MN');
+  const filteredPurchases = useMemo(() => (purchasesQuery.data ?? []).filter((purchase) => {
+    if (purchase.materialType !== materialTypeTab || !purchase.date.startsWith(purchaseMonth)) return false;
+    if (purchaseFilters.bank !== 'all' && (purchaseFilters.bank === 'linked') !== Boolean(purchase.bankConnection)) return false;
+    if (purchaseFilters.payment !== 'all' && (purchaseFilters.payment === 'paid') !== purchase.paid) return false;
+    if (purchaseFilters.receipt !== 'all' && (purchaseFilters.receipt === 'with') !== purchase.hasReceipt) return false;
+    if (!purchaseSearch) return true;
+    return [purchase.supplierName, purchase.documentNumber, ...purchase.items.map((item) => item.name)].join(' ').toLocaleLowerCase('mn-MN').includes(purchaseSearch);
+  }), [purchasesQuery.data, materialTypeTab, purchaseMonth, purchaseFilters.bank, purchaseFilters.payment, purchaseFilters.receipt, purchaseSearch]);
   const filteredPurchaseTotal = filteredPurchases.reduce((total, purchase) => total + purchase.totalAmount, 0);
   const filteredPurchaseAccounts = [...new Map(filteredPurchases
     .filter((purchase) => purchase.accountCode && purchase.accountName)
     .map((purchase) => [purchase.accountId, { code: purchase.accountCode, name: purchase.accountName }])).values()];
   const purchasePageCount = Math.max(1, Math.ceil(filteredPurchases.length / inventoryPurchasesPerPage));
-  const paginatedPurchases = filteredPurchases.slice(
-    (purchasePage - 1) * inventoryPurchasesPerPage,
-    purchasePage * inventoryPurchasesPerPage,
-  );
-  const query = useMemo(() => {
-    if (!purchasesQuery.data) return purchasesQuery;
-    const data = new Proxy(filteredPurchases, {
-      get(target, property, receiver) {
-        if (property === 'map') return paginatedPurchases.map.bind(paginatedPurchases);
-        return Reflect.get(target, property, receiver);
-      },
-    });
-    return { ...purchasesQuery, data };
-  }, [filteredPurchases, paginatedPurchases, purchasesQuery]);
+  const safePurchasePage = Math.min(purchasePage, purchasePageCount);
+  const paginatedPurchases = filteredPurchases.slice((safePurchasePage - 1) * inventoryPurchasesPerPage, safePurchasePage * inventoryPurchasesPerPage);
   useEffect(() => {
     if (purchasePage > purchasePageCount) setPurchasePage(purchasePageCount);
   }, [purchasePage, purchasePageCount]);
-  useEffect(() => setPurchasePage(1), [materialTypeTab, purchaseMonth, bankLinkFilter]);
+  useEffect(() => setPurchasePage(1), [materialTypeTab, purchaseMonth, purchaseFilters]);
+  useEffect(() => {
+    // Return to the pending drawer once the registration modal closes (saved or cancelled).
+    if (!open && returnToPendingDrawer.current) {
+      returnToPendingDrawer.current = false;
+      qc.invalidateQueries({ queryKey: getListPendingInventoryPurchasesQueryKey() });
+      setPendingDrawerOpen(true);
+    }
+  }, [open, qc]);
   const openForm = () => {
     setPendingPurchase(null);
     registerPending.reset();
@@ -333,6 +342,8 @@ export function Inventory() {
     setOpen(true);
   };
   const openPendingPurchase = (row: PendingInventoryPurchase) => {
+    setPendingDrawerOpen(false);
+    returnToPendingDrawer.current = true;
     openForm();
     setPendingPurchase(row);
     form.setValue('materialType', row.materialType);
@@ -571,50 +582,33 @@ export function Inventory() {
     );
   };
 
-  return <div className="page-enter">
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-3"><div className="inline-flex rounded-xl bg-secondary p-1"><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'stock' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('stock')} data-testid="tab-inventory-stock">Үлдэгдэл</button><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'purchases' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('purchases')} data-testid="tab-inventory-purchases">Худалдан авалт</button><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'suppliers' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('suppliers')} data-testid="tab-inventory-suppliers">Харилцагч</button><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'issues' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('issues')} data-testid="tab-inventory-issues">Зарлага</button><button className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', inventoryTab === 'requests' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground')} onClick={() => setInventoryTab('requests')} data-testid="tab-inventory-requests">Захиалга</button></div>{inventoryTab === 'purchases' ? <Button onClick={openForm} data-testid="button-add-inventory-purchase"><Plus className="size-4" />Худалдан авалт бүртгэх</Button> : inventoryTab === 'stock' ? <div className="flex flex-wrap gap-2"><Button onClick={() => setOpeningSignal((n) => n + 1)} data-testid="button-inventory-opening"><Plus className="size-4" />Эхний үлдэгдэл оруулах</Button>{canManageMaterialRequests && <Button variant="outline" onClick={() => setClosingSignal((n) => n + 1)} data-testid="button-inventory-closing"><Plus className="size-4" />Эцсийн үлдэгдэл оруулах</Button>}</div> : inventoryTab === 'issues' ? <Button onClick={openIssueForm} data-testid="button-add-inventory-issue"><Plus className="size-4" />Зарлага гаргах</Button> : null}</div>
-    {(inventoryTab === 'stock' || inventoryTab === 'purchases') && <div className="mb-5 inline-flex rounded-xl border border-border bg-card p-1" role="tablist" aria-label="Бараа материалын төрөл">{inventoryMaterialTypes.map((type) => <button key={type.value} role="tab" aria-selected={materialTypeTab === type.value} className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', materialTypeTab === type.value ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-secondary')} onClick={() => setMaterialTypeTab(type.value)} data-testid={`tab-inventory-material-${type.value}`}>{type.label}</button>)}</div>}
+  return <div className={cn('page-enter', inventoryTab === 'purchases' && 'flex h-[calc(100dvh-7rem)] min-h-[28rem] flex-col lg:h-[calc(100dvh-8.5rem)]')}>
+    <div className="mb-4 flex shrink-0 flex-wrap items-center justify-between gap-3">
+      <InventorySectionSelect value={inventoryTab} onChange={setInventoryTab} />
+      <h1 className="hidden text-lg font-bold tracking-tight lg:block" data-testid="text-inventory-section-title">{inventorySections.find((section) => section.value === inventoryTab)?.label}</h1>
+      {inventoryTab === 'purchases' ? <Button onClick={openForm} aria-label="Худалдан авалт бүртгэх" data-testid="button-add-inventory-purchase"><Plus className="size-4" /><span className="sm:hidden">Бүртгэх</span><span className="hidden sm:inline">Худалдан авалт бүртгэх</span></Button>
+        : inventoryTab === 'stock' ? <div className="flex flex-wrap gap-2"><Button onClick={() => setOpeningSignal((n) => n + 1)} data-testid="button-inventory-opening"><Plus className="size-4" />Эхний үлдэгдэл оруулах</Button>{canManageMaterialRequests && <Button variant="outline" onClick={() => setClosingSignal((n) => n + 1)} data-testid="button-inventory-closing"><Plus className="size-4" />Эцсийн үлдэгдэл оруулах</Button>}</div>
+        : inventoryTab === 'issues' ? <Button onClick={openIssueForm} data-testid="button-add-inventory-issue"><Plus className="size-4" />Зарлага гаргах</Button> : null}
+    </div>
+    {inventoryTab === 'stock' && <div className="mb-5 inline-flex rounded-xl border border-border bg-card p-1" role="tablist" aria-label="Бараа материалын төрөл">{inventoryMaterialTypes.map((type) => <button key={type.value} role="tab" aria-selected={materialTypeTab === type.value} className={cn('rounded-lg px-4 py-2 text-sm font-bold transition-colors', materialTypeTab === type.value ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-secondary')} onClick={() => setMaterialTypeTab(type.value)} data-testid={`tab-inventory-material-${type.value}`}>{type.label}</button>)}</div>}
     {inventoryTab === 'stock' && <section className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between"><h2 className="text-base font-bold">Барааны үлдэгдэл</h2><div className="relative w-full sm:w-72"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={stockSearch} onChange={(event) => setStockSearch(event.target.value)} className="pl-9" placeholder="Нэр эсвэл ангиллаар хайх" data-testid="input-search-inventory-stock" /></div></div>
       {catalog.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-12" /><LoadingBlock className="h-12" /></div> : catalog.isError ? <ErrorBlock onRetry={() => catalog.refetch()} /> : !filteredCatalog.length ? <EmptyState title="Бараа материал олдсонгүй" detail={stockSearch ? 'Хайлтын үгээ өөрчлөөд үзнэ үү.' : 'Худалдан авалт бүртгэхэд барааны үлдэгдэл автоматаар үүснэ.'} icon={PackageOpen} /> : <InventoryStockTable items={filteredCatalog} onOpen={setSelectedItem} onEdit={editCategory} />}
     </section>}
     {inventoryTab === 'stock' && <InventoryOpeningBalances catalog={catalog.data ?? []} materialType={materialTypeTab} openSignal={openingSignal} />}
     {inventoryTab === 'stock' && <InventoryClosingBalances catalog={catalog.data ?? []} materialType={materialTypeTab} openSignal={closingSignal} editId={closingEdit.id} editSignal={closingEdit.n} canManage={canManageMaterialRequests} />}
-    {inventoryTab === 'purchases' && <div className="mb-4 flex flex-wrap items-center gap-3">
-      <label className="text-xs font-semibold">Бүртгэлийн төлөв
-        <select value={registrationFilter} onChange={e => setRegistrationFilter(e.target.value)} className="ml-2 h-10 rounded-lg border border-input bg-background px-3 text-sm" data-testid="filter-purchase-registration">
-          <option value="all">Бүгд</option><option value="registered">Бүртгэлтэй</option><option value="unregistered">Бүртгэлгүй</option>
-        </select>
-      </label>
-      {registrationFilter === 'unregistered' && <Input type="month" aria-label="Худалдан авалтын сар" value={purchaseMonth} onChange={e => setPurchaseMonth(e.target.value)} className="w-44" />}
-    </div>}
-    {inventoryTab === 'purchases' && <label className="mb-4 flex items-center gap-2 text-xs font-semibold">Банкны холбоос
-      <select value={bankLinkFilter} onChange={e => setBankLinkFilter(e.target.value)} className="h-10 rounded-lg border border-input bg-background px-3 text-sm" data-testid="filter-purchase-bank-link">
-        <option value="all">Бүгд</option><option value="linked">Холбогдсон</option><option value="unlinked">Холбогдоогүй</option>
-      </select>
-    </label>}
-    {inventoryTab === 'purchases' && registrationFilter !== 'registered' && bankLinkFilter !== 'unlinked' && <PendingInventoryPurchases month={purchaseMonth} materialType={materialTypeTab} canRegister={canManageMaterialRequests} onRegister={openPendingPurchase} />}
-    {inventoryTab === 'purchases' && registrationFilter === 'unregistered' && bankLinkFilter === 'unlinked' && <p className="mb-4 text-sm text-muted-foreground">Бүртгэлгүй худалдан авалтууд банктай холбогдсон тул энэ шүүлтэд харагдахгүй.</p>}
-    {inventoryTab === 'purchases' && registrationFilter !== 'unregistered' && <section aria-label="Бүртгэлтэй худалдан авалт" className="overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="flex flex-wrap gap-2 border-b border-border bg-secondary/25 px-5 py-3" data-testid="inventory-purchase-linked-accounts">{filteredPurchaseAccounts.length ? filteredPurchaseAccounts.map((account) => <div key={account.code} className="rounded-lg border border-border bg-card px-3 py-2"><AccountLabel code={account.code} name={account.name} /></div>) : <AccountLabel code={null} name={null} />}</div>
-      <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-base font-bold">Худалдан авалтын жагсаалт</h2><p className="mt-1 text-xs text-muted-foreground">Сонгосон сарын нийт: <strong className="font-mono text-primary">{money(filteredPurchaseTotal)}</strong></p></div><div className="flex flex-wrap items-center gap-2"><div className="flex items-center overflow-hidden rounded-xl border border-border bg-card"><button type="button" onClick={() => setPurchaseMonth((value) => shiftMonth(value, -1))} className="grid size-10 place-items-center border-r border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Өмнөх сар" data-testid="button-inventory-purchase-previous-month"><ChevronRight className="size-4 rotate-180" /></button><div className="flex items-center gap-2 px-3"><CalendarDays className="size-4 text-primary" /><label className="relative flex h-10 min-w-28 cursor-pointer items-center text-sm font-medium"><span>{mongolianMonthLabel(purchaseMonth)}</span><input type="month" value={purchaseMonth} onChange={(event) => setPurchaseMonth(event.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label="Бараа материалын худалдан авалтын сар сонгох" data-testid="input-inventory-purchase-month" /></label></div><button type="button" onClick={() => setPurchaseMonth((value) => shiftMonth(value, 1))} className="grid size-10 place-items-center border-l border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" aria-label="Дараагийн сар" data-testid="button-inventory-purchase-next-month"><ChevronRight className="size-4" /></button></div><span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{query.data?.length ?? 0} бүртгэл</span></div></div>
-      {query.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-14" /><LoadingBlock className="h-14" /></div> : query.isError ? <ErrorBlock onRetry={() => query.refetch()} /> : !query.data?.length ? <EmptyState title="Худалдан авалт олдсонгүй" detail="Сонгосон сар болон бараа материалын төрөлд тохирох худалдан авалт алга." icon={PackageOpen} /> : <>
-        <div className="divide-y divide-border md:hidden">{query.data.map((purchase) => <article className="p-4" key={purchase.id} data-testid={`inventory-purchase-mobile-${purchase.id}`}><button className="w-full text-left" onClick={() => setSelectedPurchase(purchase)}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-bold">{purchase.supplierName}</p><p className="mt-1 font-mono text-xs" data-testid={`text-inventory-purchase-mobile-document-${purchase.id}`}>{purchase.documentNumber}</p><p className="mt-1 text-xs text-muted-foreground">{dateLabel(purchase.date)}</p><p className="mt-0.5 text-xs text-muted-foreground" data-testid={`text-purchase-mobile-custodian-${purchase.id}`}>Хариуцагч: {purchase.responsibleName ?? '—'}</p></div><p className="shrink-0 font-mono text-sm font-bold text-primary">{money(purchase.totalAmount)}</p></div></button>
-          <PurchaseBankConnection purchase={purchase} />
-          <label className="mt-3 flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={purchase.paid} onChange={(event) => togglePurchasePayment(purchase, event.target.checked)} disabled={confirmPurchasePayment.isPending || cancelPurchasePayment.isPending} data-testid={`checkbox-inventory-payment-${purchase.id}`} />Төлбөр төлсөн{purchase.paid && <span className="text-muted-foreground">· {dateLabel(purchase.paymentDate!)} · {money(purchase.paymentAmount ?? 0)}</span>}</label><div className="mt-3 flex items-center justify-between gap-2"><span className={cn('rounded-full border px-2.5 py-1 text-[10px] font-bold', purchase.hasReceipt ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-100 text-slate-700')}>{purchase.hasReceipt ? 'Баримттай' : 'Баримтгүй'}</span><div className="flex gap-1"><Button variant="outline" size="sm" onClick={() => setSelectedPurchase(purchase)}>Дэлгэрэнгүй</Button>{purchase.editable && <><Button size="icon" variant="ghost" onClick={() => editPurchase(purchase)}><Pencil className="size-4" /></Button><Button size="icon" variant="ghost" title="Үйл ажиллагааны зардал руу шилжүүлэх" onClick={() => openReclassify(purchase)}><ArrowRightLeft className="size-4" /></Button><Button size="icon" variant="ghost" disabled={remove.isPending} onClick={() => deletePurchase(purchase)}><Trash2 className="size-4" /></Button></>}</div></div></article>)}</div>
-        <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[980px] text-left"><thead className="bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Харилцагч · Баримтын дугаар</th><th className="px-5 py-3">Огноо</th><th className="px-5 py-3">Хариуцагч</th><th className="px-5 py-3">Баримт</th><th className="px-5 py-3 text-right">Үнийн дүн</th><th className="px-5 py-3">Төлбөр · Банкны холбоос</th><th className="px-5 py-3 text-right">Үйлдэл</th></tr></thead><tbody className="divide-y divide-border">{query.data.map((purchase) => <tr key={purchase.id} data-testid={`inventory-purchase-${purchase.id}`}><td className="px-5 py-4"><p className="text-sm font-semibold">{purchase.supplierName}</p><p className="mt-1 whitespace-nowrap font-mono text-xs" data-testid={`text-inventory-purchase-document-${purchase.id}`}>{purchase.documentNumber}</p><p className="mt-1 text-xs text-muted-foreground">{purchase.items.length} төрлийн бараа</p></td><td className="px-5 py-4 text-sm">{dateLabel(purchase.date)}</td><td className="px-5 py-4 text-sm" data-testid={`text-purchase-custodian-${purchase.id}`}>{purchase.responsibleName ?? '—'}</td><td className="px-5 py-4"><span className={cn('rounded-full border px-2.5 py-1 text-[10px] font-bold', purchase.hasReceipt ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-100 text-slate-700')}>{purchase.hasReceipt ? 'Баримттай' : 'Баримтгүй'}</span></td><td className="px-5 py-4 text-right font-mono text-sm font-bold text-primary">{money(purchase.totalAmount)}</td><td className="px-5 py-4">
-          <PurchaseBankConnection purchase={purchase} />
-          <label className="mt-2 flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={purchase.paid} onChange={(event) => togglePurchasePayment(purchase, event.target.checked)} disabled={confirmPurchasePayment.isPending || cancelPurchasePayment.isPending} data-testid={`checkbox-inventory-payment-${purchase.id}`} /><span>{purchase.paid ? 'Төлсөн' : 'Төлөөгүй'}</span></label>{purchase.paid && <p className="mt-1 text-[10px] text-muted-foreground">{dateLabel(purchase.paymentDate!)} · {money(purchase.paymentAmount ?? 0)}</p>}</td><td className="px-5 py-4"><div className="flex justify-end gap-1"><Button variant="outline" size="sm" onClick={() => setSelectedPurchase(purchase)} data-testid={`button-view-inventory-${purchase.id}`}>Дэлгэрэнгүй<ChevronRight className="size-4" /></Button>{purchase.editable && <><Button size="icon" variant="ghost" onClick={() => editPurchase(purchase)} data-testid={`button-edit-inventory-${purchase.id}`}><Pencil className="size-4" /></Button><Button size="icon" variant="ghost" title="Үйл ажиллагааны зардал руу шилжүүлэх" onClick={() => openReclassify(purchase)} data-testid={`button-reclassify-inventory-${purchase.id}`}><ArrowRightLeft className="size-4" /></Button><Button size="icon" variant="ghost" disabled={remove.isPending} onClick={() => deletePurchase(purchase)} data-testid={`button-delete-inventory-${purchase.id}`}><Trash2 className="size-4" /></Button></>}</div></td></tr>)}</tbody><tfoot className="border-t-2 border-border bg-secondary/35"><tr><td className="px-5 py-3 text-sm font-bold" colSpan={4}>Сонгосон шүүлтийн нийт</td><td className="px-5 py-3 text-right font-mono text-sm font-bold text-primary" data-testid="value-inventory-purchase-total">{money(filteredPurchaseTotal)}</td><td colSpan={2} /></tr></tfoot></table></div>
-      </>}
-    </section>}
-    {inventoryTab === 'purchases' && registrationFilter !== 'unregistered' && !query.isLoading && !query.isError && (query.data?.length ?? 0) > 0 && <div className="mt-3 flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-xs text-muted-foreground">{query.data?.length ?? 0} баримтаас {(purchasePage - 1) * inventoryPurchasesPerPage + 1}–{Math.min(purchasePage * inventoryPurchasesPerPage, query.data?.length ?? 0)}-г харуулж байна</p>
-      <div className="flex items-center justify-between gap-2 sm:justify-end">
-        <Button type="button" variant="outline" size="sm" disabled={purchasePage === 1} onClick={() => setPurchasePage((page) => Math.max(1, page - 1))} data-testid="button-inventory-purchases-previous">Өмнөх</Button>
-        <span className="min-w-20 text-center font-mono text-xs font-bold">{purchasePage} / {purchasePageCount}</span>
-        <Button type="button" variant="outline" size="sm" disabled={purchasePage === purchasePageCount} onClick={() => setPurchasePage((page) => Math.min(purchasePageCount, page + 1))} data-testid="button-inventory-purchases-next">Дараах</Button>
-      </div>
-    </div>}
+    {inventoryTab === 'purchases' && <>
+      <InventoryPurchaseToolbar month={purchaseMonth} monthLabel={mongolianMonthLabel(purchaseMonth)} onMonthChange={setPurchaseMonth} onShiftMonth={(delta) => setPurchaseMonth((value) => shiftMonth(value, delta))} filters={purchaseFilters} onFiltersChange={setPurchaseFilters}
+        materialSelector={<div className="inline-flex h-10 items-center rounded-lg border border-border bg-card p-0.5" role="tablist" aria-label="Бараа материалын төрөл">{inventoryMaterialTypes.map((type) => <button key={type.value} type="button" role="tab" aria-selected={materialTypeTab === type.value} className={cn('h-full rounded-md px-3 text-xs font-bold transition-colors', materialTypeTab === type.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary')} onClick={() => setMaterialTypeTab(type.value)} data-testid={`tab-inventory-material-${type.value}`}>{type.value === 'food' ? 'Хүнс' : 'Хангамж'}</button>)}</div>}
+        pendingLauncher={<PendingPurchasesLauncher month={purchaseMonth} materialType={materialTypeTab} onOpen={() => setPendingDrawerOpen(true)} />} />
+      <InventoryPurchaseList rows={paginatedPurchases} totalCount={filteredPurchases.length} totalAmount={filteredPurchaseTotal} accounts={filteredPurchaseAccounts}
+        isLoading={purchasesQuery.isLoading} isError={purchasesQuery.isError} onRetry={() => purchasesQuery.refetch()}
+        page={safePurchasePage} pageCount={purchasePageCount} pageSize={inventoryPurchasesPerPage} onPage={setPurchasePage}
+        hasFilters={Boolean(purchaseSearch) || purchaseFilters.bank !== 'all' || purchaseFilters.payment !== 'all' || purchaseFilters.receipt !== 'all'}
+        onOpen={setSelectedPurchase} onEdit={editPurchase} onReclassify={openReclassify} onDelete={deletePurchase} onPayment={togglePurchasePayment}
+        paymentBusy={confirmPurchasePayment.isPending || cancelPurchasePayment.isPending || cancelPurchaseGroup.isPending} deleteBusy={remove.isPending} readOnly={session.data?.role === 'viewer'} />
+      <PendingInventoryPurchasesDrawer open={pendingDrawerOpen} onOpenChange={setPendingDrawerOpen} month={purchaseMonth} materialType={materialTypeTab} monthLabel={`${mongolianMonthLabel(purchaseMonth)} · ${inventoryMaterialTypes.find((t) => t.value === materialTypeTab)?.label}`} canRegister={canManageMaterialRequests} onRegister={openPendingPurchase} />
+    </>}
     {inventoryTab === 'suppliers' && <section className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-5 py-4"><h2 className="text-base font-bold">Харилцагчид</h2><span className="rounded-full bg-secondary px-3 py-1 font-mono text-[10px] font-bold">{suppliers.data?.length ?? 0} харилцагч</span></div>
       {suppliers.isLoading ? <div className="space-y-3 p-5"><LoadingBlock className="h-20" /><LoadingBlock className="h-20" /></div> : suppliers.isError ? <ErrorBlock onRetry={() => suppliers.refetch()} /> : !suppliers.data?.length ? <EmptyState title="Харилцагч бүртгэгдээгүй" detail="Худалдан авалт бүртгэхэд харилцагч автоматаар нэмэгдэнэ." icon={PackageOpen} /> : <>

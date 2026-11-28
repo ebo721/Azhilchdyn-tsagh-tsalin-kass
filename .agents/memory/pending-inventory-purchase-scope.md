@@ -3,11 +3,17 @@ name: Pending inventory purchase scope
 description: User-requested bank purchase accounting before item and supplier details are known, without restructuring existing workflows.
 ---
 
-Allow bank-funded inventory/supply purchases to appear as “Бүртгэлгүй” when the item, quantity and supplier are unknown. Show only the known bank facts (date, amount, description, account), with “Бүртгэлтэй / Бүртгэлгүй” filtering alongside the purchase list.
+Allow bank-funded inventory/supply purchases to await registration when the item, quantity and supplier are unknown. Show only the known bank facts (date, amount, description, account).
 
 **Why:** The user requires financial posting before the purchase breakdown is available, and explicitly said not to restructure or break the existing logic or make this a large development.
 
 **How to apply:** Post cash and the appropriate inventory/supply GL account once, without inventing a supplier or adding stock. Completing the existing purchase form must exactly match the bank amount, add real stock once, and reuse the posted accounting rather than creating another payment or expense. Preserve the normal purchase/payment lifecycle.
+
+The user approved separating inventory navigation into sections and moving pending purchases out of the main list into a count-triggered panel labelled “Бүртгэл хүлээгдэж буй”.
+
+**Why:** The user asked to reduce up/down scrolling and make pending and registered purchases easier to use. This supersedes the earlier presentation using registration-status filtering above two stacked lists, not the underlying accounting rules.
+
+**How to apply:** Keep bank-paid purchases awaiting item registration distinct from unpaid purchase documents. Presentation changes must not invent approval steps, change payment/stock logic, or discard the current list position when completing a pending registration.
 
 When registering a pending purchase, suggest existing purchases with the same amount or material type, but do not suggest purchases that are already linked.
 
