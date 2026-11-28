@@ -14,6 +14,7 @@ import { dateLabel, currentMonth, money, today } from '@/lib/app-shared';
 import { useQueueDeletion } from '@/hooks/useQueueDeletion';
 import { PayrollOpeningBalances } from '@/components/PayrollOpeningBalances';
 import { AdvancePaymentHistory } from '@/components/AdvancePaymentHistory';
+import { AdvanceReceivableDeduction } from '@/components/AdvanceReceivableDeduction';
 import { rebuildPayrollBalances } from '@workspace/api-client-react';
 import { getListJournalEntriesQueryKey, getGetJournalTrialBalanceQueryKey } from '@workspace/api-client-react';
 import { getListShiftsQueryKey, getListShiftPlansQueryKey, useListShifts, useListShiftPlans } from '@workspace/api-client-react';
@@ -589,7 +590,8 @@ export function Payroll() {
           <tbody className="divide-y divide-border">{filteredAdvanceLines.length === 0 ? <tr><td colSpan={10} className="px-5 py-8 text-center text-sm text-muted-foreground" data-testid="empty-payroll-advance-filter">Шүүлтүүрт тохирох ажилтан алга.</td></tr> : filteredAdvanceLines.map((line) => {
             const selectedDate = advanceDates[line.employeeId] ?? line.paymentDate ?? advanceQuery.data?.approvalDate ?? today();
             const cashClosed = closedCashDates.has(selectedDate) || Boolean(line.paymentDate && closedCashDates.has(line.paymentDate));
-            const installments = Boolean(line.payments);
+            // Both installment history and a fully non-cash settlement lock the single-payment action.
+            const installments = Boolean(line.payments) || (line.advanceAmount > 0 && (line.receivableDeduction ?? 0) >= line.advanceAmount);
             const isRefreshing = refreshingAdvanceEmployeeId === line.employeeId;
             return <tr key={line.employeeId}>
               <td className="px-5 py-4"><p className="text-sm font-semibold">{line.employeeName}</p><p className="text-xs text-muted-foreground">{line.employeeType === 'shift' ? 'Ээлжийн ажилтан' : 'Оффис ажилтан'}</p></td>
@@ -603,6 +605,7 @@ export function Payroll() {
               <td className="px-5 py-4 text-center">{advanceQuery.data?.approved ? <>
                 <Button size="sm" variant={line.paid ? 'default' : 'outline'} disabled={updateAdvancePayment.isPending || cashClosed || closed || installments} onClick={() => setAdvancePaid(line.employeeId, !line.paid, line.advanceAmount, line.paymentDate)} title={cashClosed ? 'Энэ өдрийн касс өндөрлөсөн' : undefined} data-testid={`button-advance-paid-${line.employeeId}`}>{line.paid ? <><Check className="size-3.5" />Олгосон</> : (line.paidAmount ?? 0) > 0 ? 'Хэсэгчлэн олгосон' : 'Олгоогүй'}</Button>
                 <AdvancePaymentHistory line={line} month={month} closed={closed} />
+                <AdvanceReceivableDeduction line={line} month={month} closed={closed} readOnly={!canEditPayroll} />
               </> : <span className="text-xs text-muted-foreground">Батлаагүй</span>}</td>
               <td className="px-5 py-4 text-right"><Button size="sm" variant="outline" disabled={closed || Boolean(advanceQuery.data?.approved) || advanceQuery.isFetching} onClick={() => refreshAdvanceEmployee(line.employeeId)} title={advanceQuery.data?.approved ? 'Батлагдсан урьдчилгааны мэдээлэл өөрчлөгдөхгүй' : 'Цалин болон ажилласан хоногийн мэдээллийг шинэчлэх'} data-testid={`button-refresh-advance-employee-${line.employeeId}`}><RefreshCw className={cn('size-3.5', isRefreshing && 'animate-spin')} />{isRefreshing ? 'Шинэчилж байна...' : 'Шинэчлэх'}</Button></td>
             </tr>;

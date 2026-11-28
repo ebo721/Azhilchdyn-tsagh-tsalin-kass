@@ -373,10 +373,18 @@ router.post("/journal/entries/:id/void", async (req, res, next) => {
         sourceId: journalEntriesTable.sourceId,
       }).from(journalEntriesTable).where(eq(journalEntriesTable.id, id)).for("update");
       if (entry && await isFixedAssetJournal(tx, entry)) return "fixed_asset_owned" as const;
+      if (entry?.sourceType === "payroll_advance_receivable") return "advance_receivable_owned" as const;
+      if (entry?.sourceType === "reversal" && entry.sourceId !== null) {
+        const [original] = await tx.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, entry.sourceId));
+        if (original?.sourceType === "payroll_advance_receivable") return "advance_receivable_owned" as const;
+      }
       return voidJournalEntry(tx, { journalEntryId: id, voidedBy: session?.id ?? null });
     });
     if (result === "fixed_asset_owned") {
       return res.status(409).json({ error: "Эд хөрөнгийн журналыг шууд буцаахгүй. Эд хөрөнгийн бүртгэлээс засна уу" });
+    }
+    if (result === "advance_receivable_owned") {
+      return res.status(409).json({ error: "Урьдчилгааны авлагын суутгалыг цалингийн цэснээс буцаана уу" });
     }
     return res.json(VoidJournalEntryResponse.parse(result));
   } catch (error) {

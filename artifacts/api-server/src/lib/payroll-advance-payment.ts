@@ -1,3 +1,4 @@
+import { advanceNetAmount } from "./payroll-advance-installments.js";
 type PayrollAdvanceLine = Record<string, unknown>;
 
 type PlanPayrollAdvancePaymentInput = {
@@ -47,11 +48,11 @@ export function planPayrollAdvancePayment(
     (total, line) => total + Number(line.advanceAmount),
     0,
   ));
-  const cashTransaction = selectedLine && input.paid && input.paymentDate
+  const cashTransaction = selectedLine && input.paid && input.paymentDate && advanceNetAmount(selectedLine) > 0
     ? {
         sourceType: "payroll_advance" as const,
         sourceKey: `${input.month}:${input.employeeId}`,
-        amount: Number(selectedLine.advanceAmount),
+        amount: advanceNetAmount(selectedLine),
         date: input.paymentDate,
       }
     : null;

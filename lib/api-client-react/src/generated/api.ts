@@ -185,6 +185,7 @@ import type {
   PayrollAdjustmentInput,
   PayrollAdvanceApprovalInput,
   PayrollAdvancePaymentInput,
+  PayrollAdvanceReceivableInput,
   PayrollAdvanceSummary,
   PayrollAttendancePullInput,
   PayrollAttendancePullResult,
@@ -5194,6 +5195,77 @@ export const useRevertPayrollAdvanceApproval = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getRevertPayrollAdvanceApprovalMutationOptions(options));
+    }
+
+export const getUpdatePayrollAdvanceReceivableUrl = () => {
+
+
+
+
+  return `/api/payroll-advance/receivable`
+}
+
+/**
+ * @summary Set or reverse an employee receivable deduction before advance payment
+ */
+export const updatePayrollAdvanceReceivable = async (payrollAdvanceReceivableInput: PayrollAdvanceReceivableInput, options?: Parameters<typeof customFetch>[1]): Promise<PayrollAdvanceSummary> => {
+
+  return customFetch<PayrollAdvanceSummary>(getUpdatePayrollAdvanceReceivableUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(payrollAdvanceReceivableInput)
+  }
+);}
+
+
+
+
+
+export const getUpdatePayrollAdvanceReceivableMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePayrollAdvanceReceivable>>, TError,{data: BodyType<PayrollAdvanceReceivableInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePayrollAdvanceReceivable>>, TError,{data: BodyType<PayrollAdvanceReceivableInput>}, TContext> => {
+
+const mutationKey = ['updatePayrollAdvanceReceivable'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePayrollAdvanceReceivable>>, {data: BodyType<PayrollAdvanceReceivableInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updatePayrollAdvanceReceivable(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePayrollAdvanceReceivableMutationResult = NonNullable<Awaited<ReturnType<typeof updatePayrollAdvanceReceivable>>>
+    export type UpdatePayrollAdvanceReceivableMutationBody = BodyType<PayrollAdvanceReceivableInput>
+    export type UpdatePayrollAdvanceReceivableMutationError = ErrorType<void>
+
+    /**
+ * @summary Set or reverse an employee receivable deduction before advance payment
+ */
+export const useUpdatePayrollAdvanceReceivable = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePayrollAdvanceReceivable>>, TError,{data: BodyType<PayrollAdvanceReceivableInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updatePayrollAdvanceReceivable>>,
+        TError,
+        {data: BodyType<PayrollAdvanceReceivableInput>},
+        TContext
+      > => {
+      return useMutation(getUpdatePayrollAdvanceReceivableMutationOptions(options));
     }
 
 export const getUpdatePayrollAdvancePaymentUrl = () => {

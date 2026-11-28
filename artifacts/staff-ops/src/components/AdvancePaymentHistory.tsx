@@ -7,7 +7,7 @@ export function AdvancePaymentHistory({ line, month, closed }: {
   line: PayrollAdvanceLine; month: string; closed: boolean;
 }) {
   const deletion = useQueueDeletion();
-  const paid = line.paidAmount ?? (line.paid ? line.advanceAmount : 0);
+  const paid = line.paidAmount ?? (line.paid ? line.advanceAmount - (line.receivableDeduction ?? 0) : 0);
   return <div className="space-y-2 text-xs" data-testid={`advance-history-${line.employeeId}`}>
     <p className="font-semibold">Олгосон: {money(paid)}</p>
     <p>Үлдэгдэл: {money(line.remainingBalance ?? Math.max(0, line.advanceAmount - paid))}</p>

@@ -1158,6 +1158,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PayrollAdvanceSummary"
+  /payroll-advance/receivable:
+    put:
+      operationId: updatePayrollAdvanceReceivable
+      tags: [payroll]
+      summary: Set or reverse an employee receivable deduction before advance payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PayrollAdvanceReceivableInput"
+      responses:
+        "200":
+          description: Updated advance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayrollAdvanceSummary"
+        "400": { description: Invalid input }
+        "409": { description: Closed period or conflicting payment }
   /payroll-advance/payment:
     put:
       operationId: updatePayrollAdvancePayment
@@ -4228,6 +4248,11 @@ components:
         dailySalary: { type: number }
         totalSalary: { type: number }
         advanceAmount: { type: number }
+        receivableId: { type: ["integer", "null"] }
+        receivableDeduction: { type: number, minimum: 0 }
+        receivableDate: { type: ["string", "null"] }
+        receivableJournalEntryId: { type: ["integer", "null"] }
+        netAdvanceAmount: { type: number }
         paid: { type: boolean }
         paymentDate: { type: ["string", "null"] }
         paidAmount: { type: number }
@@ -4279,6 +4304,15 @@ components:
       properties:
         employeeId: { type: integer }
         advanceAmount: { type: number, minimum: 0 }
+    PayrollAdvanceReceivableInput:
+      type: object
+      required: [month, employeeId, receivableId, amount, date]
+      properties:
+        month: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+        employeeId: { type: integer, minimum: 1 }
+        receivableId: { type: ["integer", "null"], minimum: 1 }
+        amount: { type: number, minimum: 0 }
+        date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
     PayrollAdvancePaymentInput:
       type: object
       required: [month, employeeId, advanceAmount, paid]
