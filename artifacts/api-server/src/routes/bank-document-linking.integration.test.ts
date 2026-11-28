@@ -969,9 +969,17 @@ describe("bank document linking", () => {
       .where(eq(inventoryPurchasePaymentGroupsTable.bankTransactionId, bankId));
     paymentGroupIds.push(group.id);
     const purchaseList = await fetch(`${baseUrl}/api/inventory/purchases`, { headers: { cookie } });
-    const purchaseRows = await purchaseList.json() as Array<{ id: number; paymentGroupBankTransactionId: number | null }>;
+    const purchaseRows = await purchaseList.json() as Array<{ id: number; paid: boolean; paymentGroupBankTransactionId: number | null; bankConnection: { id: number; kind: string; amount: number } | null }>;
     assert.equal(purchaseRows.find((purchase) => purchase.id === first.id)?.paymentGroupBankTransactionId, bankId);
     assert.equal(purchaseRows.find((purchase) => purchase.id === second.id)?.paymentGroupBankTransactionId, bankId);
+    for (const id of [first.id, second.id]) {
+      assert.equal(purchaseRows.find(p => p.id === id)?.paid, true);
+      const link = purchaseRows.find(p => p.id === id)?.bankConnection;
+      assert.ok(link);
+      assert.equal(link.id, bankId);
+      assert.equal(link.kind, "group");
+      assert.equal(link.amount, 60_000);
+    }
     const protectedEdit = await fetch(`${baseUrl}/api/inventory/purchases/${first.id}`, {
       method: "PUT",
       headers: { cookie, "content-type": "application/json" },
@@ -1037,6 +1045,8 @@ describe("bank document linking", () => {
     const cancelled = await cancel.json() as { inventoryPurchaseIds: number[]; cancelled: boolean };
     assert.deepEqual(cancelled.inventoryPurchaseIds, [first.id, second.id]);
     assert.equal(cancelled.cancelled, true);
+    const afterCancelRows = await (await fetch(`${baseUrl}/api/inventory/purchases`, { headers: { cookie } })).json() as Array<{ id: number; bankConnection: unknown }>;
+    for (const id of [first.id, second.id]) assert.equal(afterCancelRows.find(p => p.id === id)?.bankConnection, null);
     const [cancelledGroup] = await db.select().from(inventoryPurchasePaymentGroupsTable)
       .where(eq(inventoryPurchasePaymentGroupsTable.id, group.id));
     assert.equal(cancelledGroup.status, "cancelled");
@@ -1261,6 +1271,7 @@ describe("bank document linking", () => {
     }).returning();
     purchaseIds.push(first.id, second.id);
     const bankId = await bank("2099-08-11", 32_000, "racing-purchase-group");
+    const singleBankId = await bank("2099-08-11", 12_000, "racing-purchase-single");
     const headers = { cookie, "content-type": "application/json" };
     const [groupResponse, singleResponse] = await Promise.all([
       fetch(`${baseUrl}/api/bank-transactions/${bankId}/link-purchases`, {
@@ -1271,7 +1282,7 @@ describe("bank document linking", () => {
       fetch(`${baseUrl}/api/inventory/purchases/${first.id}/payment`, {
         method: "PUT",
         headers,
-        body: JSON.stringify({ date: "2099-08-11", amount: 12_000 }),
+        body: JSON.stringify({ date: "2099-08-11", amount: 12_000, bankTransactionId: singleBankId }),
       }),
     ]);
     assert.deepEqual([groupResponse.status, singleResponse.status].sort(), [200, 409]);

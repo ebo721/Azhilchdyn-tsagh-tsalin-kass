@@ -106,7 +106,7 @@ describe("bank purchases awaiting item details", () => {
       }).returning();
       groups.push(group.id);
       await db.insert(inventoryPurchasePaymentGroupMembersTable).values({
-        groupId: group.id, purchaseId: status === "active" ? grouped : cancelledGroupPurchase, amount: 83.45,
+        groupId: group.id, purchaseId: status === "active" ? grouped : cancelledGroupPurchase,
       });
     }
     const list = await call(`/inventory/pending-purchases/${row.id}/suggestions`, "GET", undefined, "warehouse");
@@ -127,6 +127,17 @@ describe("bank purchases awaiting item details", () => {
     assert.equal(linked.inventoryPurchaseId, exact);
     assert.equal(linked.journalEntryId, posted.journalEntryId);
     assert.equal(linked.cashTransactionId, saved.cashTransactionId);
+    const purchaseList = await (await call("/inventory/purchases")).json();
+    const exactResult = purchaseList.find((p: any) => p.id === exact);
+    assert.equal(exactResult.paid, true);
+    assert.equal(exactResult.bankConnection.id, row.id);
+    assert.equal(exactResult.bankConnection.kind, "single");
+    assert.equal(exactResult.bankConnection.amount, 83.45);
+    assert.equal(exactResult.bankConnection.description, prefix);
+    assert.equal(purchaseList.find((p: any) => p.id === paid).bankConnection, null);
+    assert.equal(purchaseList.find((p: any) => p.id === neither).bankConnection, null);
+    assert.equal(purchaseList.find((p: any) => p.id === cashLinked).bankConnection, null);
+    assert.equal(purchaseList.find((p: any) => p.id === cancelledGroupPurchase).bankConnection, null);
     const [purchase] = await db.select().from(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, exact));
     assert.equal(purchase.date, "2098-06-14");
     assert.equal(purchase.paymentDate, "2098-06-15");

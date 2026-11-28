@@ -13,6 +13,7 @@ import {
   ListPendingPurchaseSuggestionsParams, ListPendingPurchaseSuggestionsResponse,
 } from "@workspace/api-zod";
 import { listPendingInventoryPurchases, pendingPurchaseSuggestions } from "../lib/pending-inventory-purchases.js";
+import { inventoryPurchaseBankLinks } from "../lib/inventory-purchase-bank-links.js";
 import { linkBankPurchase } from "../lib/bank-document-linking.js";
 import { inventoryOpeningBalancesTable, inventoryOpeningConsumptionsTable } from "@workspace/db";
 import { createServer } from "node:http";
@@ -229,7 +230,7 @@ router.post("/inventory/pending-purchases/:id/register", async (req, res, next) 
 
 router.get("/inventory/purchases", async (_req, res, next) => {
   try {
-    const [purchases, items, closures, paymentGroups] = await Promise.all([
+    const [purchases, items, closures, paymentGroups, bankLinks] = await Promise.all([
       db.select({
         purchase: inventoryPurchasesTable,
         accountCode: chartOfAccountsTable.code,
@@ -248,6 +249,7 @@ router.get("/inventory/purchases", async (_req, res, next) => {
           inventoryPurchasePaymentGroupMembersTable.groupId,
         ))
         .where(eq(inventoryPurchasePaymentGroupsTable.status, "active")),
+      inventoryPurchaseBankLinks(),
     ]);
     const closedDates = new Set(closures.map((closure) => closure.date));
     const paymentGroupByPurchase = new Map(paymentGroups.map((group) => [group.purchaseId, group.bankTransactionId]));
@@ -269,6 +271,7 @@ router.get("/inventory/purchases", async (_req, res, next) => {
       paymentDate: row.purchase.paymentDate,
       paymentAmount: row.purchase.paymentAmount === null ? null : Number(row.purchase.paymentAmount),
       paymentGroupBankTransactionId: paymentGroupByPurchase.get(row.purchase.id) ?? null,
+      bankConnection: bankLinks.get(row.purchase.id) ?? null,
       createdAt: row.purchase.createdAt.toISOString(),
       editable: !closedDates.has(row.purchase.date),
       items: items
@@ -1039,7 +1042,12 @@ router.get("/inventory/purchases/:id/payment-bank-suggestions", async (req, res,
 router.put("/inventory/purchases/:id/payment", async (req, res, next) => {
   try {
     const { id } = ConfirmInventoryPurchasePaymentParams.parse(req.params);
-    const input = ConfirmInventoryPurchasePaymentBody.parse(req.body);
+    const parsed = ConfirmInventoryPurchasePaymentBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Төлбөр батлахын тулд банкны гүйлгээ, төлбөрийн огноо, дүнг зөв сонгоно уу" });
+      return;
+    }
+    const input = parsed.data;
     if (!isValidCalendarDate(input.date)) {
       res.status(400).json({ error: "Хуанлийн огноо буруу байна" });
       return;
@@ -1067,26 +1075,22 @@ router.put("/inventory/purchases/:id/payment", async (req, res, next) => {
         eq(cashTransactionsTable.sourceType, "inventory_purchase"),
         eq(cashTransactionsTable.sourceKey, `purchase:${id}`),
       ));
-      const [bank] = input.bankTransactionId == null
-        ? []
-        : await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, input.bankTransactionId)).for("update");
-      if (input.bankTransactionId != null) {
-        if (!bank) return "bank_missing" as const;
-        await assertNotInternalTransfer(tx, bank.id);
-        const bankDate = bank.transactionAt.toISOString().slice(0, 10);
-        if (money(input.amount) !== money(Number(currentPurchase.totalAmount))) return "bank_mismatch" as const;
-        if (bank.type !== "expense" || bank.unclearAt !== null || bankDate !== input.date || money(Number(bank.amount)) !== money(input.amount)) {
-          return "bank_mismatch" as const;
-        }
-        if (existingCash?.bankTransactionId && existingCash.bankTransactionId !== bank.id) return "bank_conflict" as const;
-        if ((bank.cashTransactionId !== null || bank.transferredAt !== null) && bank.cashTransactionId !== existingCash?.id) {
-          return "bank_conflict" as const;
-        }
+      const [bank] = await tx.select().from(bankTransactionsTable).where(eq(bankTransactionsTable.id, input.bankTransactionId)).for("update");
+      if (!bank) return "bank_missing" as const;
+      await assertNotInternalTransfer(tx, bank.id);
+      const bankDate = bank.transactionAt.toISOString().slice(0, 10);
+      if (money(input.amount) !== money(Number(currentPurchase.totalAmount))) return "bank_mismatch" as const;
+      if (bank.type !== "expense" || bank.unclearAt !== null || bankDate !== input.date || currentPurchase.date > bankDate || money(Number(bank.amount)) !== money(input.amount)) {
+        return "bank_mismatch" as const;
+      }
+      if (existingCash?.bankTransactionId && existingCash.bankTransactionId !== bank.id) return "bank_conflict" as const;
+      if ((bank.cashTransactionId !== null || bank.transferredAt !== null) && bank.cashTransactionId !== existingCash?.id) {
+        return "bank_conflict" as const;
       }
       await tx.update(inventoryPurchasesTable)
         .set({ paymentDate: input.date, paymentAmount: money(input.amount) })
         .where(eq(inventoryPurchasesTable.id, id));
-      const verifiedAt = bank ? new Date() : null;
+      const verifiedAt = new Date();
       const cashCategory = inventoryMaterialLabel(currentPurchase.materialType);
       const cashAccount = await cashAccountForCategory(tx, cashCategory);
       const [cash] = await tx.insert(cashTransactionsTable).values({
@@ -1098,7 +1102,7 @@ router.put("/inventory/purchases/:id/payment", async (req, res, next) => {
         date: input.date,
         sourceType: "inventory_purchase",
         sourceKey: `purchase:${id}`,
-        bankTransactionId: bank?.id ?? null,
+        bankTransactionId: bank.id,
         bankVerifiedAt: verifiedAt,
       }).onConflictDoUpdate({
         target: [cashTransactionsTable.sourceType, cashTransactionsTable.sourceKey],
@@ -1108,10 +1112,10 @@ router.put("/inventory/purchases/:id/payment", async (req, res, next) => {
           description: currentPurchase.documentName,
           amount: money(input.amount),
           date: input.date,
-          ...(bank ? { bankTransactionId: bank.id, bankVerifiedAt: verifiedAt } : {}),
+          bankTransactionId: bank.id, bankVerifiedAt: verifiedAt,
         },
       }).returning({ id: cashTransactionsTable.id });
-      if (bank && bank.cashTransactionId !== cash!.id) {
+      if (bank.cashTransactionId !== cash!.id) {
         const [updatedBank] = await tx.update(bankTransactionsTable)
           .set({ cashTransactionId: cash!.id, transferredAt: verifiedAt })
           .where(and(
@@ -1132,7 +1136,7 @@ router.put("/inventory/purchases/:id/payment", async (req, res, next) => {
       if (!inventoryAccount) {
         throw new Error("Inventory purchase account is missing or inactive");
       }
-      const creditCode = bank ? "1010" : "1000";
+      const creditCode = "1010";
       const [creditAccount] = await tx.select().from(chartOfAccountsTable).where(and(
         eq(chartOfAccountsTable.code, creditCode),
         eq(chartOfAccountsTable.isActive, true),

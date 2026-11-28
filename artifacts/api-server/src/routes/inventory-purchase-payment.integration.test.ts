@@ -138,7 +138,7 @@ describe("inventory purchase payment", () => {
     const reconfirmResponse = await fetch(`${baseUrl}/api/inventory/purchases/${purchaseId}/payment`, {
       method: "PUT",
       headers: { "content-type": "application/json", cookie: adminCookie },
-      body: JSON.stringify({ date: "2099-01-16", amount: 110_000 }),
+      body: JSON.stringify({ date: "2099-01-16", amount: 110_000, bankTransactionId }),
     });
     assert.equal(reconfirmResponse.status, 409);
 
@@ -273,7 +273,7 @@ describe("inventory purchase payment", () => {
     }
   });
 
-  it("posts cash payments and rolls back when the cash account is inactive", async () => {
+  it("requires a valid bank selection and leaves historical bankless payments unchanged", async () => {
     const [purchase] = await db.insert(inventoryPurchasesTable).values({
       materialType: "food",
       documentName: `Cash payment ${process.pid}`,
@@ -281,6 +281,8 @@ describe("inventory purchase payment", () => {
       date: "2099-03-10",
       totalAmount: 25_000,
       accountId: inventoryAccountId,
+      paymentDate: "2099-03-10",
+      paymentAmount: 25_000,
     }).returning({ id: inventoryPurchasesTable.id });
     const [cashPayment] = await db.insert(inventoryPurchasesTable).values({
       materialType: "food",
@@ -290,51 +292,30 @@ describe("inventory purchase payment", () => {
       totalAmount: 26_000,
       accountId: inventoryAccountId,
     }).returning({ id: inventoryPurchasesTable.id });
-    const [cashAccount] = await db.select({ id: chartOfAccountsTable.id }).from(chartOfAccountsTable).where(eq(chartOfAccountsTable.code, "1000"));
-    assert.ok(cashAccount);
     try {
-      const paid = await fetch(`${baseUrl}/api/inventory/purchases/${purchase.id}/payment`, {
-        method: "PUT",
-        headers: { "content-type": "application/json", cookie: adminCookie },
-        body: JSON.stringify({ date: "2099-03-10", amount: 25_000 }),
-      });
-      assert.equal(paid.status, 200);
-      const [cash] = await db.select().from(cashTransactionsTable).where(and(
-        eq(cashTransactionsTable.sourceType, "inventory_purchase"),
-        eq(cashTransactionsTable.sourceKey, `purchase:${purchase.id}`),
-      ));
-      assert.ok(cash?.journalEntryId);
-      const [entry] = await db.select().from(journalEntriesTable).where(eq(journalEntriesTable.id, cash.journalEntryId!));
-      assert.equal(entry?.sourceType, "inventory_purchase");
-      const [cashLine] = await db.select().from(journalLinesTable).where(and(
-        eq(journalLinesTable.journalEntryId, cash.journalEntryId!),
-        eq(journalLinesTable.accountId, cashAccount.id),
-      ));
-      assert.equal(Number(cashLine?.credit), 25_000);
-
-      await db.update(chartOfAccountsTable).set({ isActive: false }).where(eq(chartOfAccountsTable.id, cashAccount.id));
-      const rolledBack = await fetch(`${baseUrl}/api/inventory/purchases/${cashPayment.id}/payment`, {
-        method: "PUT",
-        headers: { "content-type": "application/json", cookie: adminCookie },
-        body: JSON.stringify({ date: "2099-03-11", amount: 26_000 }),
-      });
-      assert.equal(rolledBack.status, 500);
+      for (const bankId of [undefined, null, 0, -1, "invalid"]) {
+        const response = await fetch(`${baseUrl}/api/inventory/purchases/${cashPayment.id}/payment`, {
+          method: "PUT",
+          headers: { "content-type": "application/json", cookie: adminCookie },
+          body: JSON.stringify({ date: "2099-03-11", amount: 26_000, bankTransactionId: bankId }),
+        });
+        assert.equal(response.status, 400);
+        assert.match((await response.json() as { error: string }).error, /банкны гүйлгээ/);
+      }
       const [unpaid] = await db.select().from(inventoryPurchasesTable).where(eq(inventoryPurchasesTable.id, cashPayment.id));
       assert.equal(unpaid?.paymentDate, null);
+      assert.equal(unpaid?.paymentAmount, null);
       const [rolledCash] = await db.select().from(cashTransactionsTable).where(and(
         eq(cashTransactionsTable.sourceType, "inventory_purchase"),
         eq(cashTransactionsTable.sourceKey, `purchase:${cashPayment.id}`),
       ));
       assert.equal(rolledCash, undefined);
-      await db.update(chartOfAccountsTable).set({ isActive: true }).where(eq(chartOfAccountsTable.id, cashAccount.id));
-
-      const cancelled = await fetch(`${baseUrl}/api/inventory/purchases/${purchase.id}/payment`, {
-        method: "DELETE",
-        headers: { cookie: adminCookie },
-      });
-      assert.equal(cancelled.status, 200);
+      const listed = await (await fetch(`${baseUrl}/api/inventory/purchases`, { headers: { cookie: adminCookie } })).json() as Array<{ id: number; paid: boolean; paymentDate: string | null; bankConnection: unknown }>;
+      const historical = listed.find(row => row.id === purchase.id);
+      assert.equal(historical?.paid, true);
+      assert.equal(historical?.paymentDate, "2099-03-10");
+      assert.equal(historical?.bankConnection, null);
     } finally {
-      await db.update(chartOfAccountsTable).set({ isActive: true }).where(eq(chartOfAccountsTable.id, cashAccount.id));
       const sourceEntries = await db.select({ id: journalEntriesTable.id }).from(journalEntriesTable).where(and(
         eq(journalEntriesTable.sourceType, "inventory_purchase"),
         inArray(journalEntriesTable.sourceId, [purchase.id, cashPayment.id]),

@@ -21,6 +21,7 @@ export function PendingInventoryPurchases({ month, materialType, canRegister, on
         <strong className="font-mono text-sm">{new Intl.NumberFormat('mn-MN', { maximumFractionDigits: 2 }).format(row.amount)} ₮</strong>
       </div>
       <p className="break-words text-sm">{row.description || 'Утгагүй'}</p>
+      <p className="text-xs font-semibold text-emerald-800">Банктай холбогдсон · Банк #{row.id}</p>
       <p className="break-words text-xs text-muted-foreground">Данс: {row.accountCode} {row.accountName} · Банкны гүйлгээний данс: {row.bankAccount || '—'}</p>
       {canRegister && <Button size="sm" variant="outline" onClick={() => onRegister(row)} data-testid={`register-pending-purchase-${row.id}`}>Бүртгэх</Button>}
     </article>)}

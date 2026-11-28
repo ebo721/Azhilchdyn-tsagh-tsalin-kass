@@ -4875,6 +4875,16 @@ components:
       properties:
         id: { type: integer }
         name: { type: string }
+    PurchaseBankConnection:
+      type: object
+      required: [id, transactionAt, amount, description, account, kind]
+      properties:
+        id: { type: integer }
+        transactionAt: { type: string }
+        amount: { type: number }
+        description: { type: string }
+        account: { type: string }
+        kind: { type: string, enum: [single, group] }
     InventoryPurchase:
       type: object
       required: [id, documentNumber, materialType, accountId, accountCode, accountName, supplierName, hasReceipt, date, totalAmount, paid, paymentGroupBankTransactionId, createdAt, editable, items]
@@ -4899,6 +4909,11 @@ components:
         paymentDate: { type: string, nullable: true }
         paymentAmount: { type: number, nullable: true }
         paymentGroupBankTransactionId: { type: ["integer", "null"], minimum: 1 }
+        bankConnection:
+          description: Current reciprocal bank link, present on the purchase list response; null means no bank link, independent of paid status.
+          oneOf:
+            - $ref: "#/components/schemas/PurchaseBankConnection"
+            - { type: "null" }
         createdAt: { type: string }
         editable: { type: boolean }
         items:
@@ -4969,13 +4984,13 @@ components:
             $ref: "#/components/schemas/InventoryPurchaseItemInput"
     InventoryPurchasePaymentInput:
       type: object
-      required: [date, amount]
+      required: [date, amount, bankTransactionId]
       properties:
         date:
           type: string
           pattern: '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$'
         amount: { type: number, exclusiveMinimum: 0 }
-        bankTransactionId: { type: ["integer", "null"] }
+        bankTransactionId: { type: integer, minimum: 1 }
     InventoryPurchaseBankSuggestion:
       type: object
       required: [id, transactionAt, amount, description, score]
