@@ -210,7 +210,9 @@ it("exports the same insurance salary from the common long-history summary", asy
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(bytes as never);
   const sheet = workbook.worksheets[0];
-  const lines = summary.lines.filter(line => line.socialInsuranceSalary > 0);
+  const activeEmployees = new Set(data.allEmployees.filter(employee => employee.status === "active").map(employee => employee.id));
+  const lines = summary.lines.filter(line => activeEmployees.has(line.employeeId)
+    && line.daysWorked > 0 && line.socialInsuranceSalary > 0);
   assert.equal(sheet.rowCount, lines.length + 1);
   lines.forEach((line, index) => {
     assert.equal(sheet.getCell(`H${index + 2}`).value, line.socialInsuranceSalary);

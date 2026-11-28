@@ -12,19 +12,20 @@ export const insuranceUploadHeaders = [
 ] as const;
 
 type Employee = typeof employeesTable.$inferSelect;
-type InsuredPayrollLine = { employeeId: number; socialInsuranceSalary: number };
+type InsuredPayrollLine = { employeeId: number; daysWorked: number; socialInsuranceSalary: number };
 export class InsuranceReportValidationError extends Error {}
 
-/** Only real insured payroll rows are included. Never copy the template's sample people. */
+/** Only currently active employees with worked days and insured pay are included. */
 export async function buildInsuranceWorkbook(lines: InsuredPayrollLine[], employees: Employee[]) {
   const byId = new Map(employees.map(e => [e.id, e]));
-  const included = lines.filter(line => line.socialInsuranceSalary > 0);
+  const included = lines.filter(line => line.daysWorked > 0 && line.socialInsuranceSalary > 0);
   const problems: string[] = [];
   const rows: Array<Array<string | number>> = [];
   const registrationNumbers = new Set<string>();
   for (const line of included) {
     const employee = byId.get(line.employeeId);
     if (!employee) throw new InsuranceReportValidationError("Ажилтны бүртгэл олдсонгүй. Тайланг дахин татна уу.");
+    if (employee.status !== "active") continue;
     const profile = employee.socialInsuranceProfile;
     const missing = [
       ["registrationNumber", "Регистр"], ["clanName", "Ургийн овог"],

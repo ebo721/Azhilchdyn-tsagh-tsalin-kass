@@ -13,7 +13,7 @@ const employee: typeof employeesTable.$inferSelect = {
   socialInsuranceProfile: { registrationNumber: "ТТ00000000", clanName: "Fixture", parentName: "Example",
     insuranceTypeCode: "01001", occupationCode: "0000-00", citizenship: "Монгол", email: "" },
 };
-const line = { employeeId: 1, socialInsuranceSalary: 800_000 };
+const line = { employeeId: 1, daysWorked: 1, socialInsuranceSalary: 800_000 };
 describe("social insurance upload workbook", () => {
   it("has exactly one data sheet, 15 template headers and numeric amounts", async () => {
     const data = await buildInsuranceWorkbook([line], [employee]);
@@ -36,12 +36,29 @@ describe("social insurance upload workbook", () => {
     assert.equal(sheet.getCell("O2").value, "empty");
   });
   it("excludes zero-base rows even if their metadata is incomplete", async () => {
-    const data = await buildInsuranceWorkbook([line, { employeeId: 2, socialInsuranceSalary: 0 }], [
+    const data = await buildInsuranceWorkbook([line, { employeeId: 2, daysWorked: 1, socialInsuranceSalary: 0 }], [
       employee, { ...employee, id: 2, socialInsuranceProfile: null },
     ]);
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(data as never);
     assert.equal(workbook.worksheets[0].rowCount, 2);
+  });
+  it("includes only currently active employees who worked and owe social insurance", async () => {
+    const inactive = { ...employee, id: 2, status: "inactive" as const, socialInsuranceProfile: null };
+    const activeNoWork = { ...employee, id: 3 };
+    const data = await buildInsuranceWorkbook([
+      line,
+      { employeeId: 2, daysWorked: 5, socialInsuranceSalary: 800_000 },
+      { employeeId: 3, daysWorked: 0, socialInsuranceSalary: 800_000 },
+      { employeeId: 4, daysWorked: 2, socialInsuranceSalary: 0 },
+    ], [employee, inactive, activeNoWork]);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(data as never);
+    assert.equal(workbook.worksheets[0].rowCount, 2);
+    assert.equal(workbook.worksheets[0].getCell("A2").value, "ТТ00000000");
+    await assert.rejects(buildInsuranceWorkbook([
+      { employeeId: 2, daysWorked: 5, socialInsuranceSalary: 800_000 },
+    ], [inactive]), /Сонгосон сард НДШ тооцох цалинтай ажилтан байхгүй/);
   });
   it("blocks incomplete or duplicate registry metadata instead of exporting partial rows", async () => {
     await assert.rejects(buildInsuranceWorkbook([line], [{ ...employee, socialInsuranceProfile: null }]), /Регистр/);
