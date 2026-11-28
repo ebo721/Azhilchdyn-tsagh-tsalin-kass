@@ -48,6 +48,7 @@
 - [Payroll installments](payroll-installment-scope.md) — Support three or more smaller transfers; each links separately while unpaid salary remains outstanding.
 - [Party ledger scope](party-ledger-scope.md) — Include document-backed manual journals; exclude unlinked journals and keep saved payroll separate from the read-only ledger.
 - [Employee insurance import](employee-insurance-import-scope.md) — “Овог” in the registration template maps to parentName; keep duplicate choices explicit and salaries separate.
+- [Insurance registration roster](insurance-registration-roster.md) — Export only active, non-exempt employees with positive insured salary; registration lists do not require worked days.
 - [Payroll register scope](payroll-register-scope.md) — Show earned or guaranteed monthly salary, not debt-only staff; retain complete financial carryforwards separately.
 - [Social insurance upload roster](social-insurance-upload-roster.md) — The ndaatgal.mn workbook includes current active employees with worked days and positive insured salary; general payroll exports stay unchanged.
 - [Payroll and attendance closure](payroll-attendance-closure-scope.md) — Payroll closes attendance for the same effective period; only administrators may close or reopen.

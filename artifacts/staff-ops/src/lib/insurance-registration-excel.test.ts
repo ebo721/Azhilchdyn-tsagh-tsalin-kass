@@ -4,14 +4,22 @@ import ExcelJS from 'exceljs';
 import type { Employee } from '@workspace/api-client-react';
 import { buildInsuranceRegistrationWorkbook } from './insurance-registration-excel';
 
-const employee = (id: number, status: 'active' | 'inactive', profile: NonNullable<Employee['socialInsuranceProfile']>) => ({
+const employee = (
+  id: number,
+  status: 'active' | 'inactive',
+  profile: NonNullable<Employee['socialInsuranceProfile']>,
+  changes: Partial<Employee> = {},
+) => ({
   id, name: `Ажилтан ${id}`, role: 'Ажилтан', status, socialInsuranceProfile: profile,
+  socialInsuranceSalary: 1_000_000, payrollTaxExempt: false, ...changes,
 }) as Employee;
 
-test('insurance registration workbook matches the supplied three-column template and exports active employees only', async () => {
+test('insurance registration workbook matches the supplied template and exports only active insured employees', async () => {
   const workbook = buildInsuranceRegistrationWorkbook([
     employee(1, 'active', { registrationNumber: '00123456', givenName: 'НЭР', parentName: 'ЭЦГИЙН НЭР' }),
     employee(2, 'inactive', { registrationNumber: '00234567', givenName: 'ХУУЧИН', parentName: 'ЭЦГИЙН НЭР' }),
+    employee(3, 'active', { registrationNumber: '', givenName: '', parentName: '' }, { payrollTaxExempt: true }),
+    employee(4, 'active', { registrationNumber: '', givenName: '', parentName: '' }, { socialInsuranceSalary: 0 }),
   ]);
   const result = new ExcelJS.Workbook();
   await result.xlsx.load(await workbook.xlsx.writeBuffer());
@@ -31,8 +39,10 @@ test('registration export fails explicitly when active employee identity fields 
   ]), /регистрийн дугаар, эцэг\/эхийн нэр/);
 });
 
-test('registration export reports when no active employees exist', () => {
+test('registration export reports when no active employees owe social insurance', () => {
   assert.throws(() => buildInsuranceRegistrationWorkbook([
     employee(1, 'inactive', { registrationNumber: '00123456', givenName: 'НЭР', parentName: 'ЭЦГИЙН НЭР' }),
-  ]), /идэвхтэй ажилтан алга/);
+    employee(2, 'active', { registrationNumber: '00234567', givenName: 'ЧӨЛӨӨЛСӨН', parentName: 'ЭЦГИЙН НЭР' }, { payrollTaxExempt: true }),
+    employee(3, 'active', { registrationNumber: '00345678', givenName: 'ТЭГ ЦАЛИН', parentName: 'ЭЦГИЙН НЭР' }, { socialInsuranceSalary: 0 }),
+  ]), /НДШ төлөх идэвхтэй ажилтан алга/);
 });
